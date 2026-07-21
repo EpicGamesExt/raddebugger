@@ -2842,37 +2842,54 @@ THREAD_POOL_TASK_FUNC(lnk_cv_patcher_inlines_task)
 }
 
 internal
-THREAD_POOL_TASK_FUNC(lnk_cv_patcher_leaves_task)
+THREAD_POOL_TASK_FUNC(lnk_count_unique_leaf_sizes_task)
+{
+  LNK_MergeTypes *task = raw_task;
+  Rng1U64 range = task->ranges[task_id];
+  U64 size = 0;
+  for EachInRange(i, range) {
+    LNK_LeafRef leaf_ref = task->unique_leaf_refs_arr[task->ti_source].v[i];
+    CV_DebugT  *debug_t  = &task->input->debug_t_arr[lnk_leaf_ref_obj_idx(leaf_ref)];
+    size += cv_debug_t_get_raw_leaf(debug_t, lnk_leaf_ref_leaf_idx(leaf_ref)).size;
+  }
+  task->leaf_buffer_offsets[task_id] = size; // exclusive-scanned into offsets on the main thread
+}
+
+// Materialize unique leaves: copy each unique raw leaf (existing sorted order) into one contiguous
+// private buffer and apply the type-index fixup to the COPY. This fuses the old
+// lnk_cv_patcher_leaves_task (which patched TIs in-place into the mapped input, dirtying one
+// copy-on-write page per touched .debug$T page) with the old lnk_unbucket_raw_leaves_task (which
+// pointed result.v into the input). result.v now points into the copy: identical bytes, identical
+// order, clean input pages.
+internal
+THREAD_POOL_TASK_FUNC(lnk_materialize_unique_leaves_task)
 {
   ProfBeginFunction();
   LNK_MergeTypes *task        = raw_task;
   Rng1U64         range       = task->ranges[task_id];
   Arena          *fixed_arena = task->fixed_arenas[task_id];
-  for EachInRange(leaf_ref_idx, range) {
-    Temp temp = temp_begin(fixed_arena);
-    LNK_LeafRef leaf_ref = task->unique_leaf_refs_arr[task->ti_source].v[leaf_ref_idx];
+  U8             *cursor      = task->leaf_buffer + task->leaf_buffer_offsets[task_id];
+  for EachInRange(i, range) {
+    LNK_LeafRef leaf_ref = task->unique_leaf_refs_arr[task->ti_source].v[i];
     U32         obj_idx  = lnk_leaf_ref_obj_idx(leaf_ref);
     U32         leaf_idx = lnk_leaf_ref_leaf_idx(leaf_ref);
     CV_DebugT  *debug_t  = &task->input->debug_t_arr[obj_idx];
-    CV_Leaf     leaf     = cv_debug_t_get_leaf(debug_t, leaf_idx);
+    String8     raw_leaf = cv_debug_t_get_raw_leaf(debug_t, leaf_idx);
+
+    // copy raw leaf into the private buffer
+    MemoryCopy(cursor, raw_leaf.str, raw_leaf.size);
+    task->result.v[task->ti_source][i] = cursor;
+    cursor += raw_leaf.size;
+
+    // fixup type indices on the copy (same math the in-place leaf patcher applied)
+    Temp temp = temp_begin(fixed_arena);
+    CV_Leaf leaf = {0};
+    cv_read_leaf(str8(task->result.v[task->ti_source][i], raw_leaf.size), 0, 1, &leaf);
     CV_TiOffsets ti_offs = cv_leaf_ti_offsets(temp.arena, leaf.kind, leaf.data);
     lnk_fixup_cv_type_indices(task, obj_idx, leaf.data, ti_offs);
     temp_end(temp);
   }
   ProfEnd();
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_unbucket_raw_leaves_task)
-{
-  LNK_MergeTypes *task = raw_task;
-  Rng1U64 range = task->ranges[task_id];
-  for EachInRange(i, range) {
-    LNK_LeafRef  leaf_ref = task->unique_leaf_refs_arr[task->ti_source].v[i];
-    CV_DebugT   *debug_t  = &task->input->debug_t_arr[lnk_leaf_ref_obj_idx(leaf_ref)];
-    String8      raw_leaf = cv_debug_t_get_raw_leaf(debug_t, lnk_leaf_ref_leaf_idx(leaf_ref));
-    task->result.v[task->ti_source][i] = raw_leaf.str;
-  }
 }
 
 internal
@@ -3309,11 +3326,9 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
       tp_for_parallel_prof(tp, 0, input->count, lnk_cv_patcher_inlines_task, &task, "Fixup Inlines Type Indices");
     }
 
-    for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
-      task.ti_source = ti_source;
-      task.ranges    = tp_divide_work(scratch.arena, task.unique_leaf_refs_arr[ti_source].count, tp->worker_count);
-      tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_cv_patcher_leaves_task, &task, "Fixup Types Type Indices");
-    }
+    // NOTE: the leaf TI-fixup is fused into the unbucket/materialize pass below -- it copies each
+    // unique leaf into a private buffer and patches the copy, instead of patching the mapped input
+    // (which copy-on-writes one page per touched .debug$T page).
   }
   ProfEnd();
 
@@ -3340,7 +3355,21 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     task.result.count[ti_source] = unique_leaf_refs.count;
     task.result.v    [ti_source] = push_array(tp_temp->v[0], U8 *, unique_leaf_refs.count);
     task.ranges                  = tp_divide_work(scratch.arena, unique_leaf_refs.count, tp->worker_count);
-    tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_unbucket_raw_leaves_task, &task, "Unbucket Leaves");
+
+    // per-lane byte totals for the materialize buffer, exclusive-scanned into offsets
+    task.leaf_buffer_offsets = push_array_no_zero(scratch.arena, U64, tp->worker_count + 1);
+    tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_count_unique_leaf_sizes_task, &task, "Count Leaf Sizes");
+    {
+      U64 acc = 0;
+      for EachIndex(lane, tp->worker_count) {
+        U64 lane_size = task.leaf_buffer_offsets[lane];
+        task.leaf_buffer_offsets[lane] = acc;
+        acc += lane_size;
+      }
+      task.leaf_buffer_offsets[tp->worker_count] = acc;
+      task.leaf_buffer = push_array_no_zero(tp_temp->v[0], U8, acc ? acc : 1);
+    }
+    tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_materialize_unique_leaves_task, &task, "Materialize + Fixup Leaves");
 
     if (merge_flags & LNK_MergeTypeFlag_ExportHashes) {
       task.result.hashes[ti_source] = push_array_no_zero(tp_temp->v[0], U64, unique_leaf_refs.count);

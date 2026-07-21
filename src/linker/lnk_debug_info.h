@@ -223,6 +223,11 @@ typedef struct
   // iff the unique count exceeds cap, which is a function of the input alone.
   U32  leaf_ht_overflow;
 
+  // materialize unique leaves (unbucket + leaf TI-fixup fused, applied to a private copy so the
+  // fixup never dirties the copy-on-write input mapping)
+  U64 *leaf_buffer_offsets; // [worker_count+1] per-lane byte offsets into leaf_buffer
+  U8  *leaf_buffer;
+
   LNK_MergedTypes result;
 } LNK_MergeTypes;
 
