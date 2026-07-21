@@ -4148,7 +4148,21 @@ lnk_icf_debug_s_has_locals(Arena *scratch, LNK_Obj *obj, U32 child_sn)
       MemoryCopy(&len,  s.str + o,     sizeof(len));
       MemoryCopy(&kind, s.str + o + 2, sizeof(kind));
       if (len < 2) { break; }
-      if (kind == CV_SymKind_LOCAL || kind == CV_SymKind_REGREL32) { return 1; }
+      switch (kind) {
+      // stack locals
+      case CV_SymKind_LOCAL:
+      case CV_SymKind_REGREL32:
+      // function-scoped statics (S_LDATA32 and friends): the record naming the static lives in
+      // this tree; if it were dropped the debugger could no longer evaluate the follower's
+      // static by name, even though the (folded) data itself survives in the image
+      case CV_SymKind_LDATA32:
+      case CV_SymKind_GDATA32:
+      case CV_SymKind_LTHREAD32:
+      case CV_SymKind_GTHREAD32:
+      case CV_SymKind_FILESTATIC:
+      case CV_SymKind_CONSTANT:
+        return 1;
+      }
       o += len + 2;
     }
   }
