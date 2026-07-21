@@ -18,18 +18,18 @@
 				<Size>node_count</Size>
 				<HeadPointer>first</HeadPointer>
 				<NextPointer>next</NextPointer>
-				<ValueNode>this</ValueNode>
+				<ValueNode>string</ValueNode>
 			</LinkedListItems>
 		</Expand>
 	</Type>
 	
-	<Type Name="String8Array">
-    <DisplayString>{{ count={count} pointer={strings} }}</DisplayString>
+  <Type Name="String8Array">
+    <DisplayString>{{ count={count} pointer={v} }}</DisplayString>
     <Expand>
       <Item Name="[count]">count</Item>
       <ArrayItems>
         <Size>count</Size>
-        <ValuePointer>strings</ValuePointer>
+        <ValuePointer>v</ValuePointer>
       </ArrayItems>
     </Expand>
 	</Type>
@@ -142,7 +142,7 @@
   </Type>
 
   <Type Name="CmdLineOpt">
-    <DisplayString>{{ name={string} hash={hash} value_string={value_string} value_stirngs={value_strings} }}</DisplayString>
+    <DisplayString>{{ name={string} hash={hash} value_string={value_string} value_strings={value_strings} }}</DisplayString>
   </Type>
 
   <Type Name="CmdLineOptList">
@@ -210,7 +210,6 @@
   <Type Name="DW_WriterTag">
     <Expand>
       <Item Name="kind">kind</Item>
-      <Item Name="next">next</Item>
       <Item Name="next">next</Item>
       <Item Name="parent">parent</Item>
       <Synthetic Name="[children]">

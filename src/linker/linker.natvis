@@ -240,5 +240,32 @@
     </Expand>
   </Type>
 
+  <Type Name="HashMap">
+    <DisplayString>{{ count={count} tombstones={tombstone_count} }}</DisplayString>
+    <Expand>
+      <Item Name="[count]">count</Item>
+      <Item Name="[tombstone count]">tombstone_count</Item>
+      <Item Name="[root]">root</Item>
+    </Expand>
+  </Type>
+
+  <Type Name="HashMapNode">
+    <DisplayString Condition="is_live">live</DisplayString>
+    <DisplayString>tombstone</DisplayString>
+    <Expand>
+      <Item Name="[key]" Condition="is_live">v.key</Item>
+      <Item Name="[value]" Condition="is_live">v.value</Item>
+      <Synthetic Name="[children]">
+        <DisplayString>radix children</DisplayString>
+        <Expand>
+          <Item Name="[0]" Condition="children[0] != 0">children[0]</Item>
+          <Item Name="[1]" Condition="children[1] != 0">children[1]</Item>
+          <Item Name="[2]" Condition="children[2] != 0">children[2]</Item>
+          <Item Name="[3]" Condition="children[3] != 0">children[3]</Item>
+        </Expand>
+      </Synthetic>
+    </Expand>
+  </Type>
+
 </AutoVisualizer>
 
