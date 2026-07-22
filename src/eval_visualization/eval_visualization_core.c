@@ -225,7 +225,7 @@ internal EV_ExpandNode *
 ev_expand_node_from_key(EV_View *view, EV_Key key)
 {
   U64 hash = ev_hash_from_key(key);
-  U64 slot_idx = hash%view->expand_slots_count;
+  U64 slot_idx = hash_index64(hash, view->expand_slots_count);
   EV_ExpandSlot *slot = &view->expand_slots[slot_idx];
   EV_ExpandNode *node = 0;
   for(EV_ExpandNode *n = slot->first; n != 0; n = n->hash_next)
@@ -253,7 +253,7 @@ ev_view_rule_from_key(EV_View *view, EV_Key key)
   
   //- rjf: key -> hash * slot idx * slot
   U64 hash = ev_hash_from_key(key);
-  U64 slot_idx = hash%view->key_view_rule_slots_count;
+  U64 slot_idx = hash_index64(hash, view->key_view_rule_slots_count);
   EV_KeyViewRuleSlot *slot = &view->key_view_rule_slots[slot_idx];
   
   //- rjf: slot -> existing node
@@ -299,7 +299,7 @@ ev_key_set_expansion(EV_View *view, EV_Key parent_key, EV_Key key, B32 expanded)
     
     // rjf: link into table
     U64 hash = ev_hash_from_key(key);
-    U64 slot = hash % view->expand_slots_count;
+    U64 slot = hash_index64(hash, view->expand_slots_count);
     DLLPushBack_NP(view->expand_slots[slot].first, view->expand_slots[slot].last, node, hash_next, hash_prev);
     
     // rjf: link into parent
@@ -334,7 +334,7 @@ ev_key_set_expansion(EV_View *view, EV_Key parent_key, EV_Key key, B32 expanded)
   {
     // rjf: unlink from table
     U64 hash = ev_hash_from_key(key);
-    U64 slot = hash % view->expand_slots_count;
+    U64 slot = hash_index64(hash, view->expand_slots_count);
     DLLRemove_NP(view->expand_slots[slot].first, view->expand_slots[slot].last, node, hash_next, hash_prev);
     
     // rjf: unlink from tree
@@ -353,7 +353,7 @@ ev_key_set_view_rule(EV_View *view, EV_Key key, String8 view_rule_string)
 {
   //- rjf: key -> hash * slot idx * slot
   U64 hash = ev_hash_from_key(key);
-  U64 slot_idx = hash%view->key_view_rule_slots_count;
+  U64 slot_idx = hash_index64(hash, view->key_view_rule_slots_count);
   EV_KeyViewRuleSlot *slot = &view->key_view_rule_slots[slot_idx];
   
   //- rjf: slot -> existing node
@@ -398,7 +398,7 @@ ev_expand_rule_table_push(Arena *arena, EV_ExpandRuleTable *table, EV_ExpandRule
     table->slots = push_array(arena, EV_ExpandRuleSlot, table->slots_count);
   }
   U64 hash = ev_hash_from_seed_string(5381, info->string);
-  U64 slot_idx = hash%table->slots_count;
+  U64 slot_idx = hash_index64(hash, table->slots_count);
   EV_ExpandRuleSlot *slot = &table->slots[slot_idx];
   EV_ExpandRuleNode *n = push_array(arena, EV_ExpandRuleNode, 1);
   SLLQueuePush(slot->first, slot->last, n);
@@ -419,7 +419,7 @@ ev_expand_rule_from_string(String8 string)
   if(ev_view_rule_info_table != 0 && ev_view_rule_info_table->slots_count != 0)
   {
     U64 hash = ev_hash_from_seed_string(5381, string);
-    U64 slot_idx = hash%ev_view_rule_info_table->slots_count;
+    U64 slot_idx = hash_index64(hash, ev_view_rule_info_table->slots_count);
     EV_ExpandRuleSlot *slot = &ev_view_rule_info_table->slots[slot_idx];
     EV_ExpandRuleNode *node = 0;
     for(EV_ExpandRuleNode *n = slot->first; n != 0; n = n->next)

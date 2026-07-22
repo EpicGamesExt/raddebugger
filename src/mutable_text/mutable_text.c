@@ -41,7 +41,7 @@ internal void
 mtx_push_op(C_Key buffer_key, MTX_Op op)
 {
   U64 hash = u64_hash_from_str8(str8_struct(&buffer_key));
-  MTX_MutThread *thread = &mtx_shared->mut_threads[hash%mtx_shared->mut_threads_count];
+  MTX_MutThread *thread = &mtx_shared->mut_threads[hash_index64(hash, mtx_shared->mut_threads_count)];
   mtx_enqueue_op(thread, buffer_key, op);
 }
 

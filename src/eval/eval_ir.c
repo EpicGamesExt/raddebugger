@@ -334,7 +334,7 @@ e_expr_is_poisoned(E_Expr *expr)
 {
   B32 tag_is_poisoned = 0;
   U64 hash = e_hash_from_string(5381, str8_struct(&expr));
-  U64 slot_idx = hash%e_cache->used_expr_map->slots_count;
+  U64 slot_idx = hash_index64(hash, e_cache->used_expr_map->slots_count);
   for(E_UsedExprNode *n = e_cache->used_expr_map->slots[slot_idx].first; n != 0; n = n->next)
   {
     if(n->expr == expr)
@@ -350,7 +350,7 @@ internal void
 e_expr_poison(E_Expr *expr)
 {
   U64 hash = e_hash_from_string(5381, str8_struct(&expr));
-  U64 slot_idx = hash%e_cache->used_expr_map->slots_count;
+  U64 slot_idx = hash_index64(hash, e_cache->used_expr_map->slots_count);
   E_UsedExprNode *n = push_array(e_cache->arena, E_UsedExprNode, 1);
   n->expr = expr;
   DLLPushBack(e_cache->used_expr_map->slots[slot_idx].first, e_cache->used_expr_map->slots[slot_idx].last, n);
@@ -360,7 +360,7 @@ internal void
 e_expr_unpoison(E_Expr *expr)
 {
   U64 hash = e_hash_from_string(5381, str8_struct(&expr));
-  U64 slot_idx = hash%e_cache->used_expr_map->slots_count;
+  U64 slot_idx = hash_index64(hash, e_cache->used_expr_map->slots_count);
   for(E_UsedExprNode *n = e_cache->used_expr_map->slots[slot_idx].first; n != 0; n = n->next)
   {
     if(n->expr == expr)

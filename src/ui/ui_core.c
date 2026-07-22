@@ -778,7 +778,7 @@ ui_box_from_key(UI_Key key)
   UI_Box *result = &ui_nil_box;
   if(!ui_key_match(key, ui_key_zero()))
   {
-    U64 slot = key.u64[0] % ui_state->box_table_size;
+    U64 slot = hash_index64(key.u64[0], ui_state->box_table_size);
     for(UI_Box *b = ui_state->box_table[slot].hash_first; !ui_box_is_nil(b); b = b->hash_next)
     {
       if(ui_key_match(b->key, key))
@@ -826,7 +826,7 @@ ui_begin_build(WM_Window window, UI_EventList *events, UI_IconInfo *icon_info, U
       next = n->lru_next;
       if(n->last_touched_build_index+2 < ui_state->build_index)
       {
-        U64 slot_idx = n->key.u64[0]%ui_state->anim_slots_count;
+        U64 slot_idx = hash_index64(n->key.u64[0], ui_state->anim_slots_count);
         UI_AnimSlot *slot = &ui_state->anim_slots[slot_idx];
         DLLRemove_NPZ(&ui_nil_anim_node, slot->first, slot->last, n, slot_next, slot_prev);;
         DLLRemove_NPZ(&ui_nil_anim_node, ui_state->lru_anim_node, ui_state->mru_anim_node, n, lru_next, lru_prev);
@@ -847,7 +847,7 @@ ui_begin_build(WM_Window window, UI_EventList *events, UI_IconInfo *icon_info, U
       next = n->lru_next;
       if(n->last_build_index_accessed+2 < ui_state->build_index)
       {
-        U64 slot_idx = n->key.u64[0]%ui_state->theme_pattern_cache_slots_count;
+        U64 slot_idx = hash_index64(n->key.u64[0], ui_state->theme_pattern_cache_slots_count);
         UI_ThemePatternCacheSlot *slot = &ui_state->theme_pattern_cache_slots[slot_idx];
         DLLRemove_NP(slot->first, slot->last, n, slot_next, slot_prev);
         DLLRemove_NP(ui_state->lru_theme_pattern_cache_node, ui_state->mru_theme_pattern_cache_node, n, lru_next, lru_prev);
@@ -2273,7 +2273,7 @@ ui_color_from_tags_key_extras(UI_Key key, String8Array extras)
     }
     
     //- rjf: map to existing node
-    U64 slot_idx = final_key.u64[0]%ui_state->theme_pattern_cache_slots_count;
+    U64 slot_idx = hash_index64(final_key.u64[0], ui_state->theme_pattern_cache_slots_count);
     UI_ThemePatternCacheSlot *slot = &ui_state->theme_pattern_cache_slots[slot_idx];
     UI_ThemePatternCacheNode *node = 0;
     for(UI_ThemePatternCacheNode *n = slot->first;
@@ -2292,7 +2292,7 @@ ui_color_from_tags_key_extras(UI_Key key, String8Array extras)
       // rjf: map tags_key (without name) -> full list of tags
       String8Array tags = {0};
       {
-        U64 tags_cache_slot_idx = key.u64[0]%ui_state->tags_cache_slots_count;
+        U64 tags_cache_slot_idx = hash_index64(key.u64[0], ui_state->tags_cache_slots_count);
         UI_TagsCacheSlot *tags_cache_slot = &ui_state->tags_cache_slots[tags_cache_slot_idx];
         for(UI_TagsCacheNode *n = tags_cache_slot->first; n != 0; n = n->next)
         {
@@ -2459,7 +2459,7 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
   //- rjf: hook into persistent state table
   if(box_first_frame && !box_is_transient)
   {
-    U64 slot = key.u64[0] % ui_state->box_table_size;
+    U64 slot = hash_index64(key.u64[0], ui_state->box_table_size);
     DLLInsert_NPZ(&ui_nil_box, ui_state->box_table[slot].hash_first, ui_state->box_table[slot].hash_last, ui_state->box_table[slot].hash_last, box, hash_next, hash_prev);
   }
   
@@ -3226,7 +3226,7 @@ ui_anim_(UI_Key key, UI_AnimParams *params)
   UI_AnimNode *node = &ui_nil_anim_node;
   if(ui_state != 0)
   {
-    U64 slot_idx = key.u64[0]%ui_state->anim_slots_count;
+    U64 slot_idx = hash_index64(key.u64[0], ui_state->anim_slots_count);
     UI_AnimSlot *slot = &ui_state->anim_slots[slot_idx];
     for(UI_AnimNode *n = slot->first; n != &ui_nil_anim_node && n != 0; n = n->slot_next)
     {
@@ -3363,7 +3363,7 @@ ui__push_tags_key_from_appended_string(String8 string)
   // rjf: store in tags cache
   if(!is_new_root)
   {
-    U64 slot_idx = key.u64[0] % ui_state->tags_cache_slots_count;
+    U64 slot_idx = hash_index64(key.u64[0], ui_state->tags_cache_slots_count);
     UI_TagsCacheSlot *slot = &ui_state->tags_cache_slots[slot_idx];
     UI_TagsCacheNode *node = 0;
     for(UI_TagsCacheNode *n = slot->first; n != 0; n = n->next)

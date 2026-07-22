@@ -153,7 +153,7 @@ txt_token_array_from_lang_kind_string(Arena *arena, TXT_LangKind lang_kind, Stri
   {
     String8 keyword = txt_keywords_from_lang_kind_table[lang_kind].v[idx];
     U64 hash = u64_hash_from_str8(keyword);
-    U64 slot_idx = hash%keyword_slots_count;
+    U64 slot_idx = hash_index64(hash, keyword_slots_count);
     String8Node *n = push_array(scratch.arena, String8Node, 1);
     SLLStackPush(keyword_slots[slot_idx], n);
     n->string = keyword;
@@ -173,8 +173,8 @@ txt_token_array_from_lang_kind_string(Arena *arena, TXT_LangKind lang_kind, Stri
       TXT_TokenizerRule *r = &rules.v[idx];
       U64 open_hash = u64_hash_from_str8(r->open_string);
       U64 close_hash = u64_hash_from_str8(r->close_string);
-      U64 open_slot_idx = open_hash%tokenizer_rule_slots_count;
-      U64 close_slot_idx = close_hash%tokenizer_rule_slots_count;
+      U64 open_slot_idx = hash_index64(open_hash, tokenizer_rule_slots_count);
+      U64 close_slot_idx = hash_index64(close_hash, tokenizer_rule_slots_count);
       TXT_TokenizerRulePtrNode *open_n = push_array(scratch.arena, TXT_TokenizerRulePtrNode, 1);
       TXT_TokenizerRulePtrNode *close_n = push_array(scratch.arena, TXT_TokenizerRulePtrNode, 1);
       open_n->v = r;
@@ -238,8 +238,8 @@ txt_token_array_from_lang_kind_string(Arena *arena, TXT_LangKind lang_kind, Stri
           TXT_TokenizerRule *active_rule = top_task ? top_task->rule : nil_rule;
           U64 hash_1byte = u64_hash_from_str8(string_1byte);
           U64 hash_2byte = u64_hash_from_str8(string_2byte);
-          U64 slot_1byte = hash_1byte%tokenizer_rule_slots_count;
-          U64 slot_2byte = hash_2byte%tokenizer_rule_slots_count;
+          U64 slot_1byte = hash_index64(hash_1byte, tokenizer_rule_slots_count);
+          U64 slot_2byte = hash_index64(hash_2byte, tokenizer_rule_slots_count);
           if(new_rule == nil_rule)
           {
             for EachNode(n, TXT_TokenizerRulePtrNode, tokenizer_rule_opener_slots[slot_2byte])
@@ -402,7 +402,7 @@ txt_token_array_from_lang_kind_string(Arena *arena, TXT_LangKind lang_kind, Stri
         {
           String8 token_string = str8_substr(string, token.range);
           U64 hash = u64_hash_from_str8(token_string);
-          U64 slot_idx = hash%keyword_slots_count;
+          U64 slot_idx = hash_index64(hash, keyword_slots_count);
           for EachNode(n, String8Node, keyword_slots[slot_idx])
           {
             if(str8_match(token_string, n->string, 0))

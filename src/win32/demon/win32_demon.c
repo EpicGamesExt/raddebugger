@@ -67,7 +67,7 @@ w32_dmn_entity_alloc(W32_DMN_Entity *parent, W32_DMN_EntityKind kind, U64 id)
   if(id != 0)
   {
     U64 hash = u64_hash_from_str8(str8_struct(&id));
-    U64 slot_idx = hash%w32_dmn_shared->entities_id_hash_slots_count;
+    U64 slot_idx = hash_index64(hash, w32_dmn_shared->entities_id_hash_slots_count);
     W32_DMN_EntityIDHashSlot *slot = &w32_dmn_shared->entities_id_hash_slots[slot_idx];
     W32_DMN_EntityIDHashNode *node = 0;
     for(W32_DMN_EntityIDHashNode *n = slot->first; n != 0; n = n->next)
@@ -142,7 +142,7 @@ w32_dmn_entity_release(W32_DMN_Entity *entity)
       if(t->e->id != 0)
       {
         U64 hash = u64_hash_from_str8(str8_struct(&t->e->id));
-        U64 slot_idx = hash%w32_dmn_shared->entities_id_hash_slots_count;
+        U64 slot_idx = hash_index64(hash, w32_dmn_shared->entities_id_hash_slots_count);
         W32_DMN_EntityIDHashSlot *slot = &w32_dmn_shared->entities_id_hash_slots[slot_idx];
         W32_DMN_EntityIDHashNode *node = 0;
         for(W32_DMN_EntityIDHashNode *n = slot->first; n != 0; n = n->next)
@@ -167,7 +167,7 @@ w32_dmn_entity_from_kind_id(W32_DMN_EntityKind kind, U64 id)
 {
   W32_DMN_Entity *result = &w32_dmn_entity_nil;
   U64 hash = u64_hash_from_str8(str8_struct(&id));
-  U64 slot_idx = hash%w32_dmn_shared->entities_id_hash_slots_count;
+  U64 slot_idx = hash_index64(hash, w32_dmn_shared->entities_id_hash_slots_count);
   W32_DMN_EntityIDHashSlot *slot = &w32_dmn_shared->entities_id_hash_slots[slot_idx];
   W32_DMN_EntityIDHashNode *node = 0;
   for(W32_DMN_EntityIDHashNode *n = slot->first; n != 0; n = n->next)

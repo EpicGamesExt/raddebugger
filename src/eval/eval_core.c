@@ -210,7 +210,7 @@ e_string2num_map_insert(Arena *arena, E_String2NumMap *map, String8 string, U64 
   if(string.size != 0)
   {
     U64 hash = e_hash_from_string(5381, string);
-    U64 slot_idx = hash%map->slots_count;
+    U64 slot_idx = hash_index64(hash, map->slots_count);
     E_String2NumMapNode *existing_node = 0;
     for(E_String2NumMapNode *node = map->slots[slot_idx].first; node != 0; node = node->hash_next)
     {
@@ -239,7 +239,7 @@ e_num_from_string(E_String2NumMap *map, String8 string)
   if(map->slots_count != 0)
   {
     U64 hash = e_hash_from_string(5381, string);
-    U64 slot_idx = hash%map->slots_count;
+    U64 slot_idx = hash_index64(hash, map->slots_count);
     E_String2NumMapNode *existing_node = 0;
     for(E_String2NumMapNode *node = map->slots[slot_idx].first; node != 0; node = node->hash_next)
     {
@@ -307,7 +307,7 @@ internal void
 e_string2expr_map_insert(Arena *arena, E_String2ExprMap *map, String8 string, E_Expr *expr)
 {
   U64 hash = e_hash_from_string(5381, string);
-  U64 slot_idx = hash%map->slots_count;
+  U64 slot_idx = hash_index64(hash, map->slots_count);
   E_String2ExprMapNode *existing_node = 0;
   for(E_String2ExprMapNode *node = map->slots[slot_idx].first;
       node != 0;
@@ -333,7 +333,7 @@ internal void
 e_string2expr_map_inc_poison(E_String2ExprMap *map, String8 string)
 {
   U64 hash = e_hash_from_string(5381, string);
-  U64 slot_idx = hash%map->slots_count;
+  U64 slot_idx = hash_index64(hash, map->slots_count);
   for(E_String2ExprMapNode *node = map->slots[slot_idx].first;
       node != 0;
       node = node->hash_next)
@@ -350,7 +350,7 @@ internal void
 e_string2expr_map_dec_poison(E_String2ExprMap *map, String8 string)
 {
   U64 hash = e_hash_from_string(5381, string);
-  U64 slot_idx = hash%map->slots_count;
+  U64 slot_idx = hash_index64(hash, map->slots_count);
   for(E_String2ExprMapNode *node = map->slots[slot_idx].first;
       node != 0;
       node = node->hash_next)
@@ -370,7 +370,7 @@ e_string2expr_map_lookup(E_String2ExprMap *map, String8 string)
   if(map->slots_count != 0)
   {
     U64 hash = e_hash_from_string(5381, string);
-    U64 slot_idx = hash%map->slots_count;
+    U64 slot_idx = hash_index64(hash, map->slots_count);
     E_String2ExprMapNode *existing_node = 0;
     for(E_String2ExprMapNode *node = map->slots[slot_idx].first; node != 0; node = node->hash_next)
     {
@@ -404,7 +404,7 @@ e_string2typekey_map_insert(Arena *arena, E_String2TypeKeyMap *map, String8 stri
 {
   E_String2TypeKeyNode *n = push_array(arena, E_String2TypeKeyNode, 1);
   U64 hash = e_hash_from_string(5381, string);
-  U64 slot_idx = hash%map->slots_count;
+  U64 slot_idx = hash_index64(hash, map->slots_count);
   SLLQueuePush(map->slots[slot_idx].first, map->slots[slot_idx].last, n);
   n->string = push_str8_copy(arena, string);
   n->key = key;
@@ -415,7 +415,7 @@ e_string2typekey_map_lookup(E_String2TypeKeyMap *map, String8 string)
 {
   E_TypeKey key = zero_struct;
   U64 hash = e_hash_from_string(5381, string);
-  U64 slot_idx = hash%map->slots_count;
+  U64 slot_idx = hash_index64(hash, map->slots_count);
   for(E_String2TypeKeyNode *n = map->slots[slot_idx].first; n != 0; n = n->next)
   {
     if(str8_match(n->string, string, 0))
@@ -508,7 +508,7 @@ e_auto_hook_map_insert_new_(Arena *arena, E_AutoHookMap *map, E_AutoHookParams *
     if(!e_type_key_match(e_type_key_zero(), type_key))
     {
       U64 hash = e_hash_from_string(5381, node->type_string);
-      U64 slot_idx = hash%map->slots_count;
+      U64 slot_idx = hash_index64(hash, map->slots_count);
       SLLQueuePush_N(map->slots[slot_idx].first, map->slots[slot_idx].last, node, hash_next);
     }
     else
@@ -874,7 +874,7 @@ e_locals_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff)
     e_cache->locals_map_map_slots = push_array(e_cache->arena, E_LocalMapCacheSlot, e_cache->locals_map_map_slots_count);
   }
   U64 hash = u64_hash_from_seed_str8(voff, str8_struct(&dbgi_key));
-  U64 slot_idx = hash%e_cache->locals_map_map_slots_count;
+  U64 slot_idx = hash_index64(hash, e_cache->locals_map_map_slots_count);
   E_LocalMapCacheSlot *slot = &e_cache->locals_map_map_slots[slot_idx];
   E_LocalMapCacheNode *node = 0;
   for(E_LocalMapCacheNode *n = slot->first; n != 0; n = n->next)
@@ -907,7 +907,7 @@ e_member_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff)
     e_cache->member_map_map_slots = push_array(e_cache->arena, E_LocalMapCacheSlot, e_cache->member_map_map_slots_count);
   }
   U64 hash = u64_hash_from_seed_str8(voff, str8_struct(&dbgi_key));
-  U64 slot_idx = hash%e_cache->member_map_map_slots_count;
+  U64 slot_idx = hash_index64(hash, e_cache->member_map_map_slots_count);
   E_LocalMapCacheSlot *slot = &e_cache->member_map_map_slots[slot_idx];
   E_LocalMapCacheNode *node = 0;
   for(E_LocalMapCacheNode *n = slot->first; n != 0; n = n->next)
@@ -976,7 +976,7 @@ e_key_from_string(String8 string)
     parent_key = e_cache->top_parent_node->key;
   }
   U64 hash = e_hash_from_string(parent_key.u64, string);
-  U64 slot_idx = hash%e_cache->string_slots_count;
+  U64 slot_idx = hash_index64(hash, e_cache->string_slots_count);
   E_CacheSlot *slot = &e_cache->string_slots[slot_idx];
   E_CacheNode *node = 0;
   for(E_CacheNode *n = slot->first; n != 0; n = n->string_next)
@@ -995,7 +995,7 @@ e_key_from_string(String8 string)
     e_cache->key_id_gen += 1;
     E_Key key = {e_cache->key_id_gen};
     U64 key_hash = e_hash_from_string(5381, str8_struct(&key));
-    U64 key_slot_idx = key_hash%e_cache->key_slots_count;
+    U64 key_slot_idx = hash_index64(key_hash, e_cache->key_slots_count);
     E_CacheSlot *key_slot = &e_cache->key_slots[key_slot_idx];
     node = push_array(e_cache->arena, E_CacheNode, 1);
     SLLQueuePush_N(slot->first, slot->last, node, string_next);
@@ -1036,7 +1036,7 @@ internal E_CacheBundle *
 e_cache_bundle_from_key(E_Key key)
 {
   U64 hash = e_hash_from_string(5381, str8_struct(&key));
-  U64 slot_idx = hash%e_cache->key_slots_count;
+  U64 slot_idx = hash_index64(hash, e_cache->key_slots_count);
   E_CacheSlot *slot = &e_cache->key_slots[slot_idx];
   E_CacheNode *node = 0;
   for(E_CacheNode *n = slot->first; n != 0; n = n->key_next)
@@ -1284,7 +1284,7 @@ e_push_auto_hook_matches_from_type_key(Arena *arena, E_TypeKey type_key)
     if(map != 0 && map->slots_count != 0)
     {
       U64 hash = e_hash_from_string(5381, type_string);
-      U64 slot_idx = hash%map->slots_count;
+      U64 slot_idx = hash_index64(hash, map->slots_count);
       for(E_AutoHookNode *n = map->slots[slot_idx].first; n != 0; n = n->hash_next)
       {
         if(str8_match(n->type_string, type_string, 0))
@@ -1431,7 +1431,7 @@ e_auto_hook_matches_from_type_key(E_TypeKey type_key)
   E_AutoHookMatchList matches = {0};
   {
     U64 hash = e_hash_from_string(5381, str8_struct(&type_key));
-    U64 slot_idx = hash%e_cache->type_auto_hook_cache_map->slots_count;
+    U64 slot_idx = hash_index64(hash, e_cache->type_auto_hook_cache_map->slots_count);
     E_TypeAutoHookCacheNode *node = 0;
     for(E_TypeAutoHookCacheNode *n = e_cache->type_auto_hook_cache_map->slots[slot_idx].first;
         n != 0;
@@ -1460,7 +1460,7 @@ internal U64
 e_id_from_string(String8 string)
 {
   U64 hash = e_hash_from_string(5381, string);
-  U64 hash_slot_idx = hash%e_cache->string_id_map->hash_slots_count;
+  U64 hash_slot_idx = hash_index64(hash, e_cache->string_id_map->hash_slots_count);
   E_StringIDNode *node = 0;
   for(E_StringIDNode *n = e_cache->string_id_map->hash_slots[hash_slot_idx].first; n != 0; n = n->hash_next)
   {

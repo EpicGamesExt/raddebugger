@@ -69,7 +69,7 @@ internal void
 cfg_schema_table_insert(Arena *arena, CFG_SchemaTable *table, String8 name, MD_Node *schema)
 {
   U64 hash = u64_hash_from_str8(name);
-  U64 slot_idx = hash%table->slots_count;
+  U64 slot_idx = hash_index64(hash, table->slots_count);
   CFG_SchemaNode *node = 0;
   for(CFG_SchemaNode *n = table->slots[slot_idx]; n != 0; n = n->next)
   {
@@ -94,7 +94,7 @@ cfg_schema_from_name(CFG_SchemaTable *table, String8 name)
   MD_Node *result = &md_nil_node;
   {
     U64 hash = u64_hash_from_str8(name);
-    U64 slot_idx = hash%table->slots_count;
+    U64 slot_idx = hash_index64(hash, table->slots_count);
     CFG_SchemaNode *node = 0;
     for(CFG_SchemaNode *n = table->slots[slot_idx]; n != 0; n = n->next)
     {
@@ -185,7 +185,7 @@ cfg_node_from_id(CFG_ID id)
   else
   {
     U64 hash = u64_hash_from_str8(str8_struct(&id));
-    U64 slot_idx = hash%cfg_ctx->id_slots_count;
+    U64 slot_idx = hash_index64(hash, cfg_ctx->id_slots_count);
     for(CFG_NodePtrNode *n = cfg_ctx->id_slots[slot_idx].first; n != 0; n = n->next)
     {
       if(n->v->id == id)
@@ -620,7 +620,7 @@ cfg_node_alloc(CFG_State *state)
       cfg_id_node = push_array(state->arena, CFG_NodePtrNode, 1);
     }
     U64 hash = u64_hash_from_str8(str8_struct(&result->id));
-    U64 slot_idx = hash%state->ctx.id_slots_count;
+    U64 slot_idx = hash_index64(hash, state->ctx.id_slots_count);
     DLLPushBack(state->ctx.id_slots[slot_idx].first, state->ctx.id_slots[slot_idx].last, cfg_id_node);
     cfg_id_node->v = result;
   }
@@ -650,7 +650,7 @@ cfg_node_release(CFG_State *state, CFG_Node *node)
   {
     CFG_Node *c = n->v;
     U64 hash = u64_hash_from_str8(str8_struct(&c->id));
-    U64 slot_idx = hash%state->ctx.id_slots_count;
+    U64 slot_idx = hash_index64(hash, state->ctx.id_slots_count);
     cfg_string_release(state, c->string);
     SLLStackPush(state->free, c);
     c->first = c->last = c->prev = c->parent = 0;

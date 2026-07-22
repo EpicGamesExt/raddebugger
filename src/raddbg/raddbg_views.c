@@ -2185,7 +2185,7 @@ rd_watch_view_text_edit_state_from_pt(RD_WatchViewState *wv, RD_WatchPt pt)
   if(wv->text_edit_state_slots_count != 0 && wv->text_editing != 0)
   {
     U64 hash = ev_hash_from_key(pt.key);
-    U64 slot_idx = hash%wv->text_edit_state_slots_count;
+    U64 slot_idx = hash_index64(hash, wv->text_edit_state_slots_count);
     for(RD_WatchViewTextEditState *s = wv->text_edit_state_slots[slot_idx]; s != 0; s = s->pt_hash_next)
     {
       if(rd_watch_pt_match(pt, s->pt))

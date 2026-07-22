@@ -65,7 +65,7 @@ internal void
 rd_view_ui_rule_map_insert(Arena *arena, RD_ViewUIRuleMap *map, String8 string, RD_ViewUIFunctionType *ui)
 {
   U64 hash = d_hash_from_string(string);
-  U64 slot_idx = hash%map->slots_count;
+  U64 slot_idx = hash_index64(hash, map->slots_count);
   RD_ViewUIRuleNode *n = push_array(arena, RD_ViewUIRuleNode, 1);
   n->v.name = push_str8_copy(arena, string);
   n->v.ui = ui;
@@ -79,7 +79,7 @@ rd_view_ui_rule_from_string(String8 string)
   {
     RD_ViewUIRuleMap *map = rd_state->view_ui_rule_map;
     U64 hash = d_hash_from_string(string);
-    U64 slot_idx = hash%map->slots_count;
+    U64 slot_idx = hash_index64(hash, map->slots_count);
     for(RD_ViewUIRuleNode *n = map->slots[slot_idx].first; n != 0; n = n->next)
     {
       if(str8_match(n->v.name, string, 0))
@@ -1572,7 +1572,7 @@ rd_view_state_from_cfg(CFG_Node *cfg)
   else
   {
     U64 hash = d_hash_from_string(str8_struct(&id));
-    U64 slot_idx = hash%rd_state->view_state_slots_count;
+    U64 slot_idx = hash_index64(hash, rd_state->view_state_slots_count);
     RD_ViewStateSlot *slot = &rd_state->view_state_slots[slot_idx];
     for(RD_ViewState *v = slot->first; v != 0; v = v->hash_next)
     {
@@ -1596,7 +1596,7 @@ rd_view_state_from_cfg(CFG_Node *cfg)
     }
     MemoryCopyStruct(view_state, &rd_nil_view_state);
     U64 hash = d_hash_from_string(str8_struct(&id));
-    U64 slot_idx = hash%rd_state->view_state_slots_count;
+    U64 slot_idx = hash_index64(hash, rd_state->view_state_slots_count);
     RD_ViewStateSlot *slot = &rd_state->view_state_slots[slot_idx];
     DLLPushBack_NP(slot->first, slot->last, view_state, hash_next, hash_prev);
     view_state->cfg_id = id;
@@ -2618,7 +2618,7 @@ rd_view_ui(Rng2F32 rect)
                     string.size = Min(string.size, sizeof(ewv->dummy_text_edit_state.input_buffer));
                     RD_WatchPt pt = {row->block->key, row->key, rd_id_from_watch_cell(cell)};
                     U64 hash = ev_hash_from_key(pt.key);
-                    U64 slot_idx = hash%ewv->text_edit_state_slots_count;
+                    U64 slot_idx = hash_index64(hash, ewv->text_edit_state_slots_count);
                     RD_WatchViewTextEditState *edit_state = push_array(ewv->text_edit_arena, RD_WatchViewTextEditState, 1);
                     SLLStackPush_N(ewv->text_edit_state_slots[slot_idx], edit_state, pt_hash_next);
                     edit_state->pt           = pt;
@@ -5114,7 +5114,7 @@ rd_window_state_from_cfg(CFG_Node *cfg)
   else
   {
     U64 hash = d_hash_from_string(str8_struct(&id));
-    U64 slot_idx = hash%rd_state->window_state_slots_count;
+    U64 slot_idx = hash_index64(hash, rd_state->window_state_slots_count);
     RD_WindowStateSlot *slot = &rd_state->window_state_slots[slot_idx];
     for(RD_WindowState *w = slot->first; w != 0; w = w->hash_next)
     {
@@ -5199,7 +5199,7 @@ rd_window_state_from_cfg(CFG_Node *cfg)
     
     // rjf: hook up window links
     U64 hash = d_hash_from_string(str8_struct(&id));
-    U64 slot_idx = hash%rd_state->window_state_slots_count;
+    U64 slot_idx = hash_index64(hash, rd_state->window_state_slots_count);
     RD_WindowStateSlot *slot = &rd_state->window_state_slots[slot_idx];
     DLLPushBack_NPZ(&rd_nil_window_state, rd_state->first_window_state, rd_state->last_window_state, ws, order_next, order_prev);
     DLLPushBack_NP(slot->first, slot->last, ws, hash_next, hash_prev);
@@ -10210,7 +10210,7 @@ rd_vocab_info_from_code_name(String8 code_name)
   if(code_name.size != 0)
   {
     U64 hash = d_hash_from_string(code_name);
-    U64 slot_idx = hash%rd_state->vocab_info_map.single_slots_count;
+    U64 slot_idx = hash_index64(hash, rd_state->vocab_info_map.single_slots_count);
     for(RD_VocabInfoMapNode *n = rd_state->vocab_info_map.single_slots[slot_idx].first;
         n != 0;
         n = n->single_next)
@@ -10232,7 +10232,7 @@ rd_vocab_info_from_code_name_plural(String8 code_name_plural)
   if(code_name_plural.size != 0)
   {
     U64 hash = d_hash_from_string(code_name_plural);
-    U64 slot_idx = hash%rd_state->vocab_info_map.plural_slots_count;
+    U64 slot_idx = hash_index64(hash, rd_state->vocab_info_map.plural_slots_count);
     for(RD_VocabInfoMapNode *n = rd_state->vocab_info_map.plural_slots[slot_idx].first;
         n != 0;
         n = n->plural_next)
@@ -10357,7 +10357,7 @@ rd_gather_auto_exprs(Arena *arena)
                         {
                           String8 local_name = str8_from_rdi_string_idx(rdi, local->name_string_idx);
                           U64 hash = u64_hash_from_str8(local_name);
-                          U64 slot_idx = hash%seen_expr_slots_count;
+                          U64 slot_idx = hash_index64(hash, seen_expr_slots_count);
                           B32 already_seen = 0;
                           for(String8Node *n = seen_expr_slots[slot_idx]; n != 0; n = n->next)
                           {
@@ -10391,7 +10391,7 @@ rd_gather_auto_exprs(Arena *arena)
                   {
                     String8 gvar_name = fully_qualified_str8_from_rdi_symbol(arena, affected_rdi, affected_gvar);
                     U64 hash = u64_hash_from_str8(gvar_name);
-                    U64 slot_idx = hash%seen_expr_slots_count;
+                    U64 slot_idx = hash_index64(hash, seen_expr_slots_count);
                     B32 already_seen = 0;
                     for(String8Node *n = seen_expr_slots[slot_idx]; n != 0; n = n->next)
                     {
@@ -10805,8 +10805,8 @@ rd_init(CmdLine *cmdln)
       MemoryCopyStruct(&n->v, &rd_vocab_info_table[idx]);
       U64 single_hash = d_hash_from_string(n->v.code_name);
       U64 plural_hash = d_hash_from_string(n->v.code_name_plural);
-      U64 single_slot_idx = single_hash%rd_state->vocab_info_map.single_slots_count;
-      U64 plural_slot_idx = plural_hash%rd_state->vocab_info_map.plural_slots_count;
+      U64 single_slot_idx = hash_index64(single_hash, rd_state->vocab_info_map.single_slots_count);
+      U64 plural_slot_idx = hash_index64(plural_hash, rd_state->vocab_info_map.plural_slots_count);
       if(n->v.code_name.size != 0)
       {
         SLLQueuePush_N(rd_state->vocab_info_map.single_slots[single_slot_idx].first, rd_state->vocab_info_map.single_slots[single_slot_idx].last, n, single_next);
@@ -11239,7 +11239,7 @@ rd_frame(void)
       
       // rjf: touch in cache
       U64 hash = u64_hash_from_str8(str8_struct(&key));
-      U64 slot_idx = hash%rd_state->loaded_dbg_info_slots_count;
+      U64 slot_idx = hash_index64(hash, rd_state->loaded_dbg_info_slots_count);
       RD_LoadedDbgInfoSlot *slot = &rd_state->loaded_dbg_info_slots[slot_idx];
       RD_LoadedDbgInfoNode *node = 0;
       for(RD_LoadedDbgInfoNode *n = slot->first; n != 0; n = n->hash_next)
@@ -11280,7 +11280,7 @@ rd_frame(void)
         break;
       }
       U64 hash = u64_hash_from_str8(str8_struct(&n->key));
-      U64 slot_idx = hash%rd_state->loaded_dbg_info_slots_count;
+      U64 slot_idx = hash_index64(hash, rd_state->loaded_dbg_info_slots_count);
       RD_LoadedDbgInfoSlot *slot = &rd_state->loaded_dbg_info_slots[slot_idx];
       DLLRemove_NP(rd_state->loaded_dbg_info_lru_first, rd_state->loaded_dbg_info_lru_last, n, lru_next, lru_prev);
       DLLRemove_NP(slot->first, slot->last, n, hash_next, hash_prev);
@@ -11783,7 +11783,7 @@ rd_frame(void)
         try_u64_from_str8_c_rules(timestamp_node->first->string, &timestamp);
         DI_Key key = di_key_from_path_timestamp(path, timestamp);
         U64 hash = u64_hash_from_str8(str8_struct(&key));
-        U64 slot_idx = hash%dbg_info_slots_count;
+        U64 slot_idx = hash_index64(hash, dbg_info_slots_count);
         DbgInfoNode *node = 0;
         for(DbgInfoNode *n = dbg_info_slots[slot_idx]; n != 0; n = n->hash_next)
         {
@@ -11863,7 +11863,7 @@ rd_frame(void)
         U32 dbg_info_num = 0;
         {
           U64 hash = u64_hash_from_str8(str8_struct(&dbgi_key));
-          U64 slot_idx = hash%dbg_info_slots_count;
+          U64 slot_idx = hash_index64(hash, dbg_info_slots_count);
           for(DbgInfoNode *n = dbg_info_slots[slot_idx]; n != 0; n = n->hash_next)
           {
             if(di_key_match(n->key, dbgi_key))
@@ -17829,7 +17829,7 @@ rd_frame(void)
             {
               String8 name = str8_skip_last_slash(file_path);
               U64 hash = d_hash_from_string__case_insensitive(name);
-              U64 slot_idx = hash%rd_state->ambiguous_path_slots_count;
+              U64 slot_idx = hash_index64(hash, rd_state->ambiguous_path_slots_count);
               RD_AmbiguousPathNode *node = 0;
               for(RD_AmbiguousPathNode *n = rd_state->ambiguous_path_slots[slot_idx];
                   n != 0;

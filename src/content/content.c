@@ -160,14 +160,14 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
 {
   //- rjf: unpack key
   U64 key_hash = u64_hash_from_str8(str8_struct(&key));
-  U64 key_slot_idx = key_hash%c_shared->key_slots_count;
+  U64 key_slot_idx = hash_index64(key_hash, c_shared->key_slots_count);
   U64 key_stripe_idx = key_slot_idx%c_shared->key_stripes_count;
   C_KeySlot *key_slot = &c_shared->key_slots[key_slot_idx];
   C_Stripe *key_stripe = &c_shared->key_stripes[key_stripe_idx];
   
   //- rjf: hash data, unpack hash
   U128 hash = u128_hash_from_str8(data);
-  U64 slot_idx = hash.u64[1]%c_shared->blob_slots_count;
+  U64 slot_idx = hash_index64(hash.u64[1], c_shared->blob_slots_count);
   U64 stripe_idx = slot_idx%c_shared->blob_stripes_count;
   C_BlobSlot *slot = &c_shared->blob_slots[slot_idx];
   C_Stripe *stripe = &c_shared->blob_stripes[stripe_idx];
@@ -273,7 +273,7 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
     if(key_is_new)
     {
       U64 root_hash = u64_hash_from_str8(str8_struct(&key.root));
-      U64 root_slot_idx = root_hash%c_shared->root_slots_count;
+      U64 root_slot_idx = hash_index64(root_hash, c_shared->root_slots_count);
       U64 root_stripe_idx = root_slot_idx%c_shared->root_stripes_count;
       C_RootSlot *root_slot = &c_shared->root_slots[root_slot_idx];
       C_Stripe *root_stripe = &c_shared->root_stripes[root_stripe_idx];
@@ -305,7 +305,7 @@ c_submit_data(C_Key key, Arena **data_arena, String8 data)
   //- rjf: decrement key ref count of expired hash
   if(!u128_match(key_expired_hash, u128_zero())) ProfScope("decrement key ref count of expired hash")
   {
-    U64 old_hash_slot_idx = key_expired_hash.u64[1]%c_shared->blob_slots_count;
+    U64 old_hash_slot_idx = hash_index64(key_expired_hash.u64[1], c_shared->blob_slots_count);
     U64 old_hash_stripe_idx = old_hash_slot_idx%c_shared->blob_stripes_count;
     C_BlobSlot *old_hash_slot = &c_shared->blob_slots[old_hash_slot_idx];
     C_Stripe *old_hash_stripe = &c_shared->blob_stripes[old_hash_stripe_idx];
@@ -332,7 +332,7 @@ internal void
 c_close_key(C_Key key)
 {
   U64 key_hash = u64_hash_from_str8(str8_struct(&key));
-  U64 key_slot_idx = key_hash%c_shared->key_slots_count;
+  U64 key_slot_idx = hash_index64(key_hash, c_shared->key_slots_count);
   U64 key_stripe_idx = key_slot_idx%c_shared->key_stripes_count;
   C_KeySlot *key_slot = &c_shared->key_slots[key_slot_idx];
   C_Stripe *key_stripe = &c_shared->key_stripes[key_stripe_idx];
@@ -347,7 +347,7 @@ c_close_key(C_Key key)
             history_idx += 1)
         {
           U128 hash = n->hash_history[(n->hash_history_gen-1-history_idx) % ArrayCount(n->hash_history)];
-          U64 hash_slot_idx = hash.u64[1]%c_shared->blob_slots_count;
+          U64 hash_slot_idx = hash_index64(hash.u64[1], c_shared->blob_slots_count);
           U64 hash_stripe_idx = hash_slot_idx%c_shared->blob_stripes_count;
           C_BlobSlot *hash_slot = &c_shared->blob_slots[hash_slot_idx];
           C_Stripe *hash_stripe = &c_shared->blob_stripes[hash_stripe_idx];
@@ -377,7 +377,7 @@ c_close_key(C_Key key)
 internal void
 c_hash_downstream_inc(U128 hash)
 {
-  U64 slot_idx = hash.u64[1]%c_shared->blob_slots_count;
+  U64 slot_idx = hash_index64(hash.u64[1], c_shared->blob_slots_count);
   U64 stripe_idx = slot_idx%c_shared->blob_stripes_count;
   C_BlobSlot *slot = &c_shared->blob_slots[slot_idx];
   C_Stripe *stripe = &c_shared->blob_stripes[stripe_idx];
@@ -397,7 +397,7 @@ c_hash_downstream_inc(U128 hash)
 internal void
 c_hash_downstream_dec(U128 hash)
 {
-  U64 slot_idx = hash.u64[1]%c_shared->blob_slots_count;
+  U64 slot_idx = hash_index64(hash.u64[1], c_shared->blob_slots_count);
   U64 stripe_idx = slot_idx%c_shared->blob_stripes_count;
   C_BlobSlot *slot = &c_shared->blob_slots[slot_idx];
   C_Stripe *stripe = &c_shared->blob_stripes[stripe_idx];
@@ -422,7 +422,7 @@ c_hash_from_key(C_Key key, U64 rewind_count)
 {
   U128 result = {0};
   U64 key_hash = u64_hash_from_str8(str8_struct(&key));
-  U64 key_slot_idx = key_hash%c_shared->key_slots_count;
+  U64 key_slot_idx = hash_index64(key_hash, c_shared->key_slots_count);
   U64 key_stripe_idx = key_slot_idx%c_shared->key_stripes_count;
   C_KeySlot *key_slot = &c_shared->key_slots[key_slot_idx];
   C_Stripe *key_stripe = &c_shared->key_stripes[key_stripe_idx];
@@ -445,7 +445,7 @@ c_data_from_hash(Access *access, U128 hash)
 {
   ProfBeginFunction();
   String8 result = {0};
-  U64 slot_idx = hash.u64[1]%c_shared->blob_slots_count;
+  U64 slot_idx = hash_index64(hash.u64[1], c_shared->blob_slots_count);
   U64 stripe_idx = slot_idx%c_shared->blob_stripes_count;
   C_BlobSlot *slot = &c_shared->blob_slots[slot_idx];
   C_Stripe *stripe = &c_shared->blob_stripes[stripe_idx];

@@ -338,7 +338,7 @@ smsv_async_tick(void)
       
       // rjf: evict task from cache
       U64 hash = u64_hash_from_str8(task->local_path);
-      U64 slot_idx = hash%w32_smsv_state->task_slots_count;
+      U64 slot_idx = hash_index64(hash, w32_smsv_state->task_slots_count);
       W32_SMSV_TaskSlot *slot = &w32_smsv_state->task_slots[slot_idx];
       Stripe *stripe = stripe_from_slot_idx(&w32_smsv_state->task_stripes, slot_idx);
       RWMutexScope(stripe->rw_mutex, 1)
@@ -395,7 +395,7 @@ smsv_fill_local_path(String8 path)
   if(!already_cached_locally)
   {
     U64 hash = u64_hash_from_str8(path);
-    U64 slot_idx = hash%w32_smsv_state->task_slots_count;
+    U64 slot_idx = hash_index64(hash, w32_smsv_state->task_slots_count);
     W32_SMSV_TaskSlot *slot = &w32_smsv_state->task_slots[slot_idx];
     Stripe *stripe = stripe_from_slot_idx(&w32_smsv_state->task_stripes, slot_idx);
     for(B32 write_mode = 0; write_mode <= 1; write_mode += 1)
@@ -450,7 +450,7 @@ smsv_status_from_local_path(String8 path)
     Temp scratch = scratch_begin(0, 0);
     String8 path_normalized = path_normalized_from_string(scratch.arena, path);
     U64 hash = u64_hash_from_str8(path_normalized);
-    U64 slot_idx = hash%w32_smsv_state->task_slots_count;
+    U64 slot_idx = hash_index64(hash, w32_smsv_state->task_slots_count);
     W32_SMSV_TaskSlot *slot = &w32_smsv_state->task_slots[slot_idx];
     Stripe *stripe = stripe_from_slot_idx(&w32_smsv_state->task_stripes, slot_idx);
     RWMutexScope(stripe->rw_mutex, 0)

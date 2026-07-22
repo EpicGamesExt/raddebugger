@@ -52,8 +52,8 @@ cfg_key_map_from_cfg(Arena *arena)
         {
           U64 name_hash = d_hash_from_string(name);
           U64 binding_hash = d_hash_from_string(str8_struct(&binding));
-          U64 name_slot_idx = name_hash%key_map->name_slots_count;
-          U64 binding_slot_idx = binding_hash%key_map->binding_slots_count;
+          U64 name_slot_idx = hash_index64(name_hash, key_map->name_slots_count);
+          U64 binding_slot_idx = hash_index64(binding_hash, key_map->binding_slots_count);
           CFG_KeyMapNode *n = push_array(arena, CFG_KeyMapNode, 1);
           n->cfg_id = keybinding->id;
           n->name = push_str8_copy(arena, name);
@@ -74,7 +74,7 @@ cfg_key_map_node_ptr_list_from_name(Arena *arena, CFG_KeyMap *key_map, String8 s
   CFG_KeyMapNodePtrList list = {0};
   {
     U64 hash = d_hash_from_string(string);
-    U64 slot_idx = hash%key_map->name_slots_count;
+    U64 slot_idx = hash_index64(hash, key_map->name_slots_count);
     for(CFG_KeyMapNode *n = key_map->name_slots[slot_idx].first; n != 0; n = n->name_hash_next)
     {
       if(str8_match(n->name, string, 0))
@@ -95,7 +95,7 @@ cfg_key_map_node_ptr_list_from_binding(Arena *arena, CFG_KeyMap *key_map, CFG_Bi
   CFG_KeyMapNodePtrList list = {0};
   {
     U64 hash = d_hash_from_string(str8_struct(&binding));
-    U64 slot_idx = hash%key_map->binding_slots_count;
+    U64 slot_idx = hash_index64(hash, key_map->binding_slots_count);
     for(CFG_KeyMapNode *n = key_map->binding_slots[slot_idx].first; n != 0; n = n->binding_hash_next)
     {
       if(MemoryMatchStruct(&binding, &n->binding))

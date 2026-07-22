@@ -744,6 +744,34 @@ count_digits_u64(U64 v, U64 radix)
 }
 
 ////////////////////////////////
+
+internal U32
+hash_index32(U32 hash, U32 count)
+{
+    U32 result = 0;
+#if COMPILER_MSVC && ARCH_X64
+    result = __emulu(hash, count) >> 32;
+#else
+    result = ((U64)hash * count) >> 32;
+#endif
+    return result;
+}
+
+internal U64
+hash_index64(U64 hash, U64 count)
+{
+    U64 result = 0;
+#if COMPILER_MSVC && ARCH_X64
+    (void)_umul128(hash, count, &result);
+#elif COMPILER_MSVC && ARCH_ARM64
+    result = __umulh(hash, count);
+#else
+    result = ((unsigned __int128)hash * count) >> 64;
+#endif
+    return result;
+}
+
+////////////////////////////////
 //~ rjf: Third Party Includes
 
 #if !BUILD_SUPPLEMENTARY_UNIT

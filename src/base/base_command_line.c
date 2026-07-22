@@ -11,7 +11,7 @@ cmd_line_slot_from_string(CmdLine *cmd_line, String8 string)
   if(cmd_line->option_table_size != 0)
   {
     U64 hash = u64_hash_from_str8(string);
-    U64 bucket = hash % cmd_line->option_table_size;
+    U64 bucket = hash_index64(hash, cmd_line->option_table_size);
     slot = &cmd_line->option_table[bucket];
   }
   return slot;

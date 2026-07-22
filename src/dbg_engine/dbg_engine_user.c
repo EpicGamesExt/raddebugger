@@ -1448,7 +1448,7 @@ d_query_cached_locals_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff)
       break;
     }
     U64 hash = u64_hash_from_str8(str8_struct(&dbgi_key));
-    U64 slot_idx = hash % cache->table_size;
+    U64 slot_idx = hash_index64(hash, cache->table_size);
     D_RunLocalsCacheSlot *slot = &cache->table[slot_idx];
     D_RunLocalsCacheNode *node = 0;
     for(D_RunLocalsCacheNode *n = slot->first; n != 0; n = n->hash_next)
@@ -1502,7 +1502,7 @@ d_query_cached_member_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff)
       break;
     }
     U64 hash = u64_hash_from_str8(str8_struct(&dbgi_key));
-    U64 slot_idx = hash % cache->table_size;
+    U64 slot_idx = hash_index64(hash, cache->table_size);
     D_RunLocalsCacheSlot *slot = &cache->table[slot_idx];
     D_RunLocalsCacheNode *node = 0;
     for(D_RunLocalsCacheNode *n = slot->first; n != 0; n = n->hash_next)

@@ -740,7 +740,7 @@ d_entity_from_handle(D_Handle handle)
   if(!d_handle_match(handle, d_handle_zero()))
   {
     U64 hash = d_hash_from_handle(handle);
-    U64 slot_idx = hash%d_entity_ctx->hash_slots_count;
+    U64 slot_idx = hash_index64(hash, d_entity_ctx->hash_slots_count);
     D_EntityHashSlot *slot = &d_entity_ctx->hash_slots[slot_idx];
     D_EntityHashNode *node = 0;
     for(D_EntityHashNode *n = slot->first; n != 0; n = n->next)
@@ -1059,7 +1059,7 @@ d_entity_alloc(D_EntityCtxRWStore *store, D_Entity *parent, D_EntityKind kind, A
     // rjf: insert into hash map
     {
       U64 hash = d_hash_from_handle(handle);
-      U64 slot_idx = hash%store->ctx.hash_slots_count;
+      U64 slot_idx = hash_index64(hash, store->ctx.hash_slots_count);
       D_EntityHashSlot *slot = &store->ctx.hash_slots[slot_idx];
       D_EntityHashNode *node = 0;
       for(D_EntityHashNode *n = slot->first; n != 0; n = n->next)
@@ -1131,7 +1131,7 @@ d_entity_release(D_EntityCtxRWStore *store, D_Entity *entity)
       // rjf: remove from hash map
       {
         U64 hash = d_hash_from_handle(t->e->handle);
-        U64 slot_idx = hash%store->ctx.hash_slots_count;
+        U64 slot_idx = hash_index64(hash, store->ctx.hash_slots_count);
         D_EntityHashSlot *slot = &store->ctx.hash_slots[slot_idx];
         D_EntityHashNode *node = 0;
         for(D_EntityHashNode *n = slot->first; n != 0; n = n->next)
@@ -1516,7 +1516,7 @@ d_thread_read_reg_block(D_Handle handle, void *reg_block)
       D_Entity *process = d_process_from_entity(thread);
       D_DumpCache *cache = &d_ctrl_state->dump_cache;
       U64 hash = d_hash_from_handle(process->handle);
-      U64 slot_idx = hash%cache->slots_count;
+      U64 slot_idx = hash_index64(hash, cache->slots_count);
       Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
       RWMutexScope(stripe->rw_mutex, 0)
       {
@@ -1647,7 +1647,7 @@ d_cached_reg_block_from_thread(Arena *arena, D_Handle handle)
   ARCH_Info *arch_info = arch_info_from_arch(arch);
   U64 reg_block_size = arch_info->reg_block_size;
   U64 hash = d_hash_from_handle(handle);
-  U64 slot_idx = hash%cache->slots_count;
+  U64 slot_idx = hash_index64(hash, cache->slots_count);
   U64 stripe_idx = slot_idx%cache->stripes_count;
   D_ThreadRegCacheSlot *slot = &cache->slots[slot_idx];
   D_ThreadRegCacheStripe *stripe = &cache->stripes[stripe_idx];
@@ -1736,7 +1736,7 @@ d_info_from_module(Access *access, D_Handle module)
   {
     D_ModuleInfoCache *cache = &d_ctrl_state->module_info_cache;
     U64 hash = d_hash_from_handle(module);
-    U64 slot_idx = hash%cache->slots_count;
+    U64 slot_idx = hash_index64(hash, cache->slots_count);
     D_ModuleInfoCacheSlot *slot = &cache->slots[slot_idx];
     Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
     MutexScopeR(stripe->rw_mutex) for(D_ModuleInfoCacheNode *n = slot->first; n != 0; n = n->next)
@@ -2755,7 +2755,7 @@ d_ctrl_thread__module_open(D_Handle process, D_Handle module, U64 base_vaddr, DM
   {
     D_ModuleInfoCache *cache = &d_ctrl_state->module_info_cache;
     U64 hash = d_hash_from_handle(module);
-    U64 slot_idx = hash%cache->slots_count;
+    U64 slot_idx = hash_index64(hash, cache->slots_count);
     D_ModuleInfoCacheSlot *slot = &cache->slots[slot_idx];
     Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
     MutexScopeW(stripe->rw_mutex)
@@ -2795,7 +2795,7 @@ d_ctrl_thread__module_close(D_Handle process, D_Handle module, U64 base_vaddr)
   {
     D_ModuleInfoCache *cache = &d_ctrl_state->module_info_cache;
     U64 hash = d_hash_from_handle(module);
-    U64 slot_idx = hash%cache->slots_count;
+    U64 slot_idx = hash_index64(hash, cache->slots_count);
     Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
     D_ModuleInfoCacheSlot *slot = &cache->slots[slot_idx];
     MutexScopeW(stripe->rw_mutex) for(;;)
@@ -2863,7 +2863,7 @@ d_ctrl_thread__close_dump_process(D_MsgID msg_id, D_Handle process)
   {
     D_DumpCache *cache = &d_ctrl_state->dump_cache;
     U64 hash = d_hash_from_handle(process);
-    U64 slot_idx = hash%cache->slots_count;
+    U64 slot_idx = hash_index64(hash, cache->slots_count);
     Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
     
     // rjf: remove node
@@ -3486,7 +3486,7 @@ d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Enti
           {
             // rjf: find cached result
             U64 hash = d_hash_from_handle(mod->handle);
-            U64 slot_idx = hash%d_ctrl_state->module_req_cache_slots_count;
+            U64 slot_idx = hash_index64(hash, d_ctrl_state->module_req_cache_slots_count);
             D_ModuleReqCacheNode *slot = d_ctrl_state->module_req_cache_slots[slot_idx];
             D_ModuleReqCacheNode *node = 0;
             for(D_ModuleReqCacheNode *n = slot; n != 0; n = n->next)
@@ -4034,7 +4034,7 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   {
     U64 hash = d_hash_from_handle(process);
     D_DumpCache *cache = &d_ctrl_state->dump_cache;
-    U64 slot_idx = hash%cache->slots_count;
+    U64 slot_idx = hash_index64(hash, cache->slots_count);
     Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
     RWMutexScope(stripe->rw_mutex, 1)
     {
@@ -5552,7 +5552,7 @@ d_process_read(D_Handle process, Rng1U64 range, void *dst)
     {
       D_DumpCache *cache = &d_ctrl_state->dump_cache;
       U64 hash = d_hash_from_handle(process);
-      U64 slot_idx = hash%cache->slots_count;
+      U64 slot_idx = hash_index64(hash, cache->slots_count);
       Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
       RWMutexScope(stripe->rw_mutex, 0)
       {
@@ -6123,7 +6123,7 @@ d_call_stack_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_
           if(dst_e != &d_entity_nil)
           {
             U64 hash = d_hash_from_handle(dst_e->handle);
-            U64 slot_idx = hash%dst_ctx->hash_slots_count;
+            U64 slot_idx = hash_index64(hash, dst_ctx->hash_slots_count);
             D_EntityHashSlot *slot = &dst_ctx->hash_slots[slot_idx];
             D_EntityHashNode *node = 0;
             for(D_EntityHashNode *n = slot->first; n != 0; n = n->next)

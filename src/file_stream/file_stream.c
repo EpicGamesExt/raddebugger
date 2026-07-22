@@ -168,7 +168,7 @@ fs_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 *
   U64 path_hash = u64_hash_from_str8(path);
   if(lane_idx() == 0 && read_good)
   {
-    U64 slot_idx = path_hash%fs_shared->slots_count;
+    U64 slot_idx = hash_index64(path_hash, fs_shared->slots_count);
     FS_Slot *slot = &fs_shared->slots[slot_idx];
     Stripe *stripe = stripe_from_slot_idx(&fs_shared->stripes, slot_idx);
     RWMutexScope(stripe->rw_mutex, 1)
@@ -238,7 +238,7 @@ fs_key_from_path_range(String8 path, Rng1U64 range, U64 endt_us)
     U64 gen = 0;
     {
       U64 hash = u64_hash_from_str8(path);
-      U64 slot_idx = hash%fs_shared->slots_count;
+      U64 slot_idx = hash_index64(hash, fs_shared->slots_count);
       FS_Slot *slot = &fs_shared->slots[slot_idx];
       Stripe *stripe = stripe_from_slot_idx(&fs_shared->stripes, slot_idx);
       RWMutexScope(stripe->rw_mutex, 0)
