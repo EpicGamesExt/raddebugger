@@ -1,7 +1,7 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-internal void
+LNK_HASHER_FN void
 lnk_hasher_init(LNK_Hasher *hasher, LNK_HashKind kind)
 {
   hasher->kind = kind;
@@ -12,7 +12,7 @@ lnk_hasher_init(LNK_Hasher *hasher, LNK_HashKind kind)
   }
 }
 
-internal void
+LNK_HASHER_FN void
 lnk_hasher_update(LNK_Hasher *hasher, void *data, U64 size)
 {
   switch (hasher->kind) {
@@ -22,8 +22,8 @@ lnk_hasher_update(LNK_Hasher *hasher, void *data, U64 size)
   }
 }
 
-internal U64
-lnk_hasher_digest(LNK_Hasher *hasher)
+LNK_HASHER_FN U64
+lnk_hasher_digest64(LNK_Hasher *hasher)
 {
   U64 hash = 0;
   switch (hasher->kind) {
@@ -34,7 +34,22 @@ lnk_hasher_digest(LNK_Hasher *hasher)
   return hash;
 }
 
-internal String8
+LNK_HASHER_FN U128
+lnk_hasher_digest128(LNK_Hasher *hasher)
+{
+  U128 hash = {0};
+  switch (hasher->kind) {
+  case LNK_HashKind_BLAKE3: blake3_hasher_finalize(&hasher->u.blake3, (U8 *)&hash, sizeof(hash)); break;
+  case LNK_HashKind_XXHash: {
+    XXH128_hash_t *out = (XXH128_hash_t *)&hash;
+    *out = XXH3_128bits_digest(&hasher->u.xxhash);
+  } break;
+  default: InvalidPath; break;
+  }
+  return hash;
+}
+
+LNK_HASHER_FN String8
 lnk_string_hash_kind(LNK_HashKind hash_kind)
 {
 #define X(NAME) case LNK_HashKind_##NAME: return str8_lit(Stringify(NAME));
@@ -45,7 +60,7 @@ lnk_string_hash_kind(LNK_HashKind hash_kind)
   return str8_zero();
 }
 
-internal LNK_HashKind
+LNK_HASHER_FN LNK_HashKind
 lnk_hash_kind_from_llvm(LLVM_GHashAlgEnum v)
 {
   switch (v) {

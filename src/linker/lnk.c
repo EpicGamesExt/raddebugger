@@ -185,6 +185,12 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
 
     // By default keep full type names, override when TPI/IPI streams overflow.
     "/RAD_PDB_HASH_TYPE_NAMES:NONE",
+
+    // TODO: The ICF algorithm requires a cryptographic hash to establish
+    // equivalence. With xxHash and similar non-cryptographic hashes,
+    // the algorithm must compare each section property before
+    // deciding whether sections are truly identical.
+    "/RAD_ICF_HASH_KIND:BLAKE3",
   };
 
   char *push_opts[] = {
@@ -3003,35 +3009,25 @@ lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj
   ProfEnd();
 }
 
-typedef enum LNK_ICF_ColorSpace
-{
-  LNK_ICF_ColorSpace_Null,
-  LNK_ICF_ColorSpace_Code,
-  LNK_ICF_ColorSpace_Unwind,
-  LNK_ICF_ColorSpace_VFTable,
-  LNK_ICF_ColorSpace_ConstData, // string literals, float consts, const tables (/Gw and /GF)
-  LNK_ICF_ColorSpace_COUNT,
-} LNK_ICF_ColorSpace;
+#define LNK_ICF_Scope_XList \
+  X(Null)                   \
+  X(Code)                   \
+  X(Unwind)                 \
+  X(VFTable)                \
+  X(ConstData) // string literals, float consts, const tables (/Gw and /GF)
 
-internal String8
-lnk_string_from_icf_color_space(LNK_ICF_ColorSpace color_space)
+typedef enum LNK_ICF_Scope
 {
-  String8 result = str8_lit("Unknown");
-  switch (color_space) {
-  case LNK_ICF_ColorSpace_Null:      { result = str8_lit("Null");      } break;
-  case LNK_ICF_ColorSpace_Code:      { result = str8_lit("Code");      } break;
-  case LNK_ICF_ColorSpace_Unwind:    { result = str8_lit("Unwind");    } break;
-  case LNK_ICF_ColorSpace_VFTable:   { result = str8_lit("VFTables");  } break;
-  case LNK_ICF_ColorSpace_ConstData: { result = str8_lit("ConstData"); } break;
-  case LNK_ICF_ColorSpace_COUNT:     { result = str8_lit("Unknown");   } break;
-  }
-  return result;
-}
+#define X(ID) LNK_ICF_Scope_##ID,
+  LNK_ICF_Scope_XList
+  LNK_ICF_Scope_COUNT
+#undef X
+} LNK_ICF_Scope;
 
-internal LNK_ICF_ColorSpace
-lnk_icf_color_space_from_section(LNK_Obj *obj, U32 sect_idx)
+internal LNK_ICF_Scope
+lnk_icf_scope_from_section(LNK_Obj *obj, U32 sect_idx)
 {
-  LNK_ICF_ColorSpace result = LNK_ICF_ColorSpace_Null;
+  LNK_ICF_Scope result = LNK_ICF_Scope_Null;
 
   // * section flags filter *
   COFF_SectionFlags expected_flags = COFF_SectionFlag_LnkCOMDAT | COFF_SectionFlag_MemRead;
@@ -3041,7 +3037,7 @@ lnk_icf_color_space_from_section(LNK_Obj *obj, U32 sect_idx)
   }
 
   if (obj->section_flags[sect_idx] & COFF_SectionFlag_CntCode) {
-    result = LNK_ICF_ColorSpace_Code;
+    result = LNK_ICF_Scope_Code;
     goto exit;
   }
 
@@ -3054,7 +3050,7 @@ lnk_icf_color_space_from_section(LNK_Obj *obj, U32 sect_idx)
     // * include unwind info metadata *
     //
     if (str8_match(section_name, str8_lit(".xdata"), 0) || str8_match(section_name, str8_lit(".pdata"), 0)) {
-      result = LNK_ICF_ColorSpace_Unwind;
+      result = LNK_ICF_Scope_Unwind;
       goto exit;
     }
 
@@ -3070,7 +3066,7 @@ lnk_icf_color_space_from_section(LNK_Obj *obj, U32 sect_idx)
       // * include virtual function tables *
       //
       if (str8_starts_with(comdat_name, str8_lit(MSCRT_VFTABLE_SYMBOL_PREFIX))) {
-        result = LNK_ICF_ColorSpace_VFTable;
+        result = LNK_ICF_Scope_VFTable;
         goto exit;
       } 
 
@@ -3092,7 +3088,7 @@ lnk_icf_color_space_from_section(LNK_Obj *obj, U32 sect_idx)
             select == COFF_ComdatSelect_SameSize   ||
             select == COFF_ComdatSelect_ExactMatch ||
             select == COFF_ComdatSelect_Largest) {
-          result = LNK_ICF_ColorSpace_ConstData;
+          result = LNK_ICF_Scope_ConstData;
           goto exit;
         }
       }
@@ -3100,6 +3096,7 @@ lnk_icf_color_space_from_section(LNK_Obj *obj, U32 sect_idx)
   }
 
   exit:;
+  Assert(result == LNK_ICF_Scope_Null || obj->comdats[sect_idx] != max_U32); // TODO: are symlinks on COMDATs optional?
   return result;
 }
 
@@ -3143,7 +3140,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
     U64                 color_slot_idx;
     U32                 obj_idx;
     U32                 sect_idx;
-    LNK_ICF_ColorSpace  color_space;
+    LNK_ICF_Scope       scope;
   } Contrib;
 
   // reuse both tables without clearing them between refinement rounds
@@ -3168,8 +3165,9 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
   Temp scratch  = scratch_begin(&arena,1);
   Temp scratch2 = scratch_begin(&scratch.arena,1); // retain relocation metadata through temporary associated-section traversals
 
-  LNK_OptTask  *task = raw_task;
-  LNK_Obj     **objs = task->objs;
+  LNK_OptTask   *task          = raw_task;
+  LNK_Obj      **objs          = task->objs;
+  LNK_HashKind   icf_hash_kind = task->config->icf_hash_kind;
 
   if (task->config->llvm_addrsig == LNK_SwitchState_Yes) {
     ProfBegin("Flag significant sections");
@@ -3235,7 +3233,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
     U64      obj_idx = task->obj_indices[task_id].v[i];
     LNK_Obj *obj     = objs[obj_idx];
     for EachIndex(sect_idx, obj->header.section_count_no_null) {
-      if (lnk_icf_color_space_from_section(obj, sect_idx)) {
+      if (lnk_icf_scope_from_section(obj, sect_idx)) {
         contrib_counts[obj_idx] += 1;
       }
     }
@@ -3243,54 +3241,50 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
   ProfEnd();
   barrier_wait(tp->barrier);
 
-  U64       contrib_count      = sum_array_u64(task->objs_count, contrib_counts);
-  U64      *noncontrib_offsets = 0;
-  U64      *contrib_offsets    = 0;
-  U64     **color_map          = 0;
-  Contrib  *contribs           = 0;
-  Rng1U64  *contrib_ranges     = 0;
-  U64      *split_counts       = 0;
-  U64      *split_offsets      = 0;
-  U32      *is_part_stable     = 0;
-  U64      *next_color         = 0;
+  struct Shared {
+    U64       contrib_count;
+    U64      *noncontrib_offsets;
+    U64      *contrib_offsets;
+    U64     **color_map;
+    Contrib  *contribs;
+    Rng1U64  *contrib_ranges;
+    U64      *split_counts;
+    U64      *split_offsets;
+    U32      *is_part_stable;
+    U64      *next_color;
+  } shared = {
+    .contrib_count = sum_array_u64(task->objs_count, contrib_counts)
+  };
   if (task_id == 0) {
     ProfBegin("Init");
 
-    noncontrib_offsets = push_array(scratch.arena, U64, task->objs_count);
+    shared.noncontrib_offsets = push_array(scratch.arena, U64, task->objs_count);
     U64 noncontrib_count = 0;
     for EachIndex(obj_idx, task->objs_count) {
-      noncontrib_offsets[obj_idx] = noncontrib_count;
+      shared.noncontrib_offsets[obj_idx] = noncontrib_count;
       noncontrib_count += objs[obj_idx]->header.section_count_no_null - contrib_counts[obj_idx];
     }
 
-    color_map = push_array(scratch.arena, U64 *, task->objs_count);
+    shared.color_map = push_array(scratch.arena, U64 *, task->objs_count);
     for EachIndex(obj_idx, task->objs_count) {
       LNK_Obj *obj = objs[obj_idx];
-      color_map[obj_idx] = push_array(scratch.arena, U64, obj->header.section_count_no_null);
+      shared.color_map[obj_idx] = push_array(scratch.arena, U64, obj->header.section_count_no_null);
     }
 
-    contrib_offsets = offsets_from_counts_array_u64(scratch.arena, contrib_counts, task->objs_count);
-    contribs        = push_array(scratch.arena, Contrib, contrib_count);
-    contrib_ranges  = tp_divide_work(scratch.arena, contrib_count, tp->worker_count);
-    split_counts    = push_array(scratch.arena, U64, tp->worker_count);
-    split_offsets   = push_array(scratch.arena, U64, tp->worker_count + 1);
-    is_part_stable  = push_array(scratch.arena, U32, 1);
-    next_color      = push_array(scratch.arena, U64, 1);
-    *next_color     = LNK_ICF_ColorSpace_COUNT + noncontrib_count;
+    shared.contrib_offsets = offsets_from_counts_array_u64(scratch.arena, contrib_counts, task->objs_count);
+    shared.contribs        = push_array(scratch.arena, Contrib, shared.contrib_count);
+    shared.contrib_ranges  = tp_divide_work(scratch.arena, shared.contrib_count, tp->worker_count);
+    shared.split_counts    = push_array(scratch.arena, U64, tp->worker_count);
+    shared.split_offsets   = push_array(scratch.arena, U64, tp->worker_count + 1);
+    shared.is_part_stable  = push_array(scratch.arena, U32, 1);
+    shared.next_color      = push_array(scratch.arena, U64, 1);
+    *shared.next_color     = LNK_ICF_Scope_COUNT + noncontrib_count;
 
-    lnk_log(LNK_Log_Debug, "  Contrib count: %S", str8_from_count(scratch.arena, contrib_count));
+    lnk_log(LNK_Log_Debug, "  Contrib count: %S", str8_from_count(scratch.arena, shared.contrib_count));
 
     ProfEnd();
   }
-  tp_broadcast(&contrib_offsets);
-  tp_broadcast(&noncontrib_offsets);
-  tp_broadcast(&color_map);
-  tp_broadcast(&contribs);
-  tp_broadcast(&contrib_ranges);
-  tp_broadcast(&split_counts);
-  tp_broadcast(&split_offsets);
-  tp_broadcast(&is_part_stable);
-  tp_broadcast(&next_color);
+  tp_broadcast(&shared);
 
   ProfBegin("Compute Hashes");
   HashMap reloc_target_hm = {0}; // cache source-symbol resolution so refinement only reads colors and hashes
@@ -3300,20 +3294,20 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
     U64      cursor            = 0;
     U64      noncontrib_cursor = 0;
     for EachIndex(sect_idx, obj->header.section_count_no_null) {
-      LNK_ICF_ColorSpace color_space = lnk_icf_color_space_from_section(obj, sect_idx);
-      if (color_space == LNK_ICF_ColorSpace_Null) {
+      LNK_ICF_Scope scope = lnk_icf_scope_from_section(obj, sect_idx);
+      if (scope == LNK_ICF_Scope_Null) {
         // assign colors in object order to avoid a contended atomic allocator
-        color_map[obj_idx][sect_idx] = LNK_ICF_ColorSpace_COUNT + noncontrib_offsets[obj_idx] + noncontrib_cursor++;
+        shared.color_map[obj_idx][sect_idx] = LNK_ICF_Scope_COUNT + shared.noncontrib_offsets[obj_idx] + noncontrib_cursor++;
         continue;
       }
 
       // compute contribution index
-      U64 contrib_idx = contrib_offsets[obj_idx] + cursor++;
-      Contrib *contrib = &contribs[contrib_idx];
+      U64      contrib_idx = shared.contrib_offsets[obj_idx] + cursor++;
+      Contrib *contrib     = &shared.contribs[contrib_idx];
       *contrib = (Contrib){
         .obj_idx     = safe_cast_u32(obj->input_idx),
         .sect_idx    = safe_cast_u32(sect_idx),
-        .color_space = color_space,
+        .scope       = scope,
       };
 
       Temp temp = temp_begin(scratch.arena);
@@ -3331,8 +3325,8 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
         contrib->reloc_targets = push_array(scratch2.arena, RelocTarget *, contrib->reloc_count);
       }
 
-      blake3_hasher hasher; blake3_hasher_init(&hasher);
-      blake3_hasher_update(&hasher, &color_space, sizeof(color_space));
+      LNK_Hasher hasher; lnk_hasher_init(&hasher, icf_hash_kind);
+      lnk_hasher_update_struct(&hasher, &scope);
 
       U64 reloc_cursor = 0;
       for EachNode(associated_n, U32Node, associated_sections.first) {
@@ -3340,8 +3334,8 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
         String8             associated_data   = str8_substr(obj->data, r1u64s(associated_header->foff, associated_header->fsize));
         COFF_RelocArray     associated_relocs = lnk_coff_relocs_from_section_header(obj, associated_header);
 
-        blake3_hasher_update(&hasher, associated_data.str, associated_data.size);
-        blake3_hasher_update(&hasher, &associated_relocs.count, sizeof(associated_relocs.count));
+        lnk_hasher_update_string(&hasher, associated_data);
+        lnk_hasher_update_struct(&hasher, &associated_relocs.count);
 
         for EachIndex(reloc_idx, associated_relocs.count) {
           COFF_Reloc *r = &associated_relocs.v[reloc_idx];
@@ -3377,7 +3371,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
                   }
                 }
 
-                target->color = &color_map[target_obj->input_idx][target_sect - 1];
+                target->color = &shared.color_map[target_obj->input_idx][target_sect - 1];
               } break;
               default: {
                 target->static_id = Compose64Bit(target_ref.obj->input_idx, target_ref.symbol_idx);
@@ -3392,17 +3386,17 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
           }
 
           contrib->reloc_targets[reloc_cursor++] = target;
-          blake3_hasher_update(&hasher, &r->apply_off,  sizeof(r->apply_off));
-          blake3_hasher_update(&hasher, &r->type,       sizeof(r->type));
-          blake3_hasher_update(&hasher, &target->interp, sizeof(target->interp));
-          blake3_hasher_update(&hasher, &target->value,  sizeof(target->value));
+          lnk_hasher_update_struct(&hasher, &r->apply_off);
+          lnk_hasher_update_struct(&hasher, &r->type);
+          lnk_hasher_update_struct(&hasher, &target->interp);
+          lnk_hasher_update_struct(&hasher, &target->value);
         }
       }
       Assert(reloc_cursor == contrib->reloc_count);
-      blake3_hasher_finalize(&hasher, (U8 *)&contrib->static_hash, sizeof(contrib->static_hash));
+      contrib->static_hash = lnk_hasher_digest128(&hasher);
 
       // seed foldable sections with their immutable content and relocation shape
-      color_map[obj_idx][sect_idx] = hash_map_hasher(str8_struct(&contrib->static_hash)) | (1ull << 63);
+      shared.color_map[obj_idx][sect_idx] = hash_map_hasher(str8_struct(&contrib->static_hash)) | (1ull << 63);
       temp_end(temp);
     }
   }
@@ -3414,7 +3408,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
   U64              *table_generation = 0;
   if (task_id == 0) {
     ProfBegin("Alloc hash tables");
-    color_table.slots_count     = u64_up_to_pow2(Max(2, contrib_count*2));
+    color_table.slots_count     = u64_up_to_pow2(Max(2, shared.contrib_count*2));
     color_table.slots           = push_array(scratch.arena, ColorHashSlot, color_table.slots_count);
     old_color_table.slots_count = color_table.slots_count;
     old_color_table.slots       = push_array(scratch.arena, OldColorHashSlot, old_color_table.slots_count);
@@ -3438,7 +3432,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
 
     if (task_id == 0) {
       // reset color status tracker
-      *is_part_stable = 1;
+      *shared.is_part_stable = 1;
 
       // update hash tables generations
       Assert(*table_generation < (max_U64 >> 2));
@@ -3452,19 +3446,19 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
     U64 ready_state            = (table_generation_value << 2) | 2;
 
     ProfBegin("Compute colored hashes");
-    for EachInRange(contrib_idx, contrib_ranges[task_id]) {
-      Contrib *contrib = &contribs[contrib_idx];
-      contrib->key.old_color = color_map[contrib->obj_idx][contrib->sect_idx];
+    for EachInRange(contrib_idx, shared.contrib_ranges[task_id]) {
+      Contrib *contrib = &shared.contribs[contrib_idx];
+      contrib->key.old_color = shared.color_map[contrib->obj_idx][contrib->sect_idx];
 
-      blake3_hasher hasher; blake3_hasher_init(&hasher);
-      blake3_hasher_update(&hasher, &contrib->static_hash, sizeof(contrib->static_hash));
+      // apply colors from section references
+      LNK_Hasher hasher; lnk_hasher_init(&hasher, icf_hash_kind);
+      lnk_hasher_update_struct(&hasher, &contrib->static_hash);
       for EachIndex(reloc_idx, contrib->reloc_count) {
         RelocTarget *target    = contrib->reloc_targets[reloc_idx];
         U64          target_id = target->color ? *target->color : target->static_id;
-        blake3_hasher_update(&hasher, &target_id, sizeof(target_id));
+        lnk_hasher_update_struct(&hasher, &target_id);
       }
-      U128 hash;
-      blake3_hasher_finalize(&hasher, (U8 *)&hash, sizeof(hash));
+      U128 hash = lnk_hasher_digest128(&hasher);
 
       // insert the colored hash into the concurrent table
       contrib->key.hash = hash;
@@ -3508,10 +3502,10 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
 
     // publish one old-color record per color group
     ProfBegin("Index color groups");
-    Rng1U64 contrib_range = contrib_ranges[task_id];
+    Rng1U64 contrib_range = shared.contrib_ranges[task_id];
     for EachInRange(contrib_idx, contrib_range) {
-       Contrib       *contrib = &contribs[contrib_idx];
-       ColorHashSlot *slot    = &color_table.slots[contrib->color_slot_idx];
+      Contrib       *contrib = &shared.contribs[contrib_idx];
+      ColorHashSlot *slot    = &color_table.slots[contrib->color_slot_idx];
       if (ins_atomic_u64_eval(&slot->first_contrib_idx) == contrib_idx) {
         Assert(old_color_table.slots_count > 0 && (old_color_table.slots_count & (old_color_table.slots_count - 1)) == 0);
         U64 old_color    = slot->key.old_color;
@@ -3555,16 +3549,16 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
     ProfBegin("Count color splits");
     U64 split_count = 0;
     for EachInRange(contrib_idx, contrib_range) {
-       Contrib       *contrib    = &contribs[contrib_idx];
-       ColorHashSlot *color_slot = &color_table.slots[contrib->color_slot_idx];
+      Contrib       *contrib    = &shared.contribs[contrib_idx];
+      ColorHashSlot *color_slot = &color_table.slots[contrib->color_slot_idx];
       if (ins_atomic_u64_eval(&color_slot->first_contrib_idx) != contrib_idx) { continue; }
 
-       OldColorHashSlot *old_color_slot = &old_color_table.slots[color_slot->old_color_slot_idx];
+      OldColorHashSlot *old_color_slot = &old_color_table.slots[color_slot->old_color_slot_idx];
       if (ins_atomic_u64_eval(&old_color_slot->first_contrib_idx) != contrib_idx) {
         split_count += 1;
       }
     }
-    split_counts[task_id] = split_count;
+    shared.split_counts[task_id] = split_count;
     ProfEnd();
     barrier_wait(tp->barrier);
 
@@ -3572,16 +3566,16 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
     if (task_id == 0) {
       ProfBegin("Prefix color splits");
 
-      U64 start_next_color  = *next_color;
+      U64 start_next_color  = *shared.next_color;
       U64 total_split_count = 0;
       for EachIndex(worker_id, tp->worker_count) {
-        split_offsets[worker_id] = total_split_count;
-        total_split_count += split_counts[worker_id];
+        shared.split_offsets[worker_id] = total_split_count;
+        total_split_count += shared.split_counts[worker_id];
       }
-      split_offsets[tp->worker_count] = start_next_color;
+      shared.split_offsets[tp->worker_count] = start_next_color;
       
-      *next_color += total_split_count;
-      *is_part_stable = (total_split_count == 0);
+      *shared.next_color += total_split_count;
+      *shared.is_part_stable = (total_split_count == 0);
 
       lnk_log(LNK_Log_Debug, "  Round %llu found %S splits", iter_count, str8_from_count(scratch.arena, total_split_count));
 
@@ -3591,13 +3585,13 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
 
     // assign old and split colors in deterministic contribution order
     ProfBegin("Assign colors");
-    U64 next_split_color = split_offsets[tp->worker_count] + split_offsets[task_id];
+    U64 next_split_color = shared.split_offsets[tp->worker_count] + shared.split_offsets[task_id];
     for EachInRange(contrib_idx, contrib_range) {
-       Contrib       *contrib    = &contribs[contrib_idx];
-       ColorHashSlot *color_slot = &color_table.slots[contrib->color_slot_idx];
+      Contrib       *contrib    = &shared.contribs[contrib_idx];
+      ColorHashSlot *color_slot = &color_table.slots[contrib->color_slot_idx];
       if (ins_atomic_u64_eval(&color_slot->first_contrib_idx) != contrib_idx) { continue; }
 
-       OldColorHashSlot *old_color_slot = &old_color_table.slots[color_slot->old_color_slot_idx];
+      OldColorHashSlot *old_color_slot = &old_color_table.slots[color_slot->old_color_slot_idx];
       if (ins_atomic_u64_eval(&old_color_slot->first_contrib_idx) == contrib_idx) {
         color_slot->color = color_slot->key.old_color;
       } else {
@@ -3610,11 +3604,11 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
     // update colors for this worker's contributions
     ProfBegin("Update color map");
     for EachIndex(i, task->obj_indices[task_id].count) {
-      U64 obj_idx = task->obj_indices[task_id].v[i];
-      Rng1U64 obj_contrib_range = r1u64(contrib_offsets[obj_idx], contrib_offsets[obj_idx] + contrib_counts[obj_idx]);
+      U64     obj_idx           = task->obj_indices[task_id].v[i];
+      Rng1U64 obj_contrib_range = r1u64(shared.contrib_offsets[obj_idx], shared.contrib_offsets[obj_idx] + contrib_counts[obj_idx]);
       for EachInRange(contrib_idx, obj_contrib_range) {
-        Contrib *contrib = &contribs[contrib_idx];
-        color_map[contrib->obj_idx][contrib->sect_idx] = color_table.slots[contrib->color_slot_idx].color;
+        Contrib *contrib = &shared.contribs[contrib_idx];
+        shared.color_map[contrib->obj_idx][contrib->sect_idx] = color_table.slots[contrib->color_slot_idx].color;
       }
     }
     ProfEnd();
@@ -3623,7 +3617,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
     ProfEnd(); // round prof
 
     // stop iterating when partitions stabilize
-    if (*is_part_stable) { break; }
+    if (*shared.is_part_stable) { break; }
   }
   barrier_wait(tp->barrier);
 
@@ -3631,33 +3625,42 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
   // step 3: flag folded sections for removal
   //
 
-  typedef struct { U64 count; U64 size; } FoldStats;
+  typedef struct { U64 count; U64 size; U64 live_count; U64 live_size; } FoldStats;
   FoldStats *fold_stats = 0;
   if (task_id == 0 && lnk_get_log_status(LNK_Log_Debug)) {
-    fold_stats = push_array(scratch.arena, FoldStats, tp->worker_count * LNK_ICF_ColorSpace_COUNT);
+    fold_stats = push_array(scratch.arena, FoldStats, tp->worker_count * LNK_ICF_Scope_COUNT);
   }
   tp_broadcast(&fold_stats);
 
   ProfBegin("Flag Folds");
-  FoldStats *local_fold_stats = fold_stats ? fold_stats + (task_id * LNK_ICF_ColorSpace_COUNT) : 0;
-  for EachInRange(contrib_idx, contrib_ranges[task_id]) {
-    Contrib       *contrib    = &contribs[contrib_idx];
+  for EachInRange(contrib_idx, shared.contrib_ranges[task_id]) {
+    Contrib       *contrib    = &shared.contribs[contrib_idx];
     ColorHashSlot *color_slot = &color_table.slots[contrib->color_slot_idx];
-    Contrib       *leader     = &contribs[ins_atomic_u64_eval(&color_slot->first_contrib_idx)];
-    if (leader == contrib) { continue; }
-
+    Contrib       *leader     = &shared.contribs[ins_atomic_u64_eval(&color_slot->first_contrib_idx)];
+    
     LNK_Obj *contrib_obj = objs[contrib->obj_idx];
     LNK_Obj *leader_obj  = objs[leader->obj_idx];
 
-    if (local_fold_stats) {
-      COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(contrib_obj, contrib->sect_idx + 1);
-      LNK_ICF_ColorSpace  color_space    = contrib->color_space;
-      local_fold_stats[color_space].count += 1;
-      local_fold_stats[color_space].size  += section_header->fsize;
+    if (fold_stats) {
+      FoldStats *st    = fold_stats + (task_id * LNK_ICF_Scope_COUNT);
+      U64        fsize = lnk_coff_section_header_from_section_number(contrib_obj, contrib->sect_idx + 1)->fsize;
+      if (leader == contrib) {
+        st[leader->scope].live_count += 1;
+        st[leader->scope].live_size  += fsize;
+      } else {
+        st[contrib->scope].count += 1;
+        st[contrib->scope].size  += fsize;
+      }
     }
 
-    U64 contrib_align = coff_align_size_from_section_flags(contrib_obj->section_flags[contrib->sect_idx]);
-    COFF_SectionFlags *leader_flags = &leader_obj->section_flags[leader->sect_idx];
+    if (leader == contrib) {
+      continue;
+    }
+
+    // TODO: double-check if discarded section headers should be updated with leaders' alignment,
+    // leaders at this point are resolved
+    U64                contrib_align = coff_align_size_from_section_flags(contrib_obj->section_flags[contrib->sect_idx]);
+    COFF_SectionFlags *leader_flags  = &leader_obj->section_flags[leader->sect_idx];
     for (COFF_SectionFlags old_flags = ins_atomic_u32_eval((U32 *)leader_flags);;) {
       U64 leader_align = coff_align_size_from_section_flags(old_flags);
       if (leader_align >= contrib_align) { break; }
@@ -3665,14 +3668,17 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
       COFF_SectionFlags new_flags = old_flags;
       new_flags &= ~(COFF_SectionFlag_AlignMask << COFF_SectionFlag_AlignShift);
       new_flags |= coff_section_flag_from_align_size(contrib_align);
+
       COFF_SectionFlags observed = ins_atomic_u32_eval_cond_assign((U32 *)leader_flags, new_flags, old_flags);
       if (observed == old_flags) { break; }
       old_flags = observed;
     }
 
-    Assert(leader_obj->comdats[leader->sect_idx] != max_U32);
-    contrib_obj->symlinks[contrib->sect_idx + 1] = (LNK_ObjSymbolRef){ leader_obj, leader_obj->comdats[leader->sect_idx] };
+    // remove folded section from the image
     contrib_obj->section_flags[contrib->sect_idx] |= COFF_SectionFlag_LnkRemove;
+
+    // update folded section COMDAT symlink to point to the leader section
+    contrib_obj->symlinks[contrib->sect_idx + 1] = (LNK_ObjSymbolRef){ leader_obj, leader_obj->comdats[leader->sect_idx] }; 
 
     #if LNK_PARANOID
     String8 section_name = lnk_obj_section_name_from_section_number(contrib_obj, contrib->sect_idx+1);
@@ -3684,22 +3690,48 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
   barrier_wait(tp->barrier);
 
   if (task_id == 0 && fold_stats) {
-    FoldStats total_stats[LNK_ICF_ColorSpace_COUNT] = {0};
+    FoldStats stats[LNK_ICF_Scope_COUNT] = {0};
     for EachIndex(worker_id, tp->worker_count) {
-      FoldStats *worker_stats = fold_stats + (worker_id * LNK_ICF_ColorSpace_COUNT);
-      for (LNK_ICF_ColorSpace color_space = (LNK_ICF_ColorSpace)(LNK_ICF_ColorSpace_Null + 1); color_space < LNK_ICF_ColorSpace_COUNT; color_space += 1) {
-        total_stats[color_space].count += worker_stats[color_space].count;
-        total_stats[color_space].size  += worker_stats[color_space].size;
+      FoldStats *w = fold_stats + (worker_id * LNK_ICF_Scope_COUNT);
+      for EachEnumVal(LNK_ICF_Scope, scope) {
+        stats[scope].count      += w[scope].count;
+        stats[scope].size       += w[scope].size;
+        stats[scope].live_size  += w[scope].live_size;
+        stats[scope].live_count += w[scope].live_count;
       }
     }
 
-    U64 total_count = 0, total_size = 0;
-    for (LNK_ICF_ColorSpace color_space = (LNK_ICF_ColorSpace)(LNK_ICF_ColorSpace_Null + 1); color_space < LNK_ICF_ColorSpace_COUNT; color_space += 1) {
-      lnk_log(LNK_Log_Debug, "  %-8S: %M, %.*s sections", lnk_string_from_icf_color_space(color_space), total_stats[color_space].size, str8_varg(str8_from_count(scratch.arena, total_stats[color_space].count)));
-      total_count += total_stats[color_space].count;
-      total_size  += total_stats[color_space].size;
+    FoldStats total = {0};
+    for EachEnumVal(LNK_ICF_Scope, scope) {
+      if (scope == LNK_ICF_Scope_Null) { continue; }
+
+      // scope -> string
+      String8 scope_str = str8_lit("Unknown");
+      switch (scope) {
+#define X(ID) case LNK_ICF_Scope_##ID: scope_str = str8_lit(Stringify(ID)); break;
+        LNK_ICF_Scope_XList
+#undef X
+      }
+
+      lnk_log(LNK_Log_Debug, "  %-9S: removed %M, %.*s sections; live %M, %.*s sections",
+              scope_str,
+              stats[scope].size,
+              str8_varg(str8_from_count(scratch.arena, stats[scope].count)),
+              stats[scope].live_size,
+              str8_varg(str8_from_count(scratch.arena, stats[scope].live_count)));
+
+      total.count      += stats[scope].count;
+      total.size       += stats[scope].size;
+      total.live_count += stats[scope].live_count;
+      total.live_size  += stats[scope].live_size;
     }
-    lnk_log(LNK_Log_Debug, "  %-8s: %M, %.*s sections", "Total", total_size, str8_varg(str8_from_count(scratch.arena, total_count)));
+
+    lnk_log(LNK_Log_Debug, "  %-9s: removed %M, %.*s sections; live %M, %.*s sections",
+            "Total",
+            total.size,
+            str8_varg(str8_from_count(scratch.arena, total.count)),
+            total.live_size,
+            str8_varg(str8_from_count(scratch.arena, total.live_count)));
   }
   barrier_wait(tp->barrier);
 

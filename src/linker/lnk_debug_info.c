@@ -1353,7 +1353,7 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
   lnk_hasher_update_struct(&hasher, leaf_header_ptr);
 
   // finalize the type hash
-  U64 hash = lnk_hasher_digest(&hasher);
+  U64 hash = lnk_hasher_digest64(&hasher);
 
   Assert(hash != 0);
   Assert(input->debug_h_arr[leaf_ref.obj_idx].v[leaf_ref.leaf_idx] == 0 ||

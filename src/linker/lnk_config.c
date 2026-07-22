@@ -98,6 +98,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_SharedThreadPool,             0, "RAD_SHARED_THREAD_POOL",               "[:STRING]", "Default value \"" LNK_DEFAULT_THREAD_POOL_NAME "\""                               },
   { LNK_CmdSwitch_Rad_SharedThreadPoolMaxWorkers,   0, "RAD_SHARED_THREAD_POOL_MAX_WORKERS",   ":#",        "Set maximum number of workers in a thread pool."                                  },
   { LNK_CmdSwitch_Rad_SortImports,                  0, "RAD_SORT_IMPORTS",                     "[:NO]",     "Sort static and delayed import tables by their order of appearance in libs, without assuming link order." },
+  { LNK_CmdSwitch_Rad_IcfHashKind,                  0, "RAD_ICF_HASH_KIND",                    "{BLAKE3|XXHASH}", "Sets hashing algorithm for /OPT:ICF." },
   { LNK_CmdSwitch_Rad_Ignore,                       0, "RAD_IGNORE",                           ":#",        "Ignore the specified RAD linker warning."                                         },
   { LNK_CmdSwitch_Rad_ImageAltPath,                 0, "RAD_IMAGEALTPATH",                     ":FILENAME", "Alternative name for the image"                                                   },
   { LNK_CmdSwitch_Rad_WriteTempFiles,               0, "RAD_WRITE_TEMP_FILES",                 "[:NO]",     "When speicifed linker writes image and debug info to temporary files and renames after link is done." },
@@ -2323,6 +2324,16 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
 
   case LNK_CmdSwitch_Rad_TimeStamp: {
     lnk_cmd_switch_parse_u32(obj, cmd_switch, value_strings, &config->time_stamp, 0);
+  } break;
+
+  case LNK_CmdSwitch_Rad_IcfHashKind: {
+    // TODO: dedup
+    String8 alg = {0};
+    if (lnk_cmd_switch_parse_string(obj, cmd_switch, value_strings, &alg)) {
+      if      (str8_matchi(alg, str8_lit("BLAKE3"))) { config->icf_hash_kind = LNK_HashKind_BLAKE3; }
+      else if (str8_matchi(alg, str8_lit("XXHASH"))) { config->icf_hash_kind = LNK_HashKind_XXHash; }
+      else { lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown hash alg: %S", alg); }
+    }
   } break;
 
   case LNK_CmdSwitch_Rad_DebugTypeHash: {

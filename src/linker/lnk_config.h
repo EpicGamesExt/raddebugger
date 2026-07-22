@@ -114,6 +114,7 @@ typedef enum
   LNK_CmdSwitch_Rad_EnvLib,
   LNK_CmdSwitch_Rad_Exe,
   LNK_CmdSwitch_Rad_Guid,
+  LNK_CmdSwitch_Rad_IcfHashKind,
   LNK_CmdSwitch_Rad_Ignore,
   LNK_CmdSwitch_Rad_ImageAltPath,
   LNK_CmdSwitch_Rad_LargePages,
@@ -410,6 +411,7 @@ typedef struct LNK_Config
   U64                         unresolved_symbol_limit;
   U64                         unresolved_symbol_ref_limit;
   LNK_SwitchState             map_lines_for_unresolved_symbols;
+  LNK_HashKind                icf_hash_kind;
   LNK_HashKind                debug_types_hash;
   String8                     type_server_name;
   LNK_SwitchState             type_server;
