@@ -33,8 +33,10 @@
 // PE_TLSHeader32 or PE_TLSHeader64, according to machine type.
 #define MSCRT_TLS_SYMBOL_NAME "_tls_used"
 
-// MSVC C++ vftable symbols start with this decorated-name prefix.
+// vftable symbols
 #define MSCRT_VFTABLE_SYMBOL_PREFIX "??_7"
+
+// vbptr symbols
 #define MSCRT_VBTABLE_SYMBOL_PREFIX "??_8"
 
 ////////////////////////////////

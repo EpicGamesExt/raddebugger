@@ -2994,16 +2994,13 @@ THREAD_POOL_TASK_FUNC(lnk_opt_ref_task)
 internal void
 lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj **objs, U64 objs_count)
 {
+  ProfBegin("/OPT:REF");
   Temp scratch = scratch_begin(0,0);
   U32Array *obj_indices = lnk_obj_indices_from_section_counts(scratch.arena, tp->worker_count, objs, objs_count);
-
-  ProfScope("/OPT:REF")
-  {
-    LNK_OptTask task = { .symtab = symtab, .config = config, .objs = objs, .objs_count = objs_count, .obj_indices = obj_indices };
-    tp_for_parallel(tp, 0, tp->worker_count, lnk_opt_ref_task, &task);
-  }
-
+  LNK_OptTask task = { .symtab = symtab, .config = config, .objs = objs, .objs_count = objs_count, .obj_indices = obj_indices };
+  tp_for_parallel(tp, 0, tp->worker_count, lnk_opt_ref_task, &task);
   scratch_end(scratch);
+  ProfEnd();
 }
 
 typedef enum LNK_ICF_ColorSpace
@@ -3036,46 +3033,73 @@ lnk_icf_color_space_from_section(LNK_Obj *obj, U32 sect_idx)
 {
   LNK_ICF_ColorSpace result = LNK_ICF_ColorSpace_Null;
 
-  // fold read-only COMDAT sections
+  // * section flags filter *
   COFF_SectionFlags expected_flags = COFF_SectionFlag_LnkCOMDAT | COFF_SectionFlag_MemRead;
   COFF_SectionFlags exclude_flags  = COFF_SectionFlag_LnkRemove | COFF_SectionFlag_MemWrite | LNK_SECTION_FLAG_NOICF;
+  if ((obj->section_flags[sect_idx] & expected_flags) != expected_flags || (obj->section_flags[sect_idx] & exclude_flags) != 0) {
+    goto exit;
+  }
 
-  if ((obj->section_flags[sect_idx] & expected_flags) == expected_flags && (obj->section_flags[sect_idx] & exclude_flags) == 0) {
-    // fold code
-    if (obj->section_flags[sect_idx] & COFF_SectionFlag_CntCode) {
-      result = LNK_ICF_ColorSpace_Code;
+  if (obj->section_flags[sect_idx] & COFF_SectionFlag_CntCode) {
+    result = LNK_ICF_ColorSpace_Code;
+    goto exit;
+  }
+
+  if (obj->section_flags[sect_idx] & COFF_SectionFlag_CntInitializedData) {
+    U64                 section_number = sect_idx + 1;
+    COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, section_number);
+    String8             section_name   = str8_cstring_capped(section_header->name, section_header->name + sizeof(section_header->name));
+
+    //
+    // * include unwind info metadata *
+    //
+    if (str8_match(section_name, str8_lit(".xdata"), 0) || str8_match(section_name, str8_lit(".pdata"), 0)) {
+      result = LNK_ICF_ColorSpace_Unwind;
+      goto exit;
     }
-    // fold data
-    else if (obj->section_flags[sect_idx] & COFF_SectionFlag_CntInitializedData) {
-      COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, sect_idx + 1);
-      String8             section_name   = str8_cstring_capped(section_header->name, section_header->name + sizeof(section_header->name));
 
-      // fold unwind info
-      if (str8_match(section_name, str8_lit(".xdata"), 0) || str8_match(section_name, str8_lit(".pdata"), 0)) {
-        result = LNK_ICF_ColorSpace_Unwind;
-      } else {
-        LNK_ObjSymbolRef symlink_ref = {0};
-        if (lnk_obj_get_comdat_symlink(obj, sect_idx + 1, &symlink_ref)) {
-          String8 symlink_name = lnk_symbol_name_from_coff_symbol_idx(symlink_ref.obj, symlink_ref.symbol_idx);
-          // fold MSVC vftables separately from other read-only data
-          if (str8_starts_with(symlink_name, str8_lit(MSCRT_VFTABLE_SYMBOL_PREFIX))) {
-            result = LNK_ICF_ColorSpace_VFTable;
-          }
-          // fold ordinary read-only data COMDATs; do not fold declarations and vtables that require unique addresses
-          else if (!str8_starts_with(symlink_name, str8_lit(MSCRT_VBTABLE_SYMBOL_PREFIX))) {
-            COFF_ComdatSelectType select = COFF_ComdatSelect_Null;
-            if (lnk_try_comdat_props_from_section_number(obj, sect_idx + 1, &select, 0, 0, 0)) {
-              if (select == COFF_ComdatSelect_Any || select == COFF_ComdatSelect_SameSize ||
-                  select == COFF_ComdatSelect_ExactMatch || select == COFF_ComdatSelect_Largest) {
-                result = LNK_ICF_ColorSpace_ConstData;
-              }
-            }
-          }
+    // query COMDAT symlink that is associated with the section number
+    // because the properties are stored in the symbol table
+    LNK_ObjSymbolRef comdat_ref = {0};
+    if (lnk_obj_get_comdat_symlink(obj, section_number, &comdat_ref)) {
+
+      // load COMDAT symbol name
+      String8 comdat_name = lnk_symbol_name_from_coff_symbol_idx(comdat_ref.obj, comdat_ref.symbol_idx);
+
+      //
+      // * include virtual function tables *
+      //
+      if (str8_starts_with(comdat_name, str8_lit(MSCRT_VFTABLE_SYMBOL_PREFIX))) {
+        result = LNK_ICF_ColorSpace_VFTable;
+        goto exit;
+      } 
+
+      //
+      // * include COMDATs *
+      //
+      COFF_ComdatSelectType select = COFF_ComdatSelect_Null;
+      if (lnk_try_comdat_props_from_section_number(obj, section_number, &select, 0, 0, 0)) {
+        // TODO: ref linkers exclude C++ virtual base tables, not sure why,
+        // are there tools that assume vbptr is unique for _some_reason_?
+        if (str8_starts_with(comdat_name, str8_lit(MSCRT_VBTABLE_SYMBOL_PREFIX))) {
+          goto exit;
+        }
+
+        // following selections are not included in ICF
+        //  1. NoDuplicate: selection requires a unique address
+        //  2. Associative: breaks COMDAT ownership model
+        if (select == COFF_ComdatSelect_Any        ||
+            select == COFF_ComdatSelect_SameSize   ||
+            select == COFF_ComdatSelect_ExactMatch ||
+            select == COFF_ComdatSelect_Largest) {
+          result = LNK_ICF_ColorSpace_ConstData;
+          goto exit;
         }
       }
     }
   }
 
+  exit:;
   return result;
 }
 
@@ -3095,8 +3119,7 @@ lnk_icf_atomic_min_u64(U64 *dst, U64 value)
 // and a new refinement round is run. By default, the algorithm loops until
 // partitions stabilize. Equivalence is established by comparing cryptographic
 // 128-bit hashes; in theory, the chance of collisions are near the birthday
-// paradox with BLAKE3 and the other downside it is susceptible to adversarial
-// inputs.
+// paradox with BLAKE3
 THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
 {
   ProfBeginFunction();
