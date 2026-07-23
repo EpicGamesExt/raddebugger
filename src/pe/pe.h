@@ -53,25 +53,30 @@ enum
   PE_WindowsSubsystem_COUNT                    = 14
 };
 
+#define PE_ImageFileCharacteristic_XList \
+  X(RELOCS_STRIPPED        , 0 , "Relocations Stripped"       ) \
+  X(EXECUTABLE_IMAGE       , 1 , "Executable"                 ) \
+  X(LINE_NUMS_STRIPPED     , 2 , "Line Numbers Stripped"      ) \
+  X(LOCAL_SYMS_STRIPPED    , 3 , "Local Symbols Stripped"     ) \
+  X(AGGRESSIVE_WS_TRIM     , 4 , "Aggressive Working Set Trim") \
+  X(LARGE_ADDRESS_AWARE    , 5 , "Large Address Aware"        ) \
+  X(RESERVED               , 6 , "Reserved"                   ) \
+  X(BYTES_REVERSED_LO      , 7 , "Bytes Reversed Low"         ) \
+  X(32BIT_MACHINE          , 8 , "32-Bit Machine"             ) \
+  X(DEBUG_STRIPPED         , 9 , "Debug Information Stripped" ) \
+  X(REMOVABLE_RUN_FROM_SWAP, 10, "Removable: Run from Swap"   ) \
+  X(NET_RUN_FROM_SWAP      , 11, "Network: Run from Swap"     ) \
+  X(SYSTEM                 , 12, "System File"                ) \
+  X(DLL                    , 13, "DLL"                        ) \
+  X(UP_SYSTEM_ONLY         , 14, "Uniprocessor System Only"   ) \
+  X(BYTES_REVERSED_HI      , 15, "Bytes Reversed High"        )
+
 typedef U16 PE_ImageFileCharacteristics;
 enum
 {
-  PE_ImageFileCharacteristic_STRIPPED                     = (1 << 0),
-  PE_ImageFileCharacteristic_EXE                          = (1 << 1),
-  PE_ImageFileCharacteristic_NUMS_STRIPPED                = (1 << 2),
-  PE_ImageFileCharacteristic_PE_STRIPPED                  = (1 << 3),
-  PE_ImageFileCharacteristic_AGGRESIVE_WS_TRIM            = (1 << 4),
-  PE_ImageFileCharacteristic_LARGE_ADDRESS_AWARE          = (1 << 5),
-  PE_ImageFileCharacteristic_UNUSED1                      = (1 << 6),
-  PE_ImageFileCharacteristic_BYTES_RESERVED_LO            = (1 << 7),
-  PE_ImageFileCharacteristic_32BIT_MACHINE                = (1 << 8),
-  PE_ImageFileCharacteristic_DEBUG_STRIPPED               = (1 << 9),
-  PE_ImageFileCharacteristic_FILE_REMOVABLE_RUN_FROM_SWAP = (1 << 10),
-  PE_ImageFileCharacteristic_NET_RUN_FROM_SWAP            = (1 << 11),
-  PE_ImageFileCharacteristic_FILE_SYSTEM                  = (1 << 12),
-  PE_ImageFileCharacteristic_FILE_DLL                     = (1 << 13),
-  PE_ImageFileCharacteristic_FILE_UP_SYSTEM_ONLY          = (1 << 14),
-  PE_ImageFileCharacteristic_BYTES_RESERVED_HI            = (1 << 15),
+#define X(ID, VAL, ...) PE_ImageFileCharacteristic_##ID = (1 << VAL),
+  PE_ImageFileCharacteristic_XList
+#undef X
 };
 
 typedef U16 PE_DllCharacteristics;

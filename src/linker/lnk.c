@@ -1605,7 +1605,7 @@ lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer
         }
 
         // by default terminal server is enabled for windows and console applications
-        if (~config->flags & LNK_ConfigFlag_NoTsAware && ~config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
+        if (~config->flags & LNK_ConfigFlag_NoTsAware && ~config->file_characteristics & PE_ImageFileCharacteristic_DLL) {
           if (config->subsystem == PE_WindowsSubsystem_WINDOWS_GUI || config->subsystem == PE_WindowsSubsystem_WINDOWS_CUI) {
             config->dll_characteristics |= PE_DllCharacteristic_TERMINAL_SERVER_AWARE;
           }
@@ -2397,7 +2397,35 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   // was entry point resolved?
   //
   if (config->entry_point_name.size == 0 || link->try_to_resolve_entry_point) {
-    lnk_error(LNK_Error_EntryPoint, "unable to find entry point symbol");
+    String8      machine_str   = coff_string_from_machine_type(config->machine);
+    String8      subsystem_str = pe_string_from_subsystem(config->subsystem);
+    String8Array entry_points  = pe_get_entry_point_names(config->machine, config->subsystem, config->file_characteristics);
+
+    String8List list = {0};
+    for EachIndex(i, entry_points.count) { str8_list_push(scratch.arena, &list, entry_points.v[i]); }
+    String8 default_entries = str8_list_join(scratch.arena, &list, &(StringJoin){.sep = ", "});
+
+    lnk_error(LNK_Error_EntryPoint,
+              "failed to infer entry point symbol from the inputs\n"
+              "  Machine:         %S\n"
+              "  Subsystem:       %S\n"
+              "  Subsystem Ver:   %llu.%llu\n"
+              "  File Chars:      %S\n"
+              "  DLL Chars:       %S\n"
+              "  Default Entries: %S\n"
+              "  User Entry:      \"%S\"\n"
+              "  Input Obj Count: %S\n"
+              "  Input Lib Count: %S",
+              machine_str.size   ? machine_str   : str8_lit("Unknown"),                         // Machine
+              subsystem_str.size ? subsystem_str : str8_lit("Unknown"),                         // Version
+              config->subsystem_ver.major, config->subsystem_ver.minor,                         // Subsystem
+              pe_string_from_file_characteristics(scratch.arena, config->file_characteristics), // File Chars
+              pe_string_from_dll_characteristics(scratch.arena, config->dll_characteristics),   // DLL Chars
+              default_entries.size ? default_entries : str8_lit("None"),                        // Default Entry Points
+              config->entry_point_name,                                                         // /ENTRY
+              str8_from_count(scratch.arena, config->input_list[LNK_Input_Obj].node_count),     // Input Objects Count
+              str8_from_count(scratch.arena, config->input_list[LNK_Input_Lib].node_count)      // Input Libs Count
+              );
   }
 
   //
@@ -6597,7 +6625,7 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   //
   // Import Library
   //
-  if (config->build_imp_lib && (config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL)) {
+  if (config->build_imp_lib && (config->file_characteristics & PE_ImageFileCharacteristic_DLL)) {
     ProfBegin("Build Import Library");
     lnk_timer_begin(LNK_Timer_Lib);
     String8 linker_debug_symbols = lnk_make_linker_debug_symbols(scratch.arena, config->machine);

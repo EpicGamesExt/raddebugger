@@ -352,6 +352,24 @@ pe_string_from_load_config_guard_flags(Arena *arena, PE_LoadConfigGuardFlags fla
 }
 
 internal String8
+pe_string_from_file_characteristics(Arena *arena, PE_ImageFileCharacteristics file_chars)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  String8List result = {0};
+  for EachBit(i, file_chars) {
+    switch (i) {
+#define X(ID, VAL, DISPLAY_STRING) case (1 << VAL): str8_list_push(scratch.arena, &result, str8_lit(DISPLAY_STRING)); break;
+      PE_ImageFileCharacteristic_XList
+#undef X
+    default: str8_list_pushf(scratch.arena, &result, "%llu", i);
+    }
+  }
+  String8 string = str8_list_join(arena, &result, &(StringJoin){.sep=str8_lit(", ")});
+  scratch_end(scratch);
+  return string;
+}
+
+internal String8
 pe_string_from_dll_characteristics(Arena *arena, PE_DllCharacteristics dll_chars)
 {
   Temp scratch = scratch_begin(&arena, 1);
@@ -915,7 +933,7 @@ pe_get_entry_point_names(COFF_MachineType            machine,
 {
   String8Array entry_point_names = {0};
   
-  if (file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
+  if (file_characteristics & PE_ImageFileCharacteristic_DLL) {
     if (machine == COFF_MachineType_X86) {
       read_only static String8 dll_entry_point_arr[] = {
         str8_lit_comp("__DllMainCRTStartup@12"),

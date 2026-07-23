@@ -897,9 +897,9 @@ lnk_get_base_addr(LNK_Config *config)
 {
   U64 base_addr = config->user_base_addr;
   if (base_addr == 0) {
-    if (config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
+    if (config->file_characteristics & PE_ImageFileCharacteristic_DLL) {
       base_addr = coff_default_dll_base_from_machine(config->machine);
-    } else if (config->file_characteristics & PE_ImageFileCharacteristic_EXE) {
+    } else if (config->file_characteristics & PE_ImageFileCharacteristic_EXECUTABLE_IMAGE) {
       if ((~config->file_characteristics & PE_ImageFileCharacteristic_LARGE_ADDRESS_AWARE) && config->machine == COFF_MachineType_X64) {
         base_addr = coff_default_exe_base_from_machine(COFF_MachineType_X86);
       } else {
@@ -1397,7 +1397,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
   } break;
 
   case LNK_CmdSwitch_Dll: {
-    config->file_characteristics |= PE_ImageFileCharacteristic_FILE_DLL;
+    config->file_characteristics |= PE_ImageFileCharacteristic_DLL;
   } break;
 
   case LNK_CmdSwitch_DynamicBase: {
@@ -2112,7 +2112,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
   } break;
 
   case LNK_CmdSwitch_Rad_Exe: {
-    lnk_cmd_switch_set_flag_16(obj, cmd_switch, value_strings, &config->file_characteristics, PE_ImageFileCharacteristic_EXE);
+    lnk_cmd_switch_set_flag_16(obj, cmd_switch, value_strings, &config->file_characteristics, PE_ImageFileCharacteristic_EXECUTABLE_IMAGE);
   } break;
 
   case LNK_CmdSwitch_Rad_Guid: {
@@ -2638,7 +2638,7 @@ lnk_apply_def_file_to_config(LNK_Config *config, String8 path, LNK_Obj *obj)
       }
 
       if (stmt == LNK_DefFileStmt_Library) {
-        config->file_characteristics |= PE_ImageFileCharacteristic_FILE_DLL;
+        config->file_characteristics |= PE_ImageFileCharacteristic_DLL;
       }
 
       if (name.size != 0) {
@@ -2775,7 +2775,7 @@ lnk_config_init(LNK_CmdLine cmd_line)
 
   // set default manifest resource id
   if (config->manifest_resource_id == 0) {
-    if (config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) {
+    if (config->file_characteristics & PE_ImageFileCharacteristic_DLL) {
       config->manifest_resource_id = push_u64(arena, 2);
     } else {
       config->manifest_resource_id = push_u64(arena, 1);
@@ -2844,7 +2844,7 @@ lnk_config_init(LNK_CmdLine cmd_line)
   }
 
   // warn about unused large address aware flag
-  if ((~config->file_characteristics & PE_ImageFileCharacteristic_LARGE_ADDRESS_AWARE) && (config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL)) {
+  if ((~config->file_characteristics & PE_ImageFileCharacteristic_LARGE_ADDRESS_AWARE) && (config->file_characteristics & PE_ImageFileCharacteristic_DLL)) {
     lnk_error(LNK_Warning_NoLargeAddressAwarenessForDll, "/LARGEADDRESSAWARE:NO has no effect when specified together with /DLL");
   }
   
@@ -2867,7 +2867,7 @@ lnk_config_init(LNK_CmdLine cmd_line)
   
   // set flags for /FIXED
   if (config->flags & LNK_ConfigFlag_Fixed) {
-    config->file_characteristics |= PE_ImageFileCharacteristic_STRIPPED;
+    config->file_characteristics |= PE_ImageFileCharacteristic_RELOCS_STRIPPED;
     config->dll_characteristics &= ~PE_DllCharacteristic_DYNAMIC_BASE;
   }
   // if we don't have a fixed image and dynamic base switch 
@@ -2886,7 +2886,7 @@ lnk_config_init(LNK_CmdLine cmd_line)
   // handle empty /OUT
   if (!config->out_path.size) {
     String8 name     = str8_list_first(&config->input_list[LNK_Input_Obj]);
-    String8 ext      = (config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) ? str8_lit("dll") : str8_lit("exe");
+    String8 ext      = (config->file_characteristics & PE_ImageFileCharacteristic_DLL) ? str8_lit("dll") : str8_lit("exe");
     config->out_path = path_replace_file_extension(scratch.arena, name, ext);
   }
 
