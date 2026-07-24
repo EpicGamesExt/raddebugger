@@ -2773,6 +2773,39 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                     e->string  = str8(name_buffer, name_size);
                   }break;
                   
+                  //- rjf: fill load-library info
+                  case W32_DMN_EXCEPTION_RADDBG_LOAD_MODULE:
+                  {
+                    // rjf: unpack parameters
+                    U64 vaddr      = exception->ExceptionInformation[0];
+                    U64 size       = exception->ExceptionInformation[1];
+                    U64 name_vaddr = exception->ExceptionInformation[2];
+                    
+                    // rjf: parse module info
+                    W32_DMN_Entity *process = w32_dmn_entity_from_kind_id(W32_DMN_EntityKind_Process, evt.dwProcessId);
+                    DMN_ModuleInfo *module_info = w32_dmn_module_info_from_process_module(arena, process->handle, 0, vaddr, name_vaddr, 0, 0);
+                    
+                    // rjf: create module entity
+                    W32_DMN_Entity *module = w32_dmn_entity_alloc(process, W32_DMN_EntityKind_Module, vaddr);
+                    {
+                      module->handle                         = 0;
+                      module->arch                           = process->arch;
+                      module->module.vaddr_range             = r1u64(vaddr, vaddr + Max(module_info->vsize, size));
+                      module->module.address_of_name_pointer = name_vaddr;
+                      module->module.name_is_unicode         = 0;
+                    }
+                    
+                    // rjf: fill event
+                    e->kind        = DMN_EventKind_LoadModule;
+                    e->process     = w32_dmn_handle_from_entity(process);
+                    e->module      = w32_dmn_handle_from_entity(module);
+                    e->arch        = module_info->arch;
+                    e->address     = vaddr;
+                    e->size        = Max(module_info->vsize, size);
+                    e->string      = module_info->module_path;
+                    e->module_info = module_info;
+                  }break;
+                  
                   //- rjf: unhandled exception case
                   default:
                   {

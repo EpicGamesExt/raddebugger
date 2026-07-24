@@ -59,6 +59,7 @@
 #define W32_DMN_EXCEPTION_RADDBG_SET_THREAD_COLOR        0x00524144u
 #define W32_DMN_EXCEPTION_RADDBG_SET_BREAKPOINT          0x00524145u
 #define W32_DMN_EXCEPTION_RADDBG_SET_VADDR_RANGE_NOTE    0x00524156u
+#define W32_DMN_EXCEPTION_RADDBG_LOAD_MODULE             0x00524157u
 
 ////////////////////////////////
 //~ rjf: Win32 Exception ExceptionInformation Codes

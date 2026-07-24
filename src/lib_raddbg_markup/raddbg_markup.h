@@ -38,6 +38,7 @@
 # define raddbg_add_breakpoint(ptr, size, r, w, x)    raddbg_add_or_remove_breakpoint__impl((ptr), (1), (size), (r), (w), (x))
 # define raddbg_remove_breakpoint(ptr, size, r, w, x) raddbg_add_or_remove_breakpoint__impl((ptr), (0), (size), (r), (w), (x))
 # define raddbg_annotate_vaddr_range(ptr, size, ...)  raddbg_annotate_vaddr_range__impl((ptr), (size), __VA_ARGS__)
+# define raddbg_load_module(ptr, size, name)          raddbg_load_module__impl((ptr), (size), (name))
 #else
 # define raddbg_is_attached(...)                      (0)
 # define raddbg_thread_id(...)                        ((void)0)
@@ -57,6 +58,7 @@
 # define raddbg_add_breakpoint(ptr, size, r, w, x)    ((void)0)
 # define raddbg_remove_breakpoint(ptr, size, r, w, x) ((void)0)
 # define raddbg_annotate_vaddr_range(ptr, size, ...)  ((void)0)
+# define raddbg_load_module(ptr, size, name)          ((void)0)
 #endif
 
 ////////////////////////////////
@@ -458,6 +460,37 @@ raddbg_annotate_vaddr_range__impl(void *ptr, unsigned __int64 size, char *fmt, .
     __try
     {
       RaiseException(0x00524156u, 0, sizeof(info) / sizeof(void *), (const ULONG_PTR *)&info);
+    }
+    __except(1)
+    {
+    }
+#pragma warning(pop)
+  }
+}
+
+void
+raddbg_load_module__impl(void *ptr, unsigned __int64 size, char *name)
+{
+  if(raddbg_is_attached())
+  {
+#pragma pack(push, 8)
+    typedef struct RADDBG_LoadModuleInfo RADDBG_LoadModuleInfo;
+    struct RADDBG_LoadModuleInfo
+    {
+      unsigned __int64 vaddr;
+      unsigned __int64 size;
+      unsigned __int64 name_vaddr;
+    };
+#pragma pack(pop)
+    RADDBG_LoadModuleInfo info;
+    info.vaddr     = (unsigned __int64)ptr;
+    info.size      = size;
+    info.name_vaddr= (unsigned __int64)name;
+#pragma warning(push)
+#pragma warning(disable: 6320 6322)
+    __try
+    {
+      RaiseException(0x00524157u, 0, sizeof(info) / sizeof(void *), (const ULONG_PTR *)&info);
     }
     __except(1)
     {
