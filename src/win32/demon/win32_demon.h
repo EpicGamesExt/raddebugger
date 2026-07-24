@@ -346,7 +346,7 @@ internal String16 w32_dmn_read_memory_str16(Arena *arena, HANDLE process_handle,
 #define w32_dmn_process_write_struct(process, vaddr, ptr) w32_dmn_process_write((process), r1u64((vaddr), (vaddr)+(sizeof(*ptr))), ptr)
 
 //- rjf: modules
-internal DMN_ModuleInfo *w32_dmn_module_info_from_process_module(Arena *arena, HANDLE process, HANDLE module, U64 base_vaddr, U64 module_name_vaddr, B32 module_name_is_unicode, B32 is_main_module);
+internal DMN_ModuleInfo *w32_dmn_module_info_from_process_module(Arena *arena, HANDLE process, HANDLE module, U64 base_vaddr, U64 module_name_vaddr, B32 module_name_is_unicode, B32 is_main_module, U64 dbg_path_vaddr);
 
 //- rjf: threads
 internal B32 w32_dmn_thread_read_reg_block(Arch arch, HANDLE thread, void *reg_block);

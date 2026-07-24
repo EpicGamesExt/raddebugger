@@ -20,45 +20,45 @@
 //~ Usage Macros
 
 #if !defined(RADDBG_MARKUP_STUBS)
-# define raddbg_is_attached(...)                      raddbg_is_attached__impl()
-# define raddbg_thread_id(...)                        raddbg_thread_id__impl()
-# define raddbg_thread_name(...)                      raddbg_thread_name__impl(raddbg_thread_id(), __VA_ARGS__)
-# define raddbg_thread_id_name(id, ...)               raddbg_thread_name__impl((id), __VA_ARGS__)
-# define raddbg_thread_color_u32(u32)                 raddbg_thread_color__impl(raddbg_thread_id(), (u32))
-# define raddbg_thread_color_rgba(r, g, b, a)         raddbg_thread_color__impl(raddbg_thread_id(), ((unsigned int)((r)*255) << 24) | ((unsigned int)((g)*255) << 16) | ((unsigned int)((b)*255) << 8) | ((unsigned int)(a)*255))
-# define raddbg_thread_id_color_u32(id, u32)          raddbg_thread_color__impl((id), (u32))
-# define raddbg_thread_id_color_rgba(id, r, g, b, a)  raddbg_thread_color__impl((id), ((unsigned int)((r)*255) << 24) | ((unsigned int)((g)*255) << 16) | ((unsigned int)((b)*255) << 8) | ((unsigned int)(a)*255))
-# define raddbg_break(...)                            raddbg_break__impl()
-# define raddbg_break_if(expr, ...)                   ((expr) ? raddbg_break__impl() : (void)0)
-# define raddbg_watch(fmt, ...)                       raddbg_watch__impl((fmt), __VA_ARGS__)
-# define raddbg_pin(expr, ...)                        /* NOTE(rjf): inspected by debugger ui - does not change program execution */
-# define raddbg_log(...)                              raddbg_log__impl(__VA_ARGS__)
-# define raddbg_entry_point(...)                      raddbg_exe_data char raddbg_gen_data_id()[] = ("entry_point: \"" #__VA_ARGS__ "\"")
-# define raddbg_type_view(type, ...)                  raddbg_exe_data char raddbg_gen_data_id()[] = ("type_view: {type: ```" #type "```, expr: ```" #__VA_ARGS__ "```}")
-# define raddbg_add_breakpoint(ptr, size, r, w, x)    raddbg_add_or_remove_breakpoint__impl((ptr), (1), (size), (r), (w), (x))
-# define raddbg_remove_breakpoint(ptr, size, r, w, x) raddbg_add_or_remove_breakpoint__impl((ptr), (0), (size), (r), (w), (x))
-# define raddbg_annotate_vaddr_range(ptr, size, ...)  raddbg_annotate_vaddr_range__impl((ptr), (size), __VA_ARGS__)
-# define raddbg_load_module(ptr, size, name)          raddbg_load_module__impl((ptr), (size), (name))
+# define raddbg_is_attached(...)                       raddbg_is_attached__impl()
+# define raddbg_thread_id(...)                         raddbg_thread_id__impl()
+# define raddbg_thread_name(...)                       raddbg_thread_name__impl(raddbg_thread_id(), __VA_ARGS__)
+# define raddbg_thread_id_name(id, ...)                raddbg_thread_name__impl((id), __VA_ARGS__)
+# define raddbg_thread_color_u32(u32)                  raddbg_thread_color__impl(raddbg_thread_id(), (u32))
+# define raddbg_thread_color_rgba(r, g, b, a)          raddbg_thread_color__impl(raddbg_thread_id(), ((unsigned int)((r)*255) << 24) | ((unsigned int)((g)*255) << 16) | ((unsigned int)((b)*255) << 8) | ((unsigned int)(a)*255))
+# define raddbg_thread_id_color_u32(id, u32)           raddbg_thread_color__impl((id), (u32))
+# define raddbg_thread_id_color_rgba(id, r, g, b, a)   raddbg_thread_color__impl((id), ((unsigned int)((r)*255) << 24) | ((unsigned int)((g)*255) << 16) | ((unsigned int)((b)*255) << 8) | ((unsigned int)(a)*255))
+# define raddbg_break(...)                             raddbg_break__impl()
+# define raddbg_break_if(expr, ...)                    ((expr) ? raddbg_break__impl() : (void)0)
+# define raddbg_watch(fmt, ...)                        raddbg_watch__impl((fmt), __VA_ARGS__)
+# define raddbg_pin(expr, ...)                         /* NOTE(rjf): inspected by debugger ui - does not change program execution */
+# define raddbg_log(...)                               raddbg_log__impl(__VA_ARGS__)
+# define raddbg_entry_point(...)                       raddbg_exe_data char raddbg_gen_data_id()[] = ("entry_point: \"" #__VA_ARGS__ "\"")
+# define raddbg_type_view(type, ...)                   raddbg_exe_data char raddbg_gen_data_id()[] = ("type_view: {type: ```" #type "```, expr: ```" #__VA_ARGS__ "```}")
+# define raddbg_add_breakpoint(ptr, size, r, w, x)     raddbg_add_or_remove_breakpoint__impl((ptr), (1), (size), (r), (w), (x))
+# define raddbg_remove_breakpoint(ptr, size, r, w, x)  raddbg_add_or_remove_breakpoint__impl((ptr), (0), (size), (r), (w), (x))
+# define raddbg_annotate_vaddr_range(ptr, size, ...)   raddbg_annotate_vaddr_range__impl((ptr), (size), __VA_ARGS__)
+# define raddbg_load_module(ptr, size, name, dbg_path) raddbg_load_module__impl((ptr), (size), (name), (dbg_path))
 #else
-# define raddbg_is_attached(...)                      (0)
-# define raddbg_thread_id(...)                        ((void)0)
-# define raddbg_thread_name(fmt, ...)                 ((void)0)
-# define raddbg_thread_id_name(id, fmt, ...)          ((void)0)
-# define raddbg_thread_color_u32(u32)                 ((void)0)
-# define raddbg_thread_color_rgba(r, g, b, a)         ((void)0)
-# define raddbg_thread_id_color_u32(id, u32)          ((void)0)
-# define raddbg_thread_id_color_rgba(id, r, g, b, a)  ((void)0)
-# define raddbg_break(...)                            ((void)0)
-# define raddbg_break_if(expr, ...)                   ((void)expr)
-# define raddbg_watch(fmt, ...)                       ((void)0)
+# define raddbg_is_attached(...)                       (0)
+# define raddbg_thread_id(...)                         ((void)0)
+# define raddbg_thread_name(fmt, ...)                  ((void)0)
+# define raddbg_thread_id_name(id, fmt, ...)           ((void)0)
+# define raddbg_thread_color_u32(u32)                  ((void)0)
+# define raddbg_thread_color_rgba(r, g, b, a)          ((void)0)
+# define raddbg_thread_id_color_u32(id, u32)           ((void)0)
+# define raddbg_thread_id_color_rgba(id, r, g, b, a)   ((void)0)
+# define raddbg_break(...)                             ((void)0)
+# define raddbg_break_if(expr, ...)                    ((void)expr)
+# define raddbg_watch(fmt, ...)                        ((void)0)
 # define raddbg_pin(expr, ...)
-# define raddbg_log(fmt, ...)                         ((void)0)
-# define raddbg_entry_point(...)                      struct raddbg_gen_data_id(){int __unused__;}
-# define raddbg_type_view(type, ...)                  struct raddbg_gen_data_id(){int __unused__;}
-# define raddbg_add_breakpoint(ptr, size, r, w, x)    ((void)0)
-# define raddbg_remove_breakpoint(ptr, size, r, w, x) ((void)0)
-# define raddbg_annotate_vaddr_range(ptr, size, ...)  ((void)0)
-# define raddbg_load_module(ptr, size, name)          ((void)0)
+# define raddbg_log(fmt, ...)                          ((void)0)
+# define raddbg_entry_point(...)                       struct raddbg_gen_data_id(){int __unused__;}
+# define raddbg_type_view(type, ...)                   struct raddbg_gen_data_id(){int __unused__;}
+# define raddbg_add_breakpoint(ptr, size, r, w, x)     ((void)0)
+# define raddbg_remove_breakpoint(ptr, size, r, w, x)  ((void)0)
+# define raddbg_annotate_vaddr_range(ptr, size, ...)   ((void)0)
+# define raddbg_load_module(ptr, size, name, dbg_path) ((void)0)
 #endif
 
 ////////////////////////////////
@@ -469,7 +469,7 @@ raddbg_annotate_vaddr_range__impl(void *ptr, unsigned __int64 size, char *fmt, .
 }
 
 void
-raddbg_load_module__impl(void *ptr, unsigned __int64 size, char *name)
+raddbg_load_module__impl(void *ptr, unsigned __int64 size, char *name, char *dbg_path)
 {
   if(raddbg_is_attached())
   {
@@ -480,12 +480,14 @@ raddbg_load_module__impl(void *ptr, unsigned __int64 size, char *name)
       unsigned __int64 vaddr;
       unsigned __int64 size;
       unsigned __int64 name_vaddr;
+      unsigned __int64 dbg_path_vaddr;
     };
 #pragma pack(pop)
     RADDBG_LoadModuleInfo info;
-    info.vaddr     = (unsigned __int64)ptr;
-    info.size      = size;
-    info.name_vaddr= (unsigned __int64)name;
+    info.vaddr          = (unsigned __int64)ptr;
+    info.size           = size;
+    info.name_vaddr     = (unsigned __int64)name;
+    info.dbg_path_vaddr = (unsigned __int64)dbg_path;
 #pragma warning(push)
 #pragma warning(disable: 6320 6322)
     __try

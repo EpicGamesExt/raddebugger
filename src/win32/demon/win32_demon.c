@@ -497,7 +497,7 @@ w32_dmn_read_memory_str16(Arena *arena, HANDLE process_handle, U64 address)
 //- rjf: modules
 
 internal DMN_ModuleInfo *
-w32_dmn_module_info_from_process_module(Arena *arena, HANDLE process, HANDLE module, U64 base_vaddr, U64 module_name_vaddr, B32 module_name_is_unicode, B32 is_main_module)
+w32_dmn_module_info_from_process_module(Arena *arena, HANDLE process, HANDLE module, U64 base_vaddr, U64 module_name_vaddr, B32 module_name_is_unicode, B32 is_main_module, U64 dbg_path_vaddr)
 {
   DMN_ModuleInfo *info = push_array(arena, DMN_ModuleInfo, 1);
   Temp scratch = scratch_begin(&arena, 1);
@@ -788,6 +788,16 @@ w32_dmn_module_info_from_process_module(Arena *arena, HANDLE process, HANDLE mod
             raddbg_is_attached_marker_voff = sec[idx].voff;
           }
         }
+      }
+    }
+    
+    //- rjf: nonzero debug path address -> try to read new path from it
+    if(dbg_path_vaddr != 0)
+    {
+      String8 debug_path_override_maybe = w32_dmn_str8_cstring_from_process_vaddr(arena, process, dbg_path_vaddr);
+      if(debug_path_override_maybe.size != 0)
+      {
+        debug_info_path = debug_path_override_maybe;
       }
     }
     
@@ -2087,7 +2097,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               B32 module_name_is_unicode = (evt.u.CreateProcessInfo.fUnicode != 0);
               
               // rjf: parse module info
-              DMN_ModuleInfo *module_info = w32_dmn_module_info_from_process_module(arena, process_handle, module_handle, module_base, module_name_vaddr, module_name_is_unicode, 1);
+              DMN_ModuleInfo *module_info = w32_dmn_module_info_from_process_module(arena, process_handle, module_handle, module_base, module_name_vaddr, module_name_is_unicode, 1, 0);
               
               // rjf: create process/module entities (module is implied for processes - not reported directly via module events)
               W32_DMN_Entity *process = w32_dmn_entity_alloc(w32_dmn_shared->entities_base, W32_DMN_EntityKind_Process, evt.dwProcessId);
@@ -2324,7 +2334,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               HANDLE module_handle = evt.u.LoadDll.hFile;
               U64 module_name_vaddr = (U64)evt.u.LoadDll.lpImageName;
               B32 module_name_is_unicode = (evt.u.LoadDll.fUnicode != 0);
-              DMN_ModuleInfo *module_info = w32_dmn_module_info_from_process_module(arena, process->handle, module_handle, module_base, module_name_vaddr, module_name_is_unicode, 0);
+              DMN_ModuleInfo *module_info = w32_dmn_module_info_from_process_module(arena, process->handle, module_handle, module_base, module_name_vaddr, module_name_is_unicode, 0, 0);
               
               // rjf: create module entity
               W32_DMN_Entity *module = w32_dmn_entity_alloc(process, W32_DMN_EntityKind_Module, module_base);
@@ -2777,13 +2787,14 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   case W32_DMN_EXCEPTION_RADDBG_LOAD_MODULE:
                   {
                     // rjf: unpack parameters
-                    U64 vaddr      = exception->ExceptionInformation[0];
-                    U64 size       = exception->ExceptionInformation[1];
-                    U64 name_vaddr = exception->ExceptionInformation[2];
+                    U64 vaddr          = exception->ExceptionInformation[0];
+                    U64 size           = exception->ExceptionInformation[1];
+                    U64 name_vaddr     = exception->ExceptionInformation[2];
+                    U64 dbg_path_vaddr = exception->ExceptionInformation[3];
                     
                     // rjf: parse module info
                     W32_DMN_Entity *process = w32_dmn_entity_from_kind_id(W32_DMN_EntityKind_Process, evt.dwProcessId);
-                    DMN_ModuleInfo *module_info = w32_dmn_module_info_from_process_module(arena, process->handle, 0, vaddr, name_vaddr, 0, 0);
+                    DMN_ModuleInfo *module_info = w32_dmn_module_info_from_process_module(arena, process->handle, 0, vaddr, name_vaddr, 0, 0, dbg_path_vaddr);
                     
                     // rjf: create module entity
                     W32_DMN_Entity *module = w32_dmn_entity_alloc(process, W32_DMN_EntityKind_Module, vaddr);
