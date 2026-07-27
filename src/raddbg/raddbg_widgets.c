@@ -2019,11 +2019,11 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
       if(contains_1u64(line_token->range, mouse_off))
       {
         Rng1U64 line_token_range_clamped = intersect_1u64(line_token->range, line_range);
-        mouse_token_rng = r1u64(line_token_range_clamped.min-line_range.min, line_token_range_clamped.max-line_range.min);
+        mouse_token_rng = r1u64(line_token_range_clamped.min, line_token_range_clamped.max);
         break;
       }
     }
-    mouse_line_rng = r1u64(0, dim_1u64(line_range));
+    mouse_line_rng = line_range;
   }
   
   //////////////////////////////
@@ -2630,7 +2630,7 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
       if(expr_off_rng.max != expr_off_rng.min)
       {
         F32 expr_hoff_px = params->line_num_width_px + fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_text, expr_off_rng.min-line_range.min)).x;
-        result.mouse_expr_rng = mouse_expr_rng = r1u64(expr_off_rng.min - line_range.min, expr_off_rng.max - line_range.min);
+        result.mouse_expr_rng = mouse_expr_rng = expr_off_rng;
         mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
                                         text_container_box->rect.y0+mouse_y_line_idx*params->line_height_px + params->line_height_px*0.85f);
         mouse_expr = str8_substr(line_text, r1u64(expr_off_rng.min-line_range.min, expr_off_rng.max-line_range.min));
