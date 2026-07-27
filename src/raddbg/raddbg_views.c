@@ -2474,6 +2474,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
   //
   TXT_Patched patched = txt_patched_from_info_data_patches(scratch.arena, &info, data, &cv->patches);
   U64 cursor_line_num = txt_line_num_from_off(&patched.line_map, rd_regs()->cursor);
+  Rng1U64 cursor_line_range = txt_range_from_line_num(&patched.line_map, cursor_line_num);
   
   //////////////////////////////
   //- rjf: unpack cursor info
@@ -2484,6 +2485,8 @@ RD_VIEW_UI_FUNCTION_DEF(text)
     DI_Key dbgi_key = d_dbgi_key_from_module(module);
     rd_regs()->lines = d_lines_from_dbgi_key_file_path_line_num(rd_frame_arena(), dbgi_key, rd_regs()->file_path, (S64)cursor_line_num, 8);
   }
+  rd_regs()->line_num = cursor_line_num;
+  rd_regs()->column_num = (rd_regs()->cursor - cursor_line_range.min);
   
   //////////////////////////////
   //- rjf: determine if file is out-of-date
@@ -2592,7 +2595,6 @@ RD_VIEW_UI_FUNCTION_DEF(text)
           ui_label(rd_regs()->file_path);
           ui_spacer(ui_em(1.5f, 1));
         }
-        Rng1U64 cursor_line_range = txt_range_from_line_num(&patched.line_map, cursor_line_num);
         ui_labelf("Line: %I64d, Column: %I64d, Offset: 0x%I64x", cursor_line_num, 1 + rd_regs()->cursor - cursor_line_range.min, rd_regs()->cursor);
         ui_spacer(ui_pct(1, 0));
         ui_labelf("(read only)");
