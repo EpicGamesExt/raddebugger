@@ -3884,6 +3884,7 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
         
         //- rjf: end single-line comments & meta by binary searching for the line range -
         // skip all lines that end with an escaped newline
+        B32 line_advance = 0;
         U64 active_token_end_off = 0;
         if(start_active_token_kind == TXT_TokenKind_Null && (active_token_kind == TXT_TokenKind_LineComment ||
                                                              active_token_kind == TXT_TokenKind_Meta))
@@ -3905,6 +3906,7 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
             }
           }
           active_token_end_off = line_range.max;
+          line_advance = 1;
         }
         
         //- rjf: try to end all other cases by looking at subsequent endpoint candidates
@@ -3978,12 +3980,35 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
           }
         }
         
-        //- rjf: advance
-        cand_chunk_idx += 1;
-        if(cand_chunk_idx >= cand_chunk_n->count)
+        //- rjf: advance across many token candidates until we find the new line
+        if(line_advance)
         {
-          cand_chunk_n = cand_chunk_n->next;
-          cand_chunk_idx = 0;
+          U64 scan_cand_chunk_idx = cand_chunk_idx;
+          for(TokenEndpointCandidateChunkNode *n = cand_chunk_n; n != 0; n = n->next)
+          {
+            for(U64 n_idx = scan_cand_chunk_idx; n_idx < n->count; n_idx += 1)
+            {
+              if(n->v[n_idx] >= active_token_end_off)
+              {
+                cand_chunk_n = n;
+                cand_chunk_idx = n_idx;
+                goto dbl_break_find_candidate_in_next_line;
+              }
+            }
+            scan_cand_chunk_idx = 0;
+          }
+          dbl_break_find_candidate_in_next_line:;
+        }
+        
+        //- rjf: advance by token candidate
+        else
+        {
+          cand_chunk_idx += 1;
+          if(cand_chunk_idx >= cand_chunk_n->count)
+          {
+            cand_chunk_n = cand_chunk_n->next;
+            cand_chunk_idx = 0;
+          }
         }
       }
     }
