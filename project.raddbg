@@ -20,7 +20,6 @@ target:
 {
   executable: "build/mule_main.exe"
   working_directory: build
-  output_label: output_a
 }
 target:
 {

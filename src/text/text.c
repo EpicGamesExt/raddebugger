@@ -549,8 +549,8 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
                  char_is_digit(next_byte, 10)))  { active_token_kind = TXT_TokenKind_Numeric; }
         else if(byte == '"')                     { active_token_kind = TXT_TokenKind_String; string_is_char = 0; }
         else if(byte == '\'')                    { active_token_kind = TXT_TokenKind_String; string_is_char = 1; }
-        else if(byte == '/' && next_byte == '/') { active_token_kind = TXT_TokenKind_Comment; comment_is_single_line = 1; }
-        else if(byte == '/' && next_byte == '*') { active_token_kind = TXT_TokenKind_Comment; comment_is_single_line = 0; }
+        else if(byte == '/' && next_byte == '/') { active_token_kind = TXT_TokenKind_LineComment; comment_is_single_line = 1; }
+        else if(byte == '/' && next_byte == '*') { active_token_kind = TXT_TokenKind_BlockComment; comment_is_single_line = 0; }
         else if(byte == '~' || byte == '!' ||
                 byte == '%' || byte == '^' ||
                 byte == '&' || byte == '*' ||
@@ -624,17 +624,14 @@ txt_token_array_from_string__c_cpp(Arena *arena, U64 *bytes_processed_counter, S
                            byte != '>' && byte != '/' &&
                            byte != '?' && byte != '|');
           }break;
-          case TXT_TokenKind_Comment:
+          case TXT_TokenKind_LineComment:
           {
-            if(comment_is_single_line)
-            {
-              ender_found = (!escaped && (byte == '\r' || byte == '\n'));
-            }
-            else
-            {
-              ender_found = (active_token_start_idx+1 < idx && byte == '*' && next_byte == '/');
-              ender_pad += 2;
-            }
+            ender_found = (!escaped && (byte == '\r' || byte == '\n'));
+          }break;
+          case TXT_TokenKind_BlockComment:
+          {
+            ender_found = (active_token_start_idx+1 < idx && byte == '*' && next_byte == '/');
+            ender_pad += 2;
           }break;
           case TXT_TokenKind_Meta:
           {
@@ -893,8 +890,8 @@ txt_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, St
                  char_is_digit(next_byte, 10)))  { active_token_kind = TXT_TokenKind_Numeric; }
         else if(byte == '"')                     { active_token_kind = TXT_TokenKind_String; string_is_char = 0; }
         else if(byte == '\'')                    { active_token_kind = TXT_TokenKind_String; string_is_char = 1; }
-        else if(byte == '/' && next_byte == '/') { active_token_kind = TXT_TokenKind_Comment; comment_is_single_line = 1; }
-        else if(byte == '/' && next_byte == '*') { active_token_kind = TXT_TokenKind_Comment; comment_is_single_line = 0; }
+        else if(byte == '/' && next_byte == '/') { active_token_kind = TXT_TokenKind_LineComment; comment_is_single_line = 1; }
+        else if(byte == '/' && next_byte == '*') { active_token_kind = TXT_TokenKind_BlockComment; comment_is_single_line = 0; }
         else if(byte == '~' || byte == '!' ||
                 byte == '%' || byte == '^' ||
                 byte == '&' || byte == '*' ||
@@ -968,17 +965,14 @@ txt_token_array_from_string__odin(Arena *arena, U64 *bytes_processed_counter, St
                            byte != '>' && byte != '/' &&
                            byte != '?' && byte != '|');
           }break;
-          case TXT_TokenKind_Comment:
+          case TXT_TokenKind_LineComment:
           {
-            if(comment_is_single_line)
-            {
-              ender_found = (!escaped && (byte == '\r' || byte == '\n'));
-            }
-            else
-            {
-              ender_found = (active_token_start_idx+1 < idx && byte == '*' && next_byte == '/');
-              ender_pad += 2;
-            }
+            ender_found = (!escaped && (byte == '\r' || byte == '\n'));
+          }break;
+          case TXT_TokenKind_BlockComment:
+          {
+            ender_found = (active_token_start_idx+1 < idx && byte == '*' && next_byte == '/');
+            ender_pad += 2;
           }break;
           case TXT_TokenKind_Meta:
           {
@@ -1179,8 +1173,8 @@ txt_token_array_from_string__jai(Arena *arena, U64 *bytes_processed_counter, Str
                  char_is_digit(next_byte, 10)))  { active_token_kind = TXT_TokenKind_Numeric; }
         else if(byte == '"')                     { active_token_kind = TXT_TokenKind_String; string_is_char = 0; }
         else if(byte == '\'')                    { active_token_kind = TXT_TokenKind_String; string_is_char = 1; }
-        else if(byte == '/' && next_byte == '/') { active_token_kind = TXT_TokenKind_Comment; comment_is_single_line = 1; }
-        else if(byte == '/' && next_byte == '*') { active_token_kind = TXT_TokenKind_Comment; comment_is_single_line = 0; }
+        else if(byte == '/' && next_byte == '/') { active_token_kind = TXT_TokenKind_LineComment; comment_is_single_line = 1; }
+        else if(byte == '/' && next_byte == '*') { active_token_kind = TXT_TokenKind_BlockComment; comment_is_single_line = 0; }
         else if(byte == '~' || byte == '!' ||
                 byte == '%' || byte == '^' ||
                 byte == '&' || byte == '*' ||
@@ -1254,17 +1248,14 @@ txt_token_array_from_string__jai(Arena *arena, U64 *bytes_processed_counter, Str
                            byte != '>' && byte != '/' &&
                            byte != '?' && byte != '|');
           }break;
-          case TXT_TokenKind_Comment:
+          case TXT_TokenKind_LineComment:
           {
-            if(comment_is_single_line)
-            {
-              ender_found = (!escaped && (byte == '\r' || byte == '\n'));
-            }
-            else
-            {
-              ender_found = (active_token_start_idx+1 < idx && byte == '*' && next_byte == '/');
-              ender_pad += 2;
-            }
+            ender_found = (!escaped && (byte == '\r' || byte == '\n'));
+          }break;
+          case TXT_TokenKind_BlockComment:
+          {
+            ender_found = (active_token_start_idx+1 < idx && byte == '*' && next_byte == '/');
+            ender_pad += 2;
           }break;
           case TXT_TokenKind_Meta:
           {
@@ -1465,7 +1456,7 @@ txt_token_array_from_string__zig(Arena *arena, U64 *bytes_processed_counter, Str
         else if(byte == '\'')                    { active_token_kind = TXT_TokenKind_String; string_is_char = 1; }
         else if(byte == '\\' &&
                 next_byte == '\\')               { active_token_kind = TXT_TokenKind_String; string_is_line = 1; }
-        else if(byte == '/' && next_byte == '/') { active_token_kind = TXT_TokenKind_Comment; }
+        else if(byte == '/' && next_byte == '/') { active_token_kind = TXT_TokenKind_LineComment; }
         else if(byte == '~' || byte == '!' ||
                 byte == '%' || byte == '^' ||
                 byte == '&' || byte == '*' ||
@@ -1547,7 +1538,7 @@ txt_token_array_from_string__zig(Arena *arena, U64 *bytes_processed_counter, Str
                            byte != '?' && byte != '|' &&
                            byte != 'c');
           }break;
-          case TXT_TokenKind_Comment:
+          case TXT_TokenKind_LineComment:
           {
             ender_found = (!escaped && (byte == '\r' || byte == '\n'));
           }break;
@@ -1709,7 +1700,7 @@ txt_token_array_from_string__rust(Arena *arena, U64 *bytes_processed_counter, St
 {
   // NOTE(spey): Rust supports unicode identifiers. They are not handled in any way here,
   // but it might be worth looking into in the future.
-  
+#if 0
   Temp scratch = scratch_begin(&arena, 1);
   
   //- rjf: generate token list
@@ -2066,6 +2057,9 @@ txt_token_array_from_string__rust(Arena *arena, U64 *bytes_processed_counter, St
   TXT_TokenArray result = txt_token_array_from_chunk_list(arena, &tokens);
   scratch_end(scratch);
   return result;
+#endif
+  TXT_TokenArray result = {0};
+  return result;
 }
 
 internal TXT_TokenArray
@@ -2109,7 +2103,7 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
           else if(byte == '>' && brace_nest == 0 && paren_nest == 0)
           {
             active_token_start_off = off;
-            active_token_kind = TXT_TokenKind_Comment;
+            active_token_kind = TXT_TokenKind_LineComment;
             advance = 1;
           }
           else if(('a' <= byte && byte <= 'z') || ('A' <= byte && byte <= 'Z') || byte == '_')
@@ -2259,7 +2253,7 @@ txt_token_array_from_string__disasm_x64_intel(Arena *arena, U64 *bytes_processed
           ender_found = 1;
           advance = 0;
         }break;
-        case TXT_TokenKind_Comment:
+        case TXT_TokenKind_LineComment:
         if(byte == '\n')
         {
           ender_found = 1;
@@ -2357,6 +2351,296 @@ txt_range_from_line_num(TXT_LineMap *map, U64 num)
   return result;
 }
 
+internal void
+txt_token_pt_map_push(Arena *arena, TXT_TokenPtMap *map, Rng1U64 num_range, TXT_TokenPt *pts, S64 delta)
+{
+  TXT_TokenPtMapRangeNode *n = push_array(arena, TXT_TokenPtMapRangeNode, 1);
+  SLLQueuePush(map->first_range, map->last_range, n);
+  n->num_range = num_range;
+  n->pts = pts;
+  n->delta = delta;
+  map->total_pt_count += dim_1u64(num_range);
+}
+
+internal U64
+txt_token_pt_num_from_off(TXT_TokenPtMap *map, U64 off)
+{
+  U64 result = 0;
+  for EachNode(n, TXT_TokenPtMapRangeNode, map->first_range)
+  {
+    U64 num_pts = dim_1u64(n->num_range);
+    if(num_pts != 0)
+    {
+      U64 first_off = n->pts[0].off + n->delta;
+      U64 last_off = n->pts[num_pts-1].off + n->delta;
+      if(first_off <= off && off <= last_off)
+      {
+        U64 first_idx = 0;
+        U64 last_idx = num_pts-1;
+        for(;first_idx <= last_idx;)
+        {
+          U64 mid_idx = (last_idx + first_idx) / 2;
+          U64 mid_off = n->pts[mid_idx].off + n->delta;
+          if(off < mid_off)
+          {
+            last_idx = mid_idx - 1;
+          }
+          else if(mid_off < off)
+          {
+            first_idx = mid_idx;
+          }
+          else if(off == mid_off)
+          {
+            first_idx = mid_idx;
+            break;
+          }
+        }
+        result = n->num_range.min + first_idx;
+        break;
+      }
+    }
+  }
+  return result;
+}
+
+internal TXT_TokenPt
+txt_token_pt_from_num(TXT_TokenPtMap *map, U64 num)
+{
+  TXT_TokenPt pt = {TXT_TokenKind_Null};
+  if(num > 0)
+  {
+    for EachNode(n, TXT_TokenPtMapRangeNode, map->first_range)
+    {
+      if(contains_1u64(n->num_range, num))
+      {
+        pt = n->pts[num - n->num_range.min];
+        pt.off += n->delta;
+        break;
+      }
+    }
+  }
+  return pt;
+}
+
+internal TXT_TokenArray
+txt_token_array_from_data(Arena *arena, TXT_TokenPt ctx_token_pt, String8 data, U64 base_off, U64 limit)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  TXT_TokenChunkList tokens = {0};
+  {
+    U64 chunk_size = Clamp(8, data.size/8, 4096);
+    TXT_TokenKind active_token_kind = ctx_token_pt.kind;
+    U64 active_token_start_off = ctx_token_pt.off;
+    B32 escaped = 0;
+    for(U64 off = 0; off <= data.size;)
+    {
+      U8 byte      = (off+0 < data.size) ? data.str[off+0] : 0;
+      U8 next_byte = (off+1 < data.size) ? data.str[off+1] : 0;
+      B32 token_finished = 0;
+      U64 advance = 1;
+      
+      //- rjf: adjust escaping state
+      if(active_token_kind != TXT_TokenKind_Null && byte == '\\')
+      {
+        escaped = 1;
+      }
+      
+      //- rjf: take starter bytes for new tokens
+      if(active_token_kind == TXT_TokenKind_Null)
+      {
+        if(0){}
+        else if(byte == ' ' || byte == '\n' || byte == '\t' ||
+                byte == '\r' || byte == '\f' || byte == '\v')
+        {
+          active_token_kind = TXT_TokenKind_Whitespace;
+          advance = 0;
+        }
+        else if(byte == '_' || byte == '$' ||
+                ('a' <= byte && byte <= 'z') ||
+                ('A' <= byte && byte <= 'Z'))
+        {
+          active_token_kind = TXT_TokenKind_Identifier;
+          advance = 0;
+        }
+        else if(('0' <= byte && byte <= '9') ||
+                (byte == '.' && ('0' <= next_byte && next_byte <= '9')))
+        {
+          active_token_kind = TXT_TokenKind_Numeric;
+          advance = 0;
+        }
+        else if(byte == '"')
+        {
+          active_token_kind = TXT_TokenKind_String;
+          advance = 1;
+        }
+        else if(byte == '\'')
+        {
+          active_token_kind = TXT_TokenKind_Char;
+          advance = 1;
+        }
+        else if(byte == '/' && next_byte == '/')
+        {
+          active_token_kind = TXT_TokenKind_LineComment;
+          advance = 2;
+        }
+        else if(byte == '/' && next_byte == '*')
+        {
+          active_token_kind = TXT_TokenKind_BlockComment;
+          advance = 2;
+        }
+        else if(byte == '~' || byte == '!' ||
+                byte == '%' || byte == '^' ||
+                byte == '&' || byte == '*' ||
+                byte == '(' || byte == ')' ||
+                byte == '-' || byte == '=' ||
+                byte == '+' || byte == '[' ||
+                byte == ']' || byte == '{' ||
+                byte == '}' || byte == ':' ||
+                byte == ';' || byte == ',' ||
+                byte == '.' || byte == '<' ||
+                byte == '>' || byte == '/' ||
+                byte == '?' || byte == '|')
+        {
+          active_token_kind = TXT_TokenKind_Symbol;
+          advance = 1;
+        }
+        if(active_token_kind != TXT_TokenKind_Null)
+        {
+          active_token_start_off = off;
+        }
+        else
+        {
+          TXT_Token token = {TXT_TokenKind_Error, r1u64(base_off+off, base_off+off+1)};
+          txt_token_chunk_list_push(scratch.arena, &tokens, chunk_size, &token);
+          advance = 1;
+        }
+      }
+      
+      //- rjf: look for active token enders
+      else switch(active_token_kind)
+      {
+        default:{}break;
+        case TXT_TokenKind_Whitespace:
+        {
+          if(byte != ' ' && byte != '\n' && byte != '\t' &&
+             byte != '\r' && byte != '\f' && byte != '\v')
+          {
+            token_finished = 1;
+            advance = 0;
+          }
+        }break;
+        case TXT_TokenKind_Identifier:
+        {
+          // TODO(rjf): stupid C++ symbol names - `string_literals_like_this'
+          if((byte < '0' || '9' < byte) &&
+             (byte < 'a' || 'z' < byte) &&
+             (byte < 'A' || 'Z' < byte) &&
+             byte != '$' &&
+             byte != '_')
+          {
+            token_finished = 1;
+            advance = 0;
+          }
+        }break;
+        case TXT_TokenKind_Numeric:
+        {
+          if((byte < '0' || '9' < byte) &&
+             (byte < 'a' || 'z' < byte) &&
+             (byte < 'A' || 'Z' < byte) &&
+             byte != '.')
+          {
+            token_finished = 1;
+            advance = 0;
+          }
+        }break;
+        case TXT_TokenKind_String:
+        {
+          if(byte == '"')
+          {
+            token_finished = 1;
+            advance = 1;
+          }
+        }break;
+        case TXT_TokenKind_Char:
+        {
+          if(byte == '\'')
+          {
+            token_finished = 1;
+            advance = 1;
+          }
+        }break;
+        case TXT_TokenKind_Symbol:
+        {
+          if(byte != '~' && byte != '!' &&
+             byte != '%' && byte != '^' &&
+             byte != '&' && byte != '*' &&
+             byte != '(' && byte != ')' &&
+             byte != '-' && byte != '=' &&
+             byte != '+' && byte != '[' &&
+             byte != ']' && byte != '{' &&
+             byte != '}' && byte != ':' &&
+             byte != ';' && byte != ',' &&
+             byte != '.' && byte != '<' &&
+             byte != '>' && byte != '/' &&
+             byte != '?' && byte != '|')
+          {
+            token_finished = 1;
+            advance = 0;
+          }
+        }break;
+        case TXT_TokenKind_LineComment:
+        {
+          if(byte == '\n')
+          {
+            token_finished = 1;
+            advance = 1;
+          }
+        }break;
+        case TXT_TokenKind_BlockComment:
+        {
+          if(byte == '*' && next_byte == '/')
+          {
+            token_finished = 1;
+            advance = 2;
+          }
+        }break;
+        case TXT_TokenKind_Meta:
+        {
+          if(byte == '\n')
+          {
+            token_finished = 1;
+            advance = 1;
+          }
+        }break;
+      }
+      
+      //- rjf: finish all tokens if we're at the end of the data
+      if(off == data.size)
+      {
+        token_finished = 1;
+        advance = 1;
+      }
+      
+      //- rjf: push completed token
+      if(token_finished)
+      {
+        TXT_Token token = {active_token_kind, r1u64(base_off+active_token_start_off, base_off+off+advance)};
+        txt_token_chunk_list_push(scratch.arena, &tokens, chunk_size, &token);
+        active_token_kind = TXT_TokenKind_Null;
+      }
+      
+      //- rjf: reset escaped state
+      escaped = 0;
+      
+      //- rjf: advance
+      off += advance;
+    }
+  }
+  TXT_TokenArray result = txt_token_array_from_chunk_list(arena, &tokens);
+  scratch_end(scratch);
+  return result;
+}
+
 internal TXT_Patched
 txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 data, TXT_PatchList *patches)
 {
@@ -2366,14 +2650,17 @@ txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 dat
   MemoryMap last_memory_map = {0};
   U64 last_size = data.size;
   TXT_LineMap last_line_map = {0};
+  TXT_TokenPtMap last_token_pt_map = {0};
   memory_map_push(scratch.arena, &last_memory_map, r1u64(0, data.size), data.str);
   txt_line_map_push(scratch.arena, &last_line_map, r1u64(1, info->lines_count+1), info->lines_ranges, 0);
+  txt_token_pt_map_push(scratch.arena, &last_token_pt_map, r1u64(0, info->big_token_pts_count), info->big_token_pts, 0);
   
   // rjf: apply the patches in order, each being able to slice/dice the previous memory map
   for EachNode(n, TXT_PatchNode, patches->first)
   {
     MemoryMap next_memory_map = {0};
     TXT_LineMap next_line_map = {0};
+    TXT_TokenPtMap next_token_pt_map = {0};
     
     // rjf: compute portion of memory before/after this replace-range
     Rng1U64 pre_replace_range = r1u64(0, n->v.range.min);
@@ -2389,6 +2676,17 @@ txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 dat
     // rjf: compute ranges of (unchanged) lines before/after this replace-range
     Rng1U64 pre_replace_line_num_range = r1u64(1, replace_line_num_range.min);
     Rng1U64 post_replace_line_num_range = r1u64(replace_line_num_range.max+1, last_line_map.total_line_count+1);
+    
+    // rjf: map this replace range -> range of token pts
+    Rng1U64 replace_token_pt_range = {0};
+    {
+      replace_token_pt_range.min = txt_token_pt_num_from_off(&last_token_pt_map, n->v.range.min);
+      replace_token_pt_range.max = txt_token_pt_num_from_off(&last_token_pt_map, n->v.range.max);
+    }
+    
+    // rjf: compute ranges of unchanged token pts before/after this replace-range
+    Rng1U64 pre_replace_token_pt_range = r1u64(1, replace_token_pt_range.min);
+    Rng1U64 post_replace_token_pt_range = r1u64(replace_token_pt_range.max, last_token_pt_map.total_pt_count+1);
     
     // rjf: compute delta & next size
     S64 size_delta = (S64)n->v.replace.size - (S64)dim_1u64(n->v.range);
@@ -2415,6 +2713,12 @@ txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 dat
         }
       }
       rng1u64_list_push(scratch.arena, &replace_line_ranges, r1u64(last_line_start_off, n->v.replace.size));
+    }
+    
+    // rjf: compute token pt delta
+    S64 token_pt_delta = 0;
+    {
+      // TODO(rjf)
     }
     
     // rjf: push all portions of pre-replace / post-replace ranges in previous memory map
@@ -2504,10 +2808,32 @@ txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 dat
     // rjf: push affected line ranges
     txt_line_map_push(scratch.arena, &next_line_map, r1u64(replace_line_num_range.min, replace_line_num_range.min + affected_line_count), affected_line_ranges, 0);
     
+    // rjf: push all portions of pre-replace / post-replace ranges in previous token pt map
+    {
+      for EachNode(n,  TXT_TokenPtMapRangeNode, last_token_pt_map.first_range)
+      {
+        Rng1U64 num_range = n->num_range;
+        Rng1U64 range_x_pre = intersect_1u64(pre_replace_token_pt_range, num_range);
+        Rng1U64 range_x_post = intersect_1u64(post_replace_token_pt_range, num_range);
+        if(range_x_pre.max > range_x_pre.min)
+        {
+          txt_token_pt_map_push(scratch.arena, &next_token_pt_map, range_x_pre, n->pts + (range_x_pre.min - num_range.min), n->delta);
+        }
+        if(range_x_post.max > range_x_post.min)
+        {
+          Rng1U64 range_x_post_shifted = range_x_post;
+          range_x_post_shifted.min = (U64)((S64)range_x_post_shifted.min + token_pt_delta);
+          range_x_post_shifted.max = (U64)((S64)range_x_post_shifted.max + token_pt_delta);
+          txt_token_pt_map_push(scratch.arena, &next_token_pt_map, range_x_post_shifted, n->pts + (range_x_post.min - num_range.min), n->delta);
+        }
+      }
+    }
+    
     // rjf: advance to the next memory map
     last_memory_map = next_memory_map;
     last_size = next_size;
     last_line_map = next_line_map;
+    last_token_pt_map = next_token_pt_map;
   }
   
   // rjf: fill result
@@ -2521,6 +2847,10 @@ txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 dat
     for EachNode(n, TXT_LineMapRangeNode, last_line_map.first_range)
     {
       txt_line_map_push(arena, &result.line_map, n->num_range, n->ranges, n->delta);
+    }
+    for EachNode(n, TXT_TokenPtMapRangeNode, last_token_pt_map.first_range)
+    {
+      txt_token_pt_map_push(arena, &result.token_pt_map, n->num_range, n->pts, n->delta);
     }
   }
   
@@ -2969,38 +3299,8 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
     }
     
     //- rjf: set # of bytes to process
-    //                  (line ending calc)     (line counting)    (line measuring)   (lexing)
-    set_progress_target(Min(data.size, 1024) + data.size        + data.size        + data.size*(lang != TXT_LangKind_Null));
-    
-    //- rjf: detect line end kind
-    TXT_LineEndKind line_end_kind = TXT_LineEndKind_Null;
-    if(lane_idx() == 0)
-    {
-      U64 lf_count = 0;
-      U64 cr_count = 0;
-      for(U64 idx = 0; idx < data.size && idx < 1024; idx += 1)
-      {
-        if(data.str[idx] == '\r')
-        {
-          cr_count += 1;
-        }
-        if(data.str[idx] == '\n')
-        {
-          lf_count += 1;
-        }
-      }
-      if(cr_count >= lf_count/2 && lf_count >= 1)
-      {
-        line_end_kind = TXT_LineEndKind_CRLF;
-      }
-      else if(lf_count >= 1)
-      {
-        line_end_kind = TXT_LineEndKind_LF;
-      }
-      shared->info.line_end_kind = line_end_kind;
-    }
-    lane_sync();
-    set_progress(Min(data.size, 1024));
+    //                  (line counting)    (line measuring)   (lexing)
+    set_progress_target(data.size        + data.size        + data.size*(lang != TXT_LangKind_Null));
     
     //- rjf: count # of lines
     U64 lane_line_count = 0;
@@ -3048,11 +3348,16 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
     lane_sync_u64(&lane_line_base_idxs, 0);
     
     //- rjf: allocate & store line ranges
+    U64 *lane_line_max_size = 0;
+    U64 *lane_cr_count = 0;
     if(lane_idx() == 0)
     {
+      lane_cr_count = push_array(scratch.arena, U64, lane_count());
+      lane_line_max_size = push_array(scratch.arena, U64, lane_count());
       shared->info.lines_ranges = push_array_no_zero(shared->arena, Rng1U64, shared->info.lines_count);
     }
-    lane_sync();
+    lane_sync_u64(&lane_line_max_size, 0);
+    lane_sync_u64(&lane_cr_count, 0);
     {
       Rng1U64 range = lane_range(data.size+1);
       U64 lane_line_idx = 0;
@@ -3084,12 +3389,12 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
           Rng1U64 line_range = r1u64(line_start_idx, idx);
           if(idx > 0 && data.str[idx-1] == '\r' && line_range.max > line_range.min)
           {
+            lane_cr_count[lane_idx()] += 1;
             line_range.max -= 1;
           }
           U64 line_size = dim_1u64(line_range);
           shared->info.lines_ranges[lane_line_base_idxs[lane_idx()] + lane_line_idx] = line_range;
-          // TODO(rjf): this is a race:
-          shared->info.lines_max_size = Max(shared->info.lines_max_size, line_size);
+          lane_line_max_size[lane_idx()] = Max(lane_line_max_size[lane_idx()], line_size);
           lane_line_idx += 1;
           line_start_idx = idx+1;
         }
@@ -3101,6 +3406,345 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
     }
     lane_sync();
     set_progress(Min(data.size, 1024) + data.size + data.size);
+    
+    //- rjf: find max line size across all lanes
+    if(lane_idx() == 0)
+    {
+      for EachIndex(l_idx, lane_count())
+      {
+        shared->info.lines_max_size = Max(shared->info.lines_max_size, lane_line_max_size[l_idx]);
+      }
+    }
+    lane_sync();
+    
+    //- rjf: pick LF/CRLF based on significant ratio of CR characters across all lanes
+    {
+      TXT_LineEndKind line_end_kind = TXT_LineEndKind_Null;
+      if(lane_idx() == 0)
+      {
+        U64 total_cr_count = 0;
+        for EachIndex(l_idx, lane_count())
+        {
+          total_cr_count += lane_cr_count[l_idx];
+        }
+        if(total_cr_count > shared->info.lines_count / 4 && total_cr_count > 0)
+        {
+          line_end_kind = TXT_LineEndKind_CRLF;
+        }
+        shared->info.line_end_kind = line_end_kind;
+      }
+      lane_sync();
+    }
+    
+    //- rjf: find all token endpoint candidates across all lanes
+    //
+    // note that these are not necessarily actually token-forming sequences of
+    // characters. we're effectively just building an acceleration structure to
+    // quickly process the buffer - to skip between sequences of *plausible*
+    // token markers. but, for example, if a `//` showed up inside of two `"`s,
+    // then there would not be a comment token emitted. we just do this (rather
+    // than going through the buffer sequentially) so that we can do this gather
+    // step wide, and for the serially-dependent tokenization state machine part,
+    // we can do that over much less data.
+    //
+    typedef struct TokenEndpointCandidateChunkNode TokenEndpointCandidateChunkNode;
+    struct TokenEndpointCandidateChunkNode
+    {
+      TokenEndpointCandidateChunkNode *next;
+      U64 *v;
+      U64 count;
+      U64 cap;
+    };
+    TokenEndpointCandidateChunkNode **lanes_first_token_endpoint_candidate_chunks = 0;
+    TokenEndpointCandidateChunkNode **lanes_last_token_endpoint_candidate_chunks = 0;
+    {
+      if(lane_idx() == 0)
+      {
+        lanes_first_token_endpoint_candidate_chunks = push_array(scratch.arena, TokenEndpointCandidateChunkNode *, lane_count());
+        lanes_last_token_endpoint_candidate_chunks = push_array(scratch.arena, TokenEndpointCandidateChunkNode *, lane_count());
+      }
+      lane_sync_u64(&lanes_first_token_endpoint_candidate_chunks, 0);
+      lane_sync_u64(&lanes_last_token_endpoint_candidate_chunks, 0);
+      TokenEndpointCandidateChunkNode *first_chunk = 0;
+      TokenEndpointCandidateChunkNode *last_chunk = 0;
+      Rng1U64 range = lane_range(data.size);
+      for EachInRange(off, range)
+      {
+        U8 byte = data.str[off];
+        U8 next_byte = (off+1 < data.size) ? data.str[off+1] : 0;
+        U8 prev_byte = (off > 0) ? data.str[off-1] : 0;
+        B32 off_is_endpoint = 1;
+        U64 extra_advance = 0;
+        if(byte == '/' && next_byte == '*')
+        {
+          extra_advance = 1;
+        }
+        else if(byte == '*' && next_byte == '/')
+        {
+          extra_advance = 1;
+        }
+        else if(byte == 'R' && next_byte == '"')
+        {
+          extra_advance = 1;
+        }
+        else if(byte == '/' && next_byte == '/')
+        {
+          extra_advance = 1;
+        }
+        else if(byte == '#')
+        {
+          // NOTE(rjf): no-op
+        }
+        else if(prev_byte != '\\' && (byte == '"' || byte == '\''))
+        {
+          // NOTE(rjf): no-op
+        }
+        else
+        {
+          off_is_endpoint = 0;
+        }
+        if(off_is_endpoint)
+        {
+          TokenEndpointCandidateChunkNode *chunk = last_chunk;
+          if(chunk == 0 || chunk->count >= chunk->cap)
+          {
+            chunk = push_array(scratch.arena, TokenEndpointCandidateChunkNode, 1);
+            SLLQueuePush(first_chunk, last_chunk, chunk);
+            chunk->cap = 512;
+            chunk->v = push_array(scratch.arena, U64, chunk->cap);
+          }
+          chunk->v[chunk->count] = off;
+          chunk->count += 1;
+        }
+        off += extra_advance;
+      }
+      lanes_first_token_endpoint_candidate_chunks[lane_idx()] = first_chunk;
+      lanes_last_token_endpoint_candidate_chunks[lane_idx()] = last_chunk;
+      lane_sync();
+    }
+    
+    //- rjf: join all token endpoint candidates from all lanes
+    TokenEndpointCandidateChunkNode *first_token_endpoint_candidate_chunk = 0;
+    TokenEndpointCandidateChunkNode *last_token_endpoint_candidate_chunk = 0;
+    if(lane_idx() == 0)
+    {
+      for EachIndex(l_idx, lane_count())
+      {
+        if(last_token_endpoint_candidate_chunk == 0)
+        {
+          first_token_endpoint_candidate_chunk = lanes_first_token_endpoint_candidate_chunks[l_idx];
+          last_token_endpoint_candidate_chunk = lanes_last_token_endpoint_candidate_chunks[l_idx];
+        }
+        else
+        {
+          last_token_endpoint_candidate_chunk->next = lanes_first_token_endpoint_candidate_chunks[l_idx];
+          last_token_endpoint_candidate_chunk = lanes_last_token_endpoint_candidate_chunks[l_idx];
+        }
+      }
+    }
+    lane_sync_u64(&first_token_endpoint_candidate_chunk, 0);
+    lane_sync_u64(&last_token_endpoint_candidate_chunk, 0);
+    
+    //- rjf: scan sequence of token endpoint candidates - find big token ranges.
+    typedef struct TokenPtChunkNode TokenPtChunkNode;
+    struct TokenPtChunkNode
+    {
+      TokenPtChunkNode *next;
+      TXT_TokenPt *v;
+      U64 count;
+      U64 cap;
+    };
+    TokenPtChunkNode *first_token_pt_chunk = 0;
+    TokenPtChunkNode *last_token_pt_chunk = 0;
+    U64 total_token_pt_count = 0;
+    if(lane_idx() == 0)
+    {
+      TXT_TokenKind active_token_kind = TXT_TokenKind_Null;
+      U64 active_token_start_off = 0;
+      String8 herestring_marker = {0};
+      U64 cand_chunk_idx = 0;
+      for(TokenEndpointCandidateChunkNode *cand_chunk_n = first_token_endpoint_candidate_chunk; cand_chunk_n != 0;)
+      {
+        U64 off = cand_chunk_n->v[cand_chunk_idx];
+        U8 byte = data.str[off];
+        U8 next_byte = (off+1 < data.size) ? data.str[off+1] : 0;
+        
+        //- rjf: no active token kind -> look for token starter
+        TXT_TokenKind start_active_token_kind = active_token_kind;
+        if(active_token_kind == TXT_TokenKind_Null)
+        {
+          // rjf: " -> start a string literal
+          if(byte == '"')
+          {
+            active_token_kind = TXT_TokenKind_String;
+            herestring_marker.size = 0;
+          }
+          
+          // rjf: ' -> start a char literal
+          else if(byte == '\'')
+          {
+            active_token_kind = TXT_TokenKind_Char;
+            herestring_marker.size = 0;
+          }
+          
+          // rjf: R" -> start a C++11+ style herestring
+          else if(byte == 'R' && next_byte == '"')
+          {
+            active_token_kind = TXT_TokenKind_String;
+            U64 next_paren_pos = str8_find_needle(str8_prefix(data, off+2+256), off+2, s("("), 0);
+            herestring_marker = str8_substr(data, r1u64(off+2, next_paren_pos));
+          }
+          
+          // rjf: // -> start a single-line comment
+          else if(byte == '/' && next_byte == '/')
+          {
+            active_token_kind = TXT_TokenKind_LineComment;
+          }
+          
+          // rjf: /* -> start a multi-line comment
+          else if(byte == '/' && next_byte == '*')
+          {
+            active_token_kind = TXT_TokenKind_BlockComment;
+          }
+          
+          // rjf: # -> start a meta
+          else if(byte == '#')
+          {
+            active_token_kind = TXT_TokenKind_Meta;
+          }
+          
+          // rjf: got a token kind -> remember its starting offset
+          if(active_token_kind != TXT_TokenKind_Null)
+          {
+            active_token_start_off = off;
+          }
+        }
+        
+        //- rjf: end single-line comments & meta by binary searching for the line range -
+        // skip all lines that end with an escaped newline
+        U64 active_token_end_off = 0;
+        if(start_active_token_kind == TXT_TokenKind_Null && (active_token_kind == TXT_TokenKind_LineComment ||
+                                                             active_token_kind == TXT_TokenKind_Meta))
+        {
+          TXT_LineMap line_map = {0};
+          txt_line_map_push(scratch.arena, &line_map, r1u64(1, shared->info.lines_count), shared->info.lines_ranges, 0);
+          U64 line_num = txt_line_num_from_off(&line_map, off);
+          Rng1U64 line_range = txt_range_from_line_num(&line_map, line_num);
+          for(;line_num <= shared->info.lines_count;)
+          {
+            if(str8_match(s("\\"), str8_substr(data, r1u64(line_range.max-1, line_range.max)), 0))
+            {
+              line_num += 1;
+              line_range = txt_range_from_line_num(&line_map, line_num);
+            }
+            else
+            {
+              break;
+            }
+          }
+          active_token_end_off = line_range.max;
+        }
+        
+        //- rjf: try to end all other cases by looking at subsequent endpoint candidates
+        if(start_active_token_kind == active_token_kind && active_token_kind != TXT_TokenKind_Null)
+        {
+          switch(active_token_kind)
+          {
+            default:{}break;
+            case TXT_TokenKind_String:
+            {
+              if(herestring_marker.size == 0 && byte == '"')
+              {
+                active_token_end_off = off+1;
+              }
+              else if(herestring_marker.size != 0 && byte == '"')
+              {
+                String8 paren_maybe = str8_substr(data, r1u64(off - herestring_marker.size - 1, off - herestring_marker.size));
+                String8 herestring_marker_maybe = str8_substr(data, r1u64(off - herestring_marker.size, off));
+                if(str8_match(paren_maybe, s(")"), 0) && str8_match(herestring_marker, herestring_marker_maybe, 0))
+                {
+                  active_token_end_off = off+1;
+                }
+              }
+            }break;
+            case TXT_TokenKind_Char:
+            {
+              if(byte == '\'')
+              {
+                active_token_end_off = off+1;
+              }
+            }break;
+            case TXT_TokenKind_BlockComment:
+            {
+              if(byte == '*' && next_byte == '/')
+              {
+                active_token_end_off = off+2;
+              }
+            }break;
+          }
+        }
+        
+        //- rjf: end all cases with an end-of-buffer
+        B32 next_is_end_of_buffer = (cand_chunk_idx >= cand_chunk_n->count && cand_chunk_n->next == 0);
+        if(next_is_end_of_buffer)
+        {
+          active_token_end_off = off+1;
+        }
+        
+        //- rjf: finish the active token if we can
+        if(active_token_end_off > active_token_start_off)
+        {
+          TXT_TokenPt pts[] =
+          {
+            {active_token_kind, active_token_start_off},
+            {TXT_TokenKind_Null, active_token_end_off},
+          };
+          for EachElement(pt_idx, pts)
+          {
+            TokenPtChunkNode *chunk = last_token_pt_chunk;
+            if(chunk == 0 || chunk->count >= chunk->cap)
+            {
+              chunk = push_array(scratch.arena, TokenPtChunkNode, 1);
+              SLLQueuePush(first_token_pt_chunk, last_token_pt_chunk, chunk);
+              chunk->cap = 512;
+              chunk->v = push_array(scratch.arena, TXT_TokenPt, chunk->cap);
+            }
+            chunk->v[chunk->count] = pts[pt_idx];
+            chunk->count += 1;
+            total_token_pt_count += 1;
+          }
+        }
+        
+        //- rjf: advance
+        cand_chunk_idx += 1;
+        if(cand_chunk_idx >= cand_chunk_n->count)
+        {
+          cand_chunk_n = cand_chunk_n->next;
+          cand_chunk_idx = 0;
+        }
+      }
+    }
+    lane_sync_u64(&first_token_pt_chunk, 0);
+    lane_sync_u64(&last_token_pt_chunk, 0);
+    lane_sync_u64(&total_token_pt_count, 0);
+    
+    //- rjf: form final token pt buffer
+    if(lane_idx() == 0)
+    {
+      shared->info.big_token_pts_count = total_token_pt_count;
+      shared->info.big_token_pts = push_array(shared->arena, TXT_TokenPt, shared->info.big_token_pts_count);
+    }
+    lane_sync();
+    {
+      U64 base_idx = 0;
+      for EachNode(n, TokenPtChunkNode, first_token_pt_chunk)
+      {
+        Rng1U64 range = lane_range(n->count);
+        MemoryCopy(shared->info.big_token_pts + base_idx + range.min, n->v + range.min, sizeof(n->v[0]) * dim_1u64(range));
+        base_idx += n->count;
+      }
+    }
+    lane_sync();
     
     //- rjf: lex function * data -> tokens
 #if 1
