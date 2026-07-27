@@ -1982,7 +1982,9 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
     Vec2F32 mouse = ui_mouse();
     
     // rjf: mouse y => index
-    mouse_y_line_idx = (U64)((mouse.y - text_container_box->rect.y0) / params->line_height_px);
+    S64 mouse_y_line_idx_signed = ((mouse.y - text_container_box->rect.y0) / params->line_height_px);
+    mouse_y_line_idx_signed = Clamp(0, mouse_y_line_idx_signed, dim_1s64(params->line_num_range)-1);
+    mouse_y_line_idx = (U64)mouse_y_line_idx_signed;
     
     // rjf: index => line num
     S64 line_num = (params->line_num_range.min + mouse_y_line_idx);
