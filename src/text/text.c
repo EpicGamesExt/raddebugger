@@ -3983,6 +3983,7 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
         //- rjf: advance across many token candidates until we find the new line
         if(line_advance)
         {
+          B32 found = 0;
           U64 scan_cand_chunk_idx = cand_chunk_idx;
           for(TokenEndpointCandidateChunkNode *n = cand_chunk_n; n != 0; n = n->next)
           {
@@ -3990,6 +3991,7 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
             {
               if(n->v[n_idx] >= active_token_end_off)
               {
+                found = 1;
                 cand_chunk_n = n;
                 cand_chunk_idx = n_idx;
                 goto dbl_break_find_candidate_in_next_line;
@@ -3998,6 +4000,11 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
             scan_cand_chunk_idx = 0;
           }
           dbl_break_find_candidate_in_next_line:;
+          if(!found)
+          {
+            cand_chunk_n = 0;
+            cand_chunk_idx = 0;
+          }
         }
         
         //- rjf: advance by token candidate

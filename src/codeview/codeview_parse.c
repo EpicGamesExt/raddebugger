@@ -1025,63 +1025,77 @@ internal U64
 cv_name_offset_from_symbol(CV_SymKind kind, String8 data)
 {
   U64 offset = data.size;
-  switch (kind) {
-    case CV_SymKind_COMPILE: break;
-    case CV_SymKind_OBJNAME: break;
-    case CV_SymKind_THUNK32: {
+  switch(kind)
+  {
+    case CV_SymKind_COMPILE:{}break;
+    case CV_SymKind_OBJNAME:{}break;
+    case CV_SymKind_THUNK32:
+    {
       offset = sizeof(CV_SymThunk32); 
-    } break;
-    case CV_SymKind_LABEL32: {
+    }break;
+    case CV_SymKind_LABEL32:
+    {
       offset = sizeof(CV_SymLabel32); 
-    } break;
-    case CV_SymKind_REGISTER: {
+    }break;
+    case CV_SymKind_REGISTER:
+    {
       offset = sizeof(CV_SymRegister); 
-    } break;
-    case CV_SymKind_CONSTANT: {
+    }break;
+    case CV_SymKind_CONSTANT:
+    {
       offset = sizeof(CV_SymConstant);
       CV_NumericParsed size;
       offset += cv_read_numeric(data, offset, &size);
-    } break;
-    case CV_SymKind_UDT: {
+    }break;
+    case CV_SymKind_UDT:
+    {
       offset = sizeof(CV_SymUDT);
-    } break;
-    case CV_SymKind_BPREL32: {
+    }break;
+    case CV_SymKind_BPREL32:
+    {
       offset = sizeof(CV_SymBPRel32);
-    } break;
+    }break;
     case CV_SymKind_LDATA32:
-    case CV_SymKind_GDATA32: {
+    case CV_SymKind_GDATA32:
+    {
       offset = sizeof(CV_SymData32);
-    } break;
-    case CV_SymKind_PUB32: {
+    }break;
+    case CV_SymKind_PUB32:
+    {
       offset = sizeof(CV_SymPub32);
-    } break;
+    }break;
     case CV_SymKind_LPROC32: 
     case CV_SymKind_GPROC32: 
     case CV_SymKind_LPROC32_ID:
-    case CV_SymKind_GPROC32_ID: {
+    case CV_SymKind_GPROC32_ID:
+    {
       offset = sizeof(CV_SymProc32);
-    } break;
-    case CV_SymKind_REGREL32: {
+    }break;
+    case CV_SymKind_REGREL32:
+    {
       offset = sizeof(CV_SymRegrel32);
-    } break;
+    }break;
     case CV_SymKind_LTHREAD32:
-    case CV_SymKind_GTHREAD32: {
+    case CV_SymKind_GTHREAD32:
+    {
       offset = sizeof(CV_SymData32);
-    } break;
+    }break;
     case CV_SymKind_COMPILE2: break;
-    case CV_SymKind_LOCALSLOT: {
+    case CV_SymKind_LOCALSLOT:
+    {
       offset = sizeof(CV_SymSlot);
-    } break;
+    }break;
     case CV_SymKind_PROCREF: 
     case CV_SymKind_LPROCREF:
-    case CV_SymKind_DATAREF: {
+    case CV_SymKind_DATAREF:
+    {
       offset = sizeof(CV_SymRef2);
-    } break;
+    }break;
     case CV_SymKind_TRAMPOLINE: break;
-    case CV_SymKind_LOCAL: {
+    case CV_SymKind_LOCAL:
+    {
       offset = sizeof(CV_SymLocal);
-    } break;
-    default: InvalidPath;
+    }break;
   }
   return offset;
 }
