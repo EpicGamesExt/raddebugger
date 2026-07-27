@@ -767,69 +767,94 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     if(cv->find_text_fwd.size != 0)
     {
       String8 needle = cv->find_text_fwd;
-      B32 done = 0;
-      for(U64 off = rd_regs()->cursor+1; !done && off < text_patched.size; off += search_chunk_size)
+      Rng1U64 ranges[] =
       {
-        Temp scratch = scratch_begin(&arena, 1);
-        String8 data = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, r1u64(off, off+search_chunk_size));
-        U64 needle_pos = str8_find_needle(data, 0, needle, StringMatchFlag_CaseInsensitive);
-        if(needle_pos < data.size)
+        r1u64(rd_regs()->cursor+1, text_patched.size),
+        r1u64(0, rd_regs()->cursor+1),
+      };
+      B32 found = 0;
+      for EachElement(range_idx, ranges)
+      {
+        for(U64 off = ranges[range_idx].min; off < ranges[range_idx].max; off += search_chunk_size)
         {
-          done = 1;
-          rd_regs()->mark = off+needle_pos;
-          rd_regs()->cursor = rd_regs()->mark + needle.size;
+          Temp scratch = scratch_begin(&arena, 1);
+          String8 data = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, r1u64(off, off+search_chunk_size));
+          U64 hint_needle_pos = str8_find_needle(data, 0, needle, StringMatchFlag_CaseInsensitive|StringMatchFlag_RightSideSloppy);
+          if(hint_needle_pos < data.size)
+          {
+            String8 candidate = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, r1u64(off+hint_needle_pos, off+hint_needle_pos+needle.size));
+            if(str8_match(candidate, needle, StringMatchFlag_CaseInsensitive))
+            {
+              found = 1;
+              rd_regs()->mark = off+hint_needle_pos;
+              rd_regs()->cursor = rd_regs()->mark + needle.size;
+            }
+          }
+          scratch_end(scratch);
+          if(found) { goto done_fwd; }
         }
-        scratch_end(scratch);
       }
-      if(!done)
+      done_fwd:;
+      if(!found)
       {
         log_user_errorf("Could not find `%S`", needle);
       }
-      cv->center_cursor = done;
+      cv->center_cursor = found;
     }
     
     //- rjf: find text (backward)
     if(cv->find_text_bwd.size != 0 && rd_regs()->cursor > 0)
     {
       String8 needle = cv->find_text_bwd;
-      B32 done = 0;
-      for(U64 off = rd_regs()->cursor-1, next_off = 0; !done; off = next_off)
+      Rng1U64 ranges[] =
       {
-        U64 advance = Min(search_chunk_size, off);
-        next_off = off - advance;
-        Temp scratch = scratch_begin(&arena, 1);
-        String8 data = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, r1u64(off, off+search_chunk_size));
-        U64 needle_pos = 0;
+        r1u64(0, Min(rd_regs()->cursor, rd_regs()->mark)),
+        r1u64(rd_regs()->cursor+1, text_patched.size),
+      };
+      B32 found = 0;
+      for EachElement(range_idx, ranges)
+      {
+        U64 start_off = ranges[range_idx].max + (search_chunk_size-1);
+        start_off -= start_off%search_chunk_size;
+        start_off -= search_chunk_size;
+        for(U64 off = start_off;; off -= search_chunk_size)
         {
-          U64 start_search_pos = 0;
-          for(;;)
+          Temp scratch = scratch_begin(&arena, 1);
+          String8 data = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, r1u64(off, Min(off+search_chunk_size, ranges[range_idx].max)));
+          U64 hint_needle_pos = str8_find_needle(data, 0, needle, StringMatchFlag_CaseInsensitive|StringMatchFlag_RightSideSloppy);
+          for(;hint_needle_pos < data.size;)
           {
-            U64 next_needle_pos = str8_find_needle(data, start_search_pos, needle, StringMatchFlag_CaseInsensitive);
-            if(next_needle_pos < data.size)
+            U64 next_hint_needle_pos = str8_find_needle(data, hint_needle_pos+1, needle, StringMatchFlag_CaseInsensitive|StringMatchFlag_RightSideSloppy);
+            if(next_hint_needle_pos < data.size)
             {
-              needle_pos = next_needle_pos;
+              hint_needle_pos = next_hint_needle_pos;
             }
             else
             {
-              needle_pos = data.size;
               break;
             }
-            start_search_pos = next_needle_pos+1;
           }
+          if(hint_needle_pos < data.size)
+          {
+            String8 candidate = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, r1u64(off+hint_needle_pos, off+hint_needle_pos+needle.size));
+            if(str8_match(candidate, needle, StringMatchFlag_CaseInsensitive))
+            {
+              found = 1;
+              rd_regs()->mark = off+hint_needle_pos;
+              rd_regs()->cursor = rd_regs()->mark + needle.size;
+            }
+          }
+          scratch_end(scratch);
+          if(found) { goto done_bwd; }
+          if(off == 0) { break; }
         }
-        if(needle_pos < data.size)
-        {
-          done = 1;
-          rd_regs()->mark = off+needle_pos;
-          rd_regs()->cursor = rd_regs()->mark + needle.size;
-        }
-        scratch_end(scratch);
       }
-      if(!done)
+      done_bwd:;
+      if(!found)
       {
         log_user_errorf("Could not find `%S`", needle);
       }
-      cv->center_cursor = done;
+      cv->center_cursor = found;
     }
     
     MemoryZeroStruct(&cv->find_text_fwd);
@@ -2568,7 +2593,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
           ui_spacer(ui_em(1.5f, 1));
         }
         Rng1U64 cursor_line_range = txt_range_from_line_num(&patched.line_map, cursor_line_num);
-        ui_labelf("Line: %I64d, Column: %I64d", cursor_line_num, 1 + rd_regs()->cursor - cursor_line_range.min);
+        ui_labelf("Line: %I64d, Column: %I64d, Offset: 0x%I64x", cursor_line_num, 1 + rd_regs()->cursor - cursor_line_range.min, rd_regs()->cursor);
         ui_spacer(ui_pct(1, 0));
         ui_labelf("(read only)");
         ui_labelf("%s",
