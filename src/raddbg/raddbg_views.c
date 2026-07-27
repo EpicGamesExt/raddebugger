@@ -128,8 +128,10 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   B32 snap[Axis2_COUNT] = {0};
   UI_Focus(UI_FocusKind_On) if(ui_is_focus_active())
   {
+    CFG_Node *view = cfg_node_from_id(rd_regs()->view);
+    RD_ViewState *vs = rd_view_state_from_cfg(view);
+    rd_state->text_edit_mode_multiline = (!vs->query_is_open || vs->contents_are_focused);
     rd_state->text_edit_mode = 1;
-    rd_state->text_edit_mode_multiline = 1;
     U64 line_count_per_page = ClampBot(num_possible_visible_lines, 10) - 10;
     U64 *cursor = &rd_regs()->cursor;
     U64 *mark = &rd_regs()->mark;
