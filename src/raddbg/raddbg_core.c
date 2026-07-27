@@ -2034,7 +2034,7 @@ rd_view_ui(Rng2F32 rect)
       {
         if(expr_string.size == 0)
         {
-          expr_string = str8f(scratch.arena, "query:config.$%I64x.watches", rd_regs()->view);
+          expr_string = str8f(scratch.arena, "query:config.$%I64x.watch_expressions", rd_regs()->view);
         }
         E_Eval eval = e_eval_from_string(expr_string);
         RD_WatchViewState *ewv = rd_view_state(RD_WatchViewState);
@@ -2778,13 +2778,13 @@ rd_view_ui(Rng2F32 rect)
                       {
                         CFG_Node *cfg = row_info.group_cfg_child;
                         String8 child_key = {0}; // str8_lit("expression");
+                        if(str8_match(row_info.group_cfg_name, s("watch_expression"), 0))
+                        {
+                          child_key = s("expression");
+                        }
                         if(cfg == &cfg_nil_node && editing_complete && new_string.size != 0)
                         {
                           CFG_Node *new_cfg_parent = row_info.group_cfg_parent;
-                          if(new_cfg_parent != &cfg_nil_node)
-                          {
-                            child_key = str8_zero();
-                          }
                           if(new_cfg_parent == &cfg_nil_node)
                           {
                             CFG_NodePtrList all_cfgs = cfg_node_top_level_list_from_string(scratch.arena, row_info.group_cfg_name);
@@ -3526,8 +3526,9 @@ rd_view_ui(Rng2F32 rect)
                         if(cfg == &cfg_nil_node)
                         {
                           cfg = cfg_node_alloc(rd_state->cfg);
-                          cfg_node_equip_stringf(rd_state->cfg, cfg, "watch");
-                          cfg_node_new(rd_state->cfg, cfg, drag_regs->expr);
+                          cfg_node_equip_stringf(rd_state->cfg, cfg, "watch_expression");
+                          CFG_Node *expr = cfg_node_new(rd_state->cfg, cfg, s("expression"));
+                          cfg_node_new(rd_state->cfg, expr, drag_regs->expr);
                         }
                         cfg_node_insert_child(rd_state->cfg, drag_parent_cfg, drag_prev_cfg, cfg);
                       }break;
@@ -12187,10 +12188,10 @@ rd_frame(void)
           {
             continue;
           }
-          if(str8_match(child->string, str8_lit("watch"), 0))
+          if(str8_match(child->string, str8_lit("watch_expression"), 0))
           {
             CFG_Node *watch = child;
-            String8 expr = watch->first->string;
+            String8 expr = cfg_node_child_from_string(watch, s("expression"))->first->string;
             E_Parse parse = e_parse_from_string(expr);
             if(parse.msgs.max_kind == E_MsgKind_Null)
             {
@@ -12383,10 +12384,10 @@ rd_frame(void)
                                                       .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(environment),
                                                       .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(environment),
                                                     }));
-        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("watches"),
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("watch_expressions"),
                                     e_type_key_cons(.kind = E_TypeKind_Set,
                                                     .flags = E_TypeFlag_EditableChildren|E_TypeFlag_StubSingleLineExpansion,
-                                                    .name = str8_lit("watches"),
+                                                    .name = str8_lit("watch_expressions"),
                                                     .irext  = E_TYPE_IREXT_FUNCTION_NAME(watches),
                                                     .access = E_TYPE_ACCESS_FUNCTION_NAME(watches),
                                                     .expand =
@@ -16563,7 +16564,7 @@ rd_frame(void)
               {
                 continue;
               }
-              if(str8_match(child->string, str8_lit("watch"), 0) && str8_match(child->first->string, rd_regs()->string, 0))
+              if(str8_match(child->string, str8_lit("watch_expression"), 0) && str8_match(child->first->string, rd_regs()->string, 0))
               {
                 existing_watch = child;
                 break;
@@ -16579,8 +16580,9 @@ rd_frame(void)
             // rjf: otherwise, create it
             else if(watch_tab != &cfg_nil_node)
             {
-              CFG_Node *watch = cfg_node_new(rd_state->cfg, watch_tab, str8_lit("watch"));
-              cfg_node_new(rd_state->cfg, watch, rd_regs()->string);
+              CFG_Node *watch = cfg_node_new(rd_state->cfg, watch_tab, s("watch_expression"));
+              CFG_Node *expr = cfg_node_new(rd_state->cfg, watch, s("expression"));
+              cfg_node_new(rd_state->cfg, expr, rd_regs()->string);
             }
           }break;
           

@@ -1389,7 +1389,7 @@ E_TYPE_IREXT_FUNCTION_DEF(watches)
     for(CFG_Node *child = target->first; child != &cfg_nil_node; child = child->next)
     {
       if(rd_cfg_is_project_filtered(child)) {continue;}
-      if(str8_match(child->string, str8_lit("watch"), 0))
+      if(str8_match(child->string, str8_lit("watch_expression"), 0))
       {
         cfg_node_ptr_list_push(scratch.arena, &cfgs, child);
       }
@@ -1461,7 +1461,8 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(watches)
     if(cfg_idx < accel->cfgs.count)
     {
       CFG_Node *cfg = accel->cfgs.v[cfg_idx];
-      evals_out[idx] = e_eval_from_string(cfg->first->string);
+      CFG_Node *expr = cfg_node_child_from_string(cfg, s("expression"));
+      evals_out[idx] = e_eval_from_string(expr->first->string);
     }
   }
 }

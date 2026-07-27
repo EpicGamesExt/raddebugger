@@ -71,5 +71,5 @@ target:
 target:
 {
   executable: "../../Program Files/SuperTux/bin/supertux2.exe"
-  working_directory: "../../Program Files/SuperTux/bin/"
+  working_directory: "../../Program Files/SuperTux/bin"
 }

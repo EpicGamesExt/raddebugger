@@ -94,6 +94,7 @@ RD_VocabTable:
   {watch_pin            _                           "Watch Pin"                 _                     Pin                                            }
   {debug_info           _                           "Debug Info"                "Debug Info"          Module                                         }
   {watch                watches                     "Watch"                     "Watches"             Binoculars                                     }
+  {watch_expression     _                           "Watch Expression"          _                     Binoculars                                     }
   {view                 _                           "View"                      _                     Binoculars                                     }
   {breakpoint           _                           "Breakpoint"                _                     CircleFilled                                   }
   {condition            _                           "Condition"                 _                     Null                                           }
@@ -560,7 +561,7 @@ RD_VocabTable:
       'label': code_string,
       @description("The root expression which is evaluated to produce the watch window.")
         'expression': expr_string,
-      @no_expand 'watches': set,
+      @no_expand 'watch_expressions': set,
     }
     ```
   }
