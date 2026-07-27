@@ -776,7 +776,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         if(needle_pos < data.size)
         {
           done = 1;
-          rd_regs()->mark = needle_pos;
+          rd_regs()->mark = off+needle_pos;
           rd_regs()->cursor = rd_regs()->mark + needle.size;
         }
         scratch_end(scratch);
@@ -820,7 +820,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         if(needle_pos < data.size)
         {
           done = 1;
-          rd_regs()->mark = needle_pos;
+          rd_regs()->mark = off+needle_pos;
           rd_regs()->cursor = rd_regs()->mark + needle.size;
         }
         scratch_end(scratch);
