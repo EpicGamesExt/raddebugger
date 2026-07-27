@@ -2493,6 +2493,11 @@ txt_token_array_from_data(Arena *arena, TXT_LangKind lang_kind, TXT_TokenPt ctx_
           active_token_kind = TXT_TokenKind_BlockComment;
           advance = 2;
         }
+        else if(byte == '#')
+        {
+          active_token_kind = TXT_TokenKind_Meta;
+          advance = 1;
+        }
         else if(byte == '~' || byte == '!' ||
                 byte == '%' || byte == '^' ||
                 byte == '&' || byte == '*' ||
