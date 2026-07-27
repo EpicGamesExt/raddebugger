@@ -25,8 +25,10 @@ typedef enum TXT_TokenKind
   TXT_TokenKind_Identifier,
   TXT_TokenKind_Numeric,
   TXT_TokenKind_String,
+  TXT_TokenKind_Char,
   TXT_TokenKind_Symbol,
-  TXT_TokenKind_Comment,
+  TXT_TokenKind_LineComment,
+  TXT_TokenKind_BlockComment,
   TXT_TokenKind_Meta, // preprocessor, etc.
   TXT_TokenKind_COUNT
 }
@@ -63,6 +65,13 @@ struct TXT_Token
 {
   TXT_TokenKind kind;
   Rng1U64 range;
+};
+
+typedef struct TXT_TokenPt TXT_TokenPt;
+struct TXT_TokenPt
+{
+  TXT_TokenKind kind;
+  U64 off;
 };
 
 typedef struct TXT_TokenChunkNode TXT_TokenChunkNode;
@@ -150,6 +159,8 @@ struct TXT_TextInfo
   Rng1U64 *lines_ranges;
   U64 lines_max_size;
   TXT_LineEndKind line_end_kind;
+  U64 big_token_pts_count;
+  TXT_TokenPt *big_token_pts;
   TXT_TokenArray tokens;
   TXT_ScopePtArray scope_pts;
   TXT_ScopeNodeArray scope_nodes;
@@ -209,25 +220,30 @@ struct TXT_LineMap
   U64 total_line_count;
 };
 
+typedef struct TXT_TokenPtMapRangeNode TXT_TokenPtMapRangeNode;
+struct TXT_TokenPtMapRangeNode
+{
+  TXT_TokenPtMapRangeNode *next;
+  Rng1U64 num_range;
+  TXT_TokenPt *pts;
+  S64 delta;
+};
+
+typedef struct TXT_TokenPtMap TXT_TokenPtMap;
+struct TXT_TokenPtMap
+{
+  TXT_TokenPtMapRangeNode *first_range;
+  TXT_TokenPtMapRangeNode *last_range;
+  U64 total_pt_count;
+};
+
 typedef struct TXT_Patched TXT_Patched;
 struct TXT_Patched
 {
   MemoryMap memory_map;
   U64 size;
   TXT_LineMap line_map;
-};
-
-typedef struct TXT_Line TXT_Line;
-struct TXT_Line
-{
-  Rng1U64 range;
-};
-
-typedef struct TXT_LineArray TXT_LineArray;
-struct TXT_LineArray
-{
-  TXT_Line *v;
-  U64 count;
+  TXT_TokenPtMap token_pt_map;
 };
 
 ////////////////////////////////
@@ -292,6 +308,10 @@ internal TXT_TokenArray txt_token_array_from_string__disasm_x64_intel(Arena *are
 internal void txt_line_map_push(Arena *arena, TXT_LineMap *map, Rng1U64 num_range, Rng1U64 *ranges, S64 delta);
 internal U64 txt_line_num_from_off(TXT_LineMap *map, U64 off);
 internal Rng1U64 txt_range_from_line_num(TXT_LineMap *map, U64 num);
+internal void txt_token_pt_map_push(Arena *arena, TXT_TokenPtMap *map, Rng1U64 num_range, TXT_TokenPt *pts, S64 delta);
+internal U64 txt_token_pt_num_from_off(TXT_TokenPtMap *map, U64 off);
+internal TXT_TokenPt txt_token_pt_from_num(TXT_TokenPtMap *map, U64 num);
+internal TXT_TokenArray txt_token_array_from_data(Arena *arena, TXT_TokenPt ctx_token_pt, String8 data, U64 base_off, U64 limit);
 internal TXT_Patched txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 data, TXT_PatchList *patches);
 
 //~ TODO(rjf): old unpatched text viz code:

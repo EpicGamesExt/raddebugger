@@ -163,7 +163,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       B32 need_nav = (start_cursor == start_mark || !(evt->flags & UI_EventFlag_ZeroDeltaOnSelect));
       
       //- rjf: wrap lines right
-      if(need_nav && evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && start_cursor == line_range.max && line_num+1 <= line_count)
+      if(need_nav && evt->delta_unit != UI_EventDeltaUnit_Whole && evt->delta_unit != UI_EventDeltaUnit_Line && delta.x > 0 && start_cursor == line_range.max && line_num+1 <= line_count)
       {
         Rng1U64 next_line_range = txt_range_from_line_num(&text_patched.line_map, line_num+1);
         *cursor = next_line_range.min;
@@ -171,7 +171,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       }
       
       //- rjf: wrap lines left
-      if(need_nav && evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && start_cursor == line_range.min && line_num-1 >= 1)
+      if(need_nav && evt->delta_unit != UI_EventDeltaUnit_Whole && evt->delta_unit != UI_EventDeltaUnit_Line && delta.x < 0 && start_cursor == line_range.min && line_num-1 >= 1)
       {
         Rng1U64 prev_line_range = txt_range_from_line_num(&text_patched.line_map, line_num-1);
         *cursor = prev_line_range.max;
@@ -385,7 +385,16 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     priority_margin_width_px = floor_f32(big_glyph_advance*3.5f);
     catchall_margin_width_px = floor_f32(big_glyph_advance*3.5f);
   }
-  TXT_LineTokensSlice slice = txt_line_tokens_slice_from_info_data_line_range(scratch.arena, text_info, text_data, visible_line_num_range);
+  Rng1U64 visible_byte_range = r1u64(txt_range_from_line_num(&text_patched.line_map, visible_line_num_range.min).min,
+                                     txt_range_from_line_num(&text_patched.line_map, visible_line_num_range.max).max);
+  String8 visible_data = memory_map_data_from_range(scratch.arena, &text_patched.memory_map, visible_byte_range);
+  
+  //////////////////////////////
+  //- rjf: find tokens for visible byte range
+  //
+  U64 ctx_token_pt_num = txt_token_pt_num_from_off(&text_patched.token_pt_map, visible_byte_range.min);
+  TXT_TokenPt ctx_token_pt = txt_token_pt_from_num(&text_patched.token_pt_map, ctx_token_pt_num);
+  TXT_TokenArray tokens = txt_token_array_from_data(scratch.arena, ctx_token_pt, visible_data, visible_byte_range.min, max_U64);
   
   //////////////////////////////
   //- rjf: selection on single line, no query? -> set search text
@@ -459,7 +468,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     code_slice_params.line_text_max_width_px    = (F32)line_size_x;
     code_slice_params.margin_float_off_px       = scroll_pos.x.idx + floor_f32(scroll_pos.x.off);
     
-    // rjf: fill text info
+    // rjf: fill line text / ranges
     {
       S64 line_num = visible_line_num_range.min;
       U64 line_idx = visible_line_num_range.min-1;
@@ -474,8 +483,35 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         memory_map_read(&text_patched.memory_map, line_range, line_text.str);
         code_slice_params.line_text[visible_line_idx]   = line_text;
         code_slice_params.line_ranges[visible_line_idx] = line_range;
-        // TODO(rjf): tokens
-        // code_slice_params.line_tokens[visible_line_idx] = slice.line_tokens[visible_line_idx];
+      }
+    }
+    
+    // rjf: bucket tokens by line
+    {
+      U64 token_idx = 0;
+      for EachIndex(line_idx, visible_line_count)
+      {
+        Temp scratch2 = scratch_begin(&scratch.arena, 1);
+        Rng1U64 line_range = code_slice_params.line_ranges[line_idx];
+        TXT_TokenList line_tokens = {0};
+        for(;token_idx < tokens.count;)
+        {
+          Rng1U64 token_range = tokens.v[token_idx].range;
+          if(dim_1u64(intersect_1u64(token_range, line_range)) != 0)
+          {
+            txt_token_list_push(scratch2.arena, &line_tokens, &tokens.v[token_idx]);
+          }
+          if(token_range.max <= line_range.max || token_range.max <= line_range.min)
+          {
+            token_idx += 1;
+          }
+          else if(line_range.max <= token_range.max)
+          {
+            break;
+          }
+        }
+        code_slice_params.line_tokens[line_idx] = txt_token_array_from_list(scratch.arena, &line_tokens);
+        scratch_end(scratch2);
       }
     }
     
