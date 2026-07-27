@@ -155,6 +155,12 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       //- rjf: interpret event as single-line text op
       UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, evt, line, line_range, *cursor, *mark);
       
+      //- TODO(rjf): skip replace-ranges for now
+      if(single_line_op.replace.size != 0)
+      {
+        continue;
+      }
+      
       //- rjf: apply single-line navigations
       *cursor = single_line_op.cursor;
       *mark = single_line_op.mark;
@@ -394,7 +400,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
   //
   U64 ctx_token_pt_num = txt_token_pt_num_from_off(&text_patched.token_pt_map, visible_byte_range.min);
   TXT_TokenPt ctx_token_pt = txt_token_pt_from_num(&text_patched.token_pt_map, ctx_token_pt_num);
-  TXT_TokenArray tokens = txt_token_array_from_data(scratch.arena, ctx_token_pt, visible_data, visible_byte_range.min, max_U64);
+  TXT_TokenArray tokens = txt_token_array_from_data(scratch.arena, rd_regs()->lang_kind, ctx_token_pt, visible_data, visible_byte_range.min, max_U64);
   
   //////////////////////////////
   //- rjf: selection on single line, no query? -> set search text

@@ -311,7 +311,7 @@ internal Rng1U64 txt_range_from_line_num(TXT_LineMap *map, U64 num);
 internal void txt_token_pt_map_push(Arena *arena, TXT_TokenPtMap *map, Rng1U64 num_range, TXT_TokenPt *pts, S64 delta);
 internal U64 txt_token_pt_num_from_off(TXT_TokenPtMap *map, U64 off);
 internal TXT_TokenPt txt_token_pt_from_num(TXT_TokenPtMap *map, U64 num);
-internal TXT_TokenArray txt_token_array_from_data(Arena *arena, TXT_TokenPt ctx_token_pt, String8 data, U64 base_off, U64 limit);
+internal TXT_TokenArray txt_token_array_from_data(Arena *arena, TXT_LangKind lang_kind, TXT_TokenPt ctx_token_pt, String8 data, U64 base_off, U64 limit);
 internal TXT_Patched txt_patched_from_info_data_patches(Arena *arena, TXT_TextInfo *info, String8 data, TXT_PatchList *patches);
 
 //~ TODO(rjf): old unpatched text viz code:

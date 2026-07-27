@@ -9805,6 +9805,7 @@ rd_code_color_slot_from_txt_token_kind(TXT_TokenKind kind)
     case TXT_TokenKind_Keyword:     {color = RD_CodeColorSlot_CodeKeyword;}break;
     case TXT_TokenKind_Numeric:     {color = RD_CodeColorSlot_CodeNumeric;}break;
     case TXT_TokenKind_String:      {color = RD_CodeColorSlot_CodeString;}break;
+    case TXT_TokenKind_Char:        {color = RD_CodeColorSlot_CodeString;}break;
     case TXT_TokenKind_Meta:        {color = RD_CodeColorSlot_CodeMeta;}break;
     case TXT_TokenKind_LineComment: {color = RD_CodeColorSlot_CodeComment;}break;
     case TXT_TokenKind_BlockComment:{color = RD_CodeColorSlot_CodeComment;}break;
