@@ -27,19 +27,20 @@ enum
   //- rjf: extra button extensions
   RD_CellFlag_EmptyEditButton     = (1<<6),
   RD_CellFlag_RevertButton        = (1<<7),
+  RD_CellFlag_Lock                = (1<<8),
   
   //- rjf: behavior
-  RD_CellFlag_DisableEdit         = (1<<8),
-  RD_CellFlag_KeyboardClickable   = (1<<9),
-  RD_CellFlag_SingleClickActivate = (1<<10),
+  RD_CellFlag_DisableEdit         = (1<<9),
+  RD_CellFlag_KeyboardClickable   = (1<<10),
+  RD_CellFlag_SingleClickActivate = (1<<11),
   
   //- rjf: contents description
-  RD_CellFlag_CodeContents        = (1<<11),
+  RD_CellFlag_CodeContents        = (1<<12),
   
   //- rjf: appearance
-  RD_CellFlag_Border              = (1<<12),
-  RD_CellFlag_NoBackground        = (1<<13),
-  RD_CellFlag_Button              = (1<<14),
+  RD_CellFlag_Border              = (1<<13),
+  RD_CellFlag_NoBackground        = (1<<14),
+  RD_CellFlag_Button              = (1<<15),
 };
 
 typedef struct RD_CellParams RD_CellParams;
@@ -58,6 +59,9 @@ struct RD_CellParams
   
   //- rjf: expander r/w info
   B32 *expanded_out;
+  
+  //- rjf: lock r/w info
+  B32 *lock_out;
   
   //- rjf: toggle-switch r/w info
   B32 *toggled_out;

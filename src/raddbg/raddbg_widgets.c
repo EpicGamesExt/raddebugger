@@ -3608,6 +3608,47 @@ rd_cell(RD_CellParams *params, String8 string)
   }
   
   //////////////////////////////
+  //- rjf: build lock
+  //
+  if(params->flags & RD_CellFlag_Lock && !is_focus_active && !is_focus_active_disabled) UI_Parent(box) UI_Focus(UI_FocusKind_Off)
+  {
+    UI_PrefWidth(ui_em(2.f, 1.f))
+      UI_TagF(".")
+      UI_TagF("weak")
+      UI_TagF("implicit")
+      UI_Column
+      UI_Padding(ui_pct(1, 0))
+      UI_PrefHeight(ui_em(2.f, 1.f))
+      UI_CornerRadius(ui_top_font_size()*0.5f)
+      RD_Font(RD_FontSlot_Icons)
+      UI_TextAlignment(UI_TextAlign_Center)
+    {
+      UI_Box *lock_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
+                                                   UI_BoxFlag_DrawHotEffects|
+                                                   UI_BoxFlag_DrawBorder|
+                                                   UI_BoxFlag_DrawBackground|
+                                                   UI_BoxFlag_DisableFocusOverlay|
+                                                   UI_BoxFlag_DisableFocusBorder|
+                                                   UI_BoxFlag_Clickable,
+                                                   "%S###lock", rd_icon_kind_text_table[(params->lock_out && params->lock_out[0]) ? RD_IconKind_Locked : RD_IconKind_Unlocked]);
+      UI_Signal sig = ui_signal_from_box(lock_box);
+      if(ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Main)
+      {
+        ui_state->tooltip_anchor_key = lock_box->key;
+        ui_label((params->lock_out && params->lock_out[0]) ? s("Unlock Evaluated Location") : s("Lock Evaluated Location"));
+      }
+      if(ui_pressed(sig) && params->lock_out)
+      {
+        params->lock_out[0] ^= 1;
+      }
+    }
+    // TODO(rjf): @hack
+    {
+      ui_spacer(ui_em(0.5f, 1.f));
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build toggle-switch
   //
   if(build_toggle_switch) UI_Parent(box)

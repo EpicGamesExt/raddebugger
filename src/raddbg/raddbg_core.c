@@ -4024,9 +4024,30 @@ rd_view_ui(Rng2F32 rect)
                             needle = str8_skip_last_slash(needle);
                           }
                           
+                          // rjf: determine if this cell can be locked
+                          B32 cell_can_be_locked = 0;
+                          if(str8_match(row_info->group_cfg_name, s("watch_expression"), 0) &&
+                             cell_info.flags & RD_WatchCellFlag_Expr &&
+                             cell->eval.string.size != 0 &&
+                             cell->eval.msgs.count == 0)
+                          {
+                            cell_can_be_locked = ((cell->eval.irtree.mode == E_Mode_Offset) ||
+                                                  (cell->eval.irtree.mode == E_Mode_Value &&
+                                                   e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(cell->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)))));
+                          }
+                          
+                          // rjf: determine if this cell is locked
+                          B32 cell_is_locked = 0;
+                          if(cell_can_be_locked)
+                          {
+                            CFG_Node *cfg = row_info->group_cfg_child;
+                            cell_is_locked = (cfg_node_child_from_string(cfg, s("locked")) != &cfg_nil_node);
+                          }
+                          
                           // rjf: form cell build parameters
                           UI_Key line_edit_key = {0};
                           RD_CellParams cell_params = {0};
+                          B32 next_cell_is_locked = cell_is_locked;
                           ProfScope("form cell build parameters")
                           {
                             E_Type *block_type = e_type_from_key(row->block->eval.irtree.type_key);
@@ -4042,6 +4063,7 @@ rd_view_ui(Rng2F32 rect)
                             cell_params.edit_string_size_out = &cell_edit_state->input_size;
                             cell_params.line_edit_key_out    = &line_edit_key;
                             cell_params.expanded_out         = &next_row_expanded;
+                            cell_params.lock_out             = &next_cell_is_locked;
                             cell_params.search_needle        = needle;
                             cell_params.meta_fstrs           = cell_info.expr_fstrs;
                             cell_params.value_fstrs          = cell_info.eval_fstrs;
@@ -4145,6 +4167,12 @@ rd_view_ui(Rng2F32 rect)
                               cell_params.flags &= ~RD_CellFlag_NoBackground;
                             }
                             
+                            // rjf: watch expression values -> lock
+                            if(cell_can_be_locked)
+                            {
+                              cell_params.flags |= RD_CellFlag_Lock;
+                            }
+                            
                             // rjf: apply toggle-switch
                             if(is_toggle_switch)
                             {
@@ -4233,6 +4261,23 @@ rd_view_ui(Rng2F32 rect)
                           {
                             String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
                             rd_set_autocomp_regs(cell->eval, .ui_key = line_edit_key, .string = input, .cursor = cell_edit_state->cursor);
+                          }
+                          
+                          // rjf: apply locks
+                          if(next_cell_is_locked != cell_is_locked)
+                          {
+                            CFG_Node *cfg = row_info->group_cfg_child;
+                            if(cfg != &cfg_nil_node)
+                            {
+                              if(next_cell_is_locked)
+                              {
+                                cfg_node_child_from_string_or_alloc(rd_state->cfg, cfg, s("locked"));
+                              }
+                              else
+                              {
+                                cfg_node_release(rd_state->cfg, cfg_node_child_from_string(cfg, s("locked")));
+                              }
+                            }
                           }
                         }
                       }
