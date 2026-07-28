@@ -6250,12 +6250,14 @@ rd_window_frame(void)
       {
         Vec2F32 window_dim = dim_2f32(window_rect);
         UI_Box *bg_box = &ui_nil_box;
+        Vec4F32 shadow_color = ui_color_from_name(str8_lit("drop_shadow"));
+        shadow_color.w += (1.f - shadow_color.w) * 0.5f;
         UI_Rect(window_rect)
           UI_ChildLayoutAxis(Axis2_X)
           UI_Focus(UI_FocusKind_On)
-          UI_BlurSize(10*rd_state->popup_t)
           UI_Transparency(1-rd_state->popup_t)
           UI_TagF("floating")
+          UI_BackgroundColor(shadow_color)
         {
           bg_box = ui_build_box_from_stringf(UI_BoxFlag_FixedSize|
                                              UI_BoxFlag_Floating|
@@ -6263,31 +6265,40 @@ rd_window_frame(void)
                                              UI_BoxFlag_Scroll|
                                              UI_BoxFlag_DefaultFocusNav|
                                              UI_BoxFlag_DisableFocusOverlay|
-                                             UI_BoxFlag_DrawBackgroundBlur|
+                                             UI_BoxFlag_DisableFocusBorder|
                                              UI_BoxFlag_DrawBackground, "###popup_%p", ws);
         }
         if(rd_state->popup_active) UI_Parent(bg_box) UI_Transparency(1-rd_state->popup_t)
         {
           ui_ctx_menu_close();
-          UI_WidthFill UI_PrefHeight(ui_children_sum(1.f)) UI_Column UI_Padding(ui_pct(1, 0))
+          UI_WidthFill UI_PrefHeight(ui_children_sum(1.f)) UI_Column UI_Padding(ui_pct(1, 0)) UI_TagF("floating")
           {
-            UI_TextRasterFlags(rd_raster_flags_from_slot(RD_FontSlot_Main)) UI_FontSize(ui_top_font_size()*2.f) UI_PrefHeight(ui_em(3.f, 1.f)) ui_label(rd_state->popup_title);
-            UI_PrefHeight(ui_em(3.f, 1.f)) UI_TagF("weak") ui_label(rd_state->popup_desc);
-            ui_spacer(ui_em(1.5f, 1.f));
-            UI_Row UI_Padding(ui_pct(1.f, 0.f)) UI_PrefWidth(ui_em(16.f, 1.f)) UI_PrefHeight(ui_em(3.5f, 1.f)) UI_CornerRadius(ui_top_font_size()*0.5f)
+            ui_set_next_blur_size(10*rd_state->popup_t);
+            ui_set_next_pref_width(ui_children_sum(1));
+            ui_set_next_pref_height(ui_children_sum(1));
+            ui_set_next_child_layout_axis(Axis2_Y);
+            UI_Box *panel = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawDropShadow, "");
+            UI_Parent(panel)
             {
-              UI_TagF("pop")
-                if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && ui_slot_press(UI_EventActionSlot_Accept)))
+              ui_spacer(ui_em(1.5f, 1.f));
+              UI_TextRasterFlags(rd_raster_flags_from_slot(RD_FontSlot_Main)) UI_FontSize(ui_top_font_size()*2.f) UI_PrefHeight(ui_em(3.f, 1.f)) ui_label(rd_state->popup_title);
+              UI_PrefHeight(ui_em(3.f, 1.f)) UI_TagF("weak") ui_label(rd_state->popup_desc);
+              ui_spacer(ui_em(1.5f, 1.f));
+              UI_Row UI_Padding(ui_pct(1.f, 0.f)) UI_PrefWidth(ui_em(16.f, 1.f)) UI_PrefHeight(ui_em(3.5f, 1.f)) UI_CornerRadius(ui_top_font_size()*0.5f)
               {
-                rd_cmd(RD_CmdKind_PopupAccept);
+                UI_TagF("pop")
+                  if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && ui_slot_press(UI_EventActionSlot_Accept)))
+                {
+                  rd_cmd(RD_CmdKind_PopupAccept);
+                }
+                ui_spacer(ui_em(1.f, 1.f));
+                if(ui_clicked(ui_buttonf("Cancel")) || ui_slot_press(UI_EventActionSlot_Cancel))
+                {
+                  rd_cmd(RD_CmdKind_PopupCancel);
+                }
               }
-              ui_spacer(ui_em(1.f, 1.f));
-              if(ui_clicked(ui_buttonf("Cancel")) || ui_slot_press(UI_EventActionSlot_Cancel))
-              {
-                rd_cmd(RD_CmdKind_PopupCancel);
-              }
+              ui_spacer(ui_em(3.f, 1.f));
             }
-            ui_spacer(ui_em(3.f, 1.f));
           }
         }
         ui_signal_from_box(bg_box);
@@ -8168,6 +8179,7 @@ rd_window_frame(void)
       {
         if(panel->first != &cfg_nil_panel_node) {continue;}
         B32 panel_is_focused = (window_is_focused &&
+                                !rd_state->popup_active &&
                                 !ws->menu_bar_focused &&
                                 !query_is_open &&
                                 !ui_any_ctx_menu_is_open() &&
