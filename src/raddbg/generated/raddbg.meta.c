@@ -62,7 +62,7 @@ str8_lit_comp(""),
 str8_lit_comp(""),
 };
 
-RD_VocabInfo rd_vocab_info_table[369] =
+RD_VocabInfo rd_vocab_info_table[372] =
 {
 {str8_lit_comp("type_view"), str8_lit_comp("type_views"), str8_lit_comp("Type View"), str8_lit_comp("Type Views"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -300,6 +300,9 @@ RD_VocabInfo rd_vocab_info_table[369] =
 {str8_lit_comp("accept"), str8_lit_comp(""), str8_lit_comp("Accept"), str8_lit_comp(""), RD_IconKind_CheckFilled},
 {str8_lit_comp("cancel"), str8_lit_comp(""), str8_lit_comp("Cancel"), str8_lit_comp(""), RD_IconKind_X},
 {str8_lit_comp("focus_menu"), str8_lit_comp(""), str8_lit_comp("Focus Menu"), str8_lit_comp(""), RD_IconKind_List},
+{str8_lit_comp("lock"), str8_lit_comp(""), str8_lit_comp("Lock"), str8_lit_comp(""), RD_IconKind_Locked},
+{str8_lit_comp("unlock"), str8_lit_comp(""), str8_lit_comp("Unlock"), str8_lit_comp(""), RD_IconKind_Unlocked},
+{str8_lit_comp("toggle_lock"), str8_lit_comp(""), str8_lit_comp("Toggle Lock"), str8_lit_comp(""), RD_IconKind_Locked},
 {str8_lit_comp("move_left"), str8_lit_comp(""), str8_lit_comp("Move Left"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("move_right"), str8_lit_comp(""), str8_lit_comp("Move Right"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("move_up"), str8_lit_comp(""), str8_lit_comp("Move Up"), str8_lit_comp(""), RD_IconKind_Null},
@@ -594,7 +597,7 @@ Rng1U64 rd_reg_slot_range_table[54] =
 {OffsetOf(RD_Regs, wm_event), OffsetOf(RD_Regs, wm_event) + sizeof(WM_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[256] =
+RD_CmdKindInfo rd_cmd_kind_info_table[259] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:targets")}},
@@ -719,6 +722,9 @@ RD_CmdKindInfo rd_cmd_kind_info_table[256] =
 { str8_lit_comp("accept"), str8_lit_comp("Accepts current changes, or answers prompts in the affirmative."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("cancel"), str8_lit_comp("Rejects current changes, exits temporary menus, or answers prompts in the negative."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("focus_menu"), str8_lit_comp("Focuses the menu for the selected interface, if there is one."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
+{ str8_lit_comp("lock"), str8_lit_comp("Locks the current selection, if applicable."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
+{ str8_lit_comp("unlock"), str8_lit_comp("Unlocks the current selection, if applicable."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
+{ str8_lit_comp("toggle_lock"), str8_lit_comp("Toggles the lock state of the current selection, if applicable."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("move_left"), str8_lit_comp("Moves the cursor or selection left."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("move_right"), str8_lit_comp("Moves the cursor or selection right."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("move_up"), str8_lit_comp("Moves the cursor or selection up."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
@@ -854,7 +860,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[256] =
 { str8_lit_comp("geo3d"), str8_lit_comp("Opens a Geometry (3D) tab."), {0}, str8_lit_comp("{tab_commands}"), RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs},
 };
 
-struct {String8 string; CFG_Binding binding;} rd_default_binding_table[116] =
+struct {String8 string; CFG_Binding binding;} rd_default_binding_table[117] =
 {
 {str8_lit_comp("kill_all"), {WM_Key_F5, 0  |WM_Modifier_Shift }},
 {str8_lit_comp("step_into_inst"), {WM_Key_F11, 0   |WM_Modifier_Alt}},
@@ -907,6 +913,7 @@ struct {String8 string; CFG_Binding binding;} rd_default_binding_table[116] =
 {str8_lit_comp("accept"), {WM_Key_Space, 0   }},
 {str8_lit_comp("cancel"), {WM_Key_Esc, 0   }},
 {str8_lit_comp("focus_menu"), {WM_Key_D, 0   |WM_Modifier_Alt}},
+{str8_lit_comp("toggle_lock"), {WM_Key_L, 0 |WM_Modifier_Ctrl  }},
 {str8_lit_comp("move_left"), {WM_Key_Left, 0   }},
 {str8_lit_comp("move_right"), {WM_Key_Right, 0   }},
 {str8_lit_comp("move_up"), {WM_Key_Up, 0   }},

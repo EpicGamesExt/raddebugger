@@ -40,26 +40,6 @@ struct EV_ExpandSlot
   EV_ExpandNode *last;
 };
 
-//- rjf: hash table for view rules
-
-typedef struct EV_KeyViewRuleNode EV_KeyViewRuleNode;
-struct EV_KeyViewRuleNode
-{
-  EV_KeyViewRuleNode *hash_next;
-  EV_KeyViewRuleNode *hash_prev;
-  EV_Key key;
-  U8 *buffer;
-  U64 buffer_cap;
-  U64 buffer_string_size;
-};
-
-typedef struct EV_KeyViewRuleSlot EV_KeyViewRuleSlot;
-struct EV_KeyViewRuleSlot
-{
-  EV_KeyViewRuleNode *first;
-  EV_KeyViewRuleNode *last;
-};
-
 //- rjf: view state bundle
 
 typedef struct EV_View EV_View;
@@ -69,9 +49,6 @@ struct EV_View
   EV_ExpandSlot *expand_slots;
   U64 expand_slots_count;
   EV_ExpandNode *free_expand_node;
-  EV_KeyViewRuleSlot *key_view_rule_slots;
-  U64 key_view_rule_slots_count;
-  EV_KeyViewRuleNode *free_key_view_rule_node;
 };
 
 ////////////////////////////////
@@ -328,9 +305,7 @@ internal void ev_view_release(EV_View *view);
 //- rjf: lookups / mutations
 internal EV_ExpandNode *ev_expand_node_from_key(EV_View *view, EV_Key key);
 internal B32 ev_expansion_from_key(EV_View *view, EV_Key key);
-internal String8 ev_view_rule_from_key(EV_View *view, EV_Key key);
 internal void ev_key_set_expansion(EV_View *view, EV_Key parent_key, EV_Key key, B32 expanded);
-internal void ev_key_set_view_rule(EV_View *view, EV_Key key, String8 view_rule_string);
 
 ////////////////////////////////
 //~ rjf: View Rule Info Table Building / Selection / Lookups

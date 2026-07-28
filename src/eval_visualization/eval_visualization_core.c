@@ -208,8 +208,6 @@ ev_view_alloc(void)
   view->arena = arena;
   view->expand_slots_count = 256;
   view->expand_slots = push_array(arena, EV_ExpandSlot, view->expand_slots_count);
-  view->key_view_rule_slots_count = 256;
-  view->key_view_rule_slots = push_array(arena, EV_KeyViewRuleSlot, view->key_view_rule_slots_count);
   return view;
 }
 
@@ -244,36 +242,6 @@ ev_expansion_from_key(EV_View *view, EV_Key key)
 {
   EV_ExpandNode *node = ev_expand_node_from_key(view, key);
   return (node != 0 && node->expanded);
-}
-
-internal String8
-ev_view_rule_from_key(EV_View *view, EV_Key key)
-{
-  String8 result = {0};
-  
-  //- rjf: key -> hash * slot idx * slot
-  U64 hash = ev_hash_from_key(key);
-  U64 slot_idx = hash%view->key_view_rule_slots_count;
-  EV_KeyViewRuleSlot *slot = &view->key_view_rule_slots[slot_idx];
-  
-  //- rjf: slot -> existing node
-  EV_KeyViewRuleNode *existing_node = 0;
-  for(EV_KeyViewRuleNode *n = slot->first; n != 0; n = n->hash_next)
-  {
-    if(ev_key_match(n->key, key))
-    {
-      existing_node = n;
-      break;
-    }
-  }
-  
-  //- rjf: node -> result
-  if(existing_node != 0)
-  {
-    result = str8(existing_node->buffer, existing_node->buffer_string_size);
-  }
-  
-  return result;
 }
 
 internal void
@@ -345,44 +313,6 @@ ev_key_set_expansion(EV_View *view, EV_Key parent_key, EV_Key key, B32 expanded)
     
     // rjf: free
     SLLStackPush(view->free_expand_node, node);
-  }
-}
-
-internal void
-ev_key_set_view_rule(EV_View *view, EV_Key key, String8 view_rule_string)
-{
-  //- rjf: key -> hash * slot idx * slot
-  U64 hash = ev_hash_from_key(key);
-  U64 slot_idx = hash%view->key_view_rule_slots_count;
-  EV_KeyViewRuleSlot *slot = &view->key_view_rule_slots[slot_idx];
-  
-  //- rjf: slot -> existing node
-  EV_KeyViewRuleNode *existing_node = 0;
-  for(EV_KeyViewRuleNode *n = slot->first; n != 0; n = n->hash_next)
-  {
-    if(ev_key_match(n->key, key))
-    {
-      existing_node = n;
-      break;
-    }
-  }
-  
-  //- rjf: existing node * new node -> node
-  EV_KeyViewRuleNode *node = existing_node;
-  if(node == 0)
-  {
-    node = push_array(view->arena, EV_KeyViewRuleNode, 1);
-    DLLPushBack_NP(slot->first, slot->last, node, hash_next, hash_prev);
-    node->key = key;
-    node->buffer_cap = 512;
-    node->buffer = push_array(view->arena, U8, node->buffer_cap);
-  }
-  
-  //- rjf: mutate node
-  if(node != 0)
-  {
-    node->buffer_string_size = ClampTop(view_rule_string.size, node->buffer_cap);
-    MemoryCopy(node->buffer, view_rule_string.str, node->buffer_string_size);
   }
 }
 

@@ -1226,8 +1226,25 @@ d_modules_from_dbgi_key(Arena *arena, DI_Key dbgi_key)
 }
 
 internal D_Entity *
+d_process_from_id(U64 id)
+{
+  // TODO(rjf): @multimachine need machine ID here?
+  D_Entity *process = &d_entity_nil;
+  D_EntityArray processes = d_entity_array_from_kind(D_EntityKind_Process);
+  for EachIndex(idx, processes.count)
+  {
+    if(processes.v[idx]->id == id)
+    {
+      process = processes.v[idx];
+    }
+  }
+  return process;
+}
+
+internal D_Entity *
 d_thread_from_id(U64 id)
 {
+  // TODO(rjf): @multimachine need machine ID here?
   D_Entity *thread = &d_entity_nil;
   D_EntityArray threads = d_entity_array_from_kind(D_EntityKind_Thread);
   for EachIndex(idx, threads.count)

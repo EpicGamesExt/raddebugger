@@ -104,6 +104,9 @@ typedef enum UI_EventActionSlot
   UI_EventActionSlot_Cancel,
   UI_EventActionSlot_Edit,
   UI_EventActionSlot_FocusMenu,
+  UI_EventActionSlot_Lock,
+  UI_EventActionSlot_Unlock,
+  UI_EventActionSlot_ToggleLock,
   UI_EventActionSlot_COUNT
 }
 UI_EventActionSlot;

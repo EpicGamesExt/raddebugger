@@ -2050,6 +2050,35 @@ rd_view_ui(Rng2F32 rect)
         }
         
         //////////////////////////////
+        //- rjf: adjust locked expressions which have been invalidated
+        //
+        for(CFG_Node *child = view->first; child != &cfg_nil_node; child = child->next)
+        {
+          if(str8_match(child->string, s("watch_expression"), 0))
+          {
+            CFG_Node *locked = cfg_node_child_from_string(child, s("locked"));
+            if(locked != &cfg_nil_node)
+            {
+              CFG_Node *pid_cfg = cfg_node_child_from_string_or_alloc(rd_state->cfg, locked, s("pid"));
+              U64 pid = u64_from_str8(pid_cfg->first->string, 10);
+              D_Entity *process = d_process_from_id(pid);
+              if(process == &d_entity_nil)
+              {
+                D_Entity *current_process = d_entity_from_handle(rd_regs()->process);
+                if(current_process != &d_entity_nil)
+                {
+                  cfg_node_new_replacef(rd_state->cfg, pid_cfg, "%I64u", current_process->id);
+                }
+                else
+                {
+                  cfg_node_release(rd_state->cfg, locked);
+                }
+              }
+            }
+          }
+        }
+        
+        //////////////////////////////
         //- rjf: unpack arguments
         //
         B32 is_autocomplete = cfg_node_child_from_string(view, str8_lit("autocomplete")) != &cfg_nil_node;
@@ -2689,6 +2718,79 @@ rd_view_ui(Rng2F32 rect)
                       }break;
                     }
 #endif
+                  }
+                }
+              }
+            }
+            
+            //////////////////////////
+            //- rjf: [table] do cell-granularity lock operations
+            //
+            if(!ewv->text_editing &&
+               (evt->slot == UI_EventActionSlot_Lock ||
+                evt->slot == UI_EventActionSlot_Unlock ||
+                evt->slot == UI_EventActionSlot_ToggleLock) &&
+               (selection_tbl.min.y != 0 || selection_tbl.max.y != 0))
+            {
+              EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
+              EV_WindowedRowNode *row_node = rows.first;
+              if(row_node != 0)
+              {
+                taken = 1;
+                B32 next_locked = 0;
+                B32 found_next_locked = 0;
+                for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row_node != 0; y += 1, row_node = row_node->next)
+                {
+                  // rjf: unpack row info
+                  EV_Row *row = &row_node->row;
+                  RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
+                  CFG_Node *cfg = row_info.group_cfg_child;
+                  
+                  // rjf: determine if row can be locked
+                  B32 row_can_be_locked = 0;
+                  if(str8_match(row_info.group_cfg_name, s("watch_expression"), 0) &&
+                     cfg != &cfg_nil_node &&
+                     row->eval.string.size != 0)
+                  {
+                    E_Space space = row->eval.space;
+                    D_Entity *entity = rd_ctrl_entity_from_eval_space(space);
+                    B32 is_memory_eval = (space.kind == D_EvalSpaceKind_Entity && entity->kind == D_EntityKind_Process);
+                    row_can_be_locked = (is_memory_eval &&
+                                         (row->eval.irtree.mode == E_Mode_Offset) ||
+                                         (row->eval.irtree.mode == E_Mode_Value &&
+                                          e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(row->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)))));
+                  }
+                  
+                  // rjf: determine if row is locked
+                  B32 row_is_locked = (cfg_node_child_from_string(cfg, s("locked")) != &cfg_nil_node);
+                  if(row_can_be_locked && !found_next_locked)
+                  {
+                    found_next_locked = 1;
+                    next_locked = !row_is_locked;
+                  }
+                  
+                  // rjf: toggle lock on row
+                  if(row_can_be_locked)
+                  {
+                    if(next_locked)
+                    {
+                      E_Space space = row->eval.space;
+                      D_Entity *entity = rd_ctrl_entity_from_eval_space(space);
+                      CFG_Node *locked = cfg_node_child_from_string_or_alloc(rd_state->cfg, cfg, s("locked"));
+                      cfg_node_release_all_children(rd_state->cfg, locked);
+                      CFG_Node *mid = cfg_node_new(rd_state->cfg, locked, s("mid"));
+                      cfg_node_newf(rd_state->cfg, mid, "%I64u", entity->handle.machine_id);
+                      CFG_Node *pid = cfg_node_new(rd_state->cfg, locked, s("pid"));
+                      cfg_node_newf(rd_state->cfg, pid, "%I64u", entity->id);
+                      CFG_Node *addr = cfg_node_new(rd_state->cfg, locked, s("addr"));
+                      cfg_node_newf(rd_state->cfg, addr, "0x%I64x", row->eval.value.u64);
+                      CFG_Node *type = cfg_node_new(rd_state->cfg, locked, s("type"));
+                      cfg_node_new(rd_state->cfg, type, e_type_string_from_key(scratch.arena, row->eval.irtree.type_key));
+                    }
+                    else
+                    {
+                      cfg_node_release(rd_state->cfg, cfg_node_child_from_string(cfg, s("locked")));
+                    }
                   }
                 }
               }
@@ -4027,11 +4129,14 @@ rd_view_ui(Rng2F32 rect)
                           // rjf: determine if this cell can be locked
                           B32 cell_can_be_locked = 0;
                           if(str8_match(row_info->group_cfg_name, s("watch_expression"), 0) &&
-                             cell_info.flags & RD_WatchCellFlag_Expr &&
-                             cell->eval.string.size != 0 &&
-                             cell->eval.msgs.count == 0)
+                             !(cell_info.flags & RD_WatchCellFlag_Expr) &&
+                             cell->eval.string.size != 0)
                           {
-                            cell_can_be_locked = ((cell->eval.irtree.mode == E_Mode_Offset) ||
+                            E_Space space = row->eval.space;
+                            D_Entity *entity = rd_ctrl_entity_from_eval_space(space);
+                            B32 is_memory_eval = (space.kind == D_EvalSpaceKind_Entity && entity->kind == D_EntityKind_Process);
+                            cell_can_be_locked = (is_memory_eval &&
+                                                  (cell->eval.irtree.mode == E_Mode_Offset) ||
                                                   (cell->eval.irtree.mode == E_Mode_Value &&
                                                    e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(cell->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)))));
                           }
@@ -4264,14 +4369,24 @@ rd_view_ui(Rng2F32 rect)
                           }
                           
                           // rjf: apply locks
-                          if(next_cell_is_locked != cell_is_locked)
                           {
                             CFG_Node *cfg = row_info->group_cfg_child;
-                            if(cfg != &cfg_nil_node)
+                            if(next_cell_is_locked != cell_is_locked && cfg != &cfg_nil_node)
                             {
                               if(next_cell_is_locked)
                               {
-                                cfg_node_child_from_string_or_alloc(rd_state->cfg, cfg, s("locked"));
+                                E_Space space = row->eval.space;
+                                D_Entity *entity = rd_ctrl_entity_from_eval_space(space);
+                                CFG_Node *locked = cfg_node_child_from_string_or_alloc(rd_state->cfg, cfg, s("locked"));
+                                cfg_node_release_all_children(rd_state->cfg, locked);
+                                CFG_Node *mid = cfg_node_new(rd_state->cfg, locked, s("mid"));
+                                cfg_node_newf(rd_state->cfg, mid, "%I64u", entity->handle.machine_id);
+                                CFG_Node *pid = cfg_node_new(rd_state->cfg, locked, s("pid"));
+                                cfg_node_newf(rd_state->cfg, pid, "%I64u", entity->id);
+                                CFG_Node *addr = cfg_node_new(rd_state->cfg, locked, s("addr"));
+                                cfg_node_newf(rd_state->cfg, addr, "0x%I64x", row->eval.value.u64);
+                                CFG_Node *type = cfg_node_new(rd_state->cfg, locked, s("type"));
+                                cfg_node_new(rd_state->cfg, type, e_type_string_from_key(scratch.arena, row->eval.irtree.type_key));
                               }
                               else
                               {
@@ -12338,11 +12453,16 @@ rd_frame(void)
           }
           if(kind == D_EntityKind_Process && d_handle_match(rd_base_regs()->process, entity->handle))
           {
-            e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("current_process"), expr);
+            e_string2expr_map_insert(scratch.arena, macro_map, s("current_process"), expr);
           }
           if(kind == D_EntityKind_Module && d_handle_match(rd_base_regs()->module, entity->handle))
           {
             e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("current_module"), expr);
+          }
+          if(kind == D_EntityKind_Process)
+          {
+            String8 pid_string = str8f(scratch.arena, "process_%I64u", entity->id);
+            e_string2expr_map_insert(scratch.arena, macro_map, pid_string, expr);
           }
         }
       }
@@ -16874,6 +16994,33 @@ rd_frame(void)
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Press;
             evt.slot       = UI_EventActionSlot_FocusMenu;
+            ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
+          }break;
+          case RD_CmdKind_Lock:
+          {
+            CFG_Node *window = cfg_node_from_id(rd_regs()->window);
+            RD_WindowState *ws = rd_window_state_from_cfg(window);
+            UI_Event evt = zero_struct;
+            evt.kind       = UI_EventKind_Press;
+            evt.slot       = UI_EventActionSlot_Lock;
+            ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
+          }break;
+          case RD_CmdKind_Unlock:
+          {
+            CFG_Node *window = cfg_node_from_id(rd_regs()->window);
+            RD_WindowState *ws = rd_window_state_from_cfg(window);
+            UI_Event evt = zero_struct;
+            evt.kind       = UI_EventKind_Press;
+            evt.slot       = UI_EventActionSlot_Unlock;
+            ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
+          }break;
+          case RD_CmdKind_ToggleLock:
+          {
+            CFG_Node *window = cfg_node_from_id(rd_regs()->window);
+            RD_WindowState *ws = rd_window_state_from_cfg(window);
+            UI_Event evt = zero_struct;
+            evt.kind       = UI_EventKind_Press;
+            evt.slot       = UI_EventActionSlot_ToggleLock;
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
           }break;
           

@@ -1462,7 +1462,24 @@ E_TYPE_EXPAND_RANGE_FUNCTION_DEF(watches)
     {
       CFG_Node *cfg = accel->cfgs.v[cfg_idx];
       CFG_Node *expr = cfg_node_child_from_string(cfg, s("expression"));
-      evals_out[idx] = e_eval_from_string(expr->first->string);
+      CFG_Node *locked = cfg_node_child_from_string(cfg, s("locked"));
+      if(locked->first->string.size != 0)
+      {
+        String8 pid = cfg_node_child_from_string(locked, s("pid"))->first->string;
+        String8 type = cfg_node_child_from_string(locked, s("type"))->first->string;
+        String8 addr = cfg_node_child_from_string(locked, s("addr"))->first->string;
+        String8 lock_expr = str8f(arena, "*(cast(%S *)(process_%S.memory + %S))", type, pid, addr);
+        evals_out[idx] = e_eval_from_string(lock_expr);
+        evals_out[idx].string = expr->first->string;
+        if(evals_out[idx].msgs.count != 0)
+        {
+          evals_out[idx] = e_eval_from_string(expr->first->string);
+        }
+      }
+      else
+      {
+        evals_out[idx] = e_eval_from_string(expr->first->string);
+      }
     }
   }
 }
