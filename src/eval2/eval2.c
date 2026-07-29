@@ -2127,7 +2127,7 @@ e2_parse_from_string(Arena *arena, E2_ParseState *state, B32 identifier_is_type,
         {
           identifier_mapped = 1;
           expr = e2_expr(arena, identifier_is_type ? E2_ExprKind_TypeIdentifier : E2_ExprKind_Identifier);
-          expr->string = str8_substr(string, token.range);
+          expr->string = identifier;
           expr->qualifiers = qualifiers;
           state->caller_request_count = 0;
         }

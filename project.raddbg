@@ -7,7 +7,6 @@ target:
   working_directory: "../raddebugger"
   arguments: "--user:C:/devel/raddebugger/build/raddbg_test.user"
   debug_subprocesses: 0
-  enabled: 1
 }
 target:
 {
@@ -67,6 +66,7 @@ target:
 {
   executable: "build/ryan_scratch.exe"
   working_directory: build
+  enabled: 1
 }
 target:
 {
