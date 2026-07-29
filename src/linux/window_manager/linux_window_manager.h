@@ -18,6 +18,9 @@
 #include <sys/timerfd.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <signal.h>
+#include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -45,9 +48,11 @@ struct wl_array { size_t size; size_t alloc; void *data; };
 struct wl_proxy; struct wl_display; struct wl_registry; struct wl_compositor;
 struct wl_surface; struct wl_seat; struct wl_pointer; struct wl_keyboard;
 struct wl_shm; struct wl_region; struct wl_buffer; struct wl_output; struct wl_callback;
+struct wl_data_device_manager; struct wl_data_device; struct wl_data_source; struct wl_data_offer;
 
 extern struct wl_proxy *wl_proxy_marshal_flags(struct wl_proxy *proxy, uint32_t opcode, const struct wl_interface *interface, uint32_t version, uint32_t flags, ...);
 extern int wl_proxy_add_listener(struct wl_proxy *proxy, void (**implementation)(void), void *data);
+extern void *wl_proxy_get_user_data(struct wl_proxy *proxy);
 extern uint32_t wl_proxy_get_version(struct wl_proxy *proxy);
 extern struct wl_display *wl_display_connect(const char *name);
 extern void wl_display_disconnect(struct wl_display *display);
@@ -72,6 +77,10 @@ extern const struct wl_interface wl_keyboard_interface;
 extern const struct wl_interface wl_region_interface;
 extern const struct wl_interface wl_shm_interface;
 extern const struct wl_interface wl_output_interface;
+extern const struct wl_interface wl_data_device_manager_interface;
+extern const struct wl_interface wl_data_device_interface;
+extern const struct wl_interface wl_data_source_interface;
+extern const struct wl_interface wl_data_offer_interface;
 
 #define WL_DISPLAY_GET_REGISTRY 1
 #define WL_REGISTRY_BIND 0
@@ -87,6 +96,13 @@ extern const struct wl_interface wl_output_interface;
 #define WL_SEAT_GET_POINTER 0
 #define WL_SEAT_GET_KEYBOARD 1
 #define WL_POINTER_SET_CURSOR 0
+#define WL_DATA_DEVICE_MANAGER_CREATE_DATA_SOURCE 0
+#define WL_DATA_DEVICE_MANAGER_GET_DATA_DEVICE 1
+#define WL_DATA_DEVICE_SET_SELECTION 1
+#define WL_DATA_SOURCE_OFFER 0
+#define WL_DATA_SOURCE_DESTROY 1
+#define WL_DATA_OFFER_RECEIVE 1
+#define WL_DATA_OFFER_DESTROY 2
 
 enum { WL_SEAT_CAPABILITY_POINTER = 1, WL_SEAT_CAPABILITY_KEYBOARD = 2 };
 enum { WL_POINTER_BUTTON_STATE_PRESSED = 1 };
@@ -164,6 +180,55 @@ static inline void wl_pointer_set_cursor(struct wl_pointer *wl_pointer, uint32_t
 { wl_proxy_marshal_flags((struct wl_proxy *)wl_pointer, WL_POINTER_SET_CURSOR, NULL, wl_proxy_get_version((struct wl_proxy *)wl_pointer), 0, serial, surface, hotspot_x, hotspot_y); }
 static inline int wl_keyboard_add_listener(struct wl_keyboard *wl_keyboard, const struct wl_keyboard_listener *listener, void *data)
 { return wl_proxy_add_listener((struct wl_proxy *)wl_keyboard, (void (**)(void))listener, data); }
+
+// rjf: wl_data_device_manager & friends - the core-protocol clipboard ("selection").
+// The v3 drag & drop events are declared so the listener tables stay the right
+// size when the manager is bound at version 3; we never act on them.
+struct wl_data_offer_listener
+{
+  void (*offer)(void *data, struct wl_data_offer *wl_data_offer, const char *mime_type);
+  void (*source_actions)(void *data, struct wl_data_offer *wl_data_offer, uint32_t source_actions);
+  void (*action)(void *data, struct wl_data_offer *wl_data_offer, uint32_t dnd_action);
+};
+struct wl_data_source_listener
+{
+  void (*target)(void *data, struct wl_data_source *wl_data_source, const char *mime_type);
+  void (*send)(void *data, struct wl_data_source *wl_data_source, const char *mime_type, int32_t fd);
+  void (*cancelled)(void *data, struct wl_data_source *wl_data_source);
+  void (*dnd_drop_performed)(void *data, struct wl_data_source *wl_data_source);
+  void (*dnd_finished)(void *data, struct wl_data_source *wl_data_source);
+  void (*action)(void *data, struct wl_data_source *wl_data_source, uint32_t dnd_action);
+};
+struct wl_data_device_listener
+{
+  void (*data_offer)(void *data, struct wl_data_device *wl_data_device, struct wl_data_offer *id);
+  void (*enter)(void *data, struct wl_data_device *wl_data_device, uint32_t serial, struct wl_surface *surface, wl_fixed_t x, wl_fixed_t y, struct wl_data_offer *id);
+  void (*leave)(void *data, struct wl_data_device *wl_data_device);
+  void (*motion)(void *data, struct wl_data_device *wl_data_device, uint32_t time, wl_fixed_t x, wl_fixed_t y);
+  void (*drop)(void *data, struct wl_data_device *wl_data_device);
+  void (*selection)(void *data, struct wl_data_device *wl_data_device, struct wl_data_offer *id);
+};
+
+static inline struct wl_data_source *wl_data_device_manager_create_data_source(struct wl_data_device_manager *manager)
+{ return (struct wl_data_source *)wl_proxy_marshal_flags((struct wl_proxy *)manager, WL_DATA_DEVICE_MANAGER_CREATE_DATA_SOURCE, &wl_data_source_interface, wl_proxy_get_version((struct wl_proxy *)manager), 0, NULL); }
+static inline struct wl_data_device *wl_data_device_manager_get_data_device(struct wl_data_device_manager *manager, struct wl_seat *seat)
+{ return (struct wl_data_device *)wl_proxy_marshal_flags((struct wl_proxy *)manager, WL_DATA_DEVICE_MANAGER_GET_DATA_DEVICE, &wl_data_device_interface, wl_proxy_get_version((struct wl_proxy *)manager), 0, NULL, seat); }
+static inline int wl_data_device_add_listener(struct wl_data_device *device, const struct wl_data_device_listener *listener, void *data)
+{ return wl_proxy_add_listener((struct wl_proxy *)device, (void (**)(void))listener, data); }
+static inline void wl_data_device_set_selection(struct wl_data_device *device, struct wl_data_source *source, uint32_t serial)
+{ wl_proxy_marshal_flags((struct wl_proxy *)device, WL_DATA_DEVICE_SET_SELECTION, NULL, wl_proxy_get_version((struct wl_proxy *)device), 0, source, serial); }
+static inline int wl_data_source_add_listener(struct wl_data_source *source, const struct wl_data_source_listener *listener, void *data)
+{ return wl_proxy_add_listener((struct wl_proxy *)source, (void (**)(void))listener, data); }
+static inline void wl_data_source_offer(struct wl_data_source *source, const char *mime_type)
+{ wl_proxy_marshal_flags((struct wl_proxy *)source, WL_DATA_SOURCE_OFFER, NULL, wl_proxy_get_version((struct wl_proxy *)source), 0, mime_type); }
+static inline void wl_data_source_destroy(struct wl_data_source *source)
+{ wl_proxy_marshal_flags((struct wl_proxy *)source, WL_DATA_SOURCE_DESTROY, NULL, wl_proxy_get_version((struct wl_proxy *)source), WL_MARSHAL_FLAG_DESTROY); }
+static inline int wl_data_offer_add_listener(struct wl_data_offer *offer, const struct wl_data_offer_listener *listener, void *data)
+{ return wl_proxy_add_listener((struct wl_proxy *)offer, (void (**)(void))listener, data); }
+static inline void wl_data_offer_receive(struct wl_data_offer *offer, const char *mime_type, int32_t fd)
+{ wl_proxy_marshal_flags((struct wl_proxy *)offer, WL_DATA_OFFER_RECEIVE, NULL, wl_proxy_get_version((struct wl_proxy *)offer), 0, mime_type, fd); }
+static inline void wl_data_offer_destroy(struct wl_data_offer *offer)
+{ wl_proxy_marshal_flags((struct wl_proxy *)offer, WL_DATA_OFFER_DESTROY, NULL, wl_proxy_get_version((struct wl_proxy *)offer), WL_MARSHAL_FLAG_DESTROY); }
 
 // rjf: libwayland-egl
 struct wl_egl_window;
@@ -317,6 +382,17 @@ LNX_WM_Backend;
 global LNX_WM_Backend lnx_wm_backend = LNX_WM_Backend_X11;
 
 ////////////////////////////////
+//~ rjf: Clipboard Tuning
+//
+// Both backends hand the clipboard payload to (or take it from) another process
+// over a channel that process may never service - an X11 requestor that stops
+// deleting the INCR property, a Wayland peer that never drains its end of the
+// pipe. Every such wait is bounded so a misbehaving peer can only cost us a
+// beat, never the whole UI.
+
+#define LNX_WM_CLIPBOARD_TIMEOUT_US 1000000
+
+////////////////////////////////
 //~ rjf: X11 Types
 
 #define MWM_HINTS_DECORATIONS (1L << 1)
@@ -365,6 +441,22 @@ struct LNX_WM_Window
   Rng2F32 title_bar_client_areas[LNX_WM_MAX_TITLE_BAR_CLIENT_AREAS];
 };
 
+// rjf: an in-flight ICCCM INCR hand-off: a selection payload too large for a
+// single X request, dripped to the requestor one property write at a time as it
+// deletes the property to ask for more.
+typedef struct LNX_WM_IncrSend LNX_WM_IncrSend;
+struct LNX_WM_IncrSend
+{
+  LNX_WM_IncrSend *next;
+  LNX_WM_IncrSend *prev;
+  Arena *arena;
+  Window requestor;
+  Atom property;
+  Atom type;
+  String8 data;
+  U64 off;
+};
+
 typedef struct LNX_WM_State LNX_WM_State;
 struct LNX_WM_State
 {
@@ -386,12 +478,37 @@ struct LNX_WM_State
   Visual *window_visual;
   int window_depth;
   Colormap window_colormap;
+
+  // rjf: clipboard
+  Window clipboard_window;
+  Atom clipboard_atom;
+  Atom targets_atom;
+  Atom timestamp_atom;
+  Atom multiple_atom;
+  Atom incr_atom;
+  Atom utf8_string_atom;
+  Atom text_atom;
+  Atom text_plain_atom;
+  Atom text_plain_utf8_atom;
+  Atom clipboard_recv_atom;
+  Arena *clipboard_arena;
+  String8 clipboard_text;
+  B32 clipboard_owned;
+  Time last_event_time;
+  U64 foreign_traffic_depth;
+  int (*prev_error_handler)(Display *display, XErrorEvent *evt);
+  LNX_WM_IncrSend *first_incr_send;
+  LNX_WM_IncrSend *last_incr_send;
+  LNX_WM_IncrSend *free_incr_send;
 };
 
 global LNX_WM_State *lnx_wm_state = 0;
 
 internal LNX_WM_Window *lnx_window_from_x11window(Window window);
 internal void lnx_window_finish_frame_sync(WM_Window handle);
+internal int lnx_x11_error_handler(Display *display, XErrorEvent *evt);
+internal void lnx_x11_service_selection_request(XSelectionRequestEvent *request);
+internal void lnx_x11_advance_incr_sends(XPropertyEvent *evt);
 
 ////////////////////////////////
 //~ rjf: Wayland Types
@@ -422,6 +539,26 @@ struct WL_WM_Window
   Rng2F32 title_bar_client_areas[WL_WM_MAX_TITLE_BAR_CLIENT_AREAS];
 };
 
+// rjf: text flavors a wl_data_offer can advertise, ordered worst-to-best so the
+// highest set bit picks the flavor we would rather read.
+typedef enum WL_WM_MimeFlags
+{
+  WL_WM_MimeFlag_String       = (1<<0),
+  WL_WM_MimeFlag_TextPlain    = (1<<1),
+  WL_WM_MimeFlag_UTF8String   = (1<<2),
+  WL_WM_MimeFlag_TextPlainUTF8= (1<<3),
+}
+WL_WM_MimeFlags;
+
+typedef struct WL_WM_DataOffer WL_WM_DataOffer;
+struct WL_WM_DataOffer
+{
+  WL_WM_DataOffer *next;
+  WL_WM_DataOffer *prev;
+  struct wl_data_offer *offer;
+  WL_WM_MimeFlags mime_flags;
+};
+
 typedef struct WL_WM_State WL_WM_State;
 struct WL_WM_State
 {
@@ -433,6 +570,8 @@ struct WL_WM_State
   struct wl_shm *shm;
   struct xdg_wm_base *wm_base;
   struct zxdg_decoration_manager_v1 *decoration_manager;
+  struct wl_data_device_manager *data_device_manager;
+  struct wl_data_device *data_device;
   struct wl_seat *seat;
   struct wl_pointer *pointer;
   struct wl_keyboard *keyboard;
@@ -456,6 +595,17 @@ struct WL_WM_State
   WL_WM_Window *pointer_focus;
   WL_WM_Window *keyboard_focus;
   Vec2F32 pointer_pos;
+  U32 last_input_serial;
+
+  // rjf: clipboard
+  struct wl_data_source *data_source;
+  Arena *clipboard_arena;
+  String8 clipboard_text;
+  B32 clipboard_owned;
+  WL_WM_DataOffer *first_offer;
+  WL_WM_DataOffer *last_offer;
+  WL_WM_DataOffer *free_offer;
+  WL_WM_DataOffer *selection_offer;
 
   Arena *evt_arena;
   WM_EventList *evts;

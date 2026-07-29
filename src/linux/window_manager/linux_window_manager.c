@@ -140,10 +140,34 @@ wm_x11_init(void)
   lnx_wm_state->wm_sync_request_counter_atom = XInternAtom(lnx_wm_state->display, "_NET_WM_SYNC_REQUEST_COUNTER", 0);
   lnx_wm_state->motif_wm_hints_atom          = XInternAtom(lnx_wm_state->display, "_MOTIF_WM_HINTS", 0);
   lnx_wm_state->net_wm_moveresize_atom       = XInternAtom(lnx_wm_state->display, "_NET_WM_MOVERESIZE", 0);
-  
+  lnx_wm_state->clipboard_atom               = XInternAtom(lnx_wm_state->display, "CLIPBOARD", 0);
+  lnx_wm_state->targets_atom                 = XInternAtom(lnx_wm_state->display, "TARGETS", 0);
+  lnx_wm_state->timestamp_atom               = XInternAtom(lnx_wm_state->display, "TIMESTAMP", 0);
+  lnx_wm_state->multiple_atom                = XInternAtom(lnx_wm_state->display, "MULTIPLE", 0);
+  lnx_wm_state->incr_atom                    = XInternAtom(lnx_wm_state->display, "INCR", 0);
+  lnx_wm_state->utf8_string_atom             = XInternAtom(lnx_wm_state->display, "UTF8_STRING", 0);
+  lnx_wm_state->text_atom                    = XInternAtom(lnx_wm_state->display, "TEXT", 0);
+  lnx_wm_state->text_plain_atom              = XInternAtom(lnx_wm_state->display, "text/plain", 0);
+  lnx_wm_state->text_plain_utf8_atom         = XInternAtom(lnx_wm_state->display, "text/plain;charset=utf-8", 0);
+  lnx_wm_state->clipboard_recv_atom          = XInternAtom(lnx_wm_state->display, "RADDBG_CLIPBOARD_RECV", 0);
+
   //- rjf: open im
   lnx_wm_state->xim = XOpenIM(lnx_wm_state->display, 0, 0, 0);
-  
+
+  //- rjf: set up clipboard
+  //
+  // Selection ownership & conversion replies all hang off one never-mapped
+  // window, so they are not tangled up with the lifetime of any real window -
+  // the clipboard has to keep working after the window it was copied from is
+  // closed. PropertyChangeMask is what makes incoming INCR transfers visible.
+  {
+    lnx_wm_state->clipboard_arena = arena_alloc();
+    lnx_wm_state->clipboard_window = XCreateSimpleWindow(lnx_wm_state->display, XDefaultRootWindow(lnx_wm_state->display),
+                                                        -10, -10, 1, 1, 0, 0, 0);
+    XSelectInput(lnx_wm_state->display, lnx_wm_state->clipboard_window, PropertyChangeMask);
+    lnx_wm_state->prev_error_handler = XSetErrorHandler(lnx_x11_error_handler);
+  }
+
   //- rjf: fill out gfx info
   lnx_wm_state->gfx_info.double_click_time = 0.5f;
   lnx_wm_state->gfx_info.caret_blink_time = 0.5f;
@@ -190,17 +214,522 @@ wm_x11_get_system_info(void)
 
 ////////////////////////////////
 //~ rjf: @per_os_impl Clipboards (Implemented Per-OS)
+//
+// X11 has no clipboard: it has *selections*, which are just a name the server
+// associates with a window. "Copying" means claiming ownership of the CLIPBOARD
+// selection and then answering, for as long as we keep running, every other
+// client that asks us to convert it into some target (data format). "Pasting"
+// means asking the current owner to convert its selection into a target of our
+// choosing and drop the result onto a property of our window, then waiting for
+// the SelectionNotify that says it is there. All of it is defined by ICCCM ch.2.
+//
+// Two consequences worth knowing: our clipboard contents die with the process
+// unless a clipboard manager grabs them (standard X behavior, nothing to fix),
+// and the requests below are addressed to windows owned by *other* clients,
+// which may be destroyed between the moment we learn about them and the moment
+// we write to them - see lnx_x11_begin_foreign_window_traffic.
+
+//- rjf: x error handling
+
+internal int
+lnx_x11_error_handler(Display *display, XErrorEvent *evt)
+{
+  // rjf: Xlib's default handler exits the process. That is not an acceptable
+  // answer for clipboard traffic, which is addressed to windows owned by other
+  // clients and so legitimately races with those clients being destroyed - a
+  // BadWindow here only means the conversation ended early.
+  if(lnx_wm_state != 0 && lnx_wm_state->foreign_traffic_depth != 0)
+  {
+    return 0;
+  }
+  if(lnx_wm_state != 0 && lnx_wm_state->prev_error_handler != 0)
+  {
+    return lnx_wm_state->prev_error_handler(display, evt);
+  }
+  // rjf: nothing was installed before us, so stand in for the Xlib default
+  // instead of quietly dropping errors that nobody else is watching for
+  char text[256] = {0};
+  XGetErrorText(display, evt->error_code, text, sizeof(text));
+  fprintf(stderr, "X11 error: %s (request %u.%u, resource 0x%lx)\n",
+          text, (U32)evt->request_code, (U32)evt->minor_code, (unsigned long)evt->resourceid);
+  exit(1);
+  return 0;
+}
+
+internal void
+lnx_x11_begin_foreign_window_traffic(void)
+{
+  lnx_wm_state->foreign_traffic_depth += 1;
+}
+
+internal void
+lnx_x11_end_foreign_window_traffic(void)
+{
+  // rjf: X errors are asynchronous, so the guard is only meaningful if we force
+  // the round trip that delivers them while it is still up.
+  XSync(lnx_wm_state->display, False);
+  lnx_wm_state->foreign_traffic_depth -= 1;
+}
+
+//- rjf: text encoding helpers
+
+internal String8
+lnx_x11_utf8_from_latin1(Arena *arena, String8 latin1)
+{
+  U8 *buffer = push_array_no_zero(arena, U8, latin1.size*2 + 1);
+  U64 size = 0;
+  for EachIndex(idx, latin1.size)
+  {
+    size += utf8_encode(buffer+size, latin1.str[idx]);
+  }
+  buffer[size] = 0;
+  return str8(buffer, size);
+}
+
+internal String8
+lnx_x11_latin1_from_utf8(Arena *arena, String8 utf8)
+{
+  // rjf: ICCCM defines the STRING target as Latin-1, so codepoints outside it
+  // are lost. Everything modern asks for UTF8_STRING instead; this path only
+  // exists for clients old enough to only know STRING.
+  U8 *buffer = push_array_no_zero(arena, U8, utf8.size + 1);
+  U64 size = 0;
+  for(U64 off = 0; off < utf8.size;)
+  {
+    UnicodeDecode decode = utf8_decode(utf8.str+off, utf8.size-off);
+    buffer[size] = (decode.codepoint <= 0xff) ? (U8)decode.codepoint : '?';
+    size += 1;
+    off += decode.inc ? decode.inc : 1;
+  }
+  buffer[size] = 0;
+  return str8(buffer, size);
+}
+
+//- rjf: property helpers
+
+internal U64
+lnx_x11_max_selection_chunk(void)
+{
+  long units = XExtendedMaxRequestSize(lnx_wm_state->display);
+  if(units == 0)
+  {
+    units = XMaxRequestSize(lnx_wm_state->display);
+  }
+  U64 result = (units > 16) ? (U64)(units - 16)*4 : KB(4);
+  result = Min(result, MB(1));
+  return result;
+}
+
+internal String8
+lnx_x11_read_property(Arena *arena, Window window, Atom property, Atom *type_out, B32 delete)
+{
+  String8 result = {0};
+  Atom type = None;
+  int format = 0;
+  unsigned long count = 0;
+  unsigned long bytes_after = 0;
+  unsigned char *data = 0;
+
+  // rjf: zero-length probe just to learn the type & total size
+  if(XGetWindowProperty(lnx_wm_state->display, window, property, 0, 0, False, AnyPropertyType,
+                        &type, &format, &count, &bytes_after, &data) != Success)
+  {
+    if(type_out != 0) { *type_out = None; }
+    return result;
+  }
+  if(data != 0) { XFree(data); data = 0; }
+  if(type_out != 0) { *type_out = type; }
+
+  // rjf: pull the whole value in one request, so the server honors `delete`
+  // (it only deletes when the read leaves nothing behind)
+  U64 size = (U64)bytes_after;
+  long length_32 = (long)((size + 3)/4);
+  if(XGetWindowProperty(lnx_wm_state->display, window, property, 0, length_32 + 1, delete, AnyPropertyType,
+                        &type, &format, &count, &bytes_after, &data) == Success)
+  {
+    if(data != 0 && format == 8 && count != 0)
+    {
+      result = push_str8_copy(arena, str8(data, (U64)count));
+    }
+    if(data != 0) { XFree(data); }
+  }
+  return result;
+}
+
+//- rjf: answering other clients (we are the selection owner)
+
+internal B32 lnx_x11_write_selection_target(Window requestor, Atom target, Atom property);
+
+internal B32
+lnx_x11_write_selection_data(Window requestor, Atom property, Atom type, String8 data)
+{
+  U64 max_chunk = lnx_x11_max_selection_chunk();
+  if(data.size <= max_chunk)
+  {
+    XChangeProperty(lnx_wm_state->display, requestor, property, type, 8, PropModeReplace, data.str, (int)data.size);
+  }
+  else
+  {
+    // rjf: too large for one request - announce an INCR transfer and drip the
+    // payload out from the PropertyNotify handler as the requestor consumes it
+    LNX_WM_IncrSend *xfer = lnx_wm_state->free_incr_send;
+    if(xfer != 0) { SLLStackPop(lnx_wm_state->free_incr_send); }
+    else           { xfer = push_array_no_zero(lnx_wm_state->arena, LNX_WM_IncrSend, 1); }
+    MemoryZeroStruct(xfer);
+    xfer->arena = arena_alloc();
+    xfer->requestor = requestor;
+    xfer->property = property;
+    xfer->type = type;
+    xfer->data = push_str8_copy(xfer->arena, data);
+    DLLPushBack(lnx_wm_state->first_incr_send, lnx_wm_state->last_incr_send, xfer);
+    XSelectInput(lnx_wm_state->display, requestor, PropertyChangeMask);
+    long total = (long)data.size;
+    XChangeProperty(lnx_wm_state->display, requestor, property, lnx_wm_state->incr_atom, 32, PropModeReplace, (U8 *)&total, 1);
+  }
+  return 1;
+}
+
+internal B32
+lnx_x11_write_selection_multiple(Window requestor, Atom property)
+{
+  // rjf: MULTIPLE's property holds (target, property) atom pairs; convert each
+  // one in turn & write None back over the property of any we cannot satisfy.
+  B32 result = 0;
+  Atom type = None;
+  int format = 0;
+  unsigned long count = 0;
+  unsigned long bytes_after = 0;
+  unsigned char *data = 0;
+  if(XGetWindowProperty(lnx_wm_state->display, requestor, property, 0, 0x7fffffff, False, AnyPropertyType,
+                        &type, &format, &count, &bytes_after, &data) == Success)
+  {
+    if(data != 0 && format == 32)
+    {
+      Atom *pairs = (Atom *)data;
+      B32 any_refused = 0;
+      for(unsigned long idx = 0; idx + 1 < count; idx += 2)
+      {
+        if(pairs[idx+1] == None) { continue; }
+        if(!lnx_x11_write_selection_target(requestor, pairs[idx], pairs[idx+1]))
+        {
+          pairs[idx+1] = None;
+          any_refused = 1;
+        }
+      }
+      if(any_refused)
+      {
+        XChangeProperty(lnx_wm_state->display, requestor, property, type, 32, PropModeReplace, (U8 *)pairs, (int)count);
+      }
+      result = 1;
+    }
+    if(data != 0) { XFree(data); }
+  }
+  return result;
+}
+
+internal B32
+lnx_x11_write_selection_target(Window requestor, Atom target, Atom property)
+{
+  B32 result = 0;
+  LNX_WM_State *s = lnx_wm_state;
+  Temp scratch = scratch_begin(0, 0);
+  if(target == s->targets_atom)
+  {
+    Atom targets[] =
+    {
+      s->targets_atom,
+      s->timestamp_atom,
+      s->multiple_atom,
+      s->utf8_string_atom,
+      s->text_plain_utf8_atom,
+      s->text_plain_atom,
+      s->text_atom,
+      XA_STRING,
+    };
+    XChangeProperty(s->display, requestor, property, XA_ATOM, 32, PropModeReplace, (U8 *)targets, ArrayCount(targets));
+    result = 1;
+  }
+  else if(target == s->timestamp_atom)
+  {
+    long time = (long)s->last_event_time;
+    XChangeProperty(s->display, requestor, property, XA_INTEGER, 32, PropModeReplace, (U8 *)&time, 1);
+    result = 1;
+  }
+  else if(target == s->multiple_atom)
+  {
+    result = lnx_x11_write_selection_multiple(requestor, property);
+  }
+  else if(target == s->utf8_string_atom || target == s->text_plain_utf8_atom || target == s->text_plain_atom)
+  {
+    // rjf: text/plain has no charset in its name, but every X client that asks
+    // for it today runs in a UTF-8 locale, so answer in UTF-8 either way.
+    result = lnx_x11_write_selection_data(requestor, property, target, s->clipboard_text);
+  }
+  else if(target == s->text_atom)
+  {
+    // rjf: TEXT lets the owner pick the encoding & report it back as the type
+    result = lnx_x11_write_selection_data(requestor, property, s->utf8_string_atom, s->clipboard_text);
+  }
+  else if(target == XA_STRING)
+  {
+    String8 latin1 = lnx_x11_latin1_from_utf8(scratch.arena, s->clipboard_text);
+    result = lnx_x11_write_selection_data(requestor, property, XA_STRING, latin1);
+  }
+  scratch_end(scratch);
+  return result;
+}
+
+internal void
+lnx_x11_service_selection_request(XSelectionRequestEvent *request)
+{
+  LNX_WM_State *s = lnx_wm_state;
+
+  // rjf: pre-ICCCM requestors leave the property unset & expect the target atom
+  // to double as the property name
+  Atom property = (request->property != None) ? request->property : request->target;
+
+  XSelectionEvent notify = {0};
+  notify.type = SelectionNotify;
+  notify.display = request->display;
+  notify.requestor = request->requestor;
+  notify.selection = request->selection;
+  notify.target = request->target;
+  notify.time = request->time;
+  notify.property = None; // rjf: "refused", unless the conversion below succeeds
+
+  lnx_x11_begin_foreign_window_traffic();
+  if(request->selection == s->clipboard_atom && s->clipboard_owned &&
+     lnx_x11_write_selection_target(request->requestor, request->target, property))
+  {
+    notify.property = property;
+  }
+  XSendEvent(s->display, request->requestor, False, 0, (XEvent *)&notify);
+  lnx_x11_end_foreign_window_traffic();
+}
+
+internal void
+lnx_x11_advance_incr_sends(XPropertyEvent *evt)
+{
+  // rjf: the requestor deleting the property is its "send me the next chunk"
+  if(evt->state != PropertyDelete) {return;}
+  for(LNX_WM_IncrSend *xfer = lnx_wm_state->first_incr_send; xfer != 0; xfer = xfer->next)
+  {
+    if(xfer->requestor != evt->window || xfer->property != evt->atom) {continue;}
+    U64 chunk_size = Min(xfer->data.size - xfer->off, lnx_x11_max_selection_chunk());
+    lnx_x11_begin_foreign_window_traffic();
+    XChangeProperty(lnx_wm_state->display, xfer->requestor, xfer->property, xfer->type, 8, PropModeReplace,
+                    xfer->data.str + xfer->off, (int)chunk_size);
+    if(chunk_size == 0)
+    {
+      // rjf: the zero-length write above is what terminates the transfer. Only
+      // stop listening once nothing else is still being fed to this window - a
+      // MULTIPLE request can have several oversized targets in flight at once.
+      B32 window_is_idle = 1;
+      for(LNX_WM_IncrSend *other = lnx_wm_state->first_incr_send; other != 0; other = other->next)
+      {
+        if(other != xfer && other->requestor == xfer->requestor) { window_is_idle = 0; break; }
+      }
+      if(window_is_idle)
+      {
+        XSelectInput(lnx_wm_state->display, xfer->requestor, NoEventMask);
+      }
+    }
+    lnx_x11_end_foreign_window_traffic();
+    xfer->off += chunk_size;
+    if(chunk_size == 0)
+    {
+      arena_release(xfer->arena);
+      DLLRemove(lnx_wm_state->first_incr_send, lnx_wm_state->last_incr_send, xfer);
+      SLLStackPush(lnx_wm_state->free_incr_send, xfer);
+    }
+    break;
+  }
+}
+
+//- rjf: asking another client (we are the requestor)
+
+typedef struct LNX_WM_SelectionWait LNX_WM_SelectionWait;
+struct LNX_WM_SelectionWait
+{
+  Window window;
+  Atom selection;
+  Atom property;
+};
+
+// NOTE(rjf): predicates run inside Xlib's queue walk and must not call back into Xlib.
+
+internal Bool
+lnx_x11_selection_notify_predicate(Display *display, XEvent *evt, XPointer arg)
+{
+  LNX_WM_SelectionWait *wait = (LNX_WM_SelectionWait *)arg;
+  return (evt->type == SelectionNotify &&
+          evt->xselection.requestor == wait->window &&
+          evt->xselection.selection == wait->selection);
+}
+
+internal Bool
+lnx_x11_property_new_value_predicate(Display *display, XEvent *evt, XPointer arg)
+{
+  LNX_WM_SelectionWait *wait = (LNX_WM_SelectionWait *)arg;
+  return (evt->type == PropertyNotify &&
+          evt->xproperty.window == wait->window &&
+          evt->xproperty.atom == wait->property &&
+          evt->xproperty.state == PropertyNewValue);
+}
+
+internal B32
+lnx_x11_wait_for_event(Bool (*predicate)(Display *, XEvent *, XPointer), XPointer arg, XEvent *evt_out, U64 timeout_us)
+{
+  B32 result = 0;
+  Display *display = lnx_wm_state->display;
+  U64 deadline_us = now_time_us() + timeout_us;
+  for(;;)
+  {
+    // rjf: keep answering conversion requests while we block - another client
+    // pasting from us at this moment would otherwise stall for its own timeout.
+    // XCheckIfEvent leaves everything else queued for the main event loop.
+    XEvent request_evt = {0};
+    while(XCheckTypedEvent(display, SelectionRequest, &request_evt))
+    {
+      lnx_x11_service_selection_request(&request_evt.xselectionrequest);
+    }
+    if(XCheckIfEvent(display, evt_out, predicate, arg))
+    {
+      result = 1;
+      break;
+    }
+    U64 now_us = now_time_us();
+    if(now_us >= deadline_us)
+    {
+      break;
+    }
+    struct pollfd poll_fd = { .fd = ConnectionNumber(display), .events = POLLIN };
+    poll(&poll_fd, 1, (int)((deadline_us - now_us + 999)/1000));
+  }
+  return result;
+}
+
+internal B32
+lnx_x11_request_selection(Arena *arena, Atom target, String8 *text_out)
+{
+  B32 result = 0;
+  LNX_WM_State *s = lnx_wm_state;
+  LNX_WM_SelectionWait wait = {s->clipboard_window, s->clipboard_atom, s->clipboard_recv_atom};
+  Time time = (s->last_event_time != 0) ? s->last_event_time : CurrentTime;
+
+  XDeleteProperty(s->display, s->clipboard_window, s->clipboard_recv_atom);
+  XConvertSelection(s->display, s->clipboard_atom, target, s->clipboard_recv_atom, s->clipboard_window, time);
+  XFlush(s->display);
+
+  XEvent evt = {0};
+  if(lnx_x11_wait_for_event(lnx_x11_selection_notify_predicate, (XPointer)&wait, &evt, LNX_WM_CLIPBOARD_TIMEOUT_US) &&
+     evt.xselection.property != None)
+  {
+    Atom type = None;
+    String8 text = lnx_x11_read_property(arena, s->clipboard_window, evt.xselection.property, &type, 0);
+    if(type != s->incr_atom)
+    {
+      XDeleteProperty(s->display, s->clipboard_window, evt.xselection.property);
+    }
+    else
+    {
+      // rjf: an INCR hand-off, one chunk per property write, terminated by an
+      // empty one. Deleting the property is how we ask for the next chunk.
+      //
+      // The owner wrote the INCR header *before* notifying us, so a stale
+      // PropertyNotify for that write is already in flight. Round-trip to make
+      // sure it has landed, drop it, and only then delete the header - after
+      // that every NewValue we see is a chunk, and reading each one with delete
+      // set keeps read & request-next atomic.
+      Temp scratch = scratch_begin(&arena, 1);
+      String8List chunks = {0};
+      XSync(s->display, False);
+      XEvent stale_evt = {0};
+      while(XCheckIfEvent(s->display, &stale_evt, lnx_x11_property_new_value_predicate, (XPointer)&wait)){}
+      XDeleteProperty(s->display, s->clipboard_window, s->clipboard_recv_atom);
+      XFlush(s->display);
+      for(;;)
+      {
+        XEvent chunk_evt = {0};
+        if(!lnx_x11_wait_for_event(lnx_x11_property_new_value_predicate, (XPointer)&wait, &chunk_evt, LNX_WM_CLIPBOARD_TIMEOUT_US))
+        {
+          break;
+        }
+        Atom chunk_type = None;
+        String8 chunk = lnx_x11_read_property(scratch.arena, s->clipboard_window, s->clipboard_recv_atom, &chunk_type, 1);
+        XFlush(s->display);
+        if(chunk.size == 0)
+        {
+          break;
+        }
+        str8_list_push(scratch.arena, &chunks, chunk);
+      }
+      text = str8_list_join(arena, &chunks, 0);
+      scratch_end(scratch);
+    }
+    if(type == XA_STRING)
+    {
+      text = lnx_x11_utf8_from_latin1(arena, text);
+    }
+    *text_out = text;
+    result = 1;
+  }
+  return result;
+}
 
 internal void
 wm_x11_set_clipboard_text(String8 string)
 {
-  
+  LNX_WM_State *s = lnx_wm_state;
+  arena_clear(s->clipboard_arena);
+  s->clipboard_text = push_str8_copy(s->clipboard_arena, string);
+  s->clipboard_owned = 1;
+
+  // rjf: ICCCM asks for the timestamp of the event that triggered the copy, but
+  // the server drops a claim whose timestamp predates the current owner's, so
+  // fall back to CurrentTime rather than silently failing to own the clipboard.
+  Time time = (s->last_event_time != 0) ? s->last_event_time : CurrentTime;
+  XSetSelectionOwner(s->display, s->clipboard_atom, s->clipboard_window, time);
+  if(XGetSelectionOwner(s->display, s->clipboard_atom) != s->clipboard_window)
+  {
+    XSetSelectionOwner(s->display, s->clipboard_atom, s->clipboard_window, CurrentTime);
+  }
+  XFlush(s->display);
 }
 
 internal String8
 wm_x11_get_clipboard_text(Arena *arena)
 {
   String8 result = {0};
+  LNX_WM_State *s = lnx_wm_state;
+  Window owner = XGetSelectionOwner(s->display, s->clipboard_atom);
+  if(owner == s->clipboard_window)
+  {
+    // rjf: we own it - no reason to make the server bounce our own text back
+    result = push_str8_copy(arena, s->clipboard_text);
+  }
+  else if(owner != None)
+  {
+    // rjf: first target the owner can convert wins
+    Atom targets[] =
+    {
+      s->utf8_string_atom,
+      s->text_plain_utf8_atom,
+      s->text_plain_atom,
+      XA_STRING,
+    };
+    Temp scratch = scratch_begin(&arena, 1);
+    for EachElement(idx, targets)
+    {
+      String8 text = {0};
+      if(lnx_x11_request_selection(scratch.arena, targets[idx], &text) && text.size != 0)
+      {
+        result = push_str8_copy(arena, text);
+        break;
+      }
+    }
+    scratch_end(scratch);
+  }
   return result;
 }
 
@@ -593,10 +1122,23 @@ wm_x11_get_events(Arena *arena, B32 wait)
       XNextEvent(lnx_wm_state->display, &evt);
       B32 set_mouse_cursor = 0;
       WM_Cursor cursor_override = WM_Cursor_COUNT;
+
+      // rjf: track the newest server timestamp we have seen - selection claims
+      // and conversion requests are supposed to carry a real event time
       switch(evt.type)
       {
         default:{}break;
-        
+        case KeyPress: case KeyRelease:       {lnx_wm_state->last_event_time = evt.xkey.time;}break;
+        case ButtonPress: case ButtonRelease: {lnx_wm_state->last_event_time = evt.xbutton.time;}break;
+        case MotionNotify:                    {lnx_wm_state->last_event_time = evt.xmotion.time;}break;
+        case PropertyNotify:                  {lnx_wm_state->last_event_time = evt.xproperty.time;}break;
+        case SelectionClear:                  {lnx_wm_state->last_event_time = evt.xselectionclear.time;}break;
+      }
+
+      switch(evt.type)
+      {
+        default:{}break;
+
         //- rjf: key presses/releases
         case KeyPress:
         case KeyRelease:
@@ -808,6 +1350,33 @@ wm_x11_get_events(Arena *arena, B32 wait)
           LNX_WM_Window *window = lnx_window_from_x11window(evt.xany.window);
           WM_Event *e = wm_event_list_push_new(arena, &evts, WM_EventKind_Wakeup);
           e->window.u64[0] = (U64)window;
+        }break;
+
+        //- rjf: clipboard: another client wants our selection converted
+        case SelectionRequest:
+        {
+          lnx_x11_service_selection_request(&evt.xselectionrequest);
+        }break;
+
+        //- rjf: clipboard: somebody else took the selection from us
+        case SelectionClear:
+        {
+          // rjf: re-check ownership rather than trusting the event: our own
+          // re-claim can race ahead of the clear for the *previous* loss, and
+          // dropping the text then would throw away a copy we just made.
+          if(evt.xselectionclear.selection == lnx_wm_state->clipboard_atom &&
+             XGetSelectionOwner(lnx_wm_state->display, lnx_wm_state->clipboard_atom) != lnx_wm_state->clipboard_window)
+          {
+            lnx_wm_state->clipboard_owned = 0;
+            arena_clear(lnx_wm_state->clipboard_arena);
+            lnx_wm_state->clipboard_text = str8_zero();
+          }
+        }break;
+
+        //- rjf: clipboard: a requestor consumed an INCR chunk & wants the next
+        case PropertyNotify:
+        {
+          lnx_x11_advance_incr_sends(&evt.xproperty);
         }break;
 
         //- rjf: client messages
@@ -1223,6 +1792,206 @@ wl_window_update_opaque_region(WL_WM_Window *w)
   wl_region_destroy(region);
 }
 
+//- rjf: clipboard ("selection", in wayland terms)
+//
+// Wayland moves the payload itself, not just a reference to it: to copy we
+// advertise a wl_data_source listing the mime types we can produce, and the
+// compositor hands us a pipe to write into whenever somebody pastes. To paste
+// we take the wl_data_offer the compositor gave us - which only arrives while
+// we hold keyboard focus, by design - and read the data back out of a pipe.
+//
+// Both directions therefore run a foreign process's I/O on our event-dispatch
+// thread, which is why every transfer below is non-blocking and bounded.
+
+read_only global char *wl_wm_clipboard_mime_types[] =
+{
+  "text/plain;charset=utf-8",
+  "text/plain",
+  "UTF8_STRING",
+  "STRING",
+  "TEXT",
+};
+
+internal void
+wl_write_string_to_fd(int fd, String8 data)
+{
+  // rjf: the reader may stop reading, or vanish, at any point. A plain blocking
+  // write would then either wedge the UI or kill us outright with SIGPIPE, so
+  // block that signal for the duration and give the peer a bounded window.
+  // (SIG_IGN is not an option: ignored dispositions survive exec, and would
+  // silently change SIGPIPE behavior for every process we launch & debug.)
+  sigset_t blocked_set;
+  sigset_t prev_set;
+  sigemptyset(&blocked_set);
+  sigaddset(&blocked_set, SIGPIPE);
+  pthread_sigmask(SIG_BLOCK, &blocked_set, &prev_set);
+
+  int flags = fcntl(fd, F_GETFL, 0);
+  if(flags != -1)
+  {
+    fcntl(fd, F_SETFL, flags|O_NONBLOCK);
+  }
+
+  for(U64 off = 0; off < data.size;)
+  {
+    ssize_t written = write(fd, data.str + off, data.size - off);
+    if(written > 0)
+    {
+      off += (U64)written;
+    }
+    else if(written < 0 && errno == EINTR)
+    {
+      // rjf: retry
+    }
+    else if(written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+    {
+      struct pollfd poll_fd = { .fd = fd, .events = POLLOUT };
+      if(poll(&poll_fd, 1, LNX_WM_CLIPBOARD_TIMEOUT_US/1000) <= 0 ||
+         (poll_fd.revents & (POLLERR|POLLHUP|POLLNVAL)))
+      {
+        break;
+      }
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  // rjf: consume a SIGPIPE we may have just generated, so it does not fire the
+  // instant the mask comes back off
+  {
+    struct timespec zero_timeout = {0};
+    while(sigtimedwait(&blocked_set, 0, &zero_timeout) == SIGPIPE){}
+  }
+  pthread_sigmask(SIG_SETMASK, &prev_set, 0);
+}
+
+internal void
+wl_data_offer_offer(void *data, struct wl_data_offer *offer, const char *mime_type)
+{
+  WL_WM_DataOffer *node = (WL_WM_DataOffer *)data;
+  if(node == 0) {return;}
+  if(0){}
+  else if(strcmp(mime_type, "text/plain;charset=utf-8") == 0) { node->mime_flags |= WL_WM_MimeFlag_TextPlainUTF8; }
+  else if(strcmp(mime_type, "UTF8_STRING") == 0)              { node->mime_flags |= WL_WM_MimeFlag_UTF8String; }
+  else if(strcmp(mime_type, "text/plain") == 0)               { node->mime_flags |= WL_WM_MimeFlag_TextPlain; }
+  else if(strcmp(mime_type, "STRING") == 0 ||
+          strcmp(mime_type, "TEXT") == 0)                     { node->mime_flags |= WL_WM_MimeFlag_String; }
+}
+internal void wl_data_offer_source_actions(void *data, struct wl_data_offer *offer, uint32_t source_actions){}
+internal void wl_data_offer_action(void *data, struct wl_data_offer *offer, uint32_t dnd_action){}
+local_persist const struct wl_data_offer_listener wl_data_offer_listener =
+{
+  wl_data_offer_offer,
+  wl_data_offer_source_actions,
+  wl_data_offer_action,
+};
+
+internal void
+wl_data_offers_prune(struct wl_data_offer *keep)
+{
+  // rjf: offers are ours to destroy once we are done with them; anything that is
+  // not the one we intend to read from is dropped here, drag & drop included.
+  for(WL_WM_DataOffer *node = wl_wm_state->first_offer, *next = 0; node != 0; node = next)
+  {
+    next = node->next;
+    if(node->offer == keep) {continue;}
+    wl_data_offer_destroy(node->offer);
+    DLLRemove(wl_wm_state->first_offer, wl_wm_state->last_offer, node);
+    SLLStackPush(wl_wm_state->free_offer, node);
+  }
+}
+
+internal void
+wl_data_source_target(void *data, struct wl_data_source *source, const char *mime_type){}
+
+internal void
+wl_data_source_send(void *data, struct wl_data_source *source, const char *mime_type, int32_t fd)
+{
+  // rjf: every mime type we advertise is UTF-8 text; STRING/TEXT are only listed
+  // so that clients bridged from X11 (XWayland) recognize us as a text source.
+  if(source == wl_wm_state->data_source)
+  {
+    wl_write_string_to_fd(fd, wl_wm_state->clipboard_text);
+  }
+  close(fd);
+}
+
+internal void
+wl_data_source_cancelled(void *data, struct wl_data_source *source)
+{
+  // rjf: somebody else took the selection (or the compositor rejected ours)
+  if(source == wl_wm_state->data_source)
+  {
+    wl_wm_state->data_source = 0;
+    wl_wm_state->clipboard_owned = 0;
+  }
+  wl_data_source_destroy(source);
+}
+
+internal void wl_data_source_dnd_drop_performed(void *data, struct wl_data_source *source){}
+internal void wl_data_source_dnd_finished(void *data, struct wl_data_source *source){}
+internal void wl_data_source_action(void *data, struct wl_data_source *source, uint32_t dnd_action){}
+local_persist const struct wl_data_source_listener wl_data_source_listener =
+{
+  wl_data_source_target,
+  wl_data_source_send,
+  wl_data_source_cancelled,
+  wl_data_source_dnd_drop_performed,
+  wl_data_source_dnd_finished,
+  wl_data_source_action,
+};
+
+internal void
+wl_data_device_data_offer(void *data, struct wl_data_device *device, struct wl_data_offer *offer)
+{
+  // rjf: the offer's mime types arrive as a burst of follow-up events; hang a
+  // node off the proxy so they land somewhere we can find again at selection time
+  WL_WM_DataOffer *node = wl_wm_state->free_offer;
+  if(node != 0) { SLLStackPop(wl_wm_state->free_offer); }
+  else          { node = push_array_no_zero(wl_wm_state->arena, WL_WM_DataOffer, 1); }
+  MemoryZeroStruct(node);
+  node->offer = offer;
+  DLLPushBack(wl_wm_state->first_offer, wl_wm_state->last_offer, node);
+  wl_data_offer_add_listener(offer, &wl_data_offer_listener, node);
+}
+
+internal void
+wl_data_device_selection(void *data, struct wl_data_device *device, struct wl_data_offer *offer)
+{
+  wl_data_offers_prune(offer);
+  // rjf: the node we attached as the proxy's listener data *is* its user data
+  wl_wm_state->selection_offer = (offer != 0) ? (WL_WM_DataOffer *)wl_proxy_get_user_data((struct wl_proxy *)offer) : 0;
+}
+
+internal void
+wl_data_device_enter(void *data, struct wl_data_device *device, uint32_t serial, struct wl_surface *surface, wl_fixed_t x, wl_fixed_t y, struct wl_data_offer *offer){}
+
+internal void
+wl_data_device_leave(void *data, struct wl_data_device *device)
+{
+  wl_data_offers_prune(wl_wm_state->selection_offer != 0 ? wl_wm_state->selection_offer->offer : 0);
+}
+
+internal void wl_data_device_motion(void *data, struct wl_data_device *device, uint32_t time, wl_fixed_t x, wl_fixed_t y){}
+
+internal void
+wl_data_device_drop(void *data, struct wl_data_device *device)
+{
+  wl_data_offers_prune(wl_wm_state->selection_offer != 0 ? wl_wm_state->selection_offer->offer : 0);
+}
+
+local_persist const struct wl_data_device_listener wl_data_device_listener =
+{
+  wl_data_device_data_offer,
+  wl_data_device_enter,
+  wl_data_device_leave,
+  wl_data_device_motion,
+  wl_data_device_drop,
+  wl_data_device_selection,
+};
+
 internal void
 wl_wm_base_ping(void *data, struct xdg_wm_base *wm_base, uint32_t serial)
 {
@@ -1297,6 +2066,7 @@ wl_pointer_enter(void *data, struct wl_pointer *pointer, uint32_t serial, struct
 {
   wl_wm_state->pointer_focus = wl_window_from_surface(surface);
   wl_wm_state->pointer_enter_serial = serial;
+  wl_wm_state->last_input_serial = serial;
   wl_wm_state->pointer_pos = v2f32((F32)wl_fixed_to_double(sx), (F32)wl_fixed_to_double(sy));
   wl_apply_cursor(wl_wm_state->last_set_cursor);
 }
@@ -1338,6 +2108,7 @@ wl_pointer_button(void *data, struct wl_pointer *pointer, uint32_t serial, uint3
 {
   WL_WM_Window *w = wl_wm_state->pointer_focus;
   B32 is_press = (state == WL_POINTER_BUTTON_STATE_PRESSED);
+  wl_wm_state->last_input_serial = serial;
 
   WM_Key key = WM_Key_Null;
   switch(button)
@@ -1435,6 +2206,7 @@ internal void
 wl_keyboard_enter(void *data, struct wl_keyboard *kb, uint32_t serial, struct wl_surface *surface, struct wl_array *keys)
 {
   wl_wm_state->keyboard_focus = wl_window_from_surface(surface);
+  wl_wm_state->last_input_serial = serial;
 }
 
 internal void
@@ -1511,6 +2283,7 @@ wl_keyboard_key(void *data, struct wl_keyboard *kb, uint32_t serial, uint32_t ti
 {
   uint32_t keycode = key + 8;
   B32 is_press = (state == WL_KEYBOARD_KEY_STATE_PRESSED);
+  wl_wm_state->last_input_serial = serial;
   if(!is_press && wl_wm_state->repeat_key == keycode)
   {
     wl_wm_state->repeat_key = 0;
@@ -1523,6 +2296,7 @@ wl_keyboard_key(void *data, struct wl_keyboard *kb, uint32_t serial, uint32_t ti
 internal void
 wl_keyboard_modifiers(void *data, struct wl_keyboard *kb, uint32_t serial, uint32_t mods_depressed, uint32_t mods_latched, uint32_t mods_locked, uint32_t group)
 {
+  wl_wm_state->last_input_serial = serial;
   if(wl_wm_state->xkb_state == 0) {return;}
   xkb_state_update_mask(wl_wm_state->xkb_state, mods_depressed, mods_latched, mods_locked, 0, 0, group);
   WM_Modifiers m = 0;
@@ -1590,6 +2364,10 @@ wl_registry_global(void *data, struct wl_registry *registry, uint32_t name, cons
   {
     wl_wm_state->decoration_manager = (struct zxdg_decoration_manager_v1 *)wl_registry_bind(registry, name, &zxdg_decoration_manager_v1_interface, 1);
   }
+  else if(strcmp(interface, wl_data_device_manager_interface.name) == 0)
+  {
+    wl_wm_state->data_device_manager = (struct wl_data_device_manager *)wl_registry_bind(registry, name, &wl_data_device_manager_interface, Min(version, 3));
+  }
 }
 internal void wl_registry_global_remove(void *data, struct wl_registry *registry, uint32_t name){}
 local_persist const struct wl_registry_listener wl_registry_listener = { wl_registry_global, wl_registry_global_remove };
@@ -1621,6 +2399,15 @@ wm_wl_init(void)
     return 0;
   }
 
+  // rjf: the data device needs both the manager & the seat, which arrive in
+  // whatever order the registry felt like, so wire it up after the roundtrips
+  wl_wm_state->clipboard_arena = arena_alloc();
+  if(wl_wm_state->data_device_manager != 0 && wl_wm_state->seat != 0)
+  {
+    wl_wm_state->data_device = wl_data_device_manager_get_data_device(wl_wm_state->data_device_manager, wl_wm_state->seat);
+    wl_data_device_add_listener(wl_wm_state->data_device, &wl_data_device_listener, 0);
+  }
+
   wl_wm_state->xkb_context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
   if(wl_wm_state->shm != 0)
   {
@@ -1645,8 +2432,96 @@ wm_wl_get_system_info(void)
   return &wl_wm_state->gfx_info;
 }
 
-internal void    wm_wl_set_clipboard_text(String8 string){}
-internal String8 wm_wl_get_clipboard_text(Arena *arena){ String8 r = {0}; return r; }
+internal void
+wm_wl_set_clipboard_text(String8 string)
+{
+  WL_WM_State *s = wl_wm_state;
+  if(s->data_device == 0) {return;}
+
+  arena_clear(s->clipboard_arena);
+  s->clipboard_text = push_str8_copy(s->clipboard_arena, string);
+
+  // rjf: a source is single-use - claiming the selection means publishing a new
+  // one, then dropping the old (which is why `cancelled` is not what retires it
+  // here; the compositor only sends that when *somebody else* takes over).
+  struct wl_data_source *prev_source = s->data_source;
+  s->data_source = wl_data_device_manager_create_data_source(s->data_device_manager);
+  wl_data_source_add_listener(s->data_source, &wl_data_source_listener, 0);
+  for EachElement(idx, wl_wm_clipboard_mime_types)
+  {
+    wl_data_source_offer(s->data_source, wl_wm_clipboard_mime_types[idx]);
+  }
+  wl_data_device_set_selection(s->data_device, s->data_source, s->last_input_serial);
+  s->clipboard_owned = 1;
+  if(prev_source != 0)
+  {
+    wl_data_source_destroy(prev_source);
+  }
+  wl_display_flush(s->display);
+}
+
+internal String8
+wm_wl_get_clipboard_text(Arena *arena)
+{
+  String8 result = {0};
+  WL_WM_State *s = wl_wm_state;
+
+  // rjf: the compositor hands our own selection back to us as an ordinary offer.
+  // Reading it would deadlock - the compositor would ask us to fill the pipe
+  // while we sit blocked on the other end of it - so answer from our own copy.
+  if(s->clipboard_owned && s->data_source != 0)
+  {
+    result = push_str8_copy(arena, s->clipboard_text);
+  }
+  else if(s->selection_offer != 0 && s->selection_offer->mime_flags != 0)
+  {
+    // rjf: best text flavor the offer advertises; all of them decode as UTF-8
+    // in practice, so this only decides how little we have to guess
+    char *mime_type = "STRING";
+    WL_WM_MimeFlags flags = s->selection_offer->mime_flags;
+    if(0){}
+    else if(flags & WL_WM_MimeFlag_TextPlainUTF8) { mime_type = "text/plain;charset=utf-8"; }
+    else if(flags & WL_WM_MimeFlag_UTF8String)    { mime_type = "UTF8_STRING"; }
+    else if(flags & WL_WM_MimeFlag_TextPlain)     { mime_type = "text/plain"; }
+
+    int pipe_fds[2] = {-1, -1};
+    if(pipe2(pipe_fds, O_CLOEXEC) == 0)
+    {
+      wl_data_offer_receive(s->selection_offer->offer, mime_type, pipe_fds[1]);
+      wl_display_flush(s->display);
+      close(pipe_fds[1]);
+
+      Temp scratch = scratch_begin(&arena, 1);
+      String8List chunks = {0};
+      for(;;)
+      {
+        struct pollfd poll_fd = { .fd = pipe_fds[0], .events = POLLIN };
+        if(poll(&poll_fd, 1, LNX_WM_CLIPBOARD_TIMEOUT_US/1000) <= 0)
+        {
+          break;
+        }
+        U8 buffer[KB(16)];
+        ssize_t read_size = read(pipe_fds[0], buffer, sizeof(buffer));
+        if(read_size > 0)
+        {
+          str8_list_push(scratch.arena, &chunks, push_str8_copy(scratch.arena, str8(buffer, (U64)read_size)));
+        }
+        else if(read_size < 0 && errno == EINTR)
+        {
+          // rjf: retry
+        }
+        else
+        {
+          break;
+        }
+      }
+      result = str8_list_join(arena, &chunks, 0);
+      scratch_end(scratch);
+      close(pipe_fds[0]);
+    }
+  }
+  return result;
+}
 
 internal WM_Window
 wm_wl_window_open(Rng2F32 rect, WM_WindowFlags flags, String8 title)
