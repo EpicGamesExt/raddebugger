@@ -709,8 +709,7 @@ e_oplist_from_location(Arena *arena, RDI_Parsed *rdi, RDI_Location loc)
       ARCH_RegCode reg_code = arch_reg_code_from_rdi(arch, rdi_regcode);
       Rng1U16 reg_rng = arch_info->reg_code_rng_table[reg_code];
       U64 byte_size = (U64)dim_1u16(reg_rng);
-      U64 byte_pos = reg_rng.min;
-      e_oplist_push_op(arena, &result, RDI_EvalOp_RegRead, e_value_u64(RDI_EncodeRegReadParam(rdi_regcode, byte_size, byte_pos)));
+      e_oplist_push_op(arena, &result, RDI_EvalOp_RegRead, e_value_u64(RDI_EncodeRegReadParam(rdi_regcode, byte_size, 0)));
     }break;
     
     //- rjf: space offsets

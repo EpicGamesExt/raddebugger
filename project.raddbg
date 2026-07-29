@@ -68,3 +68,8 @@ target:
   executable: "build/ryan_scratch.exe"
   working_directory: build
 }
+target:
+{
+  executable: "../../Program Files/SuperTux/bin/supertux2.exe"
+  working_directory: "../../Program Files/SuperTux/bin"
+}

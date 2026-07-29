@@ -27,19 +27,20 @@ enum
   //- rjf: extra button extensions
   RD_CellFlag_EmptyEditButton     = (1<<6),
   RD_CellFlag_RevertButton        = (1<<7),
+  RD_CellFlag_Lock                = (1<<8),
   
   //- rjf: behavior
-  RD_CellFlag_DisableEdit         = (1<<8),
-  RD_CellFlag_KeyboardClickable   = (1<<9),
-  RD_CellFlag_SingleClickActivate = (1<<10),
+  RD_CellFlag_DisableEdit         = (1<<9),
+  RD_CellFlag_KeyboardClickable   = (1<<10),
+  RD_CellFlag_SingleClickActivate = (1<<11),
   
   //- rjf: contents description
-  RD_CellFlag_CodeContents        = (1<<11),
+  RD_CellFlag_CodeContents        = (1<<12),
   
   //- rjf: appearance
-  RD_CellFlag_Border              = (1<<12),
-  RD_CellFlag_NoBackground        = (1<<13),
-  RD_CellFlag_Button              = (1<<14),
+  RD_CellFlag_Border              = (1<<13),
+  RD_CellFlag_NoBackground        = (1<<14),
+  RD_CellFlag_Button              = (1<<15),
 };
 
 typedef struct RD_CellParams RD_CellParams;
@@ -59,6 +60,9 @@ struct RD_CellParams
   //- rjf: expander r/w info
   B32 *expanded_out;
   
+  //- rjf: lock r/w info
+  B32 *lock_out;
+  
   //- rjf: toggle-switch r/w info
   B32 *toggled_out;
   
@@ -72,8 +76,8 @@ struct RD_CellParams
   B32 *revert_out;
   
   //- rjf: text editing r/w info
-  TxtPt *cursor;
-  TxtPt *mark;
+  U64 *cursor;
+  U64 *mark;
   U8 *edit_buffer;
   U64 edit_buffer_size;
   U64 *edit_string_size_out;
@@ -108,6 +112,7 @@ struct RD_CodeSliceParams
   D_LineList *line_infos;
   DI_KeyList relevant_dbgi_keys;
   TXT_TextInfo *text_info;
+  TXT_PatchList *patches;
   String8 text_data;
   
   // rjf: visual parameters
@@ -127,8 +132,8 @@ typedef struct RD_CodeSliceSignal RD_CodeSliceSignal;
 struct RD_CodeSliceSignal
 {
   UI_Signal base;
-  TxtPt mouse_pt;
-  TxtRng mouse_expr_rng;
+  U64 mouse_off;
+  Rng1U64 mouse_expr_rng;
 };
 
 ////////////////////////////////
@@ -171,10 +176,10 @@ internal UI_Signal rd_icon_buttonf(RD_IconKind kind, FuzzyMatchRangeList *matche
 internal UI_BOX_CUSTOM_DRAW(rd_code_slice_text_draw_extensions);
 internal UI_BOX_CUSTOM_DRAW(rd_thread_box_draw_extensions);
 internal UI_BOX_CUSTOM_DRAW(rd_bp_box_draw_extensions);
-internal RD_CodeSliceSignal rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string);
-internal RD_CodeSliceSignal rd_code_slicef(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...);
+internal RD_CodeSliceSignal rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred_column, String8 string);
+internal RD_CodeSliceSignal rd_code_slicef(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred_column, char *fmt, ...);
 
-internal B32 rd_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
+internal B32 rd_do_txt_controls(TXT_TextInfo *info, String8 data, TXT_PatchList *patches, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column);
 
 ////////////////////////////////
 //~ rjf: UI Widgets: Fancy Labels

@@ -44,6 +44,8 @@ entry_point(CmdLine *cmdline)
     // int & B
     // (1 + (int)&B)
     s("int32(*)(int32, int32)"),
+    s("int32 *(*)(int32, int32)"),
+    s("int32 **(*)(int32, int32)"),
     s("123(1, 2, 3)"),
     s("int32 (*) [100]"),
     s("(3 * 4) + 2"),
@@ -213,7 +215,7 @@ entry_point(CmdLine *cmdline)
     String8 msgs_string = str8_list_join(scratch.arena, &msgs, &join);
     
     // rjf: log
-    String8 log = str8f(scratch.arena, "%S -> %I64d (f32: %f) (f64: %f) *%s* %s%S\n",
+    String8 log = str8f(scratch.arena, "%S -> %I64d (f32: %f) (f64: %f) *%s* (type: %S) %s%S\n",
                         strings[idx],
                         val.s64,
                         val.f32,
@@ -221,6 +223,7 @@ entry_point(CmdLine *cmdline)
                         irtree->mode == E2_Mode_Type ? "type" :
                         irtree->mode == E2_Mode_Value ? "value" :
                         "address",
+                        e2_string_from_type_key(scratch.arena, irtree->type_key),
                         msgs_string.size != 0 ? " // " : "", msgs_string);
     raddbg_log("%S", log);
     printf("%.*s", str8_varg(log));

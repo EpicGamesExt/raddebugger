@@ -57,6 +57,18 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
   }
 }
 
+internal int
+lnk_symbol_input_task_is_before(void *raw_a, void *raw_b)
+{
+  LNK_SymbolInputTask *a = raw_a, *b = raw_b;
+
+  if (a->weight == b->weight) {
+    return a->input_range.min < b->input_range.min;
+  }
+
+  return a->weight > b->weight;
+}
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_parse_debug_h_task)
 {
@@ -95,11 +107,11 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_h_task)
     }
 
     // validate hashing algorithm
-    if (ghash.hash_alg != task->config->type_hash_alg) {
+    if (lnk_hash_kind_from_llvm(ghash.hash_alg) != task->config->debug_types_hash) {
       lnk_error_obj(LNK_Warning_GHash, task->obj_arr[obj_idx],
-                    "mismatched .debug$H hash algorithm: got %S, expected %S",
+                    "mismatched .debug$H hash algorithm: got %S, expected %S; types will be rehashed",
                     llvm_string_from_ghash_alg(ghash.hash_alg),
-                    llvm_string_from_ghash_alg(task->config->type_hash_alg));
+                    lnk_string_hash_kind(task->config->debug_types_hash));
       goto exit;
     }
 
@@ -308,42 +320,45 @@ lnk_string_list_from_rrt(Arena *arena, LNK_RRT *rrt)
   str8_list_push(arena, &rrt_data, g_rrt_magic);
 
   // (2) version
-  str8_list_push(arena, &rrt_data, str8_struct(&g_rrt_version));
+  str8_list_push(arena, &rrt_data, str8_struct(push_u64(arena, g_rrt_version)));
 
-  // (3) type data ranges
+  // (3) debug types hash
+  str8_list_push(arena, &rrt_data, str8_struct(&rrt->debug_types_hash));
+
+  // (4) type data ranges
   str8_list_push(arena, &rrt_data, str8_array_fixed(rrt->type_data_ranges));
 
-  // (4) type data
+  // (5) type data
   str8_list_push(arena, &rrt_data, rrt->type_data_raw);
 
-  // (5) type index ranges
+  // (6) type index ranges
   str8_list_push(arena, &rrt_data, str8_array_fixed(rrt->ti_ranges));
 
-  // (6) type hashes size
+  // (7) type hashes size
   U64 total_hash_count = 0;
   for EachIndex(i, CV_TypeIndexSource_COUNT) { total_hash_count += dim_1u64(rrt->ti_ranges[i]); }
   U64 type_hashes_size = sizeof(**rrt->type_hashes_unpacked) * total_hash_count;
   str8_list_push(arena, &rrt_data, str8_struct(push_u64(arena, type_hashes_size)));
 
-  // (7) type hashes
+  // (8) type hashes
   for EachIndex(i, CV_TypeIndexSource_COUNT) {
     U64 type_count = dim_1u64(rrt->ti_ranges[i]);
     str8_list_push(arena, &rrt_data, str8_array(rrt->type_hashes_unpacked[i], type_count));
   }
 
-  // (8) object count
+  // (9) object count
   str8_list_push(arena, &rrt_data, str8_struct(&rrt->obj_count));
 
-  // (9) per object type index ranges
+  // (10) per object type index ranges
   str8_list_push(arena, &rrt_data, str8_array(rrt->obj_ti_ranges, rrt->obj_count));
 
-  // (10) per object time stamps
+  // (11) per object time stamps
   str8_list_push(arena, &rrt_data, str8_array(rrt->obj_time_stamps, rrt->obj_count));
 
-  // (11) per object leaf counts
+  // (12) per object leaf counts
   str8_list_push(arena, &rrt_data, str8_array(rrt->obj_leaf_counts, rrt->obj_count));
 
-  // (12) per object file reverse lookup table for type indices
+  // (13) per object file reverse lookup table for type indices
   for EachIndex(obj_idx, rrt->obj_count) {
     CV_TypeIndex *obj_ti_map   = rrt->obj_ti_maps[obj_idx];
     U64           obj_ti_count = rrt->obj_leaf_counts[obj_idx];
@@ -351,16 +366,16 @@ lnk_string_list_from_rrt(Arena *arena, LNK_RRT *rrt)
     str8_list_push(arena, &rrt_data, str8_array(obj_ti_map, obj_ti_count));
   }
 
-  // (13) object file paths size
+  // (14) object file paths size
   str8_list_push(arena, &rrt_data, str8_struct(push_u64(arena, obj_paths.size)));
 
-  // (14) object file paths block
+  // (15) object file paths block
   str8_list_push(arena, &rrt_data, obj_paths);
 
-  // (15) PCH type index ranges
+  // (16) PCH type index ranges
   str8_list_push(arena, &rrt_data, str8_array(rrt->obj_pch_ti_ranges, rrt->obj_count));
 
-  // (16) PCH object indices
+  // (17) PCH object indices
   str8_list_push(arena, &rrt_data, str8_array(rrt->obj_pch_indices, rrt->obj_count));
 
   ProfEnd();
@@ -392,11 +407,27 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
 
   // match version
   if (version != g_rrt_version) {
-    lnk_error(LNK_Error_IllData, "ERROR: %S: RRT version mismatch, got %llu, expected %llu", path, version, g_rrt_version);
+    lnk_error(LNK_Error_IllData, "ERROR: %S: RRT version mismatch, got %llu, expected 2 or %llu", path, version, g_rrt_version);
     goto exit;
   }
 
-  // (3) type data ranges
+  // (3) debug types hash
+  LNK_HashKind debug_types_hash = LNK_HashKind_BLAKE3;
+  if (version == g_rrt_version) {
+    U64 debug_types_hash_size = str8_deserial_read_struct(rrt_data, cursor, &debug_types_hash);
+    if (debug_types_hash_size != sizeof(debug_types_hash)) {
+      lnk_error(LNK_Error_IllData, "ERROR: %S: RRT file does not contain enough bytes to read the debug types hash", path);
+      goto exit;
+    }
+    cursor += debug_types_hash_size;
+
+    if (debug_types_hash != LNK_HashKind_BLAKE3 && debug_types_hash != LNK_HashKind_XXHash) {
+      lnk_error(LNK_Error_IllData, "ERROR: %S: RRT file has invalid debug types hash %u", path, debug_types_hash);
+      goto exit;
+    }
+  }
+
+  // (4) type data ranges
   Rng1U64 type_data_ranges[CV_TypeIndexSource_COUNT] = {0};
   U64 type_data_ranges_size = str8_deserial_read_array(rrt_data, cursor, type_data_ranges, ArrayCount(type_data_ranges));
   if (type_data_ranges_size != sizeof(type_data_ranges)) {
@@ -409,7 +440,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   U64 total_type_data_size = 0;
   for EachElement(i, type_data_ranges) total_type_data_size += dim_1u64(type_data_ranges[i]);
 
-  // (4) type data
+  // (5) type data
   String8 type_data_raw      = {0};
   U64     type_data_raw_size = str8_deserial_read_block(rrt_data, cursor, total_type_data_size, &type_data_raw);
   if (type_data_raw_size != total_type_data_size) {
@@ -418,7 +449,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += type_data_raw_size;
 
-  // (5) type index ranges
+  // (6) type index ranges
   Rng1U64 ti_ranges[CV_TypeIndexSource_COUNT] = {0};
   U64 ti_ranges_size = str8_deserial_read_array(rrt_data, cursor, ti_ranges, ArrayCount(ti_ranges));
   if (ti_ranges_size != sizeof(ti_ranges)) {
@@ -427,7 +458,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += ti_ranges_size;
 
-  // (6) type hashes size
+  // (7) type hashes size
   U64 type_hashes_size      = 0;
   U64 type_hashes_size_size = str8_deserial_read_struct(rrt_data, cursor, &type_hashes_size);
   if (type_hashes_size_size != sizeof(type_hashes_size)) {
@@ -447,7 +478,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
     }
   }
 
-  // (7) type hashes
+  // (8) type hashes
   String8 type_hashes = {0};
   U64 type_hashes_read_size = str8_deserial_read_block(rrt_data, cursor, type_hashes_size, &type_hashes);
   if (type_hashes_read_size != type_hashes_size) {
@@ -467,7 +498,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
     }
   }
 
-  // (8) object count
+  // (9) object count
   U64 obj_count = 0;
   U64 obj_count_size = str8_deserial_read_struct(rrt_data, cursor, &obj_count);
   if (obj_count_size == 0) {
@@ -476,7 +507,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += obj_count_size;
 
-  // (9) per object type index ranges
+  // (10) per object type index ranges
   Rng1U64 *obj_ti_ranges = str8_deserial_get_raw_ptr(rrt_data, cursor, sizeof(*obj_ti_ranges) * obj_count); 
   if (obj_ti_ranges == 0) {
     lnk_error(LNK_Error_IllData, "ERROR: %S: RRT file is missing the object type index ranges", path);
@@ -484,7 +515,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += sizeof(*obj_ti_ranges) * obj_count;
 
-  // (10) last observed time stamp of the object files
+  // (11) last observed time stamp of the object files
   U64 *obj_time_stamps = str8_deserial_get_raw_ptr(rrt_data, cursor, sizeof(*obj_time_stamps) * obj_count);
   if (obj_time_stamps == 0) {
     lnk_error(LNK_Error_IllData, "ERROR: %S: RRT file is missing the object timestamps", path);
@@ -492,7 +523,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += sizeof(*obj_time_stamps) * obj_count;
 
-  // (11) per object leaf counts
+  // (12) per object leaf counts
   U64 *obj_leaf_counts = str8_deserial_get_raw_ptr(rrt_data, cursor, sizeof(*obj_leaf_counts) * obj_count);
   if (obj_leaf_counts == 0) {
     lnk_error(LNK_Error_IllData, "ERROR: %S: RRT file is missing the object leaf counts", path);
@@ -500,7 +531,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += sizeof(*obj_leaf_counts) * obj_count;
 
-  // (12) per object file reverse lookup table for type indices
+  // (13) per object file reverse lookup table for type indices
   CV_TypeIndex **obj_ti_maps = push_array(arena, CV_TypeIndex *, obj_count);
   for EachIndex(obj_idx, obj_count) {
     U64 obj_ti_count = obj_leaf_counts[obj_idx];
@@ -512,7 +543,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
     cursor += obj_ti_count * sizeof(*obj_ti_maps[obj_idx]);
   }
 
-  // (13) object file paths size
+  // (14) object file paths size
   U64 obj_file_paths_size = 0;
   U64 obj_file_paths_size_size = str8_deserial_read_struct(rrt_data, cursor, &obj_file_paths_size);
   if (obj_file_paths_size_size == 0) {
@@ -521,7 +552,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += obj_file_paths_size_size;
 
-  // (14) object file paths block
+  // (15) object file paths block
   String8 obj_file_paths_block = {0};
   U64 obj_file_paths_block_size = str8_deserial_read_block(rrt_data, cursor, obj_file_paths_size, &obj_file_paths_block);
   if (obj_file_paths_block_size != obj_file_paths_size) {
@@ -530,7 +561,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   }
   cursor += obj_file_paths_block_size;
 
-  // (15) PCH type index ranges
+  // (16) PCH type index ranges
   Rng1U64 *obj_pch_ti_ranges = str8_deserial_get_raw_ptr(rrt_data, cursor, obj_count * sizeof(*obj_pch_ti_ranges));
   if (obj_pch_ti_ranges == 0) {
     lnk_error(LNK_Error_IllData, "ERROR: %S: RRT file is too small to read object PCH type index ranges");
@@ -572,6 +603,7 @@ lnk_rrt_from_string(Arena *arena, String8 rrt_data, String8 path, LNK_RRT *rrt_o
   // fill out result
   if (rrt_out) {
     rrt_out->path                = path;
+    rrt_out->debug_types_hash    = debug_types_hash;
     rrt_out->type_data_raw       = type_data_raw;
     rrt_out->type_hashes         = type_hashes;
     MemoryCopyArray(rrt_out->type_data_ranges, type_data_ranges);
@@ -925,7 +957,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
     // wire RRT hashes to type servers .debug$H
     for EachIndex(ts_idx, ts_arr.count) {
       LNK_TypeServer *ts = &ts_arr.v[ts_idx];
-      if (ts->rrt) {
+      if (ts->rrt && ts->rrt->debug_types_hash == config->debug_types_hash) {
         U64        ts_obj_idx = input.ts_obj_range.min + ts_idx;
         CV_DebugT *debug_t    = &input.debug_t_arr[ts_obj_idx];
         CV_DebugH *debug_h    = &input.debug_h_arr[ts_obj_idx];
@@ -1096,6 +1128,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
     }
 
     ProfBegin("Make Ranges");
+
     U64 total_input_size = 0;
     for EachIndex(i, input.symbol_input_count) { total_input_size += input.symbol_inputs[i].raw_symbols.size; }
 
@@ -1112,7 +1145,35 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
       }
       input.symbol_input_ranges[i] = r1u64(begin, cursor);
     }
+
     ProfEnd();
+
+    if (input.symbol_input_count) {
+      ProfBegin("Balance Symbol Inputs");
+
+      U64 task_cap    = Min(input.symbol_input_count, tp->worker_count * 16);
+      U64 task_weight = Max(1, CeilIntegerDiv(total_input_size, task_cap));
+
+      input.symbol_patch_task = push_array_no_zero(tp_arena->v[0], LNK_SymbolInputTask, task_cap);
+
+      cursor = 0;
+      while (cursor < input.symbol_input_count) {
+        U64 begin  = cursor;
+        U64 weight = 0;
+        do {
+          weight += input.symbol_inputs[cursor++].raw_symbols.size;
+        } while (cursor < input.symbol_input_count && weight < task_weight);
+
+        Assert(input.symbol_patch_task_count < task_cap);
+        LNK_SymbolInputTask *task = &input.symbol_patch_task[input.symbol_patch_task_count++];
+        task->input_range = r1u64(begin, cursor);
+        task->weight      = weight;
+      }
+
+      radsort(input.symbol_patch_task, input.symbol_patch_task_count, lnk_symbol_input_task_is_before);
+
+      ProfEnd();
+    }
   }
   ProfEnd();
 
@@ -1207,7 +1268,8 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
   CV_TypeIndex        curr_ti        = cv_ti_from_leaf_idx(debug_t, curr_ti_source, leaf_ref.leaf_idx);
 
   // init hasher
-  blake3_hasher hasher; blake3_hasher_init(&hasher);
+  LNK_Hasher hasher;
+  lnk_hasher_init(&hasher, input->config->debug_types_hash);
 
   // hash bytes around indices
   {
@@ -1215,14 +1277,14 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
     for EachNode(ti_info, CV_TypeIndexInfo, ti_info_list.first) {
       U8 *bytes = leaf.data.str + last_ti_off;
       U64 size  = ti_info->offset - last_ti_off;
-      blake3_hasher_update(&hasher, bytes, size);
+      lnk_hasher_update(&hasher, bytes, size);
       last_ti_off = ti_info->offset + sizeof(CV_TypeIndex);
     }
 
     Assert(leaf.data.size >= last_ti_off);
     U8 *bytes = leaf.data.str + last_ti_off;
     U64 size  = leaf.data.size - last_ti_off;
-    blake3_hasher_update(&hasher, bytes, size);
+    lnk_hasher_update(&hasher, bytes, size);
   }
 
   // mix-in sub leaf hashes
@@ -1232,7 +1294,7 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
     
     // simple indices are stable across compile units 
     if (sub_ti < debug_t->ti_ranges[sub_ti_n->source].min) {
-      blake3_hasher_update(&hasher, &sub_ti, sizeof(sub_ti));
+      lnk_hasher_update_struct(&hasher, &sub_ti);
       continue;
     }
 
@@ -1244,7 +1306,7 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
       memory_write16(leaf_header + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
 
       // reset hasher
-      blake3_hasher_init(&hasher);
+      lnk_hasher_init(&hasher, input->config->debug_types_hash);
 
       // log error
       Temp    scratch       = scratch_begin(0,0);
@@ -1266,7 +1328,7 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
       memory_write16(leaf_header + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
 
       // reset hasher
-      blake3_hasher_init(&hasher);
+      lnk_hasher_init(&hasher, input->config->debug_types_hash);
 
       // log error
       Temp    scratch       = scratch_begin(0,0);
@@ -1283,20 +1345,21 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInf
     U64         sub_hash = input->debug_h_arr[sub_ref.obj_idx].v[sub_ref.leaf_idx];
 
     // mix-in sub-type hash
-    blake3_hasher_update(&hasher, &sub_hash, sizeof(sub_hash));
+    lnk_hasher_update_struct(&hasher, &sub_hash);
   }
 
   // hash leaf header
-  CV_LeafHeader *leaf_header = cv_debug_t_get_leaf_header(debug_t, leaf_ref.leaf_idx);
-  blake3_hasher_update(&hasher, leaf_header, sizeof(*leaf_header));
+  CV_LeafHeader *leaf_header_ptr = cv_debug_t_get_leaf_header(debug_t, leaf_ref.leaf_idx);
+  lnk_hasher_update_struct(&hasher, leaf_header_ptr);
 
-  U64 hash;
-  blake3_hasher_finalize(&hasher, (U8 *) &hash, sizeof(hash));
+  // finalize the type hash
+  U64 hash = lnk_hasher_digest(&hasher);
 
   Assert(hash != 0);
   Assert(input->debug_h_arr[leaf_ref.obj_idx].v[leaf_ref.leaf_idx] == 0 ||
          input->debug_h_arr[leaf_ref.obj_idx].v[leaf_ref.leaf_idx] == 1);
   input->debug_h_arr[leaf_ref.obj_idx].v[leaf_ref.leaf_idx] = hash;
+
   return hash;
 }
 
@@ -1370,29 +1433,21 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
   temp_end(temp);
 }
 
-internal LNK_LeafRef *
-lnk_leaf_hash_table_search(LNK_LeafHashTable *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref)
+internal CV_TypeIndex
+lnk_assigned_ti_hash_search(LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref)
 {
-  LNK_LeafRef *match = 0;
-
-  CV_DebugT *debug_t         = &input->debug_t_arr[leaf_ref.obj_idx];
-  CV_DebugH *debug_h         = &input->debug_h_arr[leaf_ref.obj_idx];
-  U64        hash            = debug_h->v[leaf_ref.leaf_idx];
-  U64        best_bucket_idx = hash % ht->cap;
-  U64        bucket_idx      = best_bucket_idx;
+  CV_DebugH *debug_h  = &input->debug_h_arr[leaf_ref.obj_idx];
+  U64        hash     = debug_h->v[leaf_ref.leaf_idx];
+  U64        best_idx = hash % ht->cap;
+  U64        idx      = best_idx;
   do {
-    LNK_LeafRef *bucket = ht->bucket_arr[bucket_idx];
-    if (bucket == 0) { break; }
+    CV_TypeIndex ti = ht->ti_arr[idx];
+    if (ti == 0) { break; }
+    if (ht->hash_arr[idx] == hash) { return ti; }
+    idx = (idx + 1) == ht->cap ? 0 : (idx + 1);
+  } while (idx != best_idx);
 
-    if (lnk_match_leaf_ref(input, *bucket, leaf_ref)) {
-      match = bucket;
-      break;
-    }
-
-    bucket_idx = (bucket_idx + 1) == ht->cap ? 0 : (bucket_idx + 1);
-  } while (bucket_idx != best_bucket_idx);
-
-  return match;
+  return 0;
 }
 
 internal
@@ -1731,10 +1786,7 @@ internal void
 lnk_leaf_ref_array_sort(TP_Context *tp, LNK_CodeViewInput *input, LNK_LeafRefArray arr, U64 debug_t_count)
 {
   Temp scratch = scratch_begin(0,0);
-
   ProfBeginDynamic("Leaf Sort [Leaf Count: %.*s]", str8_varg(str8_from_count(scratch.arena, arr.count)));
-
-
   scratch_end(scratch);
   ProfEnd();
 }
@@ -1747,52 +1799,33 @@ THREAD_POOL_TASK_FUNC(lnk_assign_type_indices_task)
   CV_TypeIndexSource  ti_source         = task->ti_source;
   LNK_LeafRefArray    unique_leaf_refs  = task->unique_leaf_refs_arr[ti_source];
   CV_TypeIndex        min_type_index    = task->min_type_indices[ti_source];
-  U64                 assigned_type_cap = task->assigned_type_caps[ti_source];
-  CV_TypeIndex       *assigned_type_ht  = task->assigned_type_hts[ti_source];
+  LNK_AssignedTiHash *assigned          = &task->assigned_ti_arr[ti_source];
+  CV_DebugH          *debug_h_arr       = task->input->debug_h_arr;
 
   for EachInRange(i, task->ranges[task_id]) {
     LNK_LeafRef  *leaf_ref   = unique_leaf_refs.v[i];
     CV_TypeIndex  type_index = min_type_index + i;
 
-    U64 hash     = u64_hash_from_str8(str8_struct(leaf_ref));
-    U64 best_idx = hash % assigned_type_cap;
+    U64 hash     = debug_h_arr[leaf_ref->obj_idx].v[leaf_ref->leaf_idx];
+    U64 best_idx = hash % assigned->cap;
     U64 idx      = best_idx;
 
     B32 is_inserted = 0;
     do {
-      CV_TypeIndex curr_type_index = assigned_type_ht[idx];
+      CV_TypeIndex curr_type_index = assigned->ti_arr[idx];
       if (curr_type_index == 0) {
-        CV_TypeIndex cmp_type_index = ins_atomic_u32_eval_cond_assign(&assigned_type_ht[idx], type_index, curr_type_index);
+        CV_TypeIndex cmp_type_index = ins_atomic_u32_eval_cond_assign(&assigned->ti_arr[idx], type_index, curr_type_index);
         if (cmp_type_index == curr_type_index) {
+          assigned->hash_arr[idx] = hash;
           is_inserted = 1;
           break;
         }
       }
       // advance
-      idx = (idx + 1) == assigned_type_cap ? 0 : (idx + 1);
+      idx = (idx + 1) == assigned->cap ? 0 : (idx + 1);
     } while (idx != best_idx);
     Assert(is_inserted);
   }
-}
-
-internal CV_TypeIndex
-lnk_assigned_type_ht_search(U64 cap, CV_TypeIndex *ht, CV_TypeIndex min_type_index, LNK_LeafRefArray unique_leaf_refs, LNK_LeafRef *v, U64 hash)
-{
-  U64 best_idx = hash % cap;
-  U64 idx      = best_idx;
-  do {
-    CV_TypeIndex type_index = ht[idx];
-    if (type_index < min_type_index) { break; }
-
-    U64          leaf_idx = type_index - min_type_index;
-    LNK_LeafRef *compar   = unique_leaf_refs.v[leaf_idx];
-    if (MemoryMatchStruct(compar,v)) { return type_index; }
-      
-    idx = (idx + 1) == cap ? 0 : (idx + 1);
-  } while(idx != best_idx);
-
-  InvalidPath;
-  return 0;
 }
 
 internal void
@@ -1805,26 +1838,15 @@ lnk_fixup_cv_type_indices(LNK_MergeTypes *ctx, U32 obj_idx, String8 data, CV_Typ
     // skip basic types
     if (ti < ctx->input->min_type_indices[n->source]) { continue; }
 
-    CV_TypeIndex final_ti = 0;
-    LNK_LeafRef        leaf_ref   = lnk_leaf_ref_from_ti(ctx->input, obj_idx, n->source, ti);
-    LNK_LeafHashTable *leaf_ht    = &ctx->leaf_ht_arr[n->source];
-    LNK_LeafRef       *final_leaf = lnk_leaf_hash_table_search(leaf_ht, ctx->input, leaf_ref);
-    if (final_leaf) {
-      U64 final_hash = u64_hash_from_str8(str8_struct(final_leaf));
-      final_ti = lnk_assigned_type_ht_search(ctx->assigned_type_caps  [n->source],
-                                             ctx->assigned_type_hts   [n->source],
-                                             ctx->min_type_indices    [n->source],
-                                             ctx->unique_leaf_refs_arr[n->source],
-                                             final_leaf,
-                                             final_hash);
-    }
-#if BUILD_DEBUG
-    else {
+    LNK_LeafRef  leaf_ref = lnk_leaf_ref_from_ti(ctx->input, obj_idx, n->source, ti);
+    CV_TypeIndex final_ti = lnk_assigned_ti_hash_search(&ctx->assigned_ti_arr[n->source], ctx->input, leaf_ref);
+    memory_write32(ti_ptr, final_ti);
+
+#if LNK_PARANOID
+    if (final_ti == 0) {
       lnk_error_obj(LNK_Error_InvalidTypeIndex, ctx->input->obj_arr[obj_idx], "no itype 0x%x", ti);
     }
 #endif
-
-    memory_write32(ti_ptr, final_ti);
   }
 }
 
@@ -1833,11 +1855,11 @@ THREAD_POOL_TASK_FUNC(lnk_cv_patcher_symbols_task)
 {
   ProfBeginFunction();
   LNK_MergeTypes *task = raw_task;
-  Rng1U64 range = task->input->symbol_input_ranges[task_id];
+  Rng1U64 range = task->input->symbol_patch_task[task_id].input_range;
   for EachInRange(i, range) {
     LNK_SymbolInput symbols = task->input->symbol_inputs[i];
     for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
-      Temp temp = temp_begin(task->fixed_arenas[task_id]);
+      Temp temp = temp_begin(task->fixed_arenas[worker_id]);
 
       CV_Symbol symbol = {0};
       TryReadBreak(cv_read_symbol(symbols.raw_symbols, cursor, CV_SymbolAlign, &symbol), cursor);
@@ -1986,25 +2008,11 @@ THREAD_POOL_TASK_FUNC(lnk_build_obj_ti_map)
   CV_TypeIndex *obj_ti_map = task->obj_ti_batch + task->obj_ti_map_offsets[obj_idx];
 
   for EachIndex(leaf_idx, debug_t->count) {
-    CV_Leaf            leaf       = cv_debug_t_get_leaf(debug_t, leaf_idx);
-    CV_TypeIndexSource source     = cv_type_index_source_from_leaf_kind(leaf.kind);
-    LNK_LeafRef        leaf_ref   = { obj_idx, leaf_idx };
-    LNK_LeafHashTable *leaf_ht    = &task->leaf_ht_arr[source];
-    LNK_LeafRef       *final_leaf = lnk_leaf_hash_table_search(leaf_ht, input, leaf_ref);
-
-    if (final_leaf) {
-      U64          final_hash = u64_hash_from_str8(str8_struct(final_leaf));
-      CV_TypeIndex final_ti   = lnk_assigned_type_ht_search(task->assigned_type_caps  [source],
-                                                            task->assigned_type_hts   [source],
-                                                            task->min_type_indices    [source],
-                                                            task->unique_leaf_refs_arr[source],
-                                                            final_leaf,
-                                                            final_hash);
-
-      obj_ti_map[leaf_idx] = final_ti;
-    } else {
-      obj_ti_map[leaf_idx] = 0;
-    }
+    CV_Leaf             leaf       = cv_debug_t_get_leaf(debug_t, leaf_idx);
+    CV_TypeIndexSource  source     = cv_type_index_source_from_leaf_kind(leaf.kind);
+    LNK_LeafRef         leaf_ref = { obj_idx, leaf_idx };
+    LNK_AssignedTiHash *assigned = &task->assigned_ti_arr[source];
+    obj_ti_map[leaf_idx] = lnk_assigned_ti_hash_search(assigned, input, leaf_ref);
   }
 
   task->result.obj_ti_maps[obj_idx] = obj_ti_map;
@@ -2245,18 +2253,23 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
   {
     ProfBegin("Assign type indices");
     for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
-      task.ti_source                     = ti_source;
-      task.assigned_type_caps[ti_source] = (task.unique_leaf_refs_arr[ti_source].count * 13) / 10;
-      task.assigned_type_hts [ti_source] = push_array(scratch.arena, CV_TypeIndex, task.assigned_type_caps[ti_source]);
-      task.min_type_indices  [ti_source] = CV_MinComplexTypeIndex;
-      task.ranges                        = tp_divide_work(scratch.arena, task.unique_leaf_refs_arr[ti_source].count, tp->worker_count);
+      task.ti_source                         = ti_source;
+      task.assigned_ti_arr[ti_source].cap    = ((task.unique_leaf_refs_arr[ti_source].count * 13) / 10);
+      task.assigned_ti_arr[ti_source].ti_arr = push_array(scratch.arena, CV_TypeIndex, task.assigned_ti_arr[ti_source].cap);
+
+      // unique extraction is complete, so the dedup bucket slots can back the
+      // direct hash table without increasing peak memory
+      Assert(task.assigned_ti_arr[ti_source].cap <= task.leaf_ht_arr[ti_source].cap);
+      task.assigned_ti_arr[ti_source].hash_arr = (U64 *)task.leaf_ht_arr[ti_source].bucket_arr;
+
+      task.min_type_indices[ti_source] = CV_MinComplexTypeIndex;
+      task.ranges = tp_divide_work(scratch.arena, task.unique_leaf_refs_arr[ti_source].count, tp->worker_count);
       tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_assign_type_indices_task, &task, "Assign Type Indices");
     }
     ProfEnd();
 
     if (~merge_flags & LNK_MergeTypeFlag_SkipSymbolTypeFixup) {
-      task.ranges = tp_divide_work(scratch.arena, input->symbol_input_count, tp->worker_count);
-      tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_cv_patcher_symbols_task, &task, "Fixup Symbol Type Indices");
+      tp_for_parallel_prof(tp, 0, input->symbol_patch_task_count, lnk_cv_patcher_symbols_task, &task, "Fixup Symbol Type Indices");
 
       task.ranges      = 0;
       task.debug_s_arr = input->debug_s_arr;
@@ -3029,7 +3042,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
 
           String8          name     = str8_cstring_capped(string_table.str + header.name_off, string_table.str + string_table.size);
           CV_StringBucket *bucket   = cv_string_hash_table_lookup(task->string_ht, name);
-          U64              name_off = task->pdb->info->strtab.size + bucket->u.offset;
+          U64              name_off = task->string_table_base_offset + bucket->u.offset;
 
           // update name offset
           {
@@ -3067,73 +3080,192 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   PDB_DbiModule *mod     = task->mod_arr    [obj_idx];
   LNK_Obj       *obj     = task->cv->obj_arr[obj_idx];
 
-  PDB_DbiSectionContribNode *sc_arr   = push_array_no_zero(arena, PDB_DbiSectionContribNode, obj->header.section_count_no_null);
-  U64                        sc_count = 0;
-  
+  PDB_DbiSCNode *sc_arr   = push_array_no_zero(arena, PDB_DbiSCNode, obj->header.section_count_no_null);
+  U64            sc_count = 0;
+
   for EachIndex(sect_idx, obj->header.section_count_no_null) {
-    LNK_ObjSection section = lnk_obj_section_from_sect_idx(obj, sect_idx);
 
-    if (*section.flags & COFF_SectionFlag_LnkInfo)   { continue; }
-    if (*section.flags & COFF_SectionFlag_LnkRemove) { continue; }
-    if (*section.flags & LNK_SECTION_FLAG_DEBUG)     { continue; }
+    // filter by section flags
+    if (obj->section_flags[sect_idx] & (COFF_SectionFlag_LnkInfo | COFF_SectionFlag_LnkRemove | LNK_SECTION_FLAG_DEBUG)) { continue; }
 
+    // skip unwind info for the section contribution
     String8 section_name = lnk_obj_section_name_from_sect_idx(obj, sect_idx);
     if (str8_match(section_name, str8_lit(".pdata"), 0)) { continue; }
 
-    U64     sect_number;
-    String8 sect_data;
-    U32     sect_off;
-    U32     data_crc;
-    if (*section.flags & COFF_SectionFlag_CntUninitializedData) {
-      if (dim_1u64(section.vrange) == 0) { continue; }
+    // load section and determine its type
+    LNK_ObjSection  section = lnk_obj_section_from_sect_idx(obj, sect_idx);
+    B32             is_virt = !!(*section.flags & COFF_SectionFlag_CntUninitializedData);
 
-      U64 search_result = rng1u64_array_num_from_value__binary_search(&task->image_section_virt_ranges, section.vrange.min);
-      sect_number = search_result-1;
-      Assert(sect_number < task->image_section_virt_ranges.count);
-      
-      sect_data   = str8_zero();
-      sect_off    = section.vrange.min - task->image_section_virt_ranges.v[sect_number].min;
-      data_crc    = 0;
-    } else {
-      if (dim_1u64(section.frange) == 0) { continue; }
+    // pick section range
+    Rng1U64 section_range = is_virt ? section.vrange : section.frange;
+    if (dim_1u64(section_range) == 0) { continue; }
 
-      U64 search_result = rng1u64_array_num_from_value__binary_search(&task->image_section_file_ranges, section.frange.min);
-      sect_number = search_result-1;
-      Assert(sect_number < task->image_section_file_ranges.count);
+    // map the SC offset to the image section range that contains it
+    Rng1U64Array *image_ranges  = is_virt ? &task->image_section_virt_ranges : &task->image_section_file_ranges;
+    U64           search_result = rng1u64_array_num_from_value__binary_search(image_ranges, section_range.min);
 
-      sect_data   = str8_substr(task->image_data, section.frange);
-      sect_off    = section.frange.min - task->image_section_file_ranges.v[sect_number].min;
-      data_crc    = update_crc32(0, sect_data.str, sect_data.size);
+    // log & skip SC offsets that failed to map
+    if (search_result == 0) {
+      Temp scratch = scratch_begin(0,0);
+      lnk_log(LNK_Log_Debug, "%S: failed to map section offset 0x%llx into the linked image; skipping this section", lnk_loc_from_obj(scratch.arena, obj), section_range.min);
+      scratch_end(scratch);
+      continue;
     }
 
-    // fill out SC
-    PDB_DbiSectionContribNode *sc = sc_arr + sc_count++;
-    sc->data.base.sec             = (U16)sect_number;
-    sc->data.base.pad0            = 0;
-    sc->data.base.sec_off         = sect_off;
-    sc->data.base.size            = dim_1u64(section.vrange);
-    sc->data.base.flags           = *section.flags;
-    sc->data.base.mod             = mod->imod;
-    sc->data.base.pad1            = 0;
-    sc->data.data_crc             = 0;
-    sc->data.reloc_crc            = 0; 
+    // unpack image range index
+    U64 range_idx = search_result - 1;
 
+    // fill out & push section contribution
+    PDB_DbiSCNode *sc = sc_arr + sc_count++;
+    sc->data.base.sec     = (U16)(is_virt ? range_idx : task->image_section_file_section_numbers[range_idx]);
+    sc->data.base.pad0    = 0;
+    sc->data.base.sec_off = section_range.min - image_ranges->v[range_idx].min;
+    sc->data.base.size    = dim_1u64(section_range);
+    sc->data.base.flags   = *section.flags;
+    sc->data.base.mod     = mod->imod;
+    sc->data.base.pad1    = 0;
+    sc->data.data_crc     = is_virt ? 0 : crc32_from_string(str8_substr(task->image_data, section_range));
+    sc->data.reloc_crc    = 0;
     dbi_sec_contrib_list_push_node(&task->sc_list[obj_idx], sc);
   }
 
-  // Mod1::fUpdateSecContrib
-  if (sc_count > 0) {
-    for (U64 sc_idx = 0; sc_idx < sc_count; ++sc_idx) {
-      if (sc_arr[sc_idx].data.base.flags & COFF_SectionFlag_CntCode) {
-        mod->first_sc = sc_arr[sc_idx].data;
-        break;
-      }
+  // find first code section contribution for the Mod1::fUpdateSecContrib
+  for EachIndex(i, sc_count) {
+    if (sc_arr[i].data.base.flags & COFF_SectionFlag_CntCode) {
+      mod->first_sc = sc_arr[i].data;
+      break;
     }
   }
 }
 
-internal String8List
-lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PDB_BuilderFlags builder_flags)
+typedef struct
+{
+  LNK_BackgroundFileWriter *writer;
+  LNK_BackgroundFile       *file;
+  MSF_StreamNumber         *sealed_streams;
+  U64                       sealed_stream_count;
+  U64                       sealed_stream_cap;
+} LNK_PdbOutput;
+
+typedef struct LNK_MsfPageCursor
+{
+  MSF_PageDataNode *node;
+  U64               node_idx;
+  U64               pages_per_node;
+} LNK_MsfPageCursor;
+
+internal U8 *
+lnk_msf_data_from_pn(LNK_MsfPageCursor *cursor, MSF_Context *msf, MSF_PageNumber pn)
+{
+  U64 node_idx = pn / cursor->pages_per_node;
+  if (node_idx < cursor->node_idx) {
+    cursor->node     = msf->page_data_list.first;
+    cursor->node_idx = 0;
+  }
+  while (cursor->node_idx < node_idx) {
+    cursor->node = cursor->node->next;
+    cursor->node_idx += 1;
+  }
+  Assert(cursor->node != 0);
+  return cursor->node->data + (pn % cursor->pages_per_node) * msf->page_size;
+}
+
+internal void
+lnk_pdb_output_enqueue_stream(LNK_PdbOutput *output, MSF_Context *msf, MSF_StreamNumber sn)
+{
+  if (sn == MSF_INVALID_STREAM_NUMBER) { return; }
+  Assert(output->sealed_stream_count < output->sealed_stream_cap);
+  output->sealed_streams[output->sealed_stream_count++] = sn;
+
+  MSF_Stream *stream = msf_find_stream(msf, sn);
+  Assert(stream != 0);
+  if (stream->page_list.count == 0) { return; }
+
+  LNK_MsfPageCursor cursor = {
+    .node           = msf->page_data_list.first,
+    .pages_per_node = msf_get_data_node_size(msf->page_size) / msf->page_size,
+  };
+  MSF_PageNumber run_first_pn = 0;
+  MSF_PageNumber run_last_pn  = 0;
+  U8            *run_data     = 0;
+  U64            run_size     = 0;
+  for EachNode(page, MSF_PageNode, stream->page_list.first) {
+    U8 *page_data = lnk_msf_data_from_pn(&cursor, msf, page->pn);
+    if (run_data != 0 && page->pn == run_last_pn + 1 && page_data == run_data + run_size) {
+      run_last_pn = page->pn;
+      run_size += msf->page_size;
+    } else {
+      if (run_data != 0) {
+        lnk_background_file_writer_enqueue(output->writer, output->file, (U64)run_first_pn * msf->page_size, str8(run_data, run_size));
+      }
+      run_first_pn = run_last_pn = page->pn;
+      run_data = page_data;
+      run_size = msf->page_size;
+    }
+  }
+  if (run_data != 0) {
+    lnk_background_file_writer_enqueue(output->writer, output->file, (U64)run_first_pn * msf->page_size, str8(run_data, run_size));
+  }
+}
+
+internal void
+lnk_pdb_output_finalize_stream(void *user_data, MSF_Context *msf, MSF_StreamNumber sn)
+{
+  lnk_pdb_output_enqueue_stream(user_data, msf, sn);
+}
+
+internal void
+lnk_pdb_output_enqueue_remaining(LNK_PdbOutput *output, MSF_Context *msf)
+{
+  Temp scratch = scratch_begin(0,0);
+  U64 save_size  = msf_get_save_size(msf);
+  U64 page_count = CeilIntegerDiv(save_size, msf->page_size);
+  U8 *is_written = push_array(scratch.arena, U8, page_count);
+
+  for EachIndex(i, output->sealed_stream_count) {
+    MSF_Stream *stream = msf_find_stream(msf, output->sealed_streams[i]);
+    Assert(stream != 0);
+    for EachNode(page, MSF_PageNode, stream->page_list.first) {
+      Assert(page->pn < page_count);
+      is_written[page->pn] = 1;
+    }
+  }
+
+  LNK_MsfPageCursor cursor = {
+    .node           = msf->page_data_list.first,
+    .pages_per_node = msf_get_data_node_size(msf->page_size) / msf->page_size,
+  };
+  U64 run_first_pn = 0;
+  U8 *run_data = 0;
+  U64 run_size = 0;
+  for EachIndex(pn, page_count) {
+    U8 *page_data = lnk_msf_data_from_pn(&cursor, msf, pn);
+    U64 page_size = Min(msf->page_size, save_size - pn * msf->page_size);
+    if (!is_written[pn]) {
+      if (run_data != 0 && page_data == run_data + run_size) {
+        run_size += page_size;
+      } else {
+        if (run_data != 0) {
+          lnk_background_file_writer_enqueue(output->writer, output->file, run_first_pn * msf->page_size, str8(run_data, run_size));
+        }
+        run_first_pn = pn;
+        run_data = page_data;
+        run_size = page_size;
+      }
+    } else if (run_data != 0) {
+      lnk_background_file_writer_enqueue(output->writer, output->file, run_first_pn * msf->page_size, str8(run_data, run_size));
+      run_data = 0;
+      run_size = 0;
+    }
+  }
+  if (run_data != 0) {
+    lnk_background_file_writer_enqueue(output->writer, output->file, run_first_pn * msf->page_size, str8(run_data, run_size));
+  }
+  scratch_end(scratch);
+}
+
+internal LNK_FileArtifact
+lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(tp_arena->v, tp_arena->count);
@@ -3143,18 +3275,37 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   }
 
   LNK_BuildPdb task = {
-    .image_data                      = image_data,
-    .symtab                          = symtab,
-    .cv                              = cv,
-    .pdb                             = pdb_alloc_(lnk_get_huge_arena(), config->pdb_page_size, config->machine, config->time_stamp, config->age, config->guid),
-    .mod_arr                         = push_array(scratch.arena, PDB_DbiModule *, cv->obj_count),
-    .pe                              = pe_bin_info_from_data(scratch.arena, image_data),
-    .image_section_table             = coff_section_table_from_data(scratch.arena, image_data, task.pe.section_table_range),
-    .image_section_table_count       = task.pe.section_count+1,
-    .image_section_virt_ranges.count = task.image_section_table_count,
-    .image_section_virt_ranges.v     = push_array(scratch.arena, Rng1U64, task.image_section_table_count),
-    .image_section_file_ranges.v     = push_array(scratch.arena, Rng1U64, task.image_section_table_count),
+    .image_data                         = image_data,
+    .symtab                             = symtab,
+    .cv                                 = cv,
+    .pdb                                = pdb_alloc_(lnk_get_huge_arena(), config->pdb_page_size, config->machine, config->time_stamp, config->age, config->guid),
+    .mod_arr                            = push_array(scratch.arena, PDB_DbiModule *, cv->obj_count),
+    .pe                                 = pe_bin_info_from_data(scratch.arena, image_data),
+    .image_section_table                = coff_section_table_from_data(scratch.arena, image_data, task.pe.section_table_range),
+    .image_section_table_count          = task.pe.section_count+1,
+    .image_section_virt_ranges.count    = task.image_section_table_count,
+    .image_section_virt_ranges.v        = push_array(scratch.arena, Rng1U64, task.image_section_table_count),
+    .image_section_file_ranges.v        = push_array(scratch.arena, Rng1U64, task.image_section_table_count),
+    .image_section_file_section_numbers = push_array(scratch.arena, U64, task.image_section_table_count),
   };
+
+  LNK_PdbOutput  output     = {0};
+  LNK_PdbOutput *output_ptr = 0;
+  if (writer.output_path.size > 0) {
+    output.writer            = writer.file_writer;
+    output.file              = lnk_background_file_writer_begin_file(output.writer, writer.output_path, writer.temp_output_path);
+    if (output.file != 0) {
+      output.sealed_stream_cap = cv->obj_count + 128;
+      output.sealed_streams    = push_array_no_zero(scratch.arena, MSF_StreamNumber, output.sealed_stream_cap);
+      output_ptr               = &output;
+    }
+  }
+
+  PDB_BuildHooks build_hooks = {0};
+  if (output_ptr != 0) {
+    build_hooks.stream_finalize = lnk_pdb_output_finalize_stream;
+    build_hooks.user_data       = output_ptr;
+  }
 
   // set min type indices
   for EachElement(ti_source, cv_types.min_type_indices) { task.pdb->type_servers[ti_source]->ti_lo = cv_types.min_type_indices[ti_source]; }
@@ -3183,24 +3334,32 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   cv_string_hash_table_assign_buffer_offsets(tp, task.string_ht);
   ProfEnd();
 
-  if (builder_flags & LNK_PDB_BuilderFlag_Modules) {
-    ProfScope ("Alloc Modules")
-      for EachIndex(obj_idx, cv->obj_count)
-        task.mod_arr[obj_idx] = dbi_push_module(task.pdb->dbi, cv->obj_arr[obj_idx]->path, lnk_obj_get_lib_path(cv->obj_arr[obj_idx]));
-
-    ProfScope("Move Global Symbols")
-      tp_for_parallel(tp, 0, tp->worker_count, lnk_move_global_symbols_to_gsi, &task);
-
-      ProfScope("Build GSI and PSI")
-        pdb_build_gsi_psi(tp, task.pdb);
-
-    ProfScope("Write Modules")
-      tp_for_parallel(tp, 0, tp->worker_count, lnk_write_pdb_modules, &task);
-  }
-
+  task.string_table_base_offset = task.pdb->info->strtab.size;
   ProfBegin("Add string tables");
   pdb_strtab_add_cv_string_hash_table(&task.pdb->info->strtab, task.string_ht);
   ProfEnd();
+  pdb_build_types(tp, task.pdb, &build_hooks);
+
+  if (builder_flags & LNK_PDB_BuilderFlag_Modules) {
+    ProfScope ("Alloc Modules")
+      for EachIndex(obj_idx, cv->obj_count) {
+        task.mod_arr[obj_idx] = dbi_push_module(task.pdb->dbi, cv->obj_arr[obj_idx]->path, lnk_obj_get_lib_path(cv->obj_arr[obj_idx]));
+      }
+
+    ProfScope("Write Modules")       tp_for_parallel(tp, 0, tp->worker_count, lnk_write_pdb_modules, &task);
+    if (output_ptr != 0) {
+      for EachIndex(obj_idx, cv->obj_count) {
+        lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.mod_arr[obj_idx]->sn);
+      }
+    }
+    ProfScope("Move Global Symbols") tp_for_parallel(tp, 0, tp->worker_count, lnk_move_global_symbols_to_gsi, &task);
+    ProfScope("Build GSI and PSI")   pdb_build_gsi_psi(tp, task.pdb);
+    if (output_ptr != 0) {
+      lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->publics_sn);
+      lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->globals_sn);
+      lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->symbols_sn);
+    }
+  }
   
   if (builder_flags & LNK_PDB_BuilderFlag_SC) {
     ProfBegin("Build Section Contrib Map");
@@ -3213,13 +3372,17 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
 
       for EachIndex(i, task.image_section_table_count) {
         COFF_SectionHeader *sect_header = task.image_section_table[i];
+
         if (~sect_header->flags & COFF_SectionFlag_CntUninitializedData) {
-          task.image_section_file_ranges.v[task.image_section_file_ranges.count++] = rng_1u64(sect_header->foff, sect_header->foff + sect_header->fsize);
+          U64 section_file_idx = task.image_section_file_ranges.count++;
+          task.image_section_file_ranges.v[section_file_idx]        = r1u64s(sect_header->foff, sect_header->fsize);
+          task.image_section_file_section_numbers[section_file_idx] = i;
         }
+
         task.image_section_virt_ranges.v[i] = rng_1u64(sect_header->voff, sect_header->voff + sect_header->vsize);
       }
 
-      task.sc_list = push_array(scratch.arena, PDB_DbiSectionContribList, cv->obj_count);
+      task.sc_list = push_array(scratch.arena, PDB_DbiSCList, cv->obj_count);
       tp_for_parallel(tp, tp_arena, cv->obj_count, lnk_push_dbi_sec_contrib_task, &task);
       dbi_sec_list_concat_arr(&task.pdb->dbi->sec_contrib_list, cv->obj_count, task.sc_list);
     }
@@ -3258,17 +3421,25 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
     ProfEnd();
   }
 
-  pdb_build(tp, tp_arena, task.pdb, task.string_ht, 0, cv->is_stripped);
+  pdb_build_dbi_info(tp, task.pdb, task.string_ht, 0, cv->is_stripped, &build_hooks);
 
   MSF_Error msf_err = msf_build(task.pdb->msf);
   if (msf_err != MSF_Error_OK) {
     lnk_error(LNK_Error_UnableToSerializeMsf, "unable to serialize MSF: %s", msf_error_to_string(msf_err));
   }
 
+  if (output_ptr != 0) {
+    lnk_pdb_output_enqueue_remaining(output_ptr, task.pdb->msf);
+  }
+
   ProfBegin("Get Page Nodes");
-  String8List page_data_list = msf_get_page_data_nodes(tp_arena->v[0], task.pdb->msf);
+  LNK_FileArtifact artifact = { .data = msf_get_page_data_nodes(tp_arena->v[0], task.pdb->msf) };
   ProfEnd();
-  
+
+  if (output_ptr != 0) {
+    lnk_background_file_writer_end_file(output_ptr->writer, output_ptr->file, artifact.data.total_size);
+  }
+
   // NOTE: linker is about to exit so we can skip memory release
   // and let windows free memory since it does this faster
 #if 0
@@ -3279,5 +3450,5 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
 
   scratch_end(scratch);
   ProfEnd();
-  return page_data_list;
+  return artifact;
 }

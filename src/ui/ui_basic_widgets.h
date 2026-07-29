@@ -77,8 +77,8 @@ internal UI_Signal ui_button(String8 string);
 internal UI_Signal ui_buttonf(char *fmt, ...);
 internal UI_Signal ui_hover_label(String8 string);
 internal UI_Signal ui_hover_labelf(char *fmt, ...);
-internal UI_Signal ui_line_edit(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, String8 pre_edit_value, String8 string);
-internal UI_Signal ui_line_editf(TxtPt *cursor, TxtPt *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, String8 pre_edit_value, char *fmt, ...);
+internal UI_Signal ui_line_edit(U64 *cursor, U64 *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, String8 pre_edit_value, String8 string);
+internal UI_Signal ui_line_editf(U64 *cursor, U64 *mark, U8 *edit_buffer, U64 edit_buffer_size, U64 *edit_string_size_out, String8 pre_edit_value, char *fmt, ...);
 
 ////////////////////////////////
 //~ rjf: Images

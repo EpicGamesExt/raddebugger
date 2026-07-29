@@ -223,11 +223,11 @@ typedef struct PDB_DbiHeader
 
 // "ModuleInfo" DBI range
 
-typedef U32 PDB_DbiSectionContribVersion;
-#define PDB_DbiSectionContribVersion_1 (0xeffe0000u + 19970605u)
-#define PDB_DbiSectionContribVersion_2 (0xeffe0000u + 20140516u)
+typedef U32 PDB_DbiSCVersion;
+#define PDB_DbiSCVersion_1 (0xeffe0000u + 19970605u)
+#define PDB_DbiSCVersion_2 (0xeffe0000u + 20140516u)
 
-typedef struct PDB_DbiSectionContrib40
+typedef struct PDB_DbiSC40
 {
   CV_SectionIndex sec;
   U16 pad0;
@@ -236,27 +236,27 @@ typedef struct PDB_DbiSectionContrib40
   U32 flags;
   CV_ModIndex mod;
   U16 pad1;
-} PDB_DbiSectionContrib40;
+} PDB_DbiSC40;
 
-typedef struct PDB_DbiSectionContrib
+typedef struct PDB_DbiSC
 {
-  PDB_DbiSectionContrib40 base;
+  PDB_DbiSC40 base;
   U32 data_crc;
   U32 reloc_crc;
-} PDB_DbiSectionContrib;
+} PDB_DbiSC;
 
-typedef struct PDB_DbiSectionContrib2
+typedef struct PDB_DbiSC2
 {
-  PDB_DbiSectionContrib40 base;
+  PDB_DbiSC40 base;
   U32 data_crc;
   U32 reloc_crc;
   U32 sec_coff;
-} PDB_DbiSectionContrib2;
+} PDB_DbiSC2;
 
 typedef struct PDB_DbiCompUnitHeader
 {
   U32 unused;
-  PDB_DbiSectionContrib contribution;
+  PDB_DbiSC contribution;
   U16 flags; // unknown
   
   MSF_StreamNumber sn;

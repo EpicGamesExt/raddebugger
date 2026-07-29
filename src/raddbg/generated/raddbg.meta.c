@@ -62,13 +62,14 @@ str8_lit_comp(""),
 str8_lit_comp(""),
 };
 
-RD_VocabInfo rd_vocab_info_table[368] =
+RD_VocabInfo rd_vocab_info_table[372] =
 {
 {str8_lit_comp("type_view"), str8_lit_comp("type_views"), str8_lit_comp("Type View"), str8_lit_comp("Type Views"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
 {str8_lit_comp("watch_pin"), str8_lit_comp("watch_pins"), str8_lit_comp("Watch Pin"), str8_lit_comp("Watch Pins"), RD_IconKind_Pin},
 {str8_lit_comp("debug_info"), str8_lit_comp("debug_infos"), str8_lit_comp("Debug Info"), str8_lit_comp("Debug Info"), RD_IconKind_Module},
 {str8_lit_comp("watch"), str8_lit_comp("watches"), str8_lit_comp("Watch"), str8_lit_comp("Watches"), RD_IconKind_Binoculars},
+{str8_lit_comp("watch_expression"), str8_lit_comp("watch_expressions"), str8_lit_comp("Watch Expression"), str8_lit_comp("Watch Expressions"), RD_IconKind_Binoculars},
 {str8_lit_comp("view"), str8_lit_comp("views"), str8_lit_comp("View"), str8_lit_comp("Views"), RD_IconKind_Binoculars},
 {str8_lit_comp("breakpoint"), str8_lit_comp("breakpoints"), str8_lit_comp("Breakpoint"), str8_lit_comp("Breakpoints"), RD_IconKind_CircleFilled},
 {str8_lit_comp("condition"), str8_lit_comp("conditions"), str8_lit_comp("Condition"), str8_lit_comp("Conditions"), RD_IconKind_Null},
@@ -299,6 +300,9 @@ RD_VocabInfo rd_vocab_info_table[368] =
 {str8_lit_comp("accept"), str8_lit_comp(""), str8_lit_comp("Accept"), str8_lit_comp(""), RD_IconKind_CheckFilled},
 {str8_lit_comp("cancel"), str8_lit_comp(""), str8_lit_comp("Cancel"), str8_lit_comp(""), RD_IconKind_X},
 {str8_lit_comp("focus_menu"), str8_lit_comp(""), str8_lit_comp("Focus Menu"), str8_lit_comp(""), RD_IconKind_List},
+{str8_lit_comp("lock"), str8_lit_comp(""), str8_lit_comp("Lock"), str8_lit_comp(""), RD_IconKind_Locked},
+{str8_lit_comp("unlock"), str8_lit_comp(""), str8_lit_comp("Unlock"), str8_lit_comp(""), RD_IconKind_Unlocked},
+{str8_lit_comp("toggle_lock"), str8_lit_comp(""), str8_lit_comp("Toggle Lock"), str8_lit_comp(""), RD_IconKind_Locked},
 {str8_lit_comp("move_left"), str8_lit_comp(""), str8_lit_comp("Move Left"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("move_right"), str8_lit_comp(""), str8_lit_comp("Move Right"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("move_up"), str8_lit_comp(""), str8_lit_comp("Move Up"), str8_lit_comp(""), RD_IconKind_Null},
@@ -456,7 +460,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[39] =
 {str8_lit_comp("array"), 1, str8_lit_comp("x:{ @description('An expression of the base address of the array.') 'base_address': expr_string, @description('The number of elements in the array.') count}")},
 {str8_lit_comp("slice"), 1, str8_lit_comp("x:{ @description('An expression of a structure that is to be interpreted as a slice.') 'expression': expr_string}")},
 {str8_lit_comp("list"), 1, str8_lit_comp("x:\n{\n  @description(\"An expression describing the first node in the list.\")\n  'expression': expr_string,\n  @order(0) @description(\"The name of the member which encodes the link to the next node.\")\n  'member_name': code_string,\n}\n")},
-{str8_lit_comp("watch"), 0, str8_lit_comp("@inherit(tab) x:\n{\n  @override @display_name('Tab Row Height') @description(\"Controls the tab's row height, in multiples of the font size.\")\n  'row_height': @range[1.75f, 5.f] f32,\n  'label': code_string,\n  @description(\"The root expression which is evaluated to produce the watch window.\")\n  'expression': expr_string,\n  @no_expand 'watches': set,\n}\n")},
+{str8_lit_comp("watch"), 0, str8_lit_comp("@inherit(tab) x:\n{\n  @override @display_name('Tab Row Height') @description(\"Controls the tab's row height, in multiples of the font size.\")\n  'row_height': @range[1.75f, 5.f] f32,\n  'label': code_string,\n  @description(\"The root expression which is evaluated to produce the watch window.\")\n  'expression': expr_string,\n  @no_expand 'watch_expressions': set,\n}\n")},
 {str8_lit_comp("text"), 1, str8_lit_comp("@inherit(tab) @expand_commands(@output clear_output) x:\n{\n  @description(\"An expression to describe data which should be viewed as text or code.\")\n  'expression': expr_string,\n  @optional @description(\"The language that the text should be interpreted as being within. Used for syntax highlighting and other parsing features.\")\n  'lang': code_string,\n  @no_callee_helper @default(1) @description(\"Controls whether or not line numbers are shown.\")\n  'show_line_numbers':bool,\n  @no_callee_helper @default(1) @display_name('Line Wrapping') @description(\"Splits textual lines into multiple visual lines, so that all text is within the visible area.\")\n  'line_wrapping': bool,\n  @no_callee_helper @default(0) @display_name('Scroll To Bottom On Change') @description(\"Scrolls to the bottom if the text is changed.\")\n  'scroll_to_bottom_on_change': bool,\n  @no_callee_helper @no_revert @default(0) @display_name('Transient') @description(\"Controls whether or not this tab will be automatically replaced by the debugger when it snaps to new source code locations.\")\n  'auto': bool,\n}\n")},
 {str8_lit_comp("disasm"), 1, str8_lit_comp("@inherit(tab) x:\n{\n  @description(\"An expression to describe the base address or offset of the disassembly.\")\n  'expression': expr_string,\n  @optional @description(\"The maximum number of bytes to disassemble.\")\n  'size': expr_string,\n  @optional @description(\"The architecture to interpret the data as when disassembling.\")\n  'arch': code_string,\n  @optional @description(\"The syntax style to use when displaying the disassembly textually.\")\n  'syntax': code_string,\n  @no_callee_helper @default(1) @description(\"Controls whether or not addresses are shown in the disassembly text.\")\n  'show_addresses':    bool,\n  @no_callee_helper @default(0) @description(\"Controls whether or not code bytes are shown in the disassembly text.\")\n  'show_code_bytes':   bool,\n  @no_callee_helper @default(1) @description(\"Controls whether or not source lines, corresponding to disassembly instruction ranges, are shown in the disassembly text.\")\n  'show_source_lines': bool,\n  @no_callee_helper @default(1) @description(\"Controls whether or not disassembly text is decorated with symbol names.\")\n  'show_symbol_names': bool,\n  @no_callee_helper @default(1) @description(\"Controls whether or not line numbers are shown.\")\n  'show_line_numbers': bool,\n}\n")},
 {str8_lit_comp("memory"), 1, str8_lit_comp("@inherit(tab) x:\n{\n  @display_name(\"Base Address\") @description(\"An expression which refers to the base address of data which should be viewed as memory.\")\n  'expression': expr_string,\n  @no_callee_helper @display_name(\"Zoom\") @description(\"The zoom level for displaying bytes in the memory view.\")\n  @default(1.0) 'zoom': @range[0.5, 2] f32,\n  @optional @display_name(\"Address Range Size\") @description(\"The number of bytes of the viewed memory range.\")\n  'size': expr_string,\n  @no_callee_helper @display_name(\"Cursor Address\") @description(\"The address of the cursor.\")\n  'cursor': expr_string,\n  @no_callee_helper @default(1) @display_name(\"Cursor Size\") @description(\"The size, in bytes, of the cursor.\")\n  'cursor_size': @range[1, 16] u64,\n  @optional @expand_if(\"!$.auto_columns\") @default(16) @description(\"The number of columns to build before building new rows.\")\n  'num_columns': @range[1, 64] u64,\n  @optional @default(16) @display_name(\"Default Radix\") @description(\"The default radix with which numeric values should be displayed, when peeking.\")\n  @or(2, 8, 10, 16)\n  'default_radix': u64,\n  @no_callee_helper @default(1) @display_name(\"Track Mark To Cursor\") @description(\"Ensures that the mark always follows the cursor, if the cursor value is updated.\")\n  'track_mark_to_cursor': bool,\n  @no_callee_helper @default(1) @display_name(\"Allow Mutation\") @description(\"Allows operations which mutate memory.\")\n  'allow_mutation': bool,\n  @no_callee_helper @default(0) @display_name(\"Automatically Size Columns\") @description(\"Determines the number of columns based on the available space.\")\n  'auto_columns': bool,\n  @no_callee_helper @default(1) @display_name(\"Peek As Unsigned\") 'peek_as_unsigned': bool,\n  @no_callee_helper @default(1) @display_name(\"Peek As Signed\") 'peek_as_signed': bool,\n  @no_callee_helper @default(1) @display_name(\"Peek As Float\") 'peek_as_float': bool,\n  @no_callee_helper @display_name(\"Extra Peek Types\") @description(\"A list of types as which to interpret selected memory.\")\n  'peek_types': set,\n}\n")},
@@ -477,7 +481,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[39] =
 {str8_lit_comp("thread"), 0, str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':set}")},
 };
 
-String8 rd_reg_slot_code_name_table[52] =
+String8 rd_reg_slot_code_name_table[54] =
 {
 {0},
 str8_lit_comp("machine"),
@@ -499,6 +503,8 @@ str8_lit_comp("inline_depth"),
 str8_lit_comp("file_path"),
 str8_lit_comp("cursor"),
 str8_lit_comp("mark"),
+str8_lit_comp("line_num"),
+str8_lit_comp("column_num"),
 str8_lit_comp("text_key"),
 str8_lit_comp("lang_kind"),
 str8_lit_comp("lines"),
@@ -533,7 +539,7 @@ str8_lit_comp("cmd_name"),
 str8_lit_comp("wm_event"),
 };
 
-Rng1U64 rd_reg_slot_range_table[52] =
+Rng1U64 rd_reg_slot_range_table[54] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(D_Handle)},
@@ -553,8 +559,10 @@ Rng1U64 rd_reg_slot_range_table[52] =
 {OffsetOf(RD_Regs, unwind_count), OffsetOf(RD_Regs, unwind_count) + sizeof(U64)},
 {OffsetOf(RD_Regs, inline_depth), OffsetOf(RD_Regs, inline_depth) + sizeof(U64)},
 {OffsetOf(RD_Regs, file_path), OffsetOf(RD_Regs, file_path) + sizeof(String8)},
-{OffsetOf(RD_Regs, cursor), OffsetOf(RD_Regs, cursor) + sizeof(TxtPt)},
-{OffsetOf(RD_Regs, mark), OffsetOf(RD_Regs, mark) + sizeof(TxtPt)},
+{OffsetOf(RD_Regs, cursor), OffsetOf(RD_Regs, cursor) + sizeof(U64)},
+{OffsetOf(RD_Regs, mark), OffsetOf(RD_Regs, mark) + sizeof(U64)},
+{OffsetOf(RD_Regs, line_num), OffsetOf(RD_Regs, line_num) + sizeof(U64)},
+{OffsetOf(RD_Regs, column_num), OffsetOf(RD_Regs, column_num) + sizeof(U64)},
 {OffsetOf(RD_Regs, text_key), OffsetOf(RD_Regs, text_key) + sizeof(C_Key)},
 {OffsetOf(RD_Regs, lang_kind), OffsetOf(RD_Regs, lang_kind) + sizeof(TXT_LangKind)},
 {OffsetOf(RD_Regs, lines), OffsetOf(RD_Regs, lines) + sizeof(D_LineList)},
@@ -589,7 +597,7 @@ Rng1U64 rd_reg_slot_range_table[52] =
 {OffsetOf(RD_Regs, wm_event), OffsetOf(RD_Regs, wm_event) + sizeof(WM_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[256] =
+RD_CmdKindInfo rd_cmd_kind_info_table[259] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:targets")}},
@@ -714,6 +722,9 @@ RD_CmdKindInfo rd_cmd_kind_info_table[256] =
 { str8_lit_comp("accept"), str8_lit_comp("Accepts current changes, or answers prompts in the affirmative."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("cancel"), str8_lit_comp("Rejects current changes, exits temporary menus, or answers prompts in the negative."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("focus_menu"), str8_lit_comp("Focuses the menu for the selected interface, if there is one."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
+{ str8_lit_comp("lock"), str8_lit_comp("Locks the current selection, if applicable."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
+{ str8_lit_comp("unlock"), str8_lit_comp("Unlocks the current selection, if applicable."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
+{ str8_lit_comp("toggle_lock"), str8_lit_comp("Toggles the lock state of the current selection, if applicable."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("move_left"), str8_lit_comp("Moves the cursor or selection left."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("move_right"), str8_lit_comp("Moves the cursor or selection right."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("move_up"), str8_lit_comp("Moves the cursor or selection up."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
@@ -755,7 +766,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[256] =
 { str8_lit_comp("insert_text"), str8_lit_comp("Inserts the text that was used to cause this command."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("move_next"), str8_lit_comp("Moves the cursor or selection to the next element."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("move_prev"), str8_lit_comp("Moves the cursor or selection to the previous element."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
-{ str8_lit_comp("goto_line"), str8_lit_comp("Jumps to a line number in the current code file."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*1), RD_RegSlot_Cursor, str8_lit_comp("")}},
+{ str8_lit_comp("goto_line"), str8_lit_comp("Jumps to a line number in the current code file."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*1), RD_RegSlot_LineNum, str8_lit_comp("")}},
 { str8_lit_comp("goto_address"), str8_lit_comp("Jumps to an address in the current memory or disassembly view."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*1), RD_RegSlot_Vaddr, str8_lit_comp("")}},
 { str8_lit_comp("center_cursor"), str8_lit_comp("Snaps the current code view to center the cursor."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("contain_cursor"), str8_lit_comp("Snaps the current code view to contain the cursor."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
@@ -849,7 +860,7 @@ RD_CmdKindInfo rd_cmd_kind_info_table[256] =
 { str8_lit_comp("geo3d"), str8_lit_comp("Opens a Geometry (3D) tab."), {0}, str8_lit_comp("{tab_commands}"), RD_CmdKindFlag_ListInUI|RD_CmdKindFlag_ListInIPCDocs},
 };
 
-struct {String8 string; CFG_Binding binding;} rd_default_binding_table[116] =
+struct {String8 string; CFG_Binding binding;} rd_default_binding_table[117] =
 {
 {str8_lit_comp("kill_all"), {WM_Key_F5, 0  |WM_Modifier_Shift }},
 {str8_lit_comp("step_into_inst"), {WM_Key_F11, 0   |WM_Modifier_Alt}},
@@ -902,6 +913,7 @@ struct {String8 string; CFG_Binding binding;} rd_default_binding_table[116] =
 {str8_lit_comp("accept"), {WM_Key_Space, 0   }},
 {str8_lit_comp("cancel"), {WM_Key_Esc, 0   }},
 {str8_lit_comp("focus_menu"), {WM_Key_D, 0   |WM_Modifier_Alt}},
+{str8_lit_comp("toggle_lock"), {WM_Key_L, 0 |WM_Modifier_Ctrl  }},
 {str8_lit_comp("move_left"), {WM_Key_Left, 0   }},
 {str8_lit_comp("move_right"), {WM_Key_Right, 0   }},
 {str8_lit_comp("move_up"), {WM_Key_Up, 0   }},

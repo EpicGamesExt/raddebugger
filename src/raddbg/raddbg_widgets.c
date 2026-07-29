@@ -1291,7 +1291,7 @@ internal UI_BOX_CUSTOM_DRAW(rd_bp_box_draw_extensions)
 }
 
 internal RD_CodeSliceSignal
-rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, String8 string)
+rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred_column, String8 string)
 {
   RD_CodeSliceSignal result = {0};
   ProfBeginFunction();
@@ -1887,9 +1887,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         {
           rd_cmd(RD_CmdKind_AddBreakpoint,
                  .file_path  = params->line_vaddrs[line_idx] ? str8_zero() : rd_regs()->file_path,
-                 .cursor     = params->line_vaddrs[line_idx] ? txt_pt(0, 0) : txt_pt(line_num, 1),
+                 .line_num   = params->line_vaddrs[line_idx] ? 0 : line_num,
                  .vaddr      = params->line_vaddrs[line_idx],
-                 .expr = s(""));
+                 .expr       = s(""));
         }
       }
     }
@@ -1901,7 +1901,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   if(params->flags & RD_CodeSliceFlag_LineNums) UI_Parent(top_container_box) ProfScope("build line numbers") UI_Focus(UI_FocusKind_Off)
     UI_TagF("floating")
   {
-    TxtRng select_rng = txt_rng(*cursor, *mark);
+    Rng1U64 select_rng = r1u64(*cursor, *mark);
     ui_set_next_fixed_x(floor_f32(params->margin_float_off_px + params->priority_margin_width_px + params->catchall_margin_width_px));
     ui_set_next_pref_width(ui_px(params->line_num_width_px, 1.f));
     ui_set_next_pref_height(ui_px(params->line_height_px*(dim_1s64(params->line_num_range)+1), 1.f));
@@ -1917,7 +1917,8 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
           line_num <= params->line_num_range.max;
           line_num += 1, line_idx += 1)
       {
-        B32 line_is_selected = (select_rng.min.line <= line_num && line_num <= select_rng.max.line);
+        Rng1U64 line_range = params->line_ranges[line_idx];
+        B32 line_is_selected = (dim_1u64(intersect_1u64(select_rng, line_range)) != 0) || (line_range.min <= *cursor && *cursor <= line_range.max);
         Vec4F32 bg_color = v4f32(0, 0, 0, 0);
         
         // rjf: line info on this line -> adjust bg color to visualize
@@ -1974,63 +1975,57 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //////////////////////////////
   //- rjf: mouse -> text coordinates
   //
-  TxtPt mouse_pt = {0};
+  U64 mouse_off = 0;
+  U64 mouse_y_line_idx = 0;
   ProfScope("mouse -> text coordinates")
   {
     Vec2F32 mouse = ui_mouse();
     
     // rjf: mouse y => index
-    U64 mouse_y_line_idx = (U64)((mouse.y - text_container_box->rect.y0) / params->line_height_px);
+    S64 mouse_y_line_idx_signed = ((mouse.y - text_container_box->rect.y0) / params->line_height_px);
+    mouse_y_line_idx_signed = Clamp(0, mouse_y_line_idx_signed, dim_1s64(params->line_num_range)-1);
+    mouse_y_line_idx = (U64)mouse_y_line_idx_signed;
     
     // rjf: index => line num
     S64 line_num = (params->line_num_range.min + mouse_y_line_idx);
+    Rng1U64 line_range = (params->line_num_range.min <= line_num && line_num <= params->line_num_range.max) ? (params->line_ranges[mouse_y_line_idx]) : r1u64(0, 0);
     String8 line_string = (params->line_num_range.min <= line_num && line_num <= params->line_num_range.max) ? (params->line_text[mouse_y_line_idx]) : str8_zero();
     
-    // rjf: mouse x * string => column
-    S64 column = fnt_char_pos_from_tag_size_string_p(params->font, params->font_size, 0, params->tab_size, line_string, mouse.x-text_container_box->rect.x0-params->line_num_width_px-line_num_padding_px)+1;
+    // rjf: mouse x * string => line offset
+    U64 mouse_line_off = fnt_char_pos_from_tag_size_string_p(params->font, params->font_size, 0, params->tab_size, line_string, mouse.x-text_container_box->rect.x0-params->line_num_width_px-line_num_padding_px);
     
-    // rjf: bundle
-    mouse_pt = txt_pt(line_num, column);
+    // rjf: compute
+    mouse_off = line_range.min + mouse_line_off;
     
     // rjf: clamp
     {
-      U64 last_line_size = params->line_text[dim_1s64(params->line_num_range)].size;
-      TxtRng legal_pt_rng = txt_rng(txt_pt(params->line_num_range.min, 1),
-                                    txt_pt(params->line_num_range.max, last_line_size+1));
-      if(txt_pt_less_than(mouse_pt, legal_pt_rng.min))
-      {
-        mouse_pt = legal_pt_rng.min;
-      }
-      if(txt_pt_less_than(legal_pt_rng.max, mouse_pt))
-      {
-        mouse_pt = legal_pt_rng.max;
-      }
+      Rng1U64 legal_range = r1u64(params->line_ranges[0].min, params->line_ranges[dim_1s64(params->line_num_range)].max);
+      mouse_off = clamp_1u64(legal_range, mouse_off);
     }
     
-    result.mouse_pt = mouse_pt;
+    result.mouse_off = mouse_off;
   }
   
   //////////////////////////////
   //- rjf: mouse point -> mouse token range, mouse line range
   //
-  TxtRng mouse_token_rng = txt_rng(mouse_pt, mouse_pt);
-  TxtRng mouse_line_rng = txt_rng(mouse_pt, mouse_pt);
-  if(contains_1s64(params->line_num_range, mouse_pt.line))
+  Rng1U64 mouse_token_rng = r1u64(mouse_off, mouse_off);
+  Rng1U64 mouse_line_rng = r1u64(mouse_off, mouse_off);
+  if(mouse_y_line_idx < (U64)dim_1s64(params->line_num_range))
   {
-    TXT_TokenArray *line_tokens = &params->line_tokens[mouse_pt.line-params->line_num_range.min];
-    Rng1U64 line_range = params->line_ranges[mouse_pt.line-params->line_num_range.min];
-    U64 mouse_pt_off = (mouse_pt.column-1) + line_range.min;
+    TXT_TokenArray *line_tokens = &params->line_tokens[mouse_y_line_idx];
+    Rng1U64 line_range = params->line_ranges[mouse_y_line_idx];
     for(U64 line_token_idx = 0; line_token_idx < line_tokens->count; line_token_idx += 1)
     {
       TXT_Token *line_token = &line_tokens->v[line_token_idx];
-      if(contains_1u64(line_token->range, mouse_pt_off))
+      if(contains_1u64(line_token->range, mouse_off))
       {
         Rng1U64 line_token_range_clamped = intersect_1u64(line_token->range, line_range);
-        mouse_token_rng = txt_rng(txt_pt(mouse_pt.line, 1+line_token_range_clamped.min-line_range.min), txt_pt(mouse_pt.line, 1+line_token_range_clamped.max-line_range.min));
+        mouse_token_rng = r1u64(line_token_range_clamped.min, line_token_range_clamped.max);
         break;
       }
     }
-    mouse_line_rng = txt_rng(txt_pt(mouse_pt.line, 1), txt_pt(mouse_pt.line, 1+(line_range.max-line_range.min)));
+    mouse_line_rng = line_range;
   }
   
   //////////////////////////////
@@ -2042,7 +2037,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   UI_Signal text_container_sig = ui_signal_from_box(text_container_box);
   {
     //- rjf: determine mouse drag range
-    TxtRng mouse_drag_rng = txt_rng(mouse_pt, mouse_pt);
+    Rng1U64 mouse_drag_rng = r1u64(mouse_off, mouse_off);
     if(text_container_sig.f & UI_SignalFlag_LeftTripleDragging)
     {
       mouse_drag_rng = mouse_line_rng;
@@ -2055,24 +2050,12 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     //- rjf: clicking/dragging over the text container
     if(!ctrlified && ui_dragging(text_container_sig))
     {
-      if(mouse_pt.line == 0)
-      {
-        mouse_pt.column = 1;
-        if(ui_mouse().y <= top_container_box->rect.y0)
-        {
-          mouse_pt.line = params->line_num_range.min - 2;
-        }
-        else if(ui_mouse().y >= top_container_box->rect.y1)
-        {
-          mouse_pt.line = params->line_num_range.max + 2;
-        }
-      }
       if(ui_pressed(text_container_sig))
       {
         *cursor = mouse_drag_rng.max;
         *mark = mouse_drag_rng.min;
       }
-      if(txt_pt_less_than(mouse_pt, *mark))
+      if(mouse_off < *mark)
       {
         *cursor = mouse_drag_rng.min;
       }
@@ -2080,7 +2063,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       {
         *cursor = mouse_drag_rng.max;
       }
-      *preferred_column = cursor->column;
+      *preferred_column = *cursor - mouse_line_rng.min;
     }
     
     //- rjf: dragging will invalidate the search string, so we don't want to draw it while dragging/releasing
@@ -2092,25 +2075,25 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     //- rjf: right-click => code context menu
     if(ui_right_clicked(text_container_sig))
     {
-      if(txt_pt_match(*cursor, *mark))
+      if(*cursor == *mark)
       {
-        *cursor = *mark = mouse_pt;
+        *cursor = *mark = mouse_off;
       }
       U64 vaddr = 0;
       D_LineList lines = {0};
-      if(params->line_num_range.min <= cursor->line && cursor->line < params->line_num_range.max)
+      if(mouse_y_line_idx < (U64)dim_1s64(params->line_num_range))
       {
-        vaddr = params->line_vaddrs[cursor->line - params->line_num_range.min];
-        lines = params->line_infos[cursor->line - params->line_num_range.min];
+        vaddr = params->line_vaddrs[mouse_y_line_idx];
+        lines = params->line_infos[mouse_y_line_idx];
       }
       String8 commands_expr;
       if(vaddr != 0)
       {
-        commands_expr = txt_pt_match(*cursor, *mark) ? s("query:disasm_pt_commands") : s("query:disasm_range_commands");
+        commands_expr = (*cursor == *mark) ? s("query:disasm_pt_commands") : s("query:disasm_range_commands");
       }
       else
       {
-        commands_expr = txt_pt_match(*cursor, *mark) ? s("query:text_pt_commands") : s("query:text_range_commands");
+        commands_expr = (*cursor == *mark) ? s("query:text_pt_commands") : s("query:text_range_commands");
       }
       rd_cmd(RD_CmdKind_FocusPanel);
       rd_cmd(RD_CmdKind_PushQuery,
@@ -2127,40 +2110,38 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     }
     
     //- rjf: drop target is dropped -> process
-    if(drop_can_hit_lines && ui_key_match(ui_drop_hot_key(), drop_site_key) && rd_drag_drop())
+    if(drop_can_hit_lines && ui_key_match(ui_drop_hot_key(), drop_site_key) && rd_drag_drop() &&
+       mouse_y_line_idx < (U64)dim_1s64(params->line_num_range))
     {
       if(rd_state->drag_drop_regs_slot == RD_RegSlot_Expr)
       {
-        S64 line_num = mouse_pt.line;
-        U64 line_idx = line_num - params->line_num_range.min;
-        U64 line_vaddr = params->line_vaddrs[line_idx];
+        U64 line_num = (U64)params->line_num_range.min + mouse_y_line_idx;
+        U64 line_vaddr = params->line_vaddrs[mouse_y_line_idx];
         rd_cmd(RD_CmdKind_AddWatchPin,
                .expr       = rd_state->drag_drop_regs->expr,
                .file_path  = line_vaddr == 0 ? rd_regs()->file_path : str8_zero(),
-               .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
+               .line_num   = line_vaddr == 0 ? line_num : 0,
                .vaddr      = line_vaddr);
       }
       if(rd_state->drag_drop_regs_slot == RD_RegSlot_Cfg && drop_cfg != &cfg_nil_node)
       {
-        S64 line_num = mouse_pt.line;
-        U64 line_idx = line_num - params->line_num_range.min;
-        U64 line_vaddr = params->line_vaddrs[line_idx];
+        U64 line_num = (U64)params->line_num_range.min + mouse_y_line_idx;
+        U64 line_vaddr = params->line_vaddrs[mouse_y_line_idx];
         rd_cmd(RD_CmdKind_RelocateCfg,
                .cfg        = drop_cfg->id,
                .file_path  = line_vaddr == 0 ? rd_regs()->file_path : str8_zero(),
-               .cursor     = line_vaddr == 0 ? txt_pt(line_num, 1) : txt_pt(0, 0),
+               .line_num   = line_vaddr == 0 ? line_num : 0,
                .vaddr      = line_vaddr);
       }
       if(drop_thread != &d_entity_nil)
       {
-        S64 line_num = mouse_pt.line;
-        U64 line_idx = line_num - params->line_num_range.min;
-        U64 line_vaddr = params->line_vaddrs[line_idx];
+        U64 line_num = (U64)params->line_num_range.min + mouse_y_line_idx;
+        U64 line_vaddr = params->line_vaddrs[mouse_y_line_idx];
         D_Entity *thread = drop_thread;
         U64 new_rip_vaddr = line_vaddr;
-        if(params->line_vaddrs[line_idx] == 0)
+        if(params->line_vaddrs[mouse_y_line_idx] == 0)
         {
-          D_LineList *lines = &params->line_infos[line_idx];
+          D_LineList *lines = &params->line_infos[mouse_y_line_idx];
           for(D_LineNode *n = lines->first; n != 0; n = n->next)
           {
             D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, n->v.dbgi_key);
@@ -2186,7 +2167,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   TXT_ScopeNode *cursor_scope_node = &txt_scope_node_nil;
   if(params->text_info != 0)
   {
-    cursor_scope_node = txt_scope_node_from_info_pt(params->text_info, rd_regs()->cursor);
+    cursor_scope_node = txt_scope_node_from_info_off(params->text_info, *cursor);
   }
   
   //////////////////////////////
@@ -2214,7 +2195,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         scope_line_color.w = scope_line_color_t*0.5f;
         Rng1U64 token_idx_range = scope_n->token_idx_range;
         Rng1U64 off_range = r1u64(params->text_info->tokens.v[token_idx_range.min].range.min, params->text_info->tokens.v[token_idx_range.max].range.min);
-        TxtRng txt_range = txt_rng(txt_pt_from_info_off__linear_scan(params->text_info, off_range.min), txt_pt_from_info_off__linear_scan(params->text_info, off_range.max));
+        TxtRng txt_range = txt_rng(txt_pt_from_off__linear_scan(params->text_info, params->patches, off_range.min), txt_pt_from_off__linear_scan(params->text_info, params->patches, off_range.max));
         
         //- rjf: single-line scopes (underline)
         if(txt_range.min.line == txt_range.max.line && contains_1s64(params->line_num_range, txt_range.min.line))
@@ -2623,40 +2604,37 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //////////////////////////////
   //- rjf: mouse -> expression range info
   //
-  TxtRng mouse_expr_rng = {0};
+  Rng1U64 mouse_expr_rng = {0};
   Vec2F32 mouse_expr_baseline_pos = {0};
   String8 mouse_expr = {0};
   B32 mouse_expr_is_explicit = 0;
-  if(ui_hovering(text_container_sig) && contains_1s64(params->line_num_range, mouse_pt.line)) ProfScope("mouse -> expression range")
+  if(ui_hovering(text_container_sig) && mouse_y_line_idx < (U64)dim_1s64(params->line_num_range))
   {
-    TxtRng selected_rng = txt_rng(*cursor, *mark);
-    if(!txt_pt_match(*cursor, *mark) && cursor->line == mark->line &&
-       ((txt_pt_less_than(selected_rng.min, mouse_pt) || txt_pt_match(selected_rng.min, mouse_pt)) &&
-        txt_pt_less_than(mouse_pt, selected_rng.max)))
+    Rng1U64 selected_rng = r1u64(*cursor, *mark);
+    if(*cursor != *mark && contains_1u64(selected_rng, mouse_off))
     {
-      U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
-      String8 line_text = params->line_text[line_slice_idx];
-      F32 expr_hoff_px = params->line_num_width_px + fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_text, selected_rng.min.column-1)).x;
-      result.mouse_expr_rng = mouse_expr_rng = selected_rng;
+      String8 line_text = params->line_text[mouse_y_line_idx];
+      Rng1U64 line_range = params->line_ranges[mouse_y_line_idx];
+      Rng1U64 selected_in_line_range = intersect_1u64(line_range, selected_rng);
+      F32 expr_hoff_px = params->line_num_width_px + fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_text, selected_in_line_range.min)).x;
+      result.mouse_expr_rng = mouse_expr_rng = selected_in_line_range;
       mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
-                                      text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
-      mouse_expr = str8_substr(line_text, r1u64(selected_rng.min.column-1, selected_rng.max.column-1));
+                                      text_container_box->rect.y0+mouse_y_line_idx*params->line_height_px + params->line_height_px*0.85f);
+      mouse_expr = str8_substr(line_text, selected_in_line_range);
       mouse_expr_is_explicit = 1;
     }
     else
     {
-      U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
-      String8 line_text = params->line_text[line_slice_idx];
-      TXT_TokenArray line_tokens = params->line_tokens[line_slice_idx];
-      Rng1U64 line_range = params->line_ranges[line_slice_idx];
-      U64 mouse_pt_off = line_range.min + (mouse_pt.column-1);
-      Rng1U64 expr_off_rng = txt_expr_off_range_from_line_off_range_string_tokens(mouse_pt_off, line_range, line_text, &line_tokens);
+      String8 line_text = params->line_text[mouse_y_line_idx];
+      TXT_TokenArray line_tokens = params->line_tokens[mouse_y_line_idx];
+      Rng1U64 line_range = params->line_ranges[mouse_y_line_idx];
+      Rng1U64 expr_off_rng = txt_expr_off_range_from_line_off_range_string_tokens(mouse_off, line_range, line_text, &line_tokens);
       if(expr_off_rng.max != expr_off_rng.min)
       {
         F32 expr_hoff_px = params->line_num_width_px + fnt_dim_from_tag_size_string(params->font, params->font_size, 0, params->tab_size, str8_prefix(line_text, expr_off_rng.min-line_range.min)).x;
-        result.mouse_expr_rng = mouse_expr_rng = txt_rng(txt_pt(mouse_pt.line, 1+(expr_off_rng.min-line_range.min)), txt_pt(mouse_pt.line, 1+(expr_off_rng.max-line_range.min)));
+        result.mouse_expr_rng = mouse_expr_rng = expr_off_rng;
         mouse_expr_baseline_pos = v2f32(text_container_box->rect.x0+expr_hoff_px,
-                                        text_container_box->rect.y0+line_slice_idx*params->line_height_px + params->line_height_px*0.85f);
+                                        text_container_box->rect.y0+mouse_y_line_idx*params->line_height_px + params->line_height_px*0.85f);
         mouse_expr = str8_substr(line_text, r1u64(expr_off_rng.min-line_range.min, expr_off_rng.max-line_range.min));
       }
     }
@@ -2665,11 +2643,10 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   //////////////////////////////
   //- rjf: mouse -> set global frontend hovered line info
   //
-  if(ui_hovering(text_container_sig) && contains_1s64(params->line_num_range, mouse_pt.line) && (ui_mouse().x - text_container_box->rect.x0 < params->line_num_width_px + line_num_padding_px))
+  if(ui_hovering(text_container_sig) && mouse_y_line_idx < (U64)dim_1s64(params->line_num_range) && (ui_mouse().x - text_container_box->rect.x0 < params->line_num_width_px + line_num_padding_px))
   {
-    U64 line_slice_idx = mouse_pt.line-params->line_num_range.min;
-    D_LineList *lines = &params->line_infos[line_slice_idx];
-    if(lines->first != 0 && (params->line_vaddrs[line_slice_idx] != 0 || lines->first->v.pt.line == mouse_pt.line))
+    D_LineList *lines = &params->line_infos[mouse_y_line_idx];
+    if(lines->first != 0 && (params->line_vaddrs[mouse_y_line_idx] != 0 || lines->first->v.pt.line == params->line_num_range.min + mouse_y_line_idx))
     {
       RD_RegsScope(.process     = selected_thread_process->handle,
                    .vaddr_range = d_vaddr_range_from_voff_range(selected_thread_module, lines->first->v.voff_range),
@@ -2693,10 +2670,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     if(eval.msgs.max_kind == E_MsgKind_Null && (eval_implicit_hover || mouse_expr_is_explicit))
     {
       U64 line_vaddr = 0;
-      if(contains_1s64(params->line_num_range, mouse_pt.line))
+      if(mouse_y_line_idx < (U64)dim_1s64(params->line_num_range))
       {
-        U64 line_idx = mouse_pt.line-params->line_num_range.min;
-        line_vaddr = params->line_vaddrs[line_idx];
+        line_vaddr = params->line_vaddrs[mouse_y_line_idx];
       }
       rd_set_hover_eval(mouse_expr_baseline_pos, mouse_expr);
     }
@@ -2713,9 +2689,9 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
       Vec4F32 color = drop_color;
       color.w *= 0.2f;
       Rng2F32 drop_line_rect = r2f32p(top_container_box->rect.x0,
-                                      top_container_box->rect.y0 + (mouse_pt.line - params->line_num_range.min) * params->line_height_px,
+                                      top_container_box->rect.y0 + mouse_y_line_idx*params->line_height_px,
                                       top_container_box->rect.x1,
-                                      top_container_box->rect.y0 + (mouse_pt.line - params->line_num_range.min + 1) * params->line_height_px);
+                                      top_container_box->rect.y0 + (mouse_y_line_idx+1)*params->line_height_px);
       R_Rect2DInst *inst = dr_rect(drop_line_rect, color, 0, 0, 1.f);
       inst->colors[Corner_10] = inst->colors[Corner_11] = v4f32(color.x, color.y, color.z, 0);
     }
@@ -2729,7 +2705,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
   struct TxtRngColorPairNode
   {
     TxtRngColorPairNode *next;
-    TxtRng rng;
+    Rng1U64 range;
     Vec4F32 color;
   };
   TxtRngColorPairNode *first_txt_rng_color_pair = 0;
@@ -2738,16 +2714,16 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
     // rjf: push initial for cursor/mark
     {
       TxtRngColorPairNode *n = push_array(scratch.arena, TxtRngColorPairNode, 1);
-      n->rng = txt_rng(*cursor, *mark);
+      n->range = r1u64(*cursor, *mark);
       n->color = ui_color_from_name(s("selection"));
       SLLQueuePush(first_txt_rng_color_pair, last_txt_rng_color_pair, n);
     }
     
     // rjf: push for ctrlified mouse expr
-    if(ctrlified && !txt_pt_match(result.mouse_expr_rng.max, result.mouse_expr_rng.min)) UI_Tag(s("pop"))
+    if(ctrlified && result.mouse_expr_rng.max != result.mouse_expr_rng.min) UI_Tag(s("pop"))
     {
       TxtRngColorPairNode *n = push_array(scratch.arena, TxtRngColorPairNode, 1);
-      n->rng = result.mouse_expr_rng;
+      n->range = result.mouse_expr_rng;
       n->color = ui_color_from_name(s("background"));
       n->color.w *= 0.2f;
       SLLQueuePush(first_txt_rng_color_pair, last_txt_rng_color_pair, n);
@@ -2840,33 +2816,22 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
         
         // rjf: extra rendering for list(text_range*color)
         {
-          U64 prev_line_size = (line_idx > 0) ? params->line_text[line_idx-1].size : 0;
-          U64 next_line_size = (line_idx+1 < dim_1s64(params->line_num_range)) ? params->line_text[line_idx+1].size : 0;
+          Rng1U64 prev_line_range = (line_idx > 0) ? params->line_ranges[line_idx-1] : r1u64(0, 0);
+          Rng1U64 next_line_range = (line_idx+1 < dim_1s64(params->line_num_range)) ? params->line_ranges[line_idx+1] : r1u64(0, 0);
           for(TxtRngColorPairNode *n = first_txt_rng_color_pair; n != 0; n = n->next)
           {
-            TxtRng select_range = n->rng;
-            TxtRng line_range = txt_rng(txt_pt(line_num, 1), txt_pt(line_num, line_string.size+1));
-            TxtRng select_range_in_line = txt_rng_intersect(select_range, line_range);
-            if(!txt_pt_match(select_range_in_line.min, select_range_in_line.max) &&
-               txt_pt_less_than(select_range_in_line.min, select_range_in_line.max))
+            Rng1U64 select_range = n->range;
+            Rng1U64 select_range_in_line = intersect_1u64(select_range, line_range);
+            if(select_range_in_line.min < select_range_in_line.max)
             {
-              TxtRng prev_line_range = txt_rng(txt_pt(line_num-1, 1), txt_pt(line_num-1, prev_line_size+1));
-              TxtRng next_line_range = txt_rng(txt_pt(line_num+1, 1), txt_pt(line_num+1, next_line_size+1));
-              TxtRng select_range_in_prev_line = txt_rng_intersect(prev_line_range, select_range);
-              TxtRng select_range_in_next_line = txt_rng_intersect(next_line_range, select_range);
-              B32 prev_line_good = (!txt_pt_match(select_range_in_prev_line.min, select_range_in_prev_line.max) &&
-                                    txt_pt_less_than(select_range_in_prev_line.min, select_range_in_prev_line.max));
-              B32 next_line_good = (!txt_pt_match(select_range_in_next_line.min, select_range_in_next_line.max) &&
-                                    txt_pt_less_than(select_range_in_next_line.min, select_range_in_next_line.max));
-              Rng1S64 select_column_range_in_line =
-              {
-                (select_range.min.line == line_num) ? select_range.min.column : 1,
-                (select_range.max.line == line_num) ? select_range.max.column : (S64)(line_string.size+1),
-              };
+              Rng1U64 select_range_in_prev_line = intersect_1u64(prev_line_range, select_range);
+              Rng1U64 select_range_in_next_line = intersect_1u64(next_line_range, select_range);
+              B32 prev_line_good = (select_range_in_prev_line.min < select_range_in_prev_line.max);
+              B32 next_line_good = (select_range_in_next_line.min < select_range_in_next_line.max);
               Rng1F32 select_column_pixel_off_range =
               {
-                fnt_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, select_column_range_in_line.min-1)).x,
-                fnt_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, select_column_range_in_line.max-1)).x,
+                fnt_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, select_range_in_line.min - line_range.min)).x,
+                fnt_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, select_range_in_line.max - line_range.min)).x,
               };
               Rng2F32 select_rect =
               {
@@ -2882,20 +2847,22 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
               }
               F32 rounded_radius = params->font_size*0.4f;
               R_Rect2DInst *inst = dr_rect(select_rect, color, rounded_radius, 0, 1);
-              inst->corner_radii[Corner_00] = !prev_line_good || select_range_in_prev_line.min.column > select_range_in_line.min.column ? rounded_radius : 0.f;
-              inst->corner_radii[Corner_10] = (!prev_line_good || select_range_in_line.max.column > select_range_in_prev_line.max.column || select_range_in_line.max.column < select_range_in_prev_line.min.column) ? rounded_radius : 0.f;
-              inst->corner_radii[Corner_01] = (!next_line_good || select_range_in_next_line.min.column > select_range_in_line.min.column || select_range_in_next_line.max.column < select_range_in_line.min.column) ? rounded_radius : 0.f;
-              inst->corner_radii[Corner_11] = !next_line_good || select_range_in_line.max.column > select_range_in_next_line.max.column ? rounded_radius : 0.f;
+              Rng1U64 prev_line_selection_off_range = r1u64(select_range_in_prev_line.min - prev_line_range.min, select_range_in_prev_line.max - prev_line_range.min);
+              Rng1U64 next_line_selection_off_range = r1u64(select_range_in_next_line.min - next_line_range.min, select_range_in_next_line.max - next_line_range.min);
+              Rng1U64 crnt_line_selection_off_range = r1u64(select_range_in_line.min - line_range.min, select_range_in_line.max - line_range.min);
+              inst->corner_radii[Corner_00] = !prev_line_good || prev_line_selection_off_range.min > crnt_line_selection_off_range.min ? rounded_radius : 0.f;
+              inst->corner_radii[Corner_10] = (!prev_line_good || crnt_line_selection_off_range.max > prev_line_selection_off_range.max || crnt_line_selection_off_range.max < prev_line_selection_off_range.min) ? rounded_radius : 0.f;
+              inst->corner_radii[Corner_01] = (!next_line_good || next_line_selection_off_range.min > crnt_line_selection_off_range.min || next_line_selection_off_range.max < crnt_line_selection_off_range.min) ? rounded_radius : 0.f;
+              inst->corner_radii[Corner_11] = !next_line_good || crnt_line_selection_off_range.max > next_line_selection_off_range.max ? rounded_radius : 0.f;
             }
           }
         }
         
         // rjf: extra rendering for cursor position
-        if(cursor->line == line_num)
+        if(line_range.min <= *cursor && *cursor <= line_range.max)
         {
-          S64 column = cursor->column;
-          Vec2F32 advance = fnt_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, column-1));
-          F32 cursor_y = line_box->rect.y0-params->font_size*0.125f;
+          Vec2F32 advance = fnt_dim_from_tag_size_string(line_box->font, line_box->font_size, 0, params->tab_size, str8_prefix(line_string, *cursor - line_range.min));
+          F32 cursor_y = text_container_box->rect.y0 + line_idx*params->line_height_px - params->font_size*0.125f;
           F32 cursor_y__animated = ui_anim(ui_key_from_stringf(text_container_box->key, "cursor_y_px"), cursor_y);
           F32 cursor_off_pixels = advance.x;
           F32 cursor_off_pixels__animated = ui_anim(ui_key_from_stringf(text_container_box->key, "cursor_off_px"), cursor_off_pixels);
@@ -2986,7 +2953,7 @@ rd_code_slice(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *prefe
 }
 
 internal RD_CodeSliceSignal
-rd_code_slicef(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *preferred_column, char *fmt, ...)
+rd_code_slicef(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred_column, char *fmt, ...)
 {
   Temp scratch = scratch_begin(0, 0);
   va_list args;
@@ -2999,179 +2966,11 @@ rd_code_slicef(RD_CodeSliceParams *params, TxtPt *cursor, TxtPt *mark, S64 *pref
 }
 
 internal B32
-rd_do_txt_controls(TXT_TextInfo *info, String8 data, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column)
+rd_do_txt_controls(TXT_TextInfo *info, String8 data, TXT_PatchList *patches, U64 line_count_per_page, TxtPt *cursor, TxtPt *mark, S64 *preferred_column)
 {
   Temp scratch = scratch_begin(0, 0);
   B32 change = 0;
-  for(UI_Event *evt = 0; ui_next_event(&evt);)
-  {
-    if(evt->kind != UI_EventKind_Navigate && evt->kind != UI_EventKind_Edit)
-    {
-      continue;
-    }
-    B32 taken = 0;
-    String8 line = txt_string_from_info_data_line_num(info, data, cursor->line);
-    UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, evt, line, *cursor, *mark);
-    
-    //- rjf: invalid single-line op or endpoint units => try multiline
-    if(evt->delta_unit == UI_EventDeltaUnit_Whole || single_line_op.flags & UI_TxtOpFlag_Invalid)
-    {
-      U64 line_count = info->lines_count;
-      String8 prev_line = txt_string_from_info_data_line_num(info, data, cursor->line-1);
-      String8 next_line = txt_string_from_info_data_line_num(info, data, cursor->line+1);
-      Vec2S32 delta = evt->delta_2s32;
-      
-      //- rjf: wrap lines right
-      if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x > 0 && cursor->column == line.size+1 && cursor->line+1 <= line_count)
-      {
-        cursor->line += 1;
-        cursor->column = 1;
-        *preferred_column = 1;
-        change = 1;
-        taken = 1;
-      }
-      
-      //- rjf: wrap lines left
-      if(evt->delta_unit != UI_EventDeltaUnit_Whole && delta.x < 0 && cursor->column == 1 && cursor->line-1 >= 1)
-      {
-        cursor->line -= 1;
-        cursor->column = prev_line.size+1;
-        *preferred_column = prev_line.size+1;
-        change = 1;
-        taken = 1;
-      }
-      
-      //- rjf: movement down (plain)
-      if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y > 0 && cursor->line+1 <= line_count)
-      {
-        cursor->line += 1;
-        cursor->column = Min(*preferred_column, next_line.size+1);
-        change = 1;
-        taken = 1;
-      }
-      
-      //- rjf: movement up (plain)
-      if(evt->delta_unit == UI_EventDeltaUnit_Char && delta.y < 0 && cursor->line-1 >= 1)
-      {
-        cursor->line -= 1;
-        cursor->column = Min(*preferred_column, prev_line.size+1);
-        change = 1;
-        taken = 1;
-      }
-      
-      //- rjf: movement down (chunk)
-      if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y > 0 && cursor->line+1 <= line_count)
-      {
-        for(S64 line_num = cursor->line+1; line_num <= line_count; line_num += 1)
-        {
-          String8 line = txt_string_from_info_data_line_num(info, data, line_num);
-          U64 line_size = line.size;
-          if(line_size == 0)
-          {
-            cursor->line = line_num;
-            cursor->column = 1;
-            break;
-          }
-          else if(line_num == line_count)
-          {
-            cursor->line = line_num;
-            cursor->column = line_size+1;
-          }
-        }
-        change = 1;
-        taken = 1;
-      }
-      
-      //- rjf: movement up (chunk)
-      if(evt->delta_unit == UI_EventDeltaUnit_Word && delta.y < 0 && cursor->line-1 >= 1)
-      {
-        for(S64 line_num = cursor->line-1; line_num > 0; line_num -= 1)
-        {
-          String8 line = txt_string_from_info_data_line_num(info, data, line_num);
-          U64 line_size = line.size;
-          if(line_size == 0)
-          {
-            cursor->line = line_num;
-            cursor->column = 1;
-            break;
-          }
-          else if(line_num == 1)
-          {
-            cursor->line = line_num;
-            cursor->column = 1;
-          }
-        }
-        change = 1;
-        taken = 1;
-      }
-      
-      //- rjf: movement down (page)
-      if(evt->delta_unit == UI_EventDeltaUnit_Page && delta.y > 0)
-      {
-        cursor->line += line_count_per_page;
-        cursor->column = 1;
-        cursor->line = Clamp(1, cursor->line, line_count);
-        change = 1;
-        taken = 1;
-      }
-      
-      //- rjf: movement up (page)
-      if(evt->delta_unit == UI_EventDeltaUnit_Page && delta.y < 0)
-      {
-        cursor->line -= line_count_per_page;
-        cursor->column = 1;
-        cursor->line = Clamp(1, cursor->line, line_count);
-        change = 1;
-        taken = 1;
-      }
-      
-      //- rjf: movement to endpoint (+)
-      if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y > 0 || delta.x > 0))
-      {
-        *cursor = txt_pt(line_count, info->lines_count ? dim_1u64(info->lines_ranges[info->lines_count-1])+1 : 1);
-        change = 1;
-        taken = 1;
-      }
-      
-      //- rjf: movement to endpoint (-)
-      if(evt->delta_unit == UI_EventDeltaUnit_Whole && (delta.y < 0 || delta.x < 0))
-      {
-        *cursor = txt_pt(1, 1);
-        change = 1;
-        taken = 1;
-      }
-      
-      //- rjf: stick mark to cursor, when we don't want to keep it in the same spot
-      if(!(evt->flags & UI_EventFlag_KeepMark))
-      {
-        *mark = *cursor;
-      }
-    }
-    
-    //- rjf: valid single-line op => do single-line op
-    else
-    {
-      *cursor = single_line_op.cursor;
-      *mark = single_line_op.mark;
-      *preferred_column = cursor->column;
-      change = 1;
-      taken = 1;
-    }
-    
-    //- rjf: copy
-    if(evt->flags & UI_EventFlag_Copy)
-    {
-      String8 text = txt_string_from_info_data_txt_rng(info, data, txt_rng(*cursor, *mark));
-      wm_set_clipboard_text(text);
-      taken = 1;
-    }
-    
-    //- rjf: consume
-    if(taken)
-    {
-      ui_eat_event(evt);
-    }
-  }
+  
   
   scratch_end(scratch);
   return change;
@@ -3619,6 +3418,52 @@ rd_cell(RD_CellParams *params, String8 string)
   }
   
   //////////////////////////////
+  //- rjf: build lock
+  //
+  if(params->flags & RD_CellFlag_Lock && !is_focus_active && !is_focus_active_disabled) UI_Parent(box) UI_Focus(UI_FocusKind_Off)
+  {
+    // TODO(rjf): @hack
+    {
+      ui_spacer(ui_em(0.5f, 1.f));
+    }
+    B32 is_locked = (params->lock_out && params->lock_out[0]);
+    UI_PrefWidth(ui_em(2.f, 1.f))
+      UI_TagF(".")
+      UI_TagF(is_locked ? "pop" : "weak")
+      UI_TagF("implicit")
+      UI_Column
+      UI_Padding(ui_pct(1, 0))
+      UI_PrefHeight(ui_em(2.f, 1.f))
+      UI_CornerRadius(ui_top_font_size()*0.5f)
+      RD_Font(RD_FontSlot_Icons)
+      UI_TextAlignment(UI_TextAlign_Center)
+    {
+      UI_Box *lock_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
+                                                   UI_BoxFlag_DrawHotEffects|
+                                                   UI_BoxFlag_DrawBorder|
+                                                   UI_BoxFlag_DrawBackground|
+                                                   UI_BoxFlag_DisableFocusOverlay|
+                                                   UI_BoxFlag_DisableFocusBorder|
+                                                   UI_BoxFlag_Clickable,
+                                                   "%S###lock", rd_icon_kind_text_table[is_locked ? RD_IconKind_Locked : RD_IconKind_Unlocked]);
+      UI_Signal sig = ui_signal_from_box(lock_box);
+      if(ui_hovering(sig)) UI_Tooltip RD_Font(RD_FontSlot_Main)
+      {
+        ui_state->tooltip_anchor_key = lock_box->key;
+        UI_PrefWidth(ui_children_sum(1)) UI_Row
+        {
+          UI_PrefWidth(ui_text_dim(10, 1)) ui_label(is_locked ? s("Unlock Location") : s("Lock Location"));
+          rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_ToggleLock].string, s(""), 1, RD_CmdBindingButtonFlag_NoEdit);
+        }
+      }
+      if(ui_pressed(sig) && params->lock_out)
+      {
+        params->lock_out[0] ^= 1;
+      }
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build left-hand-side container box
   //
   UI_Box *lhs_box = &ui_nil_box;
@@ -4051,8 +3896,8 @@ rd_cell(RD_CellParams *params, String8 string)
       {
         ui_kill_action();
       }
-      params->cursor[0] = txt_pt(1, edit_string.size+1);
-      params->mark[0] = txt_pt(1, 1);
+      params->cursor[0] = edit_string.size;
+      params->mark[0] = 0;
       focus_started = 1;
     }
   }
@@ -4088,7 +3933,7 @@ rd_cell(RD_CellParams *params, String8 string)
       }
       
       // rjf: map this action to an op
-      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, params->cursor[0], params->mark[0]);
+      UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, r1u64(0, edit_string.size), params->cursor[0], params->mark[0]);
       
       // rjf: any valid *additive* op & autocomplete hint? -> perform autocomplete first, then re-compute op
       if(!(evt->flags & UI_EventFlag_Delete) && autocomplete_hint_string.size != 0)
@@ -4096,27 +3941,27 @@ rd_cell(RD_CellParams *params, String8 string)
         CFG_Node *window = cfg_node_from_id(rd_regs()->window);
         RD_WindowState *ws = rd_window_state_from_cfg(window);
         RD_AutocompCursorInfo *autocomp_cursor_info = &ws->autocomp_cursor_info;
-        String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, r1s64(autocomp_cursor_info->replaced_range.min+1, autocomp_cursor_info->replaced_range.max+1), autocomplete_hint_string);
+        String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, autocomp_cursor_info->replaced_range, autocomplete_hint_string);
         new_string.size = Min(params->edit_buffer_size, new_string.size);
         MemoryCopy(params->edit_buffer, new_string.str, new_string.size);
         params->edit_string_size_out[0] = new_string.size;
-        params->cursor[0] = params->mark[0] = txt_pt(1, 1+autocomp_cursor_info->replaced_range.min+autocomplete_hint_string.size);
+        params->cursor[0] = params->mark[0] = autocomp_cursor_info->replaced_range.min+autocomplete_hint_string.size;
         edit_string = str8(params->edit_buffer, params->edit_string_size_out[0]);
-        op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, params->cursor[0], params->mark[0]);
+        op = ui_single_line_txt_op_from_event(scratch.arena, evt, edit_string, r1u64(0, edit_string.size), params->cursor[0], params->mark[0]);
         MemoryZeroStruct(&autocomplete_hint_string);
       }
       
       // rjf: perform replace range
-      if(!txt_pt_match(op.range.min, op.range.max) || op.replace.size != 0)
+      if(op.range.min != op.range.max || op.replace.size != 0)
       {
-        String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, r1s64(op.range.min.column, op.range.max.column), op.replace);
+        String8 new_string = ui_push_string_replace_range(scratch.arena, edit_string, op.range, op.replace);
         new_string.size = Min(params->edit_buffer_size, new_string.size);
         MemoryCopy(params->edit_buffer, new_string.str, new_string.size);
         params->edit_string_size_out[0] = new_string.size;
       }
       
       // rjf: perform copy
-      if(op.flags & UI_TxtOpFlag_Copy)
+      if(evt->flags & UI_EventFlag_Copy)
       {
         wm_set_clipboard_text(op.copy);
       }
@@ -4194,9 +4039,9 @@ rd_cell(RD_CellParams *params, String8 string)
         CFG_Node *window = cfg_node_from_id(rd_regs()->window);
         RD_WindowState *ws = rd_window_state_from_cfg(window);
         RD_AutocompCursorInfo *autocomp_cursor_info = &ws->autocomp_cursor_info;
-        String8 autocomplete_append_string = str8_skip(autocomplete_hint_string, params->cursor->column-1 - autocomp_cursor_info->replaced_range.min);
+        String8 autocomplete_append_string = str8_skip(autocomplete_hint_string, params->cursor[0] - autocomp_cursor_info->replaced_range.min);
         U64 off = 0;
-        U64 cursor_off = params->cursor->column-1;
+        U64 cursor_off = params->cursor[0];
         DR_FStrNode *prev_n = 0;
         for(DR_FStrNode *n = edit_string_fstrs.first; n != 0; n = n->next)
         {
@@ -4263,7 +4108,7 @@ rd_cell(RD_CellParams *params, String8 string)
   //////////////////////////////
   //- rjf: build scrolled contents
   //
-  TxtPt mouse_pt = {0};
+  U64 mouse_off = {0};
   F32 cursor_off = 0;
   if(scrollable_box != &ui_nil_box) UI_Parent(scrollable_box)
   {
@@ -4300,9 +4145,8 @@ rd_cell(RD_CellParams *params, String8 string)
       {
         font = rd_font_from_slot(RD_FontSlot_Code);
       }
-      U64 mouse_pt_off = fnt_char_pos_from_tag_size_string_p(font, font_size, 0, ui_top_tab_size(), edit_string, text2mouse.x);
-      mouse_pt = txt_pt(1, 1+mouse_pt_off);
-      cursor_off = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, params->cursor->column-1)).x;
+      mouse_off = fnt_char_pos_from_tag_size_string_p(font, font_size, 0, ui_top_tab_size(), edit_string, text2mouse.x);
+      cursor_off = fnt_dim_from_tag_size_string(ui_top_font(), ui_top_font_size(), 0, ui_top_tab_size(), str8_prefix(edit_string, params->cursor[0])).x;
     }
   }
   
@@ -4313,13 +4157,13 @@ rd_cell(RD_CellParams *params, String8 string)
   {
     if(ui_pressed(sig))
     {
-      params->mark[0] = mouse_pt;
+      params->mark[0] = mouse_off;
     }
-    params->cursor[0] = mouse_pt;
+    params->cursor[0] = mouse_off;
   }
   if(!is_focus_active && is_focus_active_disabled && ui_pressed(sig))
   {
-    params->cursor[0] = params->mark[0] = mouse_pt;
+    params->cursor[0] = params->mark[0] = mouse_off;
   }
   
   //////////////////////////////

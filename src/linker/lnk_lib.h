@@ -15,6 +15,10 @@ typedef struct LNK_Lib
   String8Array         symbol_names;
   String8              long_names;
   U64                  input_idx;
+  
+  struct LNK_SymbolHashTrieChunk **search_cursor_chunks;
+  U64                             *search_cursor_indices;
+  B32                              searched_anti_deps;
 } LNK_Lib;
  
 typedef struct LNK_LibNode

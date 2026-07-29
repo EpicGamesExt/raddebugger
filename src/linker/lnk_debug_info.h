@@ -7,11 +7,12 @@
 // RRT
 
 global read_only String8 g_rrt_magic   = str8_lit_comp("RAD-TYPE-SERVER\0");
-global read_only U64     g_rrt_version = 2;
+global read_only U64     g_rrt_version = 3;
 
 typedef struct LNK_RRT
 {
   String8 path;
+  LNK_HashKind debug_types_hash;
 
   String8 type_data_raw;
   union {
@@ -68,6 +69,12 @@ typedef struct LNK_SymbolInput
   String8 raw_symbols;
 } LNK_SymbolInput;
 
+typedef struct LNK_SymbolInputTask
+{
+  Rng1U64 input_range;
+  U64     weight;
+} LNK_SymbolInputTask;
+
 typedef struct
 {
   LNK_Config  *config;
@@ -95,9 +102,11 @@ typedef struct
   B32                 *is_type_server_discarded; // [ts_arr.count]
   CV_TypeIndex         min_type_indices[CV_TypeIndexSource_COUNT];
 
-  U64              symbol_input_count;
-  LNK_SymbolInput *symbol_inputs;       // [symbol_input_count]
-  Rng1U64         *symbol_input_ranges; // [worker_count]
+  U64                  symbol_input_count;
+  LNK_SymbolInput     *symbol_inputs;       // [symbol_input_count]
+  Rng1U64             *symbol_input_ranges; // [worker_count]
+  U64                  symbol_patch_task_count; //
+  LNK_SymbolInputTask *symbol_patch_task; // [symbol_patch_task_count]
 } LNK_CodeViewInput;
 
 typedef struct
@@ -118,6 +127,13 @@ typedef struct
   U64           cap;
   LNK_LeafRef **bucket_arr;
 } LNK_LeafHashTable;
+
+typedef struct
+{
+  U64           cap;
+  CV_TypeIndex *ti_arr;
+  U64          *hash_arr;
+} LNK_AssignedTiHash;
 
 typedef struct LNK_LeafRange
 {
@@ -150,6 +166,7 @@ typedef struct
   LNK_CodeViewInput  *input;
   CV_DebugS          *debug_s_arr;
   LNK_LeafHashTable   leaf_ht_arr[CV_TypeIndexSource_COUNT];
+  LNK_AssignedTiHash  assigned_ti_arr[CV_TypeIndexSource_COUNT];
   Arena             **fixed_arenas;
   CV_TypeIndexSource  ti_source;
   U32Array            indices;
@@ -173,11 +190,8 @@ typedef struct
   LNK_LeafRef **src;
   U64           pass_idx;
 
-  // assign type indices
-  U64                 assigned_type_caps  [CV_TypeIndexSource_COUNT];
-  CV_TypeIndex       *assigned_type_hts   [CV_TypeIndexSource_COUNT];
-  CV_TypeIndex        min_type_indices    [CV_TypeIndexSource_COUNT];
-  LNK_LeafRefArray    unique_leaf_refs_arr[CV_TypeIndexSource_COUNT];
+  CV_TypeIndex     min_type_indices    [CV_TypeIndexSource_COUNT];
+  LNK_LeafRefArray unique_leaf_refs_arr[CV_TypeIndexSource_COUNT];
 
   U64          *obj_ti_map_counts;
   U64          *obj_ti_map_offsets;
@@ -209,19 +223,28 @@ typedef struct
   LNK_CodeViewInput   *cv;
   PDB_Context         *pdb;
   CV_StringHashTable   string_ht;
+  U64                  string_table_base_offset;
   PDB_DbiModule      **mod_arr;     // [obj_count]
   U32Array            *obj_indices; // [obj_count]
 
   U64 symbol_count;
 
   // push DBI SC Map
-  PE_BinInfo                  pe;
-  COFF_SectionHeader        **image_section_table;
-  U64                         image_section_table_count;
-  Rng1U64Array                image_section_file_ranges;
-  Rng1U64Array                image_section_virt_ranges;
-  PDB_DbiSectionContribList  *sc_list; // [obj_count]
+  PE_BinInfo           pe;
+  COFF_SectionHeader **image_section_table;
+  U64                  image_section_table_count;
+  Rng1U64Array         image_section_virt_ranges;
+  Rng1U64Array         image_section_file_ranges;
+  U64                 *image_section_file_section_numbers;
+  PDB_DbiSCList       *sc_list; // [obj_count]
 } LNK_BuildPdb;
+
+typedef struct
+{
+  LNK_BackgroundFileWriter *file_writer;
+  String8                   output_path;
+  String8                   temp_output_path;
+} LNK_PdbWriter;
 
 typedef struct
 {
@@ -251,11 +274,11 @@ internal B32             lnk_match_leaf_ref                  (LNK_CodeViewInput 
 internal U64             lnk_hash_cv_leaf                    (LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInfoList ti_info_list, B32 discard_cycles);
 internal void            lnk_hash_cv_leaf_deep               (Arena *arena, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInfoList ti_info_list);
 internal LNK_LeafRef *   lnk_leaf_hash_table_insert_or_update(LNK_LeafHashTable *leaf_ht, LNK_CodeViewInput *input, CV_DebugH *hashes, U64 hash, LNK_LeafRef *new_bucket);
-internal LNK_LeafRef *   lnk_leaf_hash_table_search          (LNK_LeafHashTable *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
+internal CV_TypeIndex    lnk_assigned_ti_hash_search          (LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
 internal LNK_MergedTypes lnk_merge_types                     (TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK_MergeTypeFlags merge_flags);
 internal void            lnk_replace_type_names_with_hashes  (TP_Context *tp, TP_Arena *arena, U64 leaf_count, U8 **leaf_arr, LNK_TypeNameHashMode mode, U64 hash_length, String8 map_name);
 
 ////////////////////////////////
 // PDB
 
-internal String8List lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PDB_BuilderFlags builder_flags);
+internal LNK_FileArtifact lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags);

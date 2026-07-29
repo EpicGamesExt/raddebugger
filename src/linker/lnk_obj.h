@@ -5,6 +5,13 @@
 
 // --- Input -------------------------------------------------------------------
 
+typedef struct LNK_SymbolNameCache
+{
+  U64 *masks;
+  U32 *block_bases;
+  U32 *name_sizes;
+} LNK_SymbolNameCache;
+
 typedef struct LNK_Obj
 {
   String8 path;
@@ -12,6 +19,7 @@ typedef struct LNK_Obj
 
   COFF_FileHeaderInfo header;
   COFF_SectionFlags  *section_flags;
+  LNK_SymbolNameCache symbol_name_cache;
 
   // flags
   B8 hotpatch;
@@ -22,7 +30,7 @@ typedef struct LNK_Obj
   // COMDAT
   U32                 *comdats;
   U32Node            **associated_sections;
-  LNK_SymbolHashTrie **symlinks;
+  LNK_ObjSymbolRef   *symlinks;
 
   // link
   struct LNK_LibMemberRef *link_member;
@@ -32,6 +40,9 @@ typedef struct LNK_Obj
   U32 debug_t_sect_idx;
   U32 debug_p_sect_idx;
   U32 debug_h_sect_idx;
+
+  // ICF
+  U32 llvm_addrsig_sect_idx;
 
   // @type_server
   Rng1U64         ti_range;
@@ -101,6 +112,8 @@ typedef struct
   LNK_ObjNode       *objs;
   U64                obj_id_base;
   U32                machine;
+  B32                find_debug_t;
+  B32                find_llvm_addrsig;
 } LNK_ObjIniter;
 
 typedef struct
@@ -139,12 +152,15 @@ internal U32              lnk_obj_get_vol_md(LNK_Obj *obj);
 internal struct LNK_Lib * lnk_obj_get_lib(LNK_Obj *obj);
 internal String8          lnk_obj_get_lib_path(LNK_Obj *obj);
 internal U32              lnk_obj_get_removed_section_number(LNK_Obj *obj);
-internal LNK_Symbol *     lnk_obj_get_comdat_symlink(LNK_Obj *obj, U64 section_number);
+internal B32              lnk_obj_get_comdat_symlink(LNK_Obj *obj, U64 section_number, LNK_ObjSymbolRef *symlink_out);
+internal U32List          lnk_obj_collect_associated_sections(Arena *arena, LNK_Obj *obj, U32 root_section, COFF_SectionFlags skip_flags);
 
 // --- Symbol & Section Helpers ------------------------------------------------
 
 internal COFF_SectionHeader * lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number);
-internal COFF_ParsedSymbol    lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
+internal force_inline COFF_ParsedSymbol lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
+internal force_inline COFF_ParsedSymbol lnk_parsed_symbol_from_coff_symbol_idx_no_name(LNK_Obj *obj, U64 symbol_idx);
+internal force_inline String8           lnk_symbol_name_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
 internal U64                  lnk_obj_sect_idx_from_section_number(LNK_Obj *obj, U64 section_number);
 internal U64                  lnk_obj_section_number_from_sect_idx(LNK_Obj *obj, U64 sect_idx);
 internal String8              lnk_obj_section_name_from_section_number(LNK_Obj *obj, U64 section_number);

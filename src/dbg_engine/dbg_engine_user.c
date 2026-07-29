@@ -2004,7 +2004,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           if(params->file_path.size != 0)
           {
             run_extra_bps.v[0].file_path = params->file_path;
-            run_extra_bps.v[0].pt        = params->cursor;
+            run_extra_bps.v[0].pt        = txt_pt((S64)params->line_num, (S64)params->column_num);
           }
           else if(params->vaddr != 0)
           {

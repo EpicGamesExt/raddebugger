@@ -1671,13 +1671,6 @@ rd_view_ui(Rng2F32 rect)
     vs->query_string_size = Min(sizeof(vs->query_buffer), current_input.size);
     MemoryCopy(vs->query_buffer, current_input.str, vs->query_string_size);
     
-    //- rjf: clamp cursor
-    if(vs->query_cursor.column == 0)
-    {
-      vs->query_mark = txt_pt(1, 1);
-      vs->query_cursor = txt_pt(1, vs->query_string_size+1);
-    }
-    
     //- rjf: determine dimensions
     F32 search_row_height_target = ui_top_px_height();
     F32 search_row_height = search_row_open_t*search_row_height_target;
@@ -2041,7 +2034,7 @@ rd_view_ui(Rng2F32 rect)
       {
         if(expr_string.size == 0)
         {
-          expr_string = str8f(scratch.arena, "query:config.$%I64x.watches", rd_regs()->view);
+          expr_string = str8f(scratch.arena, "query:config.$%I64x.watch_expressions", rd_regs()->view);
         }
         E_Eval eval = e_eval_from_string(expr_string);
         RD_WatchViewState *ewv = rd_view_state(RD_WatchViewState);
@@ -2054,6 +2047,35 @@ rd_view_ui(Rng2F32 rect)
           ewv->initialized = 1;
           ewv->filter_arena = rd_push_view_arena();
           ewv->text_edit_arena = rd_push_view_arena();
+        }
+        
+        //////////////////////////////
+        //- rjf: adjust locked expressions which have been invalidated
+        //
+        for(CFG_Node *child = view->first; child != &cfg_nil_node; child = child->next)
+        {
+          if(str8_match(child->string, s("watch_expression"), 0))
+          {
+            CFG_Node *locked = cfg_node_child_from_string(child, s("locked"));
+            if(locked != &cfg_nil_node)
+            {
+              CFG_Node *pid_cfg = cfg_node_child_from_string_or_alloc(rd_state->cfg, locked, s("pid"));
+              U64 pid = u64_from_str8(pid_cfg->first->string, 10);
+              D_Entity *process = d_process_from_id(pid);
+              if(process == &d_entity_nil)
+              {
+                D_Entity *current_process = d_entity_from_handle(rd_regs()->process);
+                if(current_process != &d_entity_nil)
+                {
+                  cfg_node_new_replacef(rd_state->cfg, pid_cfg, "%I64u", current_process->id);
+                }
+                else
+                {
+                  cfg_node_release(rd_state->cfg, locked);
+                }
+              }
+            }
+          }
         }
         
         //////////////////////////////
@@ -2622,8 +2644,8 @@ rd_view_ui(Rng2F32 rect)
                     RD_WatchViewTextEditState *edit_state = push_array(ewv->text_edit_arena, RD_WatchViewTextEditState, 1);
                     SLLStackPush_N(ewv->text_edit_state_slots[slot_idx], edit_state, pt_hash_next);
                     edit_state->pt           = pt;
-                    edit_state->cursor       = txt_pt(1, string.size+1);
-                    edit_state->mark         = txt_pt(1, 1);
+                    edit_state->cursor       = string.size;
+                    edit_state->mark         = 0;
                     edit_state->input_size   = string.size;
                     MemoryCopy(edit_state->input_buffer, string.str, string.size);
                     edit_state->initial_size = string.size;
@@ -2702,6 +2724,79 @@ rd_view_ui(Rng2F32 rect)
             }
             
             //////////////////////////
+            //- rjf: [table] do cell-granularity lock operations
+            //
+            if(!ewv->text_editing &&
+               (evt->slot == UI_EventActionSlot_Lock ||
+                evt->slot == UI_EventActionSlot_Unlock ||
+                evt->slot == UI_EventActionSlot_ToggleLock) &&
+               (selection_tbl.min.y != 0 || selection_tbl.max.y != 0))
+            {
+              EV_WindowedRowList rows = ev_rows_from_num_range(scratch.arena, eval_view, &block_ranges, r1u64(selection_tbl.min.y, selection_tbl.max.y+1));
+              EV_WindowedRowNode *row_node = rows.first;
+              if(row_node != 0)
+              {
+                taken = 1;
+                B32 next_locked = 0;
+                B32 found_next_locked = 0;
+                for(S64 y = selection_tbl.min.y; y <= selection_tbl.max.y && row_node != 0; y += 1, row_node = row_node->next)
+                {
+                  // rjf: unpack row info
+                  EV_Row *row = &row_node->row;
+                  RD_WatchRowInfo row_info = rd_watch_row_info_from_row(scratch.arena, row);
+                  CFG_Node *cfg = row_info.group_cfg_child;
+                  
+                  // rjf: determine if row can be locked
+                  B32 row_can_be_locked = 0;
+                  if(str8_match(row_info.group_cfg_name, s("watch_expression"), 0) &&
+                     cfg != &cfg_nil_node &&
+                     row->eval.string.size != 0)
+                  {
+                    E_Space space = row->eval.space;
+                    D_Entity *entity = rd_ctrl_entity_from_eval_space(space);
+                    B32 is_memory_eval = (space.kind == D_EvalSpaceKind_Entity && entity->kind == D_EntityKind_Process);
+                    row_can_be_locked = (is_memory_eval &&
+                                         (row->eval.irtree.mode == E_Mode_Offset) ||
+                                         (row->eval.irtree.mode == E_Mode_Value &&
+                                          e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(row->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)))));
+                  }
+                  
+                  // rjf: determine if row is locked
+                  B32 row_is_locked = (cfg_node_child_from_string(cfg, s("locked")) != &cfg_nil_node);
+                  if(row_can_be_locked && !found_next_locked)
+                  {
+                    found_next_locked = 1;
+                    next_locked = !row_is_locked;
+                  }
+                  
+                  // rjf: toggle lock on row
+                  if(row_can_be_locked)
+                  {
+                    if(next_locked)
+                    {
+                      E_Space space = row->eval.space;
+                      D_Entity *entity = rd_ctrl_entity_from_eval_space(space);
+                      CFG_Node *locked = cfg_node_child_from_string_or_alloc(rd_state->cfg, cfg, s("locked"));
+                      cfg_node_release_all_children(rd_state->cfg, locked);
+                      CFG_Node *mid = cfg_node_new(rd_state->cfg, locked, s("mid"));
+                      cfg_node_newf(rd_state->cfg, mid, "%I64u", entity->handle.machine_id);
+                      CFG_Node *pid = cfg_node_new(rd_state->cfg, locked, s("pid"));
+                      cfg_node_newf(rd_state->cfg, pid, "%I64u", entity->id);
+                      CFG_Node *addr = cfg_node_new(rd_state->cfg, locked, s("addr"));
+                      cfg_node_newf(rd_state->cfg, addr, "0x%I64x", row->eval.value.u64);
+                      CFG_Node *type = cfg_node_new(rd_state->cfg, locked, s("type"));
+                      cfg_node_new(rd_state->cfg, type, e_type_string_from_key(scratch.arena, row->eval.irtree.type_key));
+                    }
+                    else
+                    {
+                      cfg_node_release(rd_state->cfg, cfg_node_child_from_string(cfg, s("locked")));
+                    }
+                  }
+                }
+              }
+            }
+            
+            //////////////////////////
             //- rjf: [text] apply textual edits
             //
             if(ewv->text_editing)
@@ -2733,10 +2828,10 @@ rd_view_ui(Rng2F32 rect)
                     RD_WatchPt pt = {row->block->key, row->key, rd_id_from_watch_cell(cell)};
                     RD_WatchViewTextEditState *edit_state = rd_watch_view_text_edit_state_from_pt(ewv, pt);
                     String8 string = str8(edit_state->input_buffer, edit_state->input_size);
-                    UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, string, edit_state->cursor, edit_state->mark);
+                    UI_TxtOp op = ui_single_line_txt_op_from_event(scratch.arena, evt, string, r1u64(0, string.size), edit_state->cursor, edit_state->mark);
                     
                     // rjf: copy
-                    if(op.flags & UI_TxtOpFlag_Copy && selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y)
+                    if(evt->flags & UI_EventFlag_Copy && selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y)
                     {
                       wm_set_clipboard_text(op.copy);
                     }
@@ -2748,13 +2843,13 @@ rd_view_ui(Rng2F32 rect)
                       CFG_Node *window = cfg_node_from_id(rd_regs()->window);
                       RD_WindowState *ws = rd_window_state_from_cfg(window);
                       RD_AutocompCursorInfo *autocomp_cursor_info = &ws->autocomp_cursor_info;
-                      String8 new_string = ui_push_string_replace_range(scratch.arena, string, r1s64(autocomp_cursor_info->replaced_range.min+1, autocomp_cursor_info->replaced_range.max+1), autocomplete_string);
+                      String8 new_string = ui_push_string_replace_range(scratch.arena, string, autocomp_cursor_info->replaced_range, autocomplete_string);
                       new_string.size = Min(sizeof(edit_state->input_buffer), new_string.size);
                       MemoryCopy(edit_state->input_buffer, new_string.str, new_string.size);
                       edit_state->input_size = new_string.size;
-                      edit_state->cursor = edit_state->mark = txt_pt(1, 1+autocomp_cursor_info->replaced_range.min+autocomplete_string.size);
+                      edit_state->cursor = edit_state->mark = autocomp_cursor_info->replaced_range.min+autocomplete_string.size;
                       string = str8(edit_state->input_buffer, edit_state->input_size);
-                      op = ui_single_line_txt_op_from_event(scratch.arena, evt, string, edit_state->cursor, edit_state->mark);
+                      op = ui_single_line_txt_op_from_event(scratch.arena, evt, string, r1u64(0, string.size), edit_state->cursor, edit_state->mark);
                     }
                     
                     // rjf: cancel? -> revert to initial string
@@ -2765,9 +2860,9 @@ rd_view_ui(Rng2F32 rect)
                     
                     // rjf: obtain edited string
                     String8 new_string = string;
-                    if(!txt_pt_match(op.range.min, op.range.max) || op.replace.size != 0)
+                    if(op.range.min != op.range.max || op.replace.size != 0)
                     {
-                      new_string = ui_push_string_replace_range(scratch.arena, string, r1s64(op.range.min.column, op.range.max.column), op.replace);
+                      new_string = ui_push_string_replace_range(scratch.arena, string, op.range, op.replace);
                     }
                     
                     // rjf: commit to edit state
@@ -2785,13 +2880,13 @@ rd_view_ui(Rng2F32 rect)
                       {
                         CFG_Node *cfg = row_info.group_cfg_child;
                         String8 child_key = {0}; // str8_lit("expression");
+                        if(str8_match(row_info.group_cfg_name, s("watch_expression"), 0))
+                        {
+                          child_key = s("expression");
+                        }
                         if(cfg == &cfg_nil_node && editing_complete && new_string.size != 0)
                         {
                           CFG_Node *new_cfg_parent = row_info.group_cfg_parent;
-                          if(new_cfg_parent != &cfg_nil_node)
-                          {
-                            child_key = str8_zero();
-                          }
                           if(new_cfg_parent == &cfg_nil_node)
                           {
                             CFG_NodePtrList all_cfgs = cfg_node_top_level_list_from_string(scratch.arena, row_info.group_cfg_name);
@@ -3533,8 +3628,9 @@ rd_view_ui(Rng2F32 rect)
                         if(cfg == &cfg_nil_node)
                         {
                           cfg = cfg_node_alloc(rd_state->cfg);
-                          cfg_node_equip_stringf(rd_state->cfg, cfg, "watch");
-                          cfg_node_new(rd_state->cfg, cfg, drag_regs->expr);
+                          cfg_node_equip_stringf(rd_state->cfg, cfg, "watch_expression");
+                          CFG_Node *expr = cfg_node_new(rd_state->cfg, cfg, s("expression"));
+                          cfg_node_new(rd_state->cfg, expr, drag_regs->expr);
                         }
                         cfg_node_insert_child(rd_state->cfg, drag_parent_cfg, drag_prev_cfg, cfg);
                       }break;
@@ -4030,9 +4126,33 @@ rd_view_ui(Rng2F32 rect)
                             needle = str8_skip_last_slash(needle);
                           }
                           
+                          // rjf: determine if this cell can be locked
+                          B32 cell_can_be_locked = 0;
+                          if(str8_match(row_info->group_cfg_name, s("watch_expression"), 0) &&
+                             !(cell_info.flags & RD_WatchCellFlag_Expr) &&
+                             cell->eval.string.size != 0)
+                          {
+                            E_Space space = row->eval.space;
+                            D_Entity *entity = rd_ctrl_entity_from_eval_space(space);
+                            B32 is_memory_eval = (space.kind == D_EvalSpaceKind_Entity && entity->kind == D_EntityKind_Process);
+                            cell_can_be_locked = (is_memory_eval &&
+                                                  (cell->eval.irtree.mode == E_Mode_Offset) ||
+                                                  (cell->eval.irtree.mode == E_Mode_Value &&
+                                                   e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(cell->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)))));
+                          }
+                          
+                          // rjf: determine if this cell is locked
+                          B32 cell_is_locked = 0;
+                          if(cell_can_be_locked)
+                          {
+                            CFG_Node *cfg = row_info->group_cfg_child;
+                            cell_is_locked = (cfg_node_child_from_string(cfg, s("locked")) != &cfg_nil_node);
+                          }
+                          
                           // rjf: form cell build parameters
                           UI_Key line_edit_key = {0};
                           RD_CellParams cell_params = {0};
+                          B32 next_cell_is_locked = cell_is_locked;
                           ProfScope("form cell build parameters")
                           {
                             E_Type *block_type = e_type_from_key(row->block->eval.irtree.type_key);
@@ -4048,6 +4168,7 @@ rd_view_ui(Rng2F32 rect)
                             cell_params.edit_string_size_out = &cell_edit_state->input_size;
                             cell_params.line_edit_key_out    = &line_edit_key;
                             cell_params.expanded_out         = &next_row_expanded;
+                            cell_params.lock_out             = &next_cell_is_locked;
                             cell_params.search_needle        = needle;
                             cell_params.meta_fstrs           = cell_info.expr_fstrs;
                             cell_params.value_fstrs          = cell_info.eval_fstrs;
@@ -4151,6 +4272,12 @@ rd_view_ui(Rng2F32 rect)
                               cell_params.flags &= ~RD_CellFlag_NoBackground;
                             }
                             
+                            // rjf: watch expression values -> lock
+                            if(cell_can_be_locked)
+                            {
+                              cell_params.flags |= RD_CellFlag_Lock;
+                            }
+                            
                             // rjf: apply toggle-switch
                             if(is_toggle_switch)
                             {
@@ -4235,10 +4362,37 @@ rd_view_ui(Rng2F32 rect)
                           }
                           if(ui_is_focus_active() &&
                              selection_tbl.min.x == selection_tbl.max.x && selection_tbl.min.y == selection_tbl.max.y &&
-                             txt_pt_match(cell_edit_state->cursor, cell_edit_state->mark))
+                             cell_edit_state->cursor == cell_edit_state->mark)
                           {
                             String8 input = str8(cell_edit_state->input_buffer, cell_edit_state->input_size);
                             rd_set_autocomp_regs(cell->eval, .ui_key = line_edit_key, .string = input, .cursor = cell_edit_state->cursor);
+                          }
+                          
+                          // rjf: apply locks
+                          {
+                            CFG_Node *cfg = row_info->group_cfg_child;
+                            if(next_cell_is_locked != cell_is_locked && cfg != &cfg_nil_node)
+                            {
+                              if(next_cell_is_locked)
+                              {
+                                E_Space space = row->eval.space;
+                                D_Entity *entity = rd_ctrl_entity_from_eval_space(space);
+                                CFG_Node *locked = cfg_node_child_from_string_or_alloc(rd_state->cfg, cfg, s("locked"));
+                                cfg_node_release_all_children(rd_state->cfg, locked);
+                                CFG_Node *mid = cfg_node_new(rd_state->cfg, locked, s("mid"));
+                                cfg_node_newf(rd_state->cfg, mid, "%I64u", entity->handle.machine_id);
+                                CFG_Node *pid = cfg_node_new(rd_state->cfg, locked, s("pid"));
+                                cfg_node_newf(rd_state->cfg, pid, "%I64u", entity->id);
+                                CFG_Node *addr = cfg_node_new(rd_state->cfg, locked, s("addr"));
+                                cfg_node_newf(rd_state->cfg, addr, "0x%I64x", row->eval.value.u64);
+                                CFG_Node *type = cfg_node_new(rd_state->cfg, locked, s("type"));
+                                cfg_node_new(rd_state->cfg, type, e_type_string_from_key(scratch.arena, row->eval.irtree.type_key));
+                              }
+                              else
+                              {
+                                cfg_node_release(rd_state->cfg, cfg_node_child_from_string(cfg, s("locked")));
+                              }
+                            }
                           }
                         }
                       }
@@ -4548,7 +4702,11 @@ rd_view_ui(Rng2F32 rect)
                             {
                               String8 file_path = lines.first->v.file_path;
                               TxtPt pt = lines.first->v.pt;
-                              rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = file_path, .cursor = pt, .vaddr = vaddr,
+                              rd_cmd(RD_CmdKind_FindCodeLocation,
+                                     .file_path = file_path,
+                                     .line_num = (U64)pt.line,
+                                     .column_num = (U64)pt.column,
+                                     .vaddr = vaddr,
                                      .process = process->handle,
                                      .module = module->handle,
                                      .dbgi_key = dbgi_key);
@@ -4562,7 +4720,11 @@ rd_view_ui(Rng2F32 rect)
                             RD_Location loc = rd_location_from_cfg(cfg);
                             if(loc.file_path.size != 0)
                             {
-                              rd_cmd(RD_CmdKind_FindCodeLocation, .vaddr = 0, .file_path = loc.file_path, .cursor = loc.pt);
+                              rd_cmd(RD_CmdKind_FindCodeLocation,
+                                     .vaddr = 0,
+                                     .file_path = loc.file_path,
+                                     .line_num = (U64)loc.pt.line,
+                                     .column_num = (U64)loc.pt.column);
                             }
                             else if(loc.expr.size != 0)
                             {
@@ -4594,7 +4756,7 @@ rd_view_ui(Rng2F32 rect)
                           // rjf: is file eval? -> switch to file
                           else if(cell_info.file_path.size != 0)
                           {
-                            rd_cmd(RD_CmdKind_FindCodeLocation, .cfg = 0, .file_path = cell_info.file_path, .cursor = txt_pt(0, 0));
+                            rd_cmd(RD_CmdKind_FindCodeLocation, .cfg = 0, .file_path = cell_info.file_path, .line_num = 0, .column_num = 0);
                           }
                         }
                         
@@ -5943,8 +6105,10 @@ rd_window_frame(void)
 #undef Handle
           ui_labelf("file_path: \"%S\"", regs->file_path);
           ui_labelf("expr: \"%S\"", regs->expr);
-          ui_labelf("cursor: (L:%I64d, C:%I64d)", regs->cursor.line, regs->cursor.column);
-          ui_labelf("mark: (L:%I64d, C:%I64d)", regs->mark.line, regs->mark.column);
+          ui_labelf("cursor: %I64u", regs->cursor);
+          ui_labelf("mark: %I64u", regs->mark);
+          ui_labelf("line_num: %I64u", regs->line_num);
+          ui_labelf("column_num: %I64u", regs->column_num);
           ui_labelf("unwind_count: %I64u", regs->unwind_count);
           ui_labelf("inline_depth: %I64u", regs->inline_depth);
           ui_labelf("text_key: [0x%I64x / 0x%I64x:0x%I64x]", regs->text_key.root.u64[0], regs->text_key.id.u128[0].u64[0], regs->text_key.id.u128[0].u64[1]);
@@ -6086,12 +6250,14 @@ rd_window_frame(void)
       {
         Vec2F32 window_dim = dim_2f32(window_rect);
         UI_Box *bg_box = &ui_nil_box;
+        Vec4F32 shadow_color = ui_color_from_name(str8_lit("drop_shadow"));
+        shadow_color.w += (1.f - shadow_color.w) * 0.5f;
         UI_Rect(window_rect)
           UI_ChildLayoutAxis(Axis2_X)
           UI_Focus(UI_FocusKind_On)
-          UI_BlurSize(10*rd_state->popup_t)
           UI_Transparency(1-rd_state->popup_t)
           UI_TagF("floating")
+          UI_BackgroundColor(shadow_color)
         {
           bg_box = ui_build_box_from_stringf(UI_BoxFlag_FixedSize|
                                              UI_BoxFlag_Floating|
@@ -6099,31 +6265,40 @@ rd_window_frame(void)
                                              UI_BoxFlag_Scroll|
                                              UI_BoxFlag_DefaultFocusNav|
                                              UI_BoxFlag_DisableFocusOverlay|
-                                             UI_BoxFlag_DrawBackgroundBlur|
+                                             UI_BoxFlag_DisableFocusBorder|
                                              UI_BoxFlag_DrawBackground, "###popup_%p", ws);
         }
         if(rd_state->popup_active) UI_Parent(bg_box) UI_Transparency(1-rd_state->popup_t)
         {
           ui_ctx_menu_close();
-          UI_WidthFill UI_PrefHeight(ui_children_sum(1.f)) UI_Column UI_Padding(ui_pct(1, 0))
+          UI_WidthFill UI_PrefHeight(ui_children_sum(1.f)) UI_Column UI_Padding(ui_pct(1, 0)) UI_TagF("floating")
           {
-            UI_TextRasterFlags(rd_raster_flags_from_slot(RD_FontSlot_Main)) UI_FontSize(ui_top_font_size()*2.f) UI_PrefHeight(ui_em(3.f, 1.f)) ui_label(rd_state->popup_title);
-            UI_PrefHeight(ui_em(3.f, 1.f)) UI_TagF("weak") ui_label(rd_state->popup_desc);
-            ui_spacer(ui_em(1.5f, 1.f));
-            UI_Row UI_Padding(ui_pct(1.f, 0.f)) UI_PrefWidth(ui_em(16.f, 1.f)) UI_PrefHeight(ui_em(3.5f, 1.f)) UI_CornerRadius(ui_top_font_size()*0.5f)
+            ui_set_next_blur_size(10*rd_state->popup_t);
+            ui_set_next_pref_width(ui_children_sum(1));
+            ui_set_next_pref_height(ui_children_sum(1));
+            ui_set_next_child_layout_axis(Axis2_Y);
+            UI_Box *panel = ui_build_box_from_stringf(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBackgroundBlur|UI_BoxFlag_DrawBorder|UI_BoxFlag_DrawDropShadow, "");
+            UI_Parent(panel)
             {
-              UI_TagF("pop")
-                if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && ui_slot_press(UI_EventActionSlot_Accept)))
+              ui_spacer(ui_em(1.5f, 1.f));
+              UI_TextRasterFlags(rd_raster_flags_from_slot(RD_FontSlot_Main)) UI_FontSize(ui_top_font_size()*2.f) UI_PrefHeight(ui_em(3.f, 1.f)) ui_label(rd_state->popup_title);
+              UI_PrefHeight(ui_em(3.f, 1.f)) UI_TagF("weak") ui_label(rd_state->popup_desc);
+              ui_spacer(ui_em(1.5f, 1.f));
+              UI_Row UI_Padding(ui_pct(1.f, 0.f)) UI_PrefWidth(ui_em(16.f, 1.f)) UI_PrefHeight(ui_em(3.5f, 1.f)) UI_CornerRadius(ui_top_font_size()*0.5f)
               {
-                rd_cmd(RD_CmdKind_PopupAccept);
+                UI_TagF("pop")
+                  if(ui_clicked(ui_buttonf("OK")) || (ui_key_match(bg_box->default_nav_focus_hot_key, ui_key_zero()) && ui_slot_press(UI_EventActionSlot_Accept)))
+                {
+                  rd_cmd(RD_CmdKind_PopupAccept);
+                }
+                ui_spacer(ui_em(1.f, 1.f));
+                if(ui_clicked(ui_buttonf("Cancel")) || ui_slot_press(UI_EventActionSlot_Cancel))
+                {
+                  rd_cmd(RD_CmdKind_PopupCancel);
+                }
               }
-              ui_spacer(ui_em(1.f, 1.f));
-              if(ui_clicked(ui_buttonf("Cancel")) || ui_slot_press(UI_EventActionSlot_Cancel))
-              {
-                rd_cmd(RD_CmdKind_PopupCancel);
-              }
+              ui_spacer(ui_em(3.f, 1.f));
             }
-            ui_spacer(ui_em(3.f, 1.f));
           }
         }
         ui_signal_from_box(bg_box);
@@ -8004,6 +8179,7 @@ rd_window_frame(void)
       {
         if(panel->first != &cfg_nil_panel_node) {continue;}
         B32 panel_is_focused = (window_is_focused &&
+                                !rd_state->popup_active &&
                                 !ws->menu_bar_focused &&
                                 !query_is_open &&
                                 !ui_any_ctx_menu_is_open() &&
@@ -9597,7 +9773,7 @@ rd_set_autocomp_regs_(E_Eval dst_eval, RD_Regs *regs)
       U64 cursor_arg_idx = 0;
       if(expr_based_replace)
       {
-        U64 cursor_off = (U64)(regs->cursor.column-1);
+        U64 cursor_off = regs->cursor;
         E_Parse parse = e_parse_from_string(regs->string);
         
         //- rjf: cursor offset -> cursor containing node
@@ -9799,12 +9975,14 @@ rd_code_color_slot_from_txt_token_kind(TXT_TokenKind kind)
   switch(kind)
   {
     default:break;
-    case TXT_TokenKind_Keyword:{color = RD_CodeColorSlot_CodeKeyword;}break;
-    case TXT_TokenKind_Numeric:{color = RD_CodeColorSlot_CodeNumeric;}break;
-    case TXT_TokenKind_String: {color = RD_CodeColorSlot_CodeString;}break;
-    case TXT_TokenKind_Meta:   {color = RD_CodeColorSlot_CodeMeta;}break;
-    case TXT_TokenKind_Comment:{color = RD_CodeColorSlot_CodeComment;}break;
-    case TXT_TokenKind_Symbol: {color = RD_CodeColorSlot_CodeDelimiterOperator;}break;
+    case TXT_TokenKind_Keyword:     {color = RD_CodeColorSlot_CodeKeyword;}break;
+    case TXT_TokenKind_Numeric:     {color = RD_CodeColorSlot_CodeNumeric;}break;
+    case TXT_TokenKind_String:      {color = RD_CodeColorSlot_CodeString;}break;
+    case TXT_TokenKind_Char:        {color = RD_CodeColorSlot_CodeString;}break;
+    case TXT_TokenKind_Meta:        {color = RD_CodeColorSlot_CodeMeta;}break;
+    case TXT_TokenKind_LineComment: {color = RD_CodeColorSlot_CodeComment;}break;
+    case TXT_TokenKind_BlockComment:{color = RD_CodeColorSlot_CodeComment;}break;
+    case TXT_TokenKind_Symbol:      {color = RD_CodeColorSlot_CodeDelimiterOperator;}break;
   }
   return color;
 }
@@ -10478,20 +10656,21 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 query_expr, String8 strin
     case RD_RegSlot_FilePath:
     {
       String8TxtPtPair pair = str8_txt_pt_pair_from_string(string);
-      rd_regs()->string = push_str8_copy(rd_frame_arena(), string);
+      rd_regs()->string = str8_copy(rd_frame_arena(), string);
       if(pair.pt.line != 0)
       {
-        rd_regs()->file_path = push_str8_copy(rd_frame_arena(), pair.string);
-        rd_regs()->cursor = pair.pt;
+        rd_regs()->file_path = str8_copy(rd_frame_arena(), pair.string);
+        rd_regs()->line_num = (U64)pair.pt.line;
+        rd_regs()->column_num = (U64)pair.pt.column;
       }
     }break;
     case RD_RegSlot_Expr:
     {
-      rd_regs()->expr = push_str8_copy(rd_frame_arena(), string);
+      rd_regs()->expr = str8_copy(rd_frame_arena(), string);
     }break;
     case RD_RegSlot_CmdName:
     {
-      rd_regs()->cmd_name = push_str8_copy(rd_frame_arena(), string);
+      rd_regs()->cmd_name = str8_copy(rd_frame_arena(), string);
     }break;
     
     //- rjf: ctrl entities
@@ -10563,13 +10742,12 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 query_expr, String8 strin
     }break;
     
     //- rjf: line numbers
-    case RD_RegSlot_Cursor:
+    case RD_RegSlot_LineNum:
     {
       E_Eval eval = e_value_eval_from_eval(e_eval_from_string(string));
       if(eval.msgs.max_kind == E_MsgKind_Null)
       {
-        rd_regs()->cursor.column = 1;
-        rd_regs()->cursor.line   = (S64)eval.value.u64;
+        rd_regs()->line_num = eval.value.u64;
       }
       else
       {
@@ -11168,7 +11346,9 @@ rd_frame(void)
     rd_state->hover_regs_slot = RD_RegSlot_Null;
   }
   B32 allow_text_hotkeys = !rd_state->text_edit_mode;
+  B32 allow_text_multiline_hotkeys = !rd_state->text_edit_mode_multiline;
   rd_state->text_edit_mode = 0;
+  rd_state->text_edit_mode_multiline = 0;
   if(rd_state->frame_depth == 1)
   {
     arena_clear(rd_state->cmd_output_arena);
@@ -11688,7 +11868,7 @@ rd_frame(void)
         if(key_map_nodes.first != 0)
         {
           U32 hit_char = wm_codepoint_from_modifiers_and_key(event->modifiers, event->key);
-          if(hit_char == 0 || allow_text_hotkeys)
+          if((allow_text_hotkeys || hit_char == 0 || (hit_char == '\n' && allow_text_multiline_hotkeys)))
           {
             String8 cmd_name = key_map_nodes.first->v->name;
             for(U64 idx = 0; idx < ArrayCount(rd_binding_version_remap_old_name_table); idx += 1)
@@ -11699,11 +11879,8 @@ rd_frame(void)
               }
             }
             rd_cmd(RD_CmdKind_RunCommand, .cmd_name = cmd_name);
-            if(allow_text_hotkeys)
-            {
-              wm_text(&events, event->window, hit_char);
-              next = event->next;
-            }
+            wm_text(&events, event->window, hit_char);
+            next = event->next;
             take = 1;
             if(event->modifiers & WM_Modifier_Alt)
             {
@@ -11719,7 +11896,7 @@ rd_frame(void)
       }
       
       //- rjf: try text events
-      if(!take && event->kind == WM_EventKind_Text)
+      if(!take && event->kind == WM_EventKind_Text && (event->character != '\n' || !allow_text_multiline_hotkeys))
       {
         String32 insertion32 = str32(&event->character, 1);
         String8 insertion8 = str8_from_32(scratch.arena, insertion32);
@@ -12183,10 +12360,10 @@ rd_frame(void)
           {
             continue;
           }
-          if(str8_match(child->string, str8_lit("watch"), 0))
+          if(str8_match(child->string, str8_lit("watch_expression"), 0))
           {
             CFG_Node *watch = child;
-            String8 expr = watch->first->string;
+            String8 expr = cfg_node_child_from_string(watch, s("expression"))->first->string;
             E_Parse parse = e_parse_from_string(expr);
             if(parse.msgs.max_kind == E_MsgKind_Null)
             {
@@ -12288,11 +12465,16 @@ rd_frame(void)
           }
           if(kind == D_EntityKind_Process && d_handle_match(rd_base_regs()->process, entity->handle))
           {
-            e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("current_process"), expr);
+            e_string2expr_map_insert(scratch.arena, macro_map, s("current_process"), expr);
           }
           if(kind == D_EntityKind_Module && d_handle_match(rd_base_regs()->module, entity->handle))
           {
             e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("current_module"), expr);
+          }
+          if(kind == D_EntityKind_Process)
+          {
+            String8 pid_string = str8f(scratch.arena, "process_%I64u", entity->id);
+            e_string2expr_map_insert(scratch.arena, macro_map, pid_string, expr);
           }
         }
       }
@@ -12379,10 +12561,10 @@ rd_frame(void)
                                                       .id_from_num = E_TYPE_EXPAND_ID_FROM_NUM_FUNCTION_NAME(environment),
                                                       .num_from_id = E_TYPE_EXPAND_NUM_FROM_ID_FUNCTION_NAME(environment),
                                                     }));
-        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("watches"),
+        e_string2typekey_map_insert(rd_frame_arena(), rd_state->meta_name2type_map, str8_lit("watch_expressions"),
                                     e_type_key_cons(.kind = E_TypeKind_Set,
                                                     .flags = E_TypeFlag_EditableChildren|E_TypeFlag_StubSingleLineExpansion,
-                                                    .name = str8_lit("watches"),
+                                                    .name = str8_lit("watch_expressions"),
                                                     .irext  = E_TYPE_IREXT_FUNCTION_NAME(watches),
                                                     .access = E_TYPE_ACCESS_FUNCTION_NAME(watches),
                                                     .expand =
@@ -13028,7 +13210,8 @@ rd_frame(void)
               params.entity        = rd_regs()->ctrl_entity;
               params.string        = rd_regs()->string;
               params.file_path     = rd_regs()->file_path;
-              params.cursor        = rd_regs()->cursor;
+              params.line_num      = rd_regs()->line_num;
+              params.column_num    = rd_regs()->column_num;
               params.vaddr         = rd_regs()->vaddr;
               params.prefer_disasm = rd_regs()->prefer_disasm;
               params.pid           = rd_regs()->pid;
@@ -14655,7 +14838,7 @@ rd_frame(void)
           case RD_CmdKind_OpenSourceFileFromDebugInfo:
           {
             String8 path = rd_regs()->file_path;
-            rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = path, .cursor = txt_pt(0, 0), .vaddr = 0, .force_focus = 1, .prefer_new_tab = 1);
+            rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = path, .line_num = 0, .vaddr = 0, .force_focus = 1, .prefer_new_tab = 1);
           }break;
           case RD_CmdKind_SwitchToPartnerFile:
           {
@@ -14682,7 +14865,7 @@ rd_frame(void)
                 FileProperties candidate_props = properties_from_file_path(candidate_path);
                 if(candidate_props.modified != 0)
                 {
-                  rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = candidate_path, .cursor = txt_pt(0, 0), .vaddr = 0, .prefer_new_tab = 1);
+                  rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = candidate_path, .line_num = 0, .vaddr = 0, .prefer_new_tab = 1);
                   break;
                 }
               }
@@ -14718,7 +14901,8 @@ rd_frame(void)
             {
               rd_cmd(RD_CmdKind_FindCodeLocation,
                      .file_path = rd_regs()->lines.first->v.file_path,
-                     .cursor    = rd_regs()->lines.first->v.pt,
+                     .line_num  = (U64)rd_regs()->lines.first->v.pt.line,
+                     .column_num= (U64)rd_regs()->lines.first->v.pt.column,
                      .vaddr     = 0,
                      .process   = d_handle_zero(),
                      .prefer_disasm = 0);
@@ -15020,7 +15204,8 @@ rd_frame(void)
             {
               rd_cmd(RD_CmdKind_FindCodeLocation,
                      .file_path    = line.file_path,
-                     .cursor       = line.pt,
+                     .line_num     = (U64)line.pt.line,
+                     .column_num   = (U64)line.pt.column,
                      .process      = process->handle,
                      .voff         = rip_voff,
                      .vaddr        = rip_vaddr,
@@ -15168,7 +15353,8 @@ rd_frame(void)
                   }
                   rd_cmd(RD_CmdKind_FindCodeLocation,
                          .file_path = lines.first->v.file_path,
-                         .cursor    = lines.first->v.pt,
+                         .line_num  = (U64)lines.first->v.pt.line,
+                         .column_num= (U64)lines.first->v.pt.column,
                          .process   = process->handle,
                          .module    = module->handle,
                          .vaddr     = module->vaddr_range.min + lines.first->v.voff_range.min);
@@ -15178,7 +15364,7 @@ rd_frame(void)
               // rjf: name resolved to a file path
               if(name_resolved && file_path.size != 0)
               {
-                rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = file_path, .cursor = txt_pt(1, 1), .vaddr = 0);
+                rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = file_path, .line_num = 0, .vaddr = 0);
               }
             }
           }break;
@@ -15230,7 +15416,8 @@ rd_frame(void)
             
             //- rjf: grab things to find. path * point, process * address, etc.
             String8 file_path = {0};
-            TxtPt point = {0};
+            U64 line_num = 0;
+            U64 column_num = 0;
             D_Entity *thread = &d_entity_nil;
             D_Entity *process = &d_entity_nil;
             U64 vaddr = 0;
@@ -15238,7 +15425,8 @@ rd_frame(void)
             B32 prefer_new_tab = 0;
             {
               file_path      = rd_mapped_from_file_path(scratch.arena, rd_regs()->file_path);
-              point          = rd_regs()->cursor;
+              line_num       = rd_regs()->line_num;
+              column_num     = rd_regs()->column_num;
               thread         = d_entity_from_handle(rd_regs()->thread);
               process        = d_entity_from_handle(rd_regs()->process);
               vaddr          = rd_regs()->vaddr;
@@ -15267,7 +15455,7 @@ rd_frame(void)
             // try to map the src coordinates to a vaddr via line info
             if(vaddr == 0 && file_path.size != 0)
             {
-              D_LineList lines = d_lines_from_file_path_line_num(scratch.arena, file_path, point.line, max_U64);
+              D_LineList lines = d_lines_from_file_path_line_num(scratch.arena, file_path, (S64)line_num, max_U64);
               for(D_LineNode *n = lines.first; n != 0; n = n->next)
               {
                 D_EntityList modules = d_modules_from_dbgi_key(scratch.arena, n->v.dbgi_key);
@@ -15774,9 +15962,9 @@ rd_frame(void)
                     rd_cmd(RD_CmdKind_FocusPanel);
                   }
                   rd_cmd(RD_CmdKind_FocusTab);
-                  if(point.line != 0)
+                  if(line_num != 0)
                   {
-                    rd_cmd(RD_CmdKind_GoToLine, .cursor = point);
+                    rd_cmd(RD_CmdKind_GoToLine, .line_num = line_num);
                   }
                   rd_cmd(cursor_snap_kind);
                 }
@@ -16042,12 +16230,12 @@ rd_frame(void)
               {
                 if(!vs->query_is_open && cmd_kind_info->query.flags & RD_QueryFlag_SelectOldInput)
                 {
-                  vs->query_cursor = txt_pt(1, 1+input->first->string.size);
-                  vs->query_mark = txt_pt(1, 1);
+                  vs->query_cursor = input->first->string.size;
+                  vs->query_mark = 0;
                 }
                 else
                 {
-                  vs->query_cursor = txt_pt(1, 1+input->first->string.size);
+                  vs->query_cursor = input->first->string.size;
                   vs->query_mark = vs->query_cursor;
                 }
                 if(!str8_match(current_query_cmd_name, cmd_name, 0))
@@ -16119,8 +16307,8 @@ rd_frame(void)
             CFG_Node *input = cfg_node_child_from_string_or_alloc(rd_state->cfg, query, str8_lit("input"));
             cfg_node_new_replace(rd_state->cfg, input, rd_regs()->string);
             RD_ViewState *vs = rd_view_state_from_cfg(view);
-            vs->query_cursor = vs->query_mark = txt_pt(1, rd_regs()->string.size+1);
             vs->query_string_size = Min(sizeof(vs->query_buffer), rd_regs()->string.size);
+            vs->query_cursor = vs->query_mark = vs->query_string_size;
             MemoryCopy(vs->query_buffer, rd_regs()->string.str, vs->query_string_size);
           }break;
           
@@ -16227,17 +16415,18 @@ rd_frame(void)
             // rjf: attach new location info
             {
               String8 file_path = rd_regs()->file_path;
-              TxtPt pt = rd_regs()->cursor;
+              U64 line_num = rd_regs()->line_num;
+              U64 column_num = rd_regs()->column_num;
               String8 expr_string = rd_regs()->expr;
               U64 vaddr = rd_regs()->vaddr;
               if(expr_string.size == 0 && vaddr != 0)
               {
                 expr_string = push_str8f(scratch.arena, "0x%I64x", vaddr);
               }
-              if(file_path.size != 0 && pt.line != 0)
+              if(file_path.size != 0 && line_num != 0)
               {
                 CFG_Node *src_loc = cfg_node_new(rd_state->cfg, cfg, str8_lit("source_location"));
-                cfg_node_newf(rd_state->cfg, src_loc, "%S:%I64d:%I64d", file_path, pt.line, pt.column);
+                cfg_node_newf(rd_state->cfg, src_loc, "%S:%I64u:%I64u", file_path, line_num, column_num);
               }
               else if(expr_string.size != 0)
               {
@@ -16259,12 +16448,13 @@ rd_frame(void)
           case RD_CmdKind_ToggleBreakpoint:
           {
             String8 file_path = rd_regs()->file_path;
-            TxtPt pt = rd_regs()->cursor;
+            U64 line_num = rd_regs()->line_num;
+            U64 column_num = rd_regs()->column_num;
             U64 vaddr = rd_regs()->vaddr;
             String8 expr = rd_regs()->expr;
             if(expr.size == 0 && vaddr != 0)
             {
-              expr = push_str8f(scratch.arena, "0x%I64x", vaddr);
+              expr = str8f(scratch.arena, "0x%I64x", vaddr);
             }
             if(file_path.size != 0 || expr.size != 0)
             {
@@ -16276,7 +16466,7 @@ rd_frame(void)
                 CFG_Node *bp = n->v;
                 CFG_Node *cnd = cfg_node_child_from_string(bp, str8_lit("condition"));
                 RD_Location loc = rd_location_from_cfg(bp);
-                B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc.file_path, file_path) && loc.pt.line == pt.line);
+                B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc.file_path, file_path) && loc.pt.line == line_num);
                 B32 loc_matches_expr    = (expr.size != 0 && str8_match(expr, loc.expr, 0));
                 if((loc_matches_file_pt || loc_matches_expr) && cnd->first->string.size == 0)
                 {
@@ -16341,7 +16531,8 @@ rd_frame(void)
           case RD_CmdKind_ToggleWatchPin:
           {
             String8 file_path = rd_regs()->file_path;
-            TxtPt pt = rd_regs()->cursor;
+            U64 line_num = rd_regs()->line_num;
+            U64 column_num = rd_regs()->column_num;
             String8 expr_string = rd_regs()->expr;
             U64 vaddr = rd_regs()->vaddr;
             B32 removed_already_existing = 0;
@@ -16353,7 +16544,7 @@ rd_frame(void)
                 CFG_Node *wp = n->v;
                 CFG_Node *expr = cfg_node_child_from_string(wp, str8_lit("expression"));
                 RD_Location loc = rd_location_from_cfg(wp);
-                B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc.file_path, file_path) && loc.pt.line == pt.line);
+                B32 loc_matches_file_pt = (file_path.size != 0 && path_match_normalized(loc.file_path, file_path) && loc.pt.line == (S64)line_num);
                 B32 loc_matches_expr    = (expr_string.size != 0 && str8_match(expr_string, loc.expr, 0));
                 if((loc_matches_file_pt || loc_matches_expr) && str8_match(expr->first->string, expr_string, 0))
                 {
@@ -16550,7 +16741,7 @@ rd_frame(void)
               {
                 continue;
               }
-              if(str8_match(child->string, str8_lit("watch"), 0) && str8_match(child->first->string, rd_regs()->string, 0))
+              if(str8_match(child->string, str8_lit("watch_expression"), 0) && str8_match(child->first->string, rd_regs()->string, 0))
               {
                 existing_watch = child;
                 break;
@@ -16566,8 +16757,9 @@ rd_frame(void)
             // rjf: otherwise, create it
             else if(watch_tab != &cfg_nil_node)
             {
-              CFG_Node *watch = cfg_node_new(rd_state->cfg, watch_tab, str8_lit("watch"));
-              cfg_node_new(rd_state->cfg, watch, rd_regs()->string);
+              CFG_Node *watch = cfg_node_new(rd_state->cfg, watch_tab, s("watch_expression"));
+              CFG_Node *expr = cfg_node_new(rd_state->cfg, watch, s("expression"));
+              cfg_node_new(rd_state->cfg, expr, rd_regs()->string);
             }
           }break;
           
@@ -16579,20 +16771,11 @@ rd_frame(void)
             RD_Regs *regs = rd_regs();
             C_Key text_key = regs->text_key;
             TXT_LangKind lang_kind = regs->lang_kind;
-            TxtRng range = txt_rng(regs->cursor, regs->mark);
+            Rng1U64 range = r1u64(regs->cursor, regs->mark);
             U128 hash = {0};
             TXT_TextInfo info = txt_text_info_from_key_lang(access, text_key, lang_kind, &hash);
             String8 data = c_data_from_hash(access, hash);
-            Rng1U64 expr_off_range = {0};
-            if(range.min.column != range.max.column)
-            {
-              expr_off_range = r1u64(txt_off_from_info_pt(&info, range.min), txt_off_from_info_pt(&info, range.max));
-            }
-            else
-            {
-              expr_off_range = txt_expr_off_range_from_info_data_pt(&info, data, range.min);
-            }
-            String8 expr = str8_substr(data, expr_off_range);
+            String8 expr = str8_substr(data, range);
             rd_cmd((kind == RD_CmdKind_GoToNameAtCursor ? RD_CmdKind_GoToName :
                     kind == RD_CmdKind_ToggleWatchExpressionAtCursor ? RD_CmdKind_ToggleWatchExpression :
                     RD_CmdKind_GoToName),
@@ -16823,6 +17006,33 @@ rd_frame(void)
             UI_Event evt = zero_struct;
             evt.kind       = UI_EventKind_Press;
             evt.slot       = UI_EventActionSlot_FocusMenu;
+            ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
+          }break;
+          case RD_CmdKind_Lock:
+          {
+            CFG_Node *window = cfg_node_from_id(rd_regs()->window);
+            RD_WindowState *ws = rd_window_state_from_cfg(window);
+            UI_Event evt = zero_struct;
+            evt.kind       = UI_EventKind_Press;
+            evt.slot       = UI_EventActionSlot_Lock;
+            ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
+          }break;
+          case RD_CmdKind_Unlock:
+          {
+            CFG_Node *window = cfg_node_from_id(rd_regs()->window);
+            RD_WindowState *ws = rd_window_state_from_cfg(window);
+            UI_Event evt = zero_struct;
+            evt.kind       = UI_EventKind_Press;
+            evt.slot       = UI_EventActionSlot_Unlock;
+            ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
+          }break;
+          case RD_CmdKind_ToggleLock:
+          {
+            CFG_Node *window = cfg_node_from_id(rd_regs()->window);
+            RD_WindowState *ws = rd_window_state_from_cfg(window);
+            UI_Event evt = zero_struct;
+            evt.kind       = UI_EventKind_Press;
+            evt.slot       = UI_EventActionSlot_ToggleLock;
             ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
           }break;
           

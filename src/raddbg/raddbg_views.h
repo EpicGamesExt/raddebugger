@@ -47,6 +47,10 @@ struct RD_CodeViewState
   B32 drifted_for_search;
   U128 last_hash;
   
+  // rjf: patch state
+  Arena *patch_arena;
+  TXT_PatchList patches;
+  
   // rjf: per-frame command info
   S64 goto_line_num;
   B32 center_cursor;
@@ -159,8 +163,8 @@ struct RD_WatchViewTextEditState
 {
   RD_WatchViewTextEditState *pt_hash_next;
   RD_WatchPt pt;
-  TxtPt cursor;
-  TxtPt mark;
+  U64 cursor;
+  U64 mark;
   U8 input_buffer[1024];
   U64 input_size;
   U8 initial_buffer[1024];

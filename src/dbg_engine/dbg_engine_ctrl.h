@@ -519,6 +519,7 @@ internal void d_entity_equip_string(D_EntityCtxRWStore *store, D_Entity *entity,
 internal D_EntityCtxLookupAccel *d_thread_entity_ctx_lookup_accel(void);
 internal D_EntityArray d_entity_array_from_kind(D_EntityKind kind);
 internal D_EntityList d_modules_from_dbgi_key(Arena *arena, DI_Key dbgi_key);
+internal D_Entity *d_process_from_id(U64 id);
 internal D_Entity *d_thread_from_id(U64 id);
 
 //- rjf: applying events to entity caches

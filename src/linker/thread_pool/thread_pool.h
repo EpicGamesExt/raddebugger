@@ -32,6 +32,7 @@ typedef struct TP_Context
   Semaphore    exec_semaphore;
   Semaphore    task_semaphore;
   Semaphore    main_semaphore;
+  Barrier      run_barrier;
   Barrier      barrier;
   void        *broadcast;
   U64          broadcast_size;
@@ -58,4 +59,3 @@ internal void         tp_temp_end(TP_Temp temp);
 internal void         tp_for_parallel(TP_Context *pool, TP_Arena *arena, U64 task_count, TP_TaskFunc *task_func, void *task_data);
 internal Rng1U64 *    tp_divide_work(Arena *arena, U64 item_count, U32 worker_count);
 #define tp_broadcast(p) tp_broadcast_(tp, task_id, p, sizeof(*p))
-

@@ -34,6 +34,7 @@ typedef struct LNK_Input
   String8           data;
   B32               disallow;
   B32               is_thin;
+  B32               owns_file_map;
   B32               has_disk_read_failed;
   B32               exclude_from_debug_info;
   LNK_LibMemberRef *link_member;
@@ -74,6 +75,7 @@ typedef struct LNK_Inputer
 #define LNK_NULL_SYMBOL "*** RAD_NULL_SYMBOL ***"
 
 #define LNK_SECTION_FLAG_DEBUG (1 << 0)
+#define LNK_SECTION_FLAG_NOICF (1 << 1)
 
 typedef U8 LNK_LibMemberFlags;
 enum
@@ -204,6 +206,7 @@ typedef struct LNK_BaseRelocPageArray
 typedef struct
 {
   B32                   search_anti_deps;
+  B32                   reset_search_cursor;
   LNK_Link             *link;
   HashMap              *imports_hm;
   LNK_SymbolTable      *symtab;
@@ -215,10 +218,12 @@ typedef struct
 
 typedef struct
 {
-  LNK_SymbolTable *symtab;
-  LNK_Config      *config;
-  LNK_ObjList      objs;
-} LNK_OptRefTask;
+  LNK_SymbolTable  *symtab;
+  LNK_Config       *config;
+  LNK_Obj         **objs;
+  U64               objs_count;
+  U32Array         *obj_indices;
+} LNK_OptTask;
 
 typedef struct
 {
@@ -258,6 +263,7 @@ typedef struct LNK_ImageFillNode
 
 typedef struct
 {
+  LNK_Config                *config;
   LNK_SymbolTable           *symtab;
   LNK_SectionTable          *sectab;
   U64                        objs_count;
@@ -271,6 +277,8 @@ typedef struct
   LNK_SectionArray           image_sects;
   union {
     struct {
+      Arena     *arena;
+      Rng1U64   *ranges;
       HashTable **defns;
     } gather_sects;
     struct {
@@ -374,6 +382,7 @@ internal LNK_Input * lnk_inputer_push_lib_thin(LNK_Inputer *inputer, LNK_Config 
 
 internal B32               lnk_inputer_has_items(LNK_Inputer *inputer);
 internal LNK_InputPtrArray lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Flags io_flags, LNK_InputList *all_inputs, LNK_InputList *new_inputs);
+internal void               lnk_inputer_release_file_maps(TP_Context *tp, LNK_Inputer *inputer);
 
 // --- Link Context ------------------------------------------------------------
 
@@ -390,7 +399,8 @@ internal LNK_LinkResult lnk_link_image (TP_Context *tp, TP_Arena *arena, LNK_Con
 
 // --- Optimizations -----------------------------------------------------------
 
-internal void lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_ObjList objs);
+internal void lnk_opt_ref(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj **objs, U64 objs_count);
+internal void lnk_opt_icf(TP_Context *tp, LNK_SymbolTable *symtab, LNK_Config *config, LNK_Obj **objs, U64 objs_count);
 
 // --- Win32 Image -------------------------------------------------------------
 
@@ -403,4 +413,3 @@ internal LNK_ImageContext lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_C
 
 internal void lnk_log_link_stats(LNK_ObjList obj_list, LNK_LibList *lib_index, LNK_SectionTable *sectab);
 internal void lnk_log_timers(void);
-

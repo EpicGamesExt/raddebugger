@@ -10,9 +10,11 @@ lnk_open_file_read(char *path, uint64_t path_size, void *handle_buffer, uint64_t
 shared_function int
 lnk_open_file_write(char *path, uint64_t path_size, void *handle_buffer, uint64_t handle_buffer_max)
 {
+  ProfBeginFunction();
   File handle = file_open(AccessFlag_Write, str8((U8*)path, path_size));
   Assert(sizeof(handle) <= handle_buffer_max);
   MemoryCopy(handle_buffer, &handle, sizeof(handle));
+  ProfEnd();
   return !file_match(handle, file_zero());
 }
 
@@ -84,6 +86,7 @@ lnk_find_first_file(Arena *arena, String8List dir_list, String8 path)
 internal File
 lnk_file_open_with_rename_permissions(String8 path)
 {
+  ProfBeginFunction();
   File file_handle = file_zero();
 #if OS_WINDOWS
   Temp scratch = scratch_begin(0,0);
@@ -106,6 +109,7 @@ lnk_file_open_with_rename_permissions(String8 path)
 #else
   file_handle = file_open(AccessFlag_Read|AccessFlag_Write, path);
 #endif
+  ProfEnd();
   return file_handle;
 }
 
@@ -400,4 +404,231 @@ lnk_write_data_to_file_path(String8 path, String8 temp_path, String8 data)
   str8_list_push(scratch.arena, &data_list, data);
   lnk_write_data_list_to_file_path(path, temp_path, data_list);
   scratch_end(scratch);
+}
+
+internal String8
+lnk_data_from_file_artifact(Arena *arena, LNK_FileArtifact *artifact)
+{
+  return str8_list_join(arena, &artifact->data, 0);
+}
+
+// --- Background Writer -------------------------------------------------------
+
+struct LNK_BackgroundFile
+{
+  LNK_BackgroundFile *next;
+  String8             path;
+  String8             temp_path;
+  String8             open_path;
+  File                file;
+  U64                 bytes_written;
+  B32                 open_with_rename;
+  B32                 is_open;
+  B32                 is_finished;
+  B32                 is_complete;
+  B32                 write_failed;
+};
+
+typedef enum
+{
+  LNK_BackgroundFileJobKind_Write,
+  LNK_BackgroundFileJobKind_EndFile,
+  LNK_BackgroundFileJobKind_EndWriter,
+} LNK_BackgroundFileJobKind;
+
+typedef struct
+{
+  LNK_BackgroundFileJobKind kind;
+  LNK_BackgroundFile       *file;
+  U64                       file_off;
+  U64                       expected_byte_count;
+  String8                   data;
+} LNK_BackgroundFileWriteJob;
+
+internal void
+lnk_background_file_writer_end_file_on_thread(LNK_BackgroundFile *file, U64 expected_byte_count)
+{
+  B32 is_complete = !file->write_failed && file->bytes_written == expected_byte_count;
+  if (is_complete && file->open_with_rename) {
+    if (!lnk_file_set_delete_on_close(file->file, 0)) {
+      lnk_error(LNK_Error_IO, "failed to update file disposition on %S", file->open_path);
+      is_complete = 0;
+    } else if (!lnk_file_rename(file->file, file->path)) {
+      lnk_error(LNK_Error_IO, "failed to rename %S -> %S", file->temp_path, file->path);
+      is_complete = 0;
+    }
+  }
+
+  lnk_close_file(&file->file);
+  file->is_open     = 0;
+  file->is_complete = is_complete;
+
+  if (!is_complete) {
+    lnk_error(LNK_Error_IO, "incomplete write, %M written, expected %M, file %S", file->bytes_written, expected_byte_count, file->path);
+  } else if (lnk_get_log_status(LNK_Log_IO_Write)) {
+    lnk_log(LNK_Log_IO_Write, "File \"%S\" %M written", file->path, expected_byte_count);
+  }
+}
+
+internal void
+lnk_background_file_writer_thread(void *raw_writer)
+{
+  ProfBeginFunction();
+  set_thread_namef("Background File Writer");
+
+  LNK_BackgroundFileWriter *writer = raw_writer;
+  for (;;) {
+    LNK_BackgroundFileWriteJob job = {0};
+    RingGuard guard = guarded_ring_open(writer->queue);
+    B32 is_read = guarded_ring_read_struct_or_wait(&guard, &job, max_U64);
+    guarded_ring_close(&guard);
+    Assert(is_read);
+
+    if (job.kind == LNK_BackgroundFileJobKind_EndWriter) { break; }
+
+    if (job.kind == LNK_BackgroundFileJobKind_Write) {
+      U64 write_size = lnk_write_file(&job.file->file, job.file_off, job.data.str, job.data.size);
+      if (write_size != job.data.size) {
+        job.file->write_failed = 1;
+      }
+      job.file->bytes_written += write_size;
+    } else if (job.kind == LNK_BackgroundFileJobKind_EndFile) {
+      lnk_background_file_writer_end_file_on_thread(job.file, job.expected_byte_count);
+    }
+  }
+  ProfEnd();
+}
+
+internal void
+lnk_background_file_writer_begin(LNK_BackgroundFileWriter *writer)
+{
+  ProfBegin("Background File Writer Begin");
+
+  writer->queue_arena = arena_alloc(.reserve_size = MB(2), .commit_size = MB(2), .name = "BACKGROUND_FILE_WRITE_QUEUE");
+  writer->queue       = guarded_ring_alloc(writer->queue_arena, MB(1));
+  ProfEnd();
+}
+
+internal LNK_BackgroundFile *
+lnk_background_file_writer_begin_file(LNK_BackgroundFileWriter *writer, String8 path, String8 temp_path)
+{
+  ProfBegin("Background File Writer Begin File");
+
+  if (!writer->is_running) {
+    writer->thread     = thread_launch(lnk_background_file_writer_thread, writer);
+    writer->is_running = writer->thread.u64[0] != 0;
+    if (!writer->is_running) {
+      lnk_error(LNK_Error_IO, "failed to start background file writer");
+      ProfEnd();
+      return 0;
+    }
+  }
+
+  LNK_BackgroundFile *file = push_array(writer->queue_arena, LNK_BackgroundFile, 1);
+
+  file->path             = path;
+  file->temp_path        = temp_path;
+  file->open_with_rename = (temp_path.size > 0);
+
+  if (file->open_with_rename) {
+    file->file      = lnk_file_open_with_rename_permissions(temp_path);
+    file->open_path = temp_path;
+  } else {
+    lnk_open_file_write((char *)path.str, path.size, &file->file, sizeof(file->file));
+    file->open_path = path;
+  }
+
+  file->is_open = !file_match(file->file, file_zero());
+  if (!file->is_open) {
+    lnk_error(LNK_Error_NoAccess, "don't have access to write to %S", path);
+    goto exit;
+  }
+
+  if (file->open_with_rename && !lnk_file_set_delete_on_close(file->file, 1)) {
+    lnk_error(LNK_Error_IO, "failed to update file disposition on %S", file->open_path);
+    lnk_close_file(&file->file);
+    file->is_open = 0;
+    goto exit;
+  }
+
+  SLLQueuePush(writer->file_first, writer->file_last, file);
+
+  exit:;
+  ProfEnd();
+  return file->is_open ? file : 0;
+}
+
+internal void
+lnk_background_file_writer_enqueue(LNK_BackgroundFileWriter *writer, LNK_BackgroundFile *file, U64 file_off, String8 data)
+{
+  ProfBegin("Background File Writer Enqueue");
+
+  Assert(writer->is_running);
+  Assert(file->is_open && !file->is_finished);
+
+  if (data.size > 0) {
+    LNK_BackgroundFileWriteJob job = {
+      .kind     = LNK_BackgroundFileJobKind_Write,
+      .file     = file,
+      .file_off = file_off,
+      .data     = data,
+    };
+    RingGuard guard      = guarded_ring_open(writer->queue);
+    B32       is_written = guarded_ring_write_struct_or_wait(&guard, &job, max_U64);
+    guarded_ring_close(&guard);
+    Assert(is_written);
+  }
+
+  ProfEnd();
+}
+
+internal void
+lnk_background_file_writer_end_file(LNK_BackgroundFileWriter *writer, LNK_BackgroundFile *file, U64 expected_byte_count)
+{
+  ProfBegin("Background File Writer End File");
+
+  Assert(writer->is_running);
+  Assert(file->is_open && !file->is_finished);
+  file->is_finished = 1;
+
+  LNK_BackgroundFileWriteJob job = {
+    .kind                = LNK_BackgroundFileJobKind_EndFile,
+    .file                = file,
+    .expected_byte_count = expected_byte_count,
+  };
+  RingGuard guard      = guarded_ring_open(writer->queue);
+  B32       is_written = guarded_ring_write_struct_or_wait(&guard, &job, max_U64);
+  guarded_ring_close(&guard);
+  Assert(is_written);
+
+  ProfEnd();
+}
+
+internal void
+lnk_background_file_writer_end(LNK_BackgroundFileWriter *writer)
+{
+  ProfBegin("Background File Writer End");
+
+  if (writer->is_running) {
+    LNK_BackgroundFileWriteJob job        = { .kind = LNK_BackgroundFileJobKind_EndWriter };
+    RingGuard                  guard      = guarded_ring_open(writer->queue);
+    B32                        is_written = guarded_ring_write_struct_or_wait(&guard, &job, max_U64);
+    guarded_ring_close(&guard);
+    Assert(is_written);
+    thread_join(writer->thread, -1);
+  }
+
+  for EachNode(file, LNK_BackgroundFile, writer->file_first) {
+    if (file->is_open) {
+      lnk_error(LNK_Error_IO, "unfinished background write, file %S", file->path);
+      lnk_close_file(&file->file);
+      file->is_open = 0;
+    }
+  }
+
+  guarded_ring_release(writer->queue);
+  arena_release(writer->queue_arena);
+  writer->is_running = 0;
+
+  ProfEnd();
 }

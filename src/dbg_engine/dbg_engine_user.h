@@ -65,7 +65,8 @@ struct D_CmdParams
   D_Handle entity;
   String8 string;
   String8 file_path;
-  TxtPt cursor;
+  U64 line_num;
+  U64 column_num;
   U64 vaddr;
   B32 prefer_disasm;
   U32 pid;

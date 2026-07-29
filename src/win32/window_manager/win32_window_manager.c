@@ -506,12 +506,16 @@ w32_wm_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       case WM_CHAR:
       {
         U32 character = wParam;
-        if(character >= 32 && character != 127)
+        if((character >= 32 && character != 127) || character == '\n' || character == '\r')
         {
           WM_Event *event = w32_wm_push_event(WM_EventKind_Text, window);
           if(lParam & bit29)
           {
             event->modifiers |= WM_Modifier_Alt;
+          }
+          if(character == '\r')
+          {
+            character = '\n';
           }
           event->character = character;
         }

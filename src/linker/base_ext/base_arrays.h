@@ -9,6 +9,7 @@ typedef struct U64Node  { U64 data; struct U64Node  *next; } U64Node;
 typedef struct S64Node  { S64 v;    struct S64Node  *next; } S64Node;
 
 typedef struct VoidList { U64 count; VoidNode *first, *last; } VoidList;
+typedef struct U32List  { U64 count; U32Node  *first, *last; } U32List;
 typedef struct U64List  { U64 count; U64Node  *first, *last; } U64List;
 typedef struct S64List  { U64 count; S64Node  *first, *last; } S64List;
 
@@ -19,6 +20,9 @@ typedef struct S64Array { U64 count; S64 *v; } S64Array;
 internal U64  void_list_count_nodes  (VoidNode *head);
 internal void void_node_concat       (VoidNode **head, VoidNode *node);
 internal void void_node_concat_atomic(VoidNode **head, VoidNode *node);
+
+internal void      u32_list_push_node      (U32List *list, U32Node *n);
+internal U32Node * u32_list_push           (Arena *arena, U32List *list, U32 v);
 
 internal void      u64_list_push_node      (U64List *list, U64Node *n);
 internal U64Node * u64_list_push           (Arena *arena, U64List *list, U64 v);
@@ -44,4 +48,3 @@ internal void      s64_list_push_node      (S64List *list, S64Node *n);
 internal S64Node * s64_list_push           (Arena *arena, S64List *list, S64 v);
 internal void      s64_list_concat_in_place(S64List *list, S64List *to_concat);
 internal S64Array  s64_array_from_list     (Arena *arena, S64List *list);
-

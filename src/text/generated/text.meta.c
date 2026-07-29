@@ -157,8 +157,8 @@ str8_lit_comp("->"),
 
 TXT_TokenizerRule txt_tokenizer_rules__c[7] =
 {
-{TXT_TokenKind_Comment, str8_lit_comp("//"), str8_lit_comp("\n"), 0, 0, 1, 0},
-{TXT_TokenKind_Comment, str8_lit_comp("/*"), str8_lit_comp("*/"), 2, 0, 0, 0},
+{TXT_TokenKind_LineComment, str8_lit_comp("//"), str8_lit_comp("\n"), 0, 0, 1, 0},
+{TXT_TokenKind_BlockComment, str8_lit_comp("/*"), str8_lit_comp("*/"), 2, 0, 0, 0},
 {TXT_TokenKind_Meta, str8_lit_comp("#"), str8_lit_comp("\n"), 0, 0, 1, 0},
 {TXT_TokenKind_String, str8_lit_comp("\""), str8_lit_comp("\""), 1, 0, 1, 0},
 {TXT_TokenKind_String, str8_lit_comp("'"), str8_lit_comp("'"), 1, 0, 1, 0},

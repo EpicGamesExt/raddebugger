@@ -1805,6 +1805,274 @@ gsi_record_sort_by_sc(PDB_GsiSortRecord *arr, U64 count)
   ProfEnd();
 }
 
+#define PDB_PSI_ADDR_MAP_RADIX_BITS      11
+#define PDB_PSI_ADDR_MAP_RADIX_COUNT     (1 << PDB_PSI_ADDR_MAP_RADIX_BITS)
+#define PDB_PSI_ADDR_MAP_RADIX_MIN_COUNT (1 << 17)
+
+typedef struct PDB_PsiAddrMapSortRecord
+{
+  U64                key;
+  PDB_GsiSortRecord *record;
+} PDB_PsiAddrMapSortRecord;
+
+typedef struct PDB_PsiAddrMapSortTask
+{
+  Rng1U64                 *ranges;
+  PDB_GsiSortRecord       *gsi_record_arr;
+  PDB_PsiAddrMapSortRecord *src;
+  PDB_PsiAddrMapSortRecord *dst;
+  U64                     *counts;
+  U32                      digit_shift;
+  U32                      digit_count;
+} PDB_PsiAddrMapSortTask;
+
+typedef struct PDB_PsiAddrMapNameSortTask
+{
+  PDB_PsiAddrMapSortRecord *record_arr;
+  Rng1U64                  *run_arr;
+  Rng1U64                  *batch_arr;
+} PDB_PsiAddrMapNameSortTask;
+
+force_inline U64
+psi_addr_map_sort_key(PDB_GsiSortRecord *record)
+{
+  U64 key = ((U64)record->isect_off.isect << 32) | record->isect_off.off;
+  return key;
+}
+
+force_inline int
+psi_addr_map_name_compar_is_before(void *raw_a, void *raw_b)
+{
+  PDB_PsiAddrMapSortRecord *a = raw_a;
+  PDB_PsiAddrMapSortRecord *b = raw_b;
+  int is_before = str8_compar_case_sensitive(&a->record->name, &b->record->name) < 0;
+  return is_before;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(psi_addr_map_radix_init_task)
+{
+  ProfBeginFunction();
+
+  PDB_PsiAddrMapSortTask *task  = raw_task;
+  Rng1U64                 range = task->ranges[task_id];
+  for EachInRange(i, range) {
+    PDB_GsiSortRecord *record = &task->gsi_record_arr[i];
+    task->src[i].key          = psi_addr_map_sort_key(record);
+    task->src[i].record       = record;
+  }
+
+  ProfEnd();
+}
+
+internal
+THREAD_POOL_TASK_FUNC(psi_addr_map_radix_histogram_task)
+{
+  ProfBeginFunction();
+
+  PDB_PsiAddrMapSortTask *task   = raw_task;
+  Rng1U64                 range  = task->ranges[task_id];
+  U64                    *counts = task->counts + task_id * PDB_PSI_ADDR_MAP_RADIX_COUNT;
+  U32                     mask   = task->digit_count - 1;
+
+  MemoryZeroTyped(counts, task->digit_count);
+  for EachInRange(i, range) {
+    U64 digit = (task->src[i].key >> task->digit_shift) & mask;
+    counts[digit] += 1;
+  }
+
+  ProfEnd();
+}
+
+internal
+THREAD_POOL_TASK_FUNC(psi_addr_map_radix_sort_task)
+{
+  ProfBeginFunction();
+
+  PDB_PsiAddrMapSortTask *task   = raw_task;
+  Rng1U64                 range  = task->ranges[task_id];
+  U64                    *offsets = task->counts + task_id * PDB_PSI_ADDR_MAP_RADIX_COUNT;
+  U32                     mask    = task->digit_count - 1;
+
+  for EachInRange(i, range) {
+    PDB_PsiAddrMapSortRecord record = task->src[i];
+    U64 digit = (record.key >> task->digit_shift) & mask;
+    task->dst[offsets[digit]++] = record;
+  }
+
+  ProfEnd();
+}
+
+force_inline U64
+psi_addr_map_name_sort_work(Rng1U64 run)
+{
+  U64 count = dim_1u64(run);
+  U64 work = count * (64 - clz64(count));
+  return work;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(psi_addr_map_name_sort_task)
+{
+  ProfBeginFunction();
+
+  PDB_PsiAddrMapNameSortTask *task  = raw_task;
+  Rng1U64                     batch = task->batch_arr[task_id];
+  for EachInRange(run_idx, batch) {
+    Rng1U64 run = task->run_arr[run_idx];
+    radsort(task->record_arr + run.min, dim_1u64(run), psi_addr_map_name_compar_is_before);
+  }
+
+  ProfEnd();
+}
+
+internal U32 *
+psi_addr_map_from_gsi_records(TP_Context *tp, Arena *arena, PDB_GsiSortRecord *gsi_record_arr, U64 count)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
+
+  PDB_PsiAddrMapSortRecord *radix_record_arr = 0;
+
+  ProfBegin("Sort");
+  if (count >= PDB_PSI_ADDR_MAP_RADIX_MIN_COUNT) {
+    PDB_PsiAddrMapSortTask task = {0};
+    task.ranges         = tp_divide_work(scratch.arena, count, tp->worker_count);
+    task.gsi_record_arr = gsi_record_arr;
+    task.src            = push_array_no_zero(scratch.arena, PDB_PsiAddrMapSortRecord, count);
+    task.dst            = push_array_no_zero(scratch.arena, PDB_PsiAddrMapSortRecord, count);
+    task.counts         = push_array_no_zero(scratch.arena, U64, tp->worker_count * PDB_PSI_ADDR_MAP_RADIX_COUNT);
+
+    tp_for_parallel_prof(tp, 0, tp->worker_count, psi_addr_map_radix_init_task, &task, "psi_addr_map_radix_init_task");
+
+    ProfBegin("Radix");
+    U32 digit_shift[] = { 0, 11, 22, 32, 43 };
+    U32 digit_count[] = { 1 << 11, 1 << 11, 1 << 10, 1 << 11, 1 << 5 };
+    for EachIndex(pass_idx, ArrayCount(digit_shift)) {
+      ProfBeginV("Pass %llu", pass_idx);
+
+      task.digit_shift = digit_shift[pass_idx];
+      task.digit_count = digit_count[pass_idx];
+
+      tp_for_parallel_prof(tp, 0, tp->worker_count, psi_addr_map_radix_histogram_task, &task, "psi_addr_map_radix_histogram_task");
+
+      U64 cursor = 0;
+      for EachIndex(digit_idx, task.digit_count) {
+        for EachIndex(task_id, tp->worker_count) {
+          U64 *count_ptr = &task.counts[task_id * PDB_PSI_ADDR_MAP_RADIX_COUNT + digit_idx];
+          U64  digit_item_count = *count_ptr;
+          *count_ptr = cursor;
+          cursor += digit_item_count;
+        }
+      }
+      Assert(cursor == count);
+
+      tp_for_parallel_prof(tp, 0, tp->worker_count, psi_addr_map_radix_sort_task, &task, "psi_addr_map_radix_sort_task");
+      Swap(PDB_PsiAddrMapSortRecord *, task.src, task.dst);
+
+      ProfEnd();
+    }
+    radix_record_arr = task.src;
+    ProfEnd();
+
+    ProfBegin("Get Name Run Count");
+    U64 name_run_count       = 0;
+    U64 total_name_sort_work = 0;
+    for (U64 run_first = 0; run_first < count;) {
+      U64 run_opl = run_first + 1;
+      while (run_opl < count && radix_record_arr[run_opl].key == radix_record_arr[run_first].key) {
+        run_opl += 1;
+      }
+      if (run_opl - run_first > 1) {
+        Rng1U64 run = rng_1u64(run_first, run_opl);
+        name_run_count += 1;
+        total_name_sort_work += psi_addr_map_name_sort_work(run);
+      }
+      run_first = run_opl;
+    }
+    ProfEnd();
+
+    if (name_run_count) {
+      ProfBegin("Name Runs");
+
+      PDB_PsiAddrMapNameSortTask name_task = {0};
+      name_task.record_arr = radix_record_arr;
+      name_task.run_arr    = push_array_no_zero(scratch.arena, Rng1U64, name_run_count);
+
+      ProfBegin("Gather Run Ranges");
+      U64 name_run_idx = 0;
+      for (U64 run_first = 0; run_first < count;) {
+        U64 run_opl = run_first + 1;
+        while (run_opl < count && radix_record_arr[run_opl].key == radix_record_arr[run_first].key) {
+          run_opl += 1;
+        }
+        if (run_opl - run_first > 1) {
+          name_task.run_arr[name_run_idx++] = rng_1u64(run_first, run_opl);
+        }
+        run_first = run_opl;
+      }
+      Assert(name_run_idx == name_run_count);
+      ProfEnd();
+
+      ProfBegin("Batching");
+
+      U64 batch_count = Min(name_run_count, (U64)tp->worker_count * 4);
+      name_task.batch_arr = push_array_no_zero(scratch.arena, Rng1U64, batch_count);
+
+      U64 run_idx        = 0;
+      U64 remaining_work = total_name_sort_work;
+
+      for EachIndex(batch_idx, batch_count) {
+        U64 batch_first   = run_idx;
+        U64 batches_left  = batch_count - batch_idx;
+        U64 run_opl_limit = name_run_count - (batches_left - 1);
+        U64 target_work   = CeilIntegerDiv(remaining_work, batches_left);
+        U64 batch_work    = 0;
+        while (run_idx < run_opl_limit) {
+          U64 run_work = psi_addr_map_name_sort_work(name_task.run_arr[run_idx]);
+          if (run_idx > batch_first && batch_work + run_work > target_work) {
+            break;
+          }
+          batch_work += run_work;
+          run_idx += 1;
+          if (batch_work >= target_work) {
+            break;
+          }
+        }
+        name_task.batch_arr[batch_idx] = rng_1u64(batch_first, run_idx);
+        remaining_work -= batch_work;
+      }
+      Assert(run_idx == name_run_count);
+
+      ProfEnd();
+
+      tp_for_parallel_prof(tp, 0, batch_count, psi_addr_map_name_sort_task, &name_task, "psi_addr_map_name_sort_task");
+
+      ProfEnd();
+    }
+  } else {
+    gsi_record_sort_by_sc(gsi_record_arr, count);
+  }
+  ProfEnd();
+
+  ProfBegin("Offset Fill");
+  U32 *addr_map = push_array_no_zero(arena, U32, count);
+  if (radix_record_arr) {
+    for EachIndex(i, count) {
+      addr_map[i] = safe_cast_u32(radix_record_arr[i].record->offset);
+    }
+  } else {
+    for EachIndex(i, count) {
+      addr_map[i] = safe_cast_u32(gsi_record_arr[i].offset);
+    }
+  }
+  ProfEnd();
+
+  scratch_end(scratch);
+  ProfEnd();
+  return addr_map;
+}
+
 internal
 THREAD_POOL_TASK_FUNC(gsi_size_buckets_task)
 {
@@ -2207,19 +2475,10 @@ psi_build(TP_Context *tp, PDB_PsiContext *psi, MSF_Context *msf, MSF_StreamNumbe
   PDB_GsiBuildResult gsi_build = gsi_build_ex(tp, scratch.arena, psi->gsi, symbol_data_base, /* is_pub32: */ 1, msf->page_size);
   
   ProfBegin("Address Map");
-  
-  ProfBegin("Sort");
-  gsi_record_sort_by_sc(gsi_build.sort_record_arr, gsi_build.hash_record_count);
-  ProfEnd();
-  
-  ProfBegin("Offset Fill");
+
   U64 addr_map_count = gsi_build.hash_record_count;
   U64 addr_map_size = addr_map_count * sizeof(U32);
-  U32 *addr_map     = push_array_no_zero(scratch.arena, U32, addr_map_count);
-  for (U64 i = 0; i < addr_map_count; i += 1) {
-    addr_map[i] = gsi_build.sort_record_arr[i].offset;
-  }
-  ProfEnd();
+  U32 *addr_map = psi_addr_map_from_gsi_records(tp, scratch.arena, gsi_build.sort_record_arr, addr_map_count);
 
   ProfEnd();
   
@@ -2263,24 +2522,24 @@ psi_push(PDB_PsiContext *psi, CV_Pub32Flags flags, U32 offset, U16 isect, String
 ////////////////////////////////
 
 internal void
-dbi_sec_contrib_list_push_node(PDB_DbiSectionContribList *list, PDB_DbiSectionContribNode *node)
+dbi_sec_contrib_list_push_node(PDB_DbiSCList *list, PDB_DbiSCNode *node)
 {
   node->next = 0;
   SLLQueuePush(list->first, list->last, node);
   list->count += 1;
 }
 
-internal PDB_DbiSectionContribNode *
-dbi_sec_contrib_list_push(Arena *arena, PDB_DbiSectionContribList *list)
+internal PDB_DbiSCNode *
+dbi_sec_contrib_list_push(Arena *arena, PDB_DbiSCList *list)
 {
-  PDB_DbiSectionContribNode *node = push_array_no_zero(arena, PDB_DbiSectionContribNode, 1);
+  PDB_DbiSCNode *node = push_array_no_zero(arena, PDB_DbiSCNode, 1);
   node->next = 0;
   dbi_sec_contrib_list_push_node(list, node);
   return node;
 }
 
 internal void
-dbi_sec_list_concat_arr(PDB_DbiSectionContribList *list, U64 count, PDB_DbiSectionContribList *to_concat)
+dbi_sec_list_concat_arr(PDB_DbiSCList *list, U64 count, PDB_DbiSCList *to_concat)
 {
   SLLConcatInPlaceArray(list, to_concat, count);
 }
@@ -2405,14 +2664,14 @@ dbi_open_module_info(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_Db
   return list;
 }
 
-internal PDB_DbiSectionContribList
+internal PDB_DbiSCList
 dbi_open_sec_contrib(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_DbiHeader *dbi_header)
 {
   ProfBeginFunction();
   
-  PDB_DbiSectionContribList sec_contrib = {0};
+  PDB_DbiSCList sec_contrib = {0};
   
-  if (dbi_header->sec_con_size > sizeof(PDB_DbiSectionContrib)) {
+  if (dbi_header->sec_con_size > sizeof(PDB_DbiSC)) {
     Temp scratch = scratch_begin(&arena, 1);
     
     // seek to start of section contrib info
@@ -2420,25 +2679,25 @@ dbi_open_sec_contrib(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_Db
     msf_stream_seek(msf, sn, sec_con_pos);
     
     // read header
-    PDB_DbiSectionContribVersion version = 0;
+    PDB_DbiSCVersion version = 0;
     msf_stream_read_struct(msf, sn, &version);
     
     // parse contrib items
     switch (version) {
-    case PDB_DbiSectionContribVersion_1: {
-      U64 contrib_count = dbi_header->sec_con_size / sizeof(PDB_DbiSectionContrib);
-      PDB_DbiSectionContrib *src_contrib_array = push_array(scratch.arena, PDB_DbiSectionContrib, contrib_count);
+    case PDB_DbiSCVersion_1: {
+      U64 contrib_count = dbi_header->sec_con_size / sizeof(PDB_DbiSC);
+      PDB_DbiSC *src_contrib_array = push_array(scratch.arena, PDB_DbiSC, contrib_count);
       MSF_UInt sec_con_read = msf_stream_read_array(msf, sn, &src_contrib_array[0], contrib_count);
       Assert(sec_con_read == sizeof(src_contrib_array[0]) * contrib_count);
       
-      PDB_DbiSectionContribNode *dst_contrib_array = push_array_no_zero(arena, PDB_DbiSectionContribNode, contrib_count);
+      PDB_DbiSCNode *dst_contrib_array = push_array_no_zero(arena, PDB_DbiSCNode, contrib_count);
       for (U64 icontrib = 0; icontrib < contrib_count; icontrib += 1) {
         dst_contrib_array[icontrib].next = 0;
         dst_contrib_array[icontrib].data = src_contrib_array[icontrib];
         dbi_sec_contrib_list_push_node(&sec_contrib, &dst_contrib_array[icontrib]);
       }
     } break;
-    case PDB_DbiSectionContribVersion_2: {
+    case PDB_DbiSCVersion_2: {
       NotImplemented;
     } break;
     default: Assert(!"unknown section contrib version"); break;
@@ -2595,7 +2854,7 @@ dbi_build_module_info(Arena *arena, PDB_DbiContext *dbi, MSF_Context *msf)
 
 #if 0
 int 
-dbi_sc_compar(const PDB_DbiSectionContrib *a, const PDB_DbiSectionContrib *b)
+dbi_sc_compar(const PDB_DbiSC *a, const PDB_DbiSC *b)
 {
 #if 0
   int cmp = 0;
@@ -2621,10 +2880,127 @@ dbi_sc_compar(const PDB_DbiSectionContrib *a, const PDB_DbiSectionContrib *b)
 }
 #endif
 
+typedef struct
+{
+  PDB_DbiSC *src;
+  PDB_DbiSC *dst;
+  Rng1U64   *range_arr;
+  U32       *count_arr;
+  U64        digit_count;
+  U64        shift;
+  B32        is_sec_pass;
+} LNK_DbiScRadixPass;
+
+internal U64
+lnk_dbi_sc_radix_digit(LNK_DbiScRadixPass *pass, PDB_DbiSC *sc)
+{
+  if (pass->is_sec_pass) {
+    return sc->base.sec;
+  }
+  return (sc->base.sec_off >> pass->shift) % pass->digit_count;
+}
+
+typedef struct
+{
+  PDB_DbiSC *src;
+  PDB_DbiSC *dst;
+  Rng1U64   *range_arr;
+} LNK_DbiScCopy;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_dbi_sc_copy_task)
+{
+  LNK_DbiScCopy *copy = raw_task;
+  Rng1U64 range = copy->range_arr[task_id];
+  MemoryCopy(copy->dst + range.min, copy->src + range.min, sizeof(copy->src[0]) * dim_1u64(range));
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_dbi_sc_radix_histo_task)
+{
+  LNK_DbiScRadixPass *pass = raw_task;
+  U32     *count = pass->count_arr + task_id * pass->digit_count;
+  Rng1U64  range = pass->range_arr[task_id];
+  for EachInRange(i, range) {
+    count[lnk_dbi_sc_radix_digit(pass, &pass->src[i])] += 1;
+  }
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_dbi_sc_radix_scatter_task)
+{
+  LNK_DbiScRadixPass *pass = raw_task;
+  U32     *count = pass->count_arr + task_id * pass->digit_count;
+  Rng1U64  range = pass->range_arr[task_id];
+  for EachInRange(i, range) {
+    PDB_DbiSC *sc = &pass->src[i];
+    pass->dst[count[lnk_dbi_sc_radix_digit(pass, sc)]++] = *sc;
+  }
+}
+
 internal void
-lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_count)
+lnk_dbi_sc_radix_pass_parallel(TP_Context *tp, Arena *arena, U64 task_count, Rng1U64 *range_arr, PDB_DbiSC **src, PDB_DbiSC **dst, U64 digit_count, U64 shift, B32 is_sec_pass)
+{
+  Temp temp = temp_begin(arena);
+
+  LNK_DbiScRadixPass pass = {
+    .src         = *src,
+    .dst         = *dst,
+    .range_arr   = range_arr,
+    .count_arr   = push_array(temp.arena, U32, task_count * digit_count),
+    .digit_count = digit_count,
+    .shift       = shift,
+    .is_sec_pass = is_sec_pass,
+  };
+
+  tp_for_parallel(tp, 0, task_count, lnk_dbi_sc_radix_histo_task, &pass);
+
+  U32 cursor = 0;
+  for EachIndex(digit, digit_count) {
+    for EachIndex(worker_idx, task_count) {
+      U32 *slot  = &pass.count_arr[worker_idx * digit_count + digit];
+      U32  count = *slot;
+      *slot = cursor;
+      cursor += count;
+    }
+  }
+
+  tp_for_parallel(tp, 0, task_count, lnk_dbi_sc_radix_scatter_task, &pass);
+  temp_end(temp);
+
+  Swap(PDB_DbiSC *, *src, *dst);
+}
+
+internal void
+lnk_radix_sort_dbi_sc_array(TP_Context *tp, PDB_DbiSC *arr, U64 sc_count, U64 sect_count)
 {
   ProfBeginFunction();
+
+  if (tp != 0 && tp->worker_count > 1 && sc_count >= KB(64)) {
+    Temp scratch = scratch_begin(0, 0);
+
+    PDB_DbiSC *src        = arr;
+    PDB_DbiSC *dst        = push_array_no_zero(scratch.arena, PDB_DbiSC, sc_count);
+    U64        task_count = tp->worker_count;
+    Rng1U64   *range_arr  = tp_divide_work(scratch.arena, sc_count, task_count);
+
+    lnk_dbi_sc_radix_pass_parallel(tp, scratch.arena, task_count, range_arr, &src, &dst, 256, 0, 0);
+    lnk_dbi_sc_radix_pass_parallel(tp, scratch.arena, task_count, range_arr, &src, &dst, 256, 8, 0);
+    lnk_dbi_sc_radix_pass_parallel(tp, scratch.arena, task_count, range_arr, &src, &dst, 256, 16, 0);
+    lnk_dbi_sc_radix_pass_parallel(tp, scratch.arena, task_count, range_arr, &src, &dst, 256, 24, 0);
+    lnk_dbi_sc_radix_pass_parallel(tp, scratch.arena, task_count, range_arr, &src, &dst, sect_count, 0, 1);
+
+    LNK_DbiScCopy copy = { .src = src, .dst = arr, .range_arr = range_arr };
+    tp_for_parallel(tp, 0, task_count, lnk_dbi_sc_copy_task, &copy);
+
+    scratch_end(scratch);
+    ProfEnd();
+    return;
+  }
+
+  //
+  // on small inputs the serial path is 4x faster
+  //
 
 #if 1
   // faster but uses more memory
@@ -2638,9 +3014,9 @@ lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_c
 
   Temp scratch = scratch_begin(0,0);
 
-  PDB_DbiSectionContrib *temp_arr = push_array_no_zero(scratch.arena, PDB_DbiSectionContrib, sc_count);
-  PDB_DbiSectionContrib *src_arr = arr;
-  PDB_DbiSectionContrib *dst_arr = temp_arr;
+  PDB_DbiSC *temp_arr = push_array_no_zero(scratch.arena, PDB_DbiSC, sc_count);
+  PDB_DbiSC *src_arr = arr;
+  PDB_DbiSC *dst_arr = temp_arr;
 
   ProfBegin("Count Memzero");
   U32 count_8lo[256]; MemoryZeroArray(count_8lo);
@@ -2651,7 +3027,7 @@ lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_c
 
   ProfBegin("Histogram");
   for (U64 i = 0; i < sc_count; i += 1) {
-    PDB_DbiSectionContrib *sc = src_arr + i;
+    PDB_DbiSC *sc = src_arr + i;
     count_arr[sc->base.sec] += 1;
 
     U64 digit_8lo = (sc->base.sec_off >> 0) % ArrayCount(count_8lo);
@@ -2693,7 +3069,7 @@ lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_c
 
   ProfBegin("Order 8 Lo");
   for (U64 i = 0; i < sc_count; i += 1) {
-    PDB_DbiSectionContrib *sc = &src_arr[i];
+    PDB_DbiSC *sc = &src_arr[i];
     U64 digit = (sc->base.sec_off >> 0) % ArrayCount(count_8lo);
     dst_arr[count_8lo[digit]++] = *sc;
   }
@@ -2701,7 +3077,7 @@ lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_c
 
   ProfBegin("Order 8 Hi");
   for (U64 i = 0; i < sc_count; i += 1) {
-    PDB_DbiSectionContrib *sc = &dst_arr[i];
+    PDB_DbiSC *sc = &dst_arr[i];
     U64 digit = (sc->base.sec_off >> 8) % ArrayCount(count_8hi);
     src_arr[count_8hi[digit]++] = *sc;
   }
@@ -2709,7 +3085,7 @@ lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_c
 
   ProfBegin("Order 16");
   for (U64 i = 0; i < sc_count; i += 1) {
-    PDB_DbiSectionContrib *sc = &src_arr[i];
+    PDB_DbiSC *sc = &src_arr[i];
     U64 digit = (sc->base.sec_off >> 16) % ArrayCount(count_16);
     dst_arr[count_16[digit]++] = *sc;
   }
@@ -2731,7 +3107,7 @@ lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_c
   count_arr[0] = 0;
 
   for (U64 i = 0; i < sc_count; i += 1) {
-    PDB_DbiSectionContrib *sc = dst_arr + i;
+    PDB_DbiSC *sc = dst_arr + i;
     src_arr[count_arr[sc->base.sec]++] = *sc;
   }
 
@@ -2754,30 +3130,52 @@ lnk_radix_sort_dbi_sc_array(PDB_DbiSectionContrib *arr, U64 sc_count, U64 sect_c
 }
 
 internal String8List
-dbi_build_sec_con(Arena *arena, PDB_DbiContext *dbi)
+dbi_build_sec_con(Arena *arena, TP_Context *tp, PDB_DbiContext *dbi)
 {
   ProfBeginFunction();
 
-  PDB_DbiSectionContribVersion *version = push_array(arena, PDB_DbiSectionContribVersion, 1);
-  *version = PDB_DbiSectionContribVersion_1;
+  PDB_DbiSCVersion *version = push_array(arena, PDB_DbiSCVersion, 1);
+  *version = PDB_DbiSCVersion_1;
   
   // push section contribs V1
   ProfBegin("Push sect contribs [Count %llu]", dbi->sec_contrib_list.count);
-  PDB_DbiSectionContrib *sc_array = push_array_no_zero(arena, PDB_DbiSectionContrib, dbi->sec_contrib_list.count);
-  PDB_DbiSectionContrib *dst = &sc_array[0];
-  for (PDB_DbiSectionContribNode *src = dbi->sec_contrib_list.first; src != 0; src = src->next, dst += 1) {
+  PDB_DbiSC *sc_array = push_array_no_zero(arena, PDB_DbiSC, dbi->sec_contrib_list.count);
+  PDB_DbiSC *dst = &sc_array[0];
+  for (PDB_DbiSCNode *src = dbi->sec_contrib_list.first; src != 0; src = src->next, dst += 1) {
     *dst = src->data;
   }
   ProfEnd();
 
   // sort section contribs so they are binary searchable
-  lnk_radix_sort_dbi_sc_array(sc_array, dbi->sec_contrib_list.count, dbi->section_list.count + 1);
-  
+  lnk_radix_sort_dbi_sc_array(tp, sc_array, dbi->sec_contrib_list.count, dbi->section_list.count + 1);
+
+  // DBI contribution maps an address range to its module, so adjacent same-module runs can share one record
+  ProfBegin("Coalesce sect contribs");
+  U64 sc_count = 0;
+  for EachIndex(read_idx, dbi->sec_contrib_list.count) {
+    PDB_DbiSC *current = &sc_array[read_idx];
+    if (sc_count > 0) {
+      PDB_DbiSC *previous = &sc_array[sc_count - 1];
+      if (previous->base.sec == current->base.sec &&
+          previous->base.mod == current->base.mod &&
+          previous->base.flags == current->base.flags) {
+        U64 current_end  = (U64)current->base.sec_off + (U64)current->base.size;
+        U64 previous_end = (U64)previous->base.sec_off + (U64)previous->base.size;
+        if (current_end > previous_end) {
+          previous->base.size = (U32)(current_end - (U64)previous->base.sec_off);
+        }
+        continue;
+      }
+    }
+    sc_array[sc_count++] = *current;
+  }
+  ProfEnd();
+
   // push section contrib info
   ProfBegin("List Push");
   String8List sec_con_list = {0};
   str8_list_push(arena, &sec_con_list, str8((U8*)version, sizeof(*version)));
-  str8_list_push(arena, &sec_con_list, str8((U8*)sc_array, sizeof(sc_array[0])*dbi->sec_contrib_list.count));
+  str8_list_push(arena, &sec_con_list, str8((U8*)sc_array, sizeof(sc_array[0])*sc_count));
   ProfEnd();
   
   ProfEnd();
@@ -2862,7 +3260,7 @@ dbi_build(TP_Context *tp, PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumbe
   
   ProfBegin("Build");
   String8List module_info_list = dbi_build_module_info(scratch.arena, dbi, msf);
-  String8List sec_con_list     = dbi_build_sec_con(scratch.arena, dbi);
+  String8List sec_con_list     = dbi_build_sec_con(scratch.arena, tp, dbi);
   String8List sec_map_list     = dbi_build_sec_map(scratch.arena, dbi);
   String8List file_info_list   = dbi_build_file_info(scratch.arena, tp, dbi->module_list, string_ht);
   String8List dbg_header_list  = dbi_build_dbg_header(scratch.arena, dbi, msf);
@@ -2956,7 +3354,7 @@ dbi_module_push_section_contrib(PDB_DbiContext *dbi,
 {
   ProfBeginFunction();
 
-  PDB_DbiSectionContrib sc;
+  PDB_DbiSC sc;
   sc.base.sec     = safe_cast_u16(isect_off.isect);
   sc.base.sec_off = isect_off.off;
   sc.base.size    = size;
@@ -2965,7 +3363,7 @@ dbi_module_push_section_contrib(PDB_DbiContext *dbi,
   sc.data_crc     = data_crc;
   sc.reloc_crc    = reloc_crc;
 
-  PDB_DbiSectionContribNode *node = push_array_no_zero(dbi->arena, PDB_DbiSectionContribNode, 1);
+  PDB_DbiSCNode *node = push_array_no_zero(dbi->arena, PDB_DbiSCNode, 1);
   node->data = sc;
   dbi_sec_contrib_list_push_node(&dbi->sec_contrib_list, node);
   
@@ -3159,28 +3557,61 @@ pdb_build_gsi_psi(TP_Context *tp, PDB_Context *pdb)
 }
 
 internal void
-pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped)
+pdb_build_types(TP_Context *tp, PDB_Context *pdb, PDB_BuildHooks *hooks)
 {
   ProfBeginFunction();
-  
+
   PDB_InfoContext *info   = pdb->info;
   PDB_StringTable *strtab = &info->strtab;
-  PDB_DbiContext  *dbi    = pdb->dbi;
   PDB_TypeServer  *tpi    = pdb->type_servers[CV_TypeIndexSource_TPI];
   PDB_TypeServer  *ipi    = pdb->type_servers[CV_TypeIndexSource_IPI];
-  
+
   pdb_type_server_build(tp, tpi, strtab, pdb->msf, PDB_FixedStream_Tpi);
+  if (hooks && hooks->stream_finalize) {
+    hooks->stream_finalize(hooks->user_data, pdb->msf, PDB_FixedStream_Tpi);
+    hooks->stream_finalize(hooks->user_data, pdb->msf, tpi->hash_sn);
+  }
   if (info->flags & PDB_FeatureFlag_HAS_ID_STREAM) {
     pdb_type_server_build(tp, ipi, strtab, pdb->msf, PDB_FixedStream_Ipi);
+    if (hooks && hooks->stream_finalize) {
+      hooks->stream_finalize(hooks->user_data, pdb->msf, PDB_FixedStream_Ipi);
+      hooks->stream_finalize(hooks->user_data, pdb->msf, ipi->hash_sn);
+    }
   }
+
+  ProfEnd();
+}
+
+internal void
+pdb_build_dbi_info(TP_Context *tp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped, PDB_BuildHooks *hooks)
+{
+  ProfBeginFunction();
 
   if (build_gsi) {
     pdb_build_gsi_psi(tp, pdb);
   }
 
   dbi_build(tp, pdb->dbi, pdb->msf, PDB_FixedStream_Dbi, string_ht, is_stripped);
+  if (hooks && hooks->stream_finalize) {
+    hooks->stream_finalize(hooks->user_data, pdb->msf, PDB_FixedStream_Dbi);
+    for EachElement(i, pdb->dbi->dbg_streams) {
+      hooks->stream_finalize(hooks->user_data, pdb->msf, pdb->dbi->dbg_streams[i]);
+    }
+  }
   pdb_info_build(pdb->info, pdb->msf, PDB_FixedStream_Info);
+  if (hooks && hooks->stream_finalize) {
+    hooks->stream_finalize(hooks->user_data, pdb->msf, PDB_FixedStream_Info);
+  }
 
+  ProfEnd();
+}
+
+internal void
+pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped, PDB_BuildHooks *hooks)
+{
+  ProfBeginFunction();
+  pdb_build_types(tp, pdb, hooks);
+  pdb_build_dbi_info(tp, pdb, string_ht, build_gsi, is_stripped, hooks);
   ProfEnd();
 }
 

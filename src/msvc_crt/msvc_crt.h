@@ -33,6 +33,12 @@
 // PE_TLSHeader32 or PE_TLSHeader64, according to machine type.
 #define MSCRT_TLS_SYMBOL_NAME "_tls_used"
 
+// vftable symbols
+#define MSCRT_VFTABLE_SYMBOL_PREFIX "??_7"
+
+// vbptr symbols
+#define MSCRT_VBTABLE_SYMBOL_PREFIX "??_8"
+
 ////////////////////////////////
 
 // feature flags in absolute symbol @feat.00
@@ -377,4 +383,3 @@ mscrt_catch_blocks_from_data_x8664(Arena              *arena,
 internal String8 mscrt_string_from_eh_adjectives(Arena *arena, MSCRT_EhHandlerTypeFlags adjectives);
 
 #endif // MSVC_CRT
-

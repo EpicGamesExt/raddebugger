@@ -272,14 +272,19 @@ internal B32
 commit_memory(void *ptr, U64 size)
 {
   B32 result = (VirtualAlloc(ptr, size, MEM_COMMIT, PAGE_READWRITE) != 0);
+
+#if !NO_WIN32_RIO
   if(w32_rio_functions.RIORegisterBuffer)
   {
     // wine does not implement these functions
     w32_rio_functions.RIODeregisterBuffer(w32_rio_functions.RIORegisterBuffer(ptr, size));
   }
+#endif
+
 #if PROFILE_TELEMETRY
   tmAlloc(0, ptr, size / 1024, "Win32 Commit");
 #endif
+
   return result;
 }
 
@@ -441,11 +446,13 @@ set_platform_thread_name(String8 name)
 internal Thread
 thread_launch(ThreadEntryPointFunctionType *f, void *p)
 {
+  ProfBeginFunction();
   W32_Entity *entity = w32_entity_alloc(W32_EntityKind_Thread);
   entity->thread.func = f;
   entity->thread.ptr = p;
   entity->thread.handle = CreateThread(0, 0, w32_thread_entry_point, entity, 0, &entity->thread.tid);
   Thread result = {IntFromPtr(entity)};
+  ProfEnd();
   return result;
 }
 

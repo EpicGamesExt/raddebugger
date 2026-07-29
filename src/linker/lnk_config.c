@@ -14,6 +14,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Brepro,             0, "BREPRO",               "",                               "No support."                                                  },
   { LNK_CmdSwitch_Debug,              0, "DEBUG",                "[:{FULL|NONE}]",                 "Controls debug info level."                                   },
   { LNK_CmdSwitch_DefaultLib,         1, "DEFAULTLIB",           ":LIBNAME",                       "Set default library."                                         },
+  { LNK_CmdSwitch_Def,                1, "DEF",                  ":FILENAME",                      "Read exports from a module-definition file."                   },
   { LNK_CmdSwitch_Delay,              0, "DELAY",                ":{NOBIND|UNLOAD}",               "Controls emission of unload and bind tables."                 },
   { LNK_CmdSwitch_DelayLoad,          0, "DELAYLOAD",            ":DLL",                           "Delay load DLL."                                              },
   { LNK_CmdSwitch_Dll,                0, "DLL",                  "",                               "Link to a DLL."                                               },
@@ -24,7 +25,10 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_FailIfMismatch,     1, "FAILIFMISMATCH",       "{id=value}",                     "Fails to link if same ids have conflicting values."           },
   { LNK_CmdSwitch_FileAlign,          0, "FILEALIGN",            ":#",                             "Set section alignment in the file."                           },
   { LNK_CmdSwitch_Fixed,              0, "FIXED",                "[:NO]",                          "Load the image at the default base address."                  },
+  { LNK_CmdSwitch_Force,              0, "FORCE",                "",                               "Force image output despite errors."                           },
   { LNK_CmdSwitch_FunctionPadMin,     0, "FUNCTIONPADMIN",       ":#",                             "Minimum function byte size."                                  },
+  { LNK_CmdSwitch_Guard,              0, "GUARD",                ":{CF|NO|LONGJMP|EHCONT}",        "Controls Control Flow Guard metadata."                        },
+  { LNK_CmdSwitch_GuardSym,           1, "GUARDSYM",             ":SYMBOL,S",                      "MSVC guard symbol directive."                                 },
   { LNK_CmdSwitch_Heap,               0, "HEAP",                 "RESERVE[,COMMIT]",               "Set reserve and commit size for the heap."                    },
   { LNK_CmdSwitch_HighEntropyVa,      0, "HIGHENTROPYVA",        "[:NO]",                          "Indicate that image supports full 64-bit address space ASLR." },
   { LNK_CmdSwitch_Ignore,             0, "IGNORE",               ":#",                             "Ignore a warning."                                            },
@@ -55,6 +59,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_PdbPageSize,        0, "PDBPAGESIZE",          ":#",                             "Page size must be power of two."                              },
   { LNK_CmdSwitch_PdbStripped,        0, "PDBSTRIPPED",          ":FILENAME",                      "Create a stripped PDB containing public symbols, a section map, and a list of object files." },
   { LNK_CmdSwitch_Release,            1, "RELEASE",              "",                               "Write image checksum."                                        },
+  { LNK_CmdSwitch_Section,            1, "SECTION",              ":NAME,ATTRS",                    "Set output section attributes."                              },
   { LNK_CmdSwitch_Stack,              1, "STACK",                ":RESERVE[,COMMIT]",              "Set reserve and commit size for the stack."                   },
   { LNK_CmdSwitch_SubSystem,          1, "SUBSYSTEM",            ":{CONSOLE|NATIVE|WINDOWS}[,#[.##]]", "Set subsystem for the image."                             },
   { LNK_CmdSwitch_TsAware,            0, "TSAWARE",              "[:NO]",                          "Image is terminal server aware."                              },
@@ -97,7 +102,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_ImageAltPath,                 0, "RAD_IMAGEALTPATH",                     ":FILENAME", "Alternative name for the image"                                                   },
   { LNK_CmdSwitch_Rad_WriteTempFiles,               0, "RAD_WRITE_TEMP_FILES",                 "[:NO]",     "When speicifed linker writes image and debug info to temporary files and renames after link is done." },
   { LNK_CmdSwitch_Rad_TimeStamp,                    0, "RAD_TIME_STAMP",                       ":#",        "Time stamp embeded in EXE and PDB."                                               },
-  { LNK_CmdSwitch_Rad_TypeHashAlg,                  0, "RAD_TPYE_HASH_ALG",                    ":{BLAKE3}", "Sets hashing algorithm for type merging."                                         },
+  { LNK_CmdSwitch_Rad_DebugTypeHash,                0, "RAD_DEBUG_TYPE_HASH",                  ":{BLAKE3|XXHASH}", "Sets hashing algorithm for debug type merging."                               },
   { LNK_CmdSwitch_Rad_UnresolvedSymbolLimit,        0, "RAD_UNRESOLVED_SYMBOL_LIMIT",          ":#",        "Limits number of unresolved symbol errors linker reports."                        },
   { LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,     0, "RAD_UNRESOLVED_SYMBOL_REF_LIMIT",      ":#",        "Limit number of unresolved symbol references linker reports."                     },
   { LNK_CmdSwitch_Rad_Version,                      0, "RAD_VERSION",                          "",          "Print version and exit."                                                          },
@@ -105,6 +110,8 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_WorkDir,                      0, "RAD_WORK_DIR",                         ":PATH",     "Working directory used for stable debug paths."                                   },
 
   { LNK_CmdSwitch_RadTypeServer,                   0, "RAD_TYPE_SERVER", ":FILENAME", "Merge types and store them in the specified file. The filename must have the .rrt extension." },
+
+  { LNK_CmdSwitch_LLVM_AddrSig, 0, "LLVM_ADDRSIG", "[:NO]", "Use .llvm_addrsig to guide ICF." },
 
   { LNK_CmdSwitch_Help, 0, "HELP", "", "" },
   { LNK_CmdSwitch_Help, 0, "?",    "", "" },
@@ -708,6 +715,55 @@ lnk_parse_export_directive(Arena *arena, String8 directive, LNK_Obj *obj, PE_Exp
   return is_parsed;
 }
 
+internal String8
+lnk_text_file_string_from_data(Arena *arena, String8 data)
+{
+  String8 result = data;
+
+  if (data.size >= 2 && data.str[0] == 0xff && data.str[1] == 0xfe) {
+    // decode UTF-16LE BOM
+    result = str8_from_16(arena, str16((U16 *)(data.str + 2), (data.size - 2) / sizeof(U16)));
+  } else if (data.size >= 3 && data.str[0] == 0xef && data.str[1] == 0xbb && data.str[2] == 0xbf) {
+    // strip UTF-8 BOM
+    result = str8_skip(data, 3);
+  }
+
+  return result;
+}
+
+internal void
+lnk_push_export_to_config(LNK_Config *config, LNK_Obj *obj, PE_ExportParse export_parse)
+{
+  // lookup existing export
+  String8             export_name = pe_name_from_export_parse(&export_parse);
+  PE_ExportParseNode *exp_n       = hash_map_search_string_raw(&config->export_ht, export_name);
+
+  if (exp_n == 0) {
+    // push new export
+    if (!export_parse.is_forwarder) {
+      lnk_include_symbol(config, export_parse.name, 0);
+    }
+
+    exp_n = pe_export_parse_list_push(config->arena, &config->export_symbol_list, export_parse);
+    hash_map_push_string_raw(config->arena, &config->export_ht, export_name, exp_n);
+  } else {
+    // merge duplicate export
+    PE_ExportParse *extant_export = &exp_n->data;
+    B32 alias_conflict = extant_export->alias.size &&
+                         export_parse.alias.size &&
+                         !str8_match(extant_export->alias, export_parse.alias, 0);
+    B32 ordinal_conflict = extant_export->ordinal != export_parse.ordinal;
+
+    if (alias_conflict || ordinal_conflict) {
+      lnk_error_obj(LNK_Error_IllExport, obj, "ambiguous symbol export %S", export_parse.name);
+    }
+
+    if (!alias_conflict && !ordinal_conflict && extant_export->alias.size == 0 && export_parse.alias.size != 0) {
+      extant_export->alias = export_parse.alias;
+    }
+  }
+}
+
 internal B32
 lnk_parse_merge_directive(String8 string, LNK_Obj *obj, LNK_MergeDirective *out)
 {
@@ -724,6 +780,43 @@ lnk_parse_merge_directive(String8 string, LNK_Obj *obj, LNK_MergeDirective *out)
   scratch_end(scratch);
   return is_parse_ok;
 }
+
+typedef struct LNK_SectionDirectiveAttr
+{
+  U8                code;
+  COFF_SectionFlags flag;
+  B32               is_mem_attr;
+  B32               negated_sets;
+} LNK_SectionDirectiveAttr;
+
+global read_only LNK_SectionDirectiveAttr g_section_directive_attr_map[] =
+{
+  { 'D', COFF_SectionFlag_MemDiscardable, 0, 0 },
+  { 'E', COFF_SectionFlag_MemExecute,     1, 0 },
+  { 'K', COFF_SectionFlag_MemNotCached,   0, 1 },
+  { 'P', COFF_SectionFlag_MemNotPaged,    0, 1 },
+  { 'R', COFF_SectionFlag_MemRead,        1, 0 },
+  { 'S', COFF_SectionFlag_MemShared,      0, 0 },
+  { 'W', COFF_SectionFlag_MemWrite,       1, 0 },
+};
+
+typedef struct LNK_GuardOption
+{
+  String8        name;
+  LNK_GuardFlags set_flags;
+  LNK_GuardFlags clear_flags;
+} LNK_GuardOption;
+
+global read_only LNK_GuardOption g_guard_option_table[] =
+{
+  { str8_lit_comp("cf"),       LNK_Guard_Cf,      0                 },
+  { str8_lit_comp("nocf"),     0,                 LNK_Guard_Cf      },
+  { str8_lit_comp("longjmp"),  LNK_Guard_LongJmp, 0                 },
+  { str8_lit_comp("nolongjmp"), 0,                LNK_Guard_LongJmp },
+  { str8_lit_comp("ehcont"),   LNK_Guard_EhCont,  0                 },
+  { str8_lit_comp("noehcont"), 0,                 LNK_Guard_EhCont  },
+  { str8_lit_comp("no"),       0,                 LNK_Guard_All     },
+};
 
 internal LNK_AltNameNode *
 lnk_alt_name_list_push(Arena *arena, LNK_AltNameList *list, LNK_AltName v)
@@ -743,6 +836,24 @@ lnk_merge_directive_list_push(Arena *arena, LNK_MergeDirectiveList *list, LNK_Me
   SLLQueuePush(list->first, list->last, node);
   list->count += 1;
   return node;
+}
+
+internal COFF_SectionFlags
+lnk_apply_section_directives_to_flags(LNK_Config *config, String8 full_section_name, COFF_SectionFlags flags)
+{
+  String8 section_name = {0};
+  String8 sort_idx     = {0};
+  coff_parse_section_name(full_section_name, &section_name, &sort_idx);
+
+  for EachNode(dir_n, LNK_SectionDirectiveNode, config->section_list.first) {
+    LNK_SectionDirective *dir = &dir_n->v;
+    if (str8_match(dir->name, section_name, 0)) {
+      flags &= ~dir->clear_flags;
+      flags |= dir->set_flags;
+    }
+  }
+
+  return flags;
 }
 
 internal String8
@@ -1088,6 +1199,7 @@ lnk_unwrap_rsp(Arena *arena, String8List arg_list)
       if (file_path_exists(name)) {
         // read rsp from disk
         String8 file = lnk_read_data_from_file_path(scratch.arena, 0, name);
+        file = lnk_text_file_string_from_data(scratch.arena, file);
         
         // parse rsp
         String8List rsp_args = lnk_arg_list_parse_windows_rules(scratch.arena, file);
@@ -1131,6 +1243,8 @@ lnk_apply_write_temp_files(Arena *arena, LNK_Config *config)
     config->temp_type_server_name = push_str8f(arena, "%S.tmp%x", config->type_server_name, config->time_stamp); 
   }
 }
+
+internal void lnk_apply_def_file_to_config(LNK_Config *config, String8 path, LNK_Obj *obj);
 
 internal void
 lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List value_strings, LNK_Obj *obj)
@@ -1250,6 +1364,13 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     }
   } break;
 
+  case LNK_CmdSwitch_Def: {
+    String8 path = {0};
+    if (lnk_cmd_switch_parse_string(obj, cmd_switch, value_strings, &path)) {
+      lnk_apply_def_file_to_config(config, path, obj);
+    }
+  } break;
+
   case LNK_CmdSwitch_Delay: {
     if (value_strings.node_count == 0 || value_strings.node_count > 1) {
       lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
@@ -1297,42 +1418,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
   case LNK_CmdSwitch_Export: {
     PE_ExportParse export_parse = {0};
     if (lnk_parse_export_directive_ex(config->arena, value_strings, obj, &export_parse)) {
-      String8             export_name = pe_name_from_export_parse(&export_parse);
-      PE_ExportParseNode *exp_n       = hash_map_search_string_raw(&config->export_ht, export_name);
-
-      if (exp_n == 0) {
-        // make sure export is defined
-        if (!export_parse.is_forwarder) {
-          lnk_include_symbol(config, export_parse.name, 0);
-        }
-
-        // push new export
-        exp_n = pe_export_parse_list_push(config->arena, &config->export_symbol_list, export_parse);
-
-        hash_map_push_string_raw(config->arena, &config->export_ht, export_name, exp_n);
-      } else {
-        B32 is_ambiguous = 1;
-        PE_ExportParse *extant_export = &exp_n->data;
-
-        if (extant_export->alias.size && export_parse.alias.size && !str8_match(extant_export->alias, export_parse.alias, 0)) {
-          goto report;
-        }
-
-        if (extant_export->ordinal != export_parse.ordinal) {
-          goto report;
-        }
-
-        is_ambiguous = 0;
-
-        if (extant_export->alias.size == 0 && export_parse.alias.size != 0) {
-          extant_export->alias = export_parse.alias;
-        }
-
-      report:;
-       if (is_ambiguous) {
-         lnk_error_obj(LNK_Error_IllExport, obj, "ambiguous symbol export %S", export_parse.name);
-       }
-      }
+      lnk_push_export_to_config(config, obj, export_parse);
     }
   } break;
 
@@ -1382,6 +1468,25 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
       lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &config->function_pad_min, LNK_ParseU64Flag_CheckUnder32bit);
     }
     config->do_function_pad_min = LNK_SwitchState_Yes;
+  } break;
+
+  case LNK_CmdSwitch_Guard: {
+    for EachNode(n, String8Node, value_strings.first) {
+      LNK_GuardOption *option = 0;
+      for EachElement(i, g_guard_option_table) {
+        if (str8_matchi(g_guard_option_table[i].name, n->string)) {
+          option = &g_guard_option_table[i];
+          break;
+        }
+      }
+
+      if (option != 0) {
+        config->guard_flags &= ~option->clear_flags;
+        config->guard_flags |= option->set_flags;
+      } else {
+        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown option \"%S\"", n->string);
+      }
+    }
   } break;
 
   case LNK_CmdSwitch_Heap: {
@@ -1725,6 +1830,101 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
       config->flags |= LNK_ConfigFlag_WriteImageChecksum;
     } else {
       lnk_error_cmd_switch_invalid_param_count(LNK_Error_Cmdl, obj, cmd_switch);
+    }
+  } break;
+
+  case LNK_CmdSwitch_Section: {
+    LNK_SectionDirective section_dir = {0};
+    B32 is_parse_ok = 1;
+
+    if (value_strings.node_count < 2) {
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, LNK_CmdSwitch_Section, "expected section name and attributes");
+      is_parse_ok = 0;
+    } else {
+      section_dir.name = value_strings.first->string;
+
+      B32 has_attr     = 0;
+      B32 has_mem_attr = 0;
+      for (String8Node *param_n = value_strings.first->next; param_n != 0; param_n = param_n->next) {
+        String8 param = param_n->string;
+
+        if (str8_match_lit("ALIGN=", param, StringMatchFlag_CaseInsensitive|StringMatchFlag_RightSideSloppy)) {
+          String8 align_string = str8_skip(param, sizeof("ALIGN=") - 1);
+          U64 align = 0;
+          if (try_u64_from_str8_c_rules(align_string, &align)) {
+            COFF_SectionFlags align_flag = coff_section_flag_from_align_size(align);
+            if (align_flag) {
+              COFF_SectionFlags align_mask = (COFF_SectionFlag_AlignMask << COFF_SectionFlag_AlignShift);
+              section_dir.clear_flags |= align_mask;
+              section_dir.set_flags   &= ~align_mask;
+              section_dir.set_flags   |= align_flag;
+              section_dir.clear_flags &= ~align_flag;
+            } else {
+              lnk_error_cmd_switch(LNK_Error_Cmdl, obj, LNK_CmdSwitch_Section, "invalid alignment \"%S\"", align_string);
+              is_parse_ok = 0;
+            }
+          } else {
+            lnk_error_cmd_switch(LNK_Error_Cmdl, obj, LNK_CmdSwitch_Section, "unable to parse alignment \"%S\"", align_string);
+            is_parse_ok = 0;
+          }
+          continue;
+        }
+
+        B32 negate = 0;
+        for EachIndex(i, param.size) {
+          U8 c = upper_from_char(param.str[i]);
+          if (c == '!') {
+            negate = 1;
+            continue;
+          }
+
+          LNK_SectionDirectiveAttr *attr = 0;
+          for EachElement(attr_idx, g_section_directive_attr_map) {
+            if (g_section_directive_attr_map[attr_idx].code == c) {
+              attr = &g_section_directive_attr_map[attr_idx];
+              break;
+            }
+          }
+
+          if (attr == 0) {
+            lnk_error_cmd_switch(LNK_Error_Cmdl, obj, LNK_CmdSwitch_Section, "unknown section attribute '%c' in \"%S\"", c, param);
+            is_parse_ok = 0;
+          } else {
+            has_attr     = 1;
+            has_mem_attr = has_mem_attr || attr->is_mem_attr;
+
+            COFF_SectionFlags flags = (negate == attr->negated_sets) ? attr->flag : 0;
+            section_dir.clear_flags |= attr->flag;
+            section_dir.set_flags   &= ~attr->flag;
+            section_dir.set_flags   |= flags;
+            section_dir.clear_flags &= ~flags;
+          }
+
+          negate = 0;
+        }
+
+        if (negate) {
+          lnk_error_cmd_switch(LNK_Error_Cmdl, obj, LNK_CmdSwitch_Section, "dangling '!' in \"%S\"", param);
+          is_parse_ok = 0;
+        }
+      }
+
+      if (has_attr) {
+        section_dir.clear_flags |= COFF_SectionFlag_MemDiscardable|COFF_SectionFlag_MemNotCached|COFF_SectionFlag_MemNotPaged|COFF_SectionFlag_MemShared;
+        if (has_mem_attr) {
+          section_dir.clear_flags |= COFF_SectionFlag_MemExecute|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite;
+        }
+        section_dir.clear_flags &= ~section_dir.set_flags;
+      }
+    }
+
+    if (is_parse_ok) {
+      section_dir.name = push_str8_copy(config->arena, section_dir.name);
+
+      LNK_SectionDirectiveNode *node = push_array_no_zero(config->arena, LNK_SectionDirectiveNode, 1);
+      node->v = section_dir;
+      SLLQueuePush(config->section_list.first, config->section_list.last, node);
+      config->section_list.count += 1;
     }
   } break;
 
@@ -2125,11 +2325,13 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
     lnk_cmd_switch_parse_u32(obj, cmd_switch, value_strings, &config->time_stamp, 0);
   } break;
 
-  case LNK_CmdSwitch_Rad_TypeHashAlg: {
+  case LNK_CmdSwitch_Rad_DebugTypeHash: {
     String8 alg = {0};
     if (lnk_cmd_switch_parse_string(obj, cmd_switch, value_strings, &alg)) {
       if (str8_match(alg, str8_lit("BLAKE3"), StringMatchFlag_CaseInsensitive)) {
-        config->type_hash_alg = LLVM_GHashAlg_BLAKE3;
+        config->debug_types_hash = LNK_HashKind_BLAKE3;
+      } else if (str8_match(alg, str8_lit("XXHASH"), StringMatchFlag_CaseInsensitive)) {
+        config->debug_types_hash = LNK_HashKind_XXHash;
       } else {
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown hash alg: %S", alg);
       }
@@ -2179,6 +2381,335 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8List
       lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "missing type server file path");
     }
   } break;
+
+  case LNK_CmdSwitch_LLVM_AddrSig: {
+    lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &config->llvm_addrsig);
+  } break;
+  }
+
+  scratch_end(scratch);
+}
+
+typedef enum LNK_DefFileStmt
+{
+  LNK_DefFileStmt_Null,
+  LNK_DefFileStmt_Description,
+  LNK_DefFileStmt_Exports,
+  LNK_DefFileStmt_HeapSize,
+  LNK_DefFileStmt_Imports,
+  LNK_DefFileStmt_Library,
+  LNK_DefFileStmt_Name,
+  LNK_DefFileStmt_Sections,
+  LNK_DefFileStmt_Segments,
+  LNK_DefFileStmt_StackSize,
+  LNK_DefFileStmt_Stub,
+  LNK_DefFileStmt_Version,
+} LNK_DefFileStmt;
+
+global read_only struct
+{
+  String8         name;
+  LNK_DefFileStmt stmt;
+} g_def_file_stmt_map[] =
+{
+  { str8_lit_comp("DESCRIPTION"), LNK_DefFileStmt_Description },
+  { str8_lit_comp("EXPORTS"),     LNK_DefFileStmt_Exports     },
+  { str8_lit_comp("HEAPSIZE"),    LNK_DefFileStmt_HeapSize    },
+  { str8_lit_comp("IMPORTS"),     LNK_DefFileStmt_Imports     },
+  { str8_lit_comp("LIBRARY"),     LNK_DefFileStmt_Library     },
+  { str8_lit_comp("NAME"),        LNK_DefFileStmt_Name        },
+  { str8_lit_comp("SECTIONS"),    LNK_DefFileStmt_Sections    },
+  { str8_lit_comp("SEGMENTS"),    LNK_DefFileStmt_Segments    },
+  { str8_lit_comp("STACKSIZE"),   LNK_DefFileStmt_StackSize   },
+  { str8_lit_comp("STUB"),        LNK_DefFileStmt_Stub        },
+  { str8_lit_comp("VERSION"),     LNK_DefFileStmt_Version     },
+};
+
+typedef struct LNK_DefFileLineNode LNK_DefFileLineNode;
+struct LNK_DefFileLineNode
+{
+  LNK_DefFileStmt     stmt;
+  String8             line;
+  B32                 is_keyword;
+  LNK_DefFileLineNode *next;
+};
+
+typedef struct LNK_DefFileLineList LNK_DefFileLineList;
+struct LNK_DefFileLineList
+{
+  U64                  count;
+  LNK_DefFileLineNode *first;
+  LNK_DefFileLineNode *last;
+};
+
+internal String8List
+lnk_def_file_tokenize(Arena *arena, String8 line)
+{
+  // tokenize with windows quoting rules
+  line = push_str8_copy(arena, line);
+  for EachIndex(i, line.size) {
+    if (line.str[i] == '\t') {
+      line.str[i] = ' ';
+    }
+  }
+
+  String8List tokens = lnk_arg_list_parse_windows_rules(arena, line);
+
+  String8List result = {0};
+  for (String8Node *token_n = tokens.first; token_n != 0; token_n = token_n->next) {
+    String8      token  = token_n->string;
+    String8Node *next_n = token_n->next;
+    if (token.size == 1 && token.str[0] == '@' && next_n != 0) {
+      str8_list_push(arena, &result, str8_cat(arena, token, next_n->string));
+      token_n = next_n;
+    } else {
+      str8_list_push(arena, &result, token);
+    }
+  }
+  return result;
+}
+
+internal void
+lnk_apply_def_file_to_config(LNK_Config *config, String8 path, LNK_Obj *obj)
+{
+  Temp scratch = scratch_begin(&config->arena, 1);
+
+  // load DEF file
+  String8 raw_file = lnk_read_data_from_file_path(scratch.arena, config->io_flags, path);
+  String8 file     = lnk_text_file_string_from_data(scratch.arena, raw_file);
+
+  // parse & collect normalized DEF lines
+  LNK_DefFileLineList def_lines = {0};
+  LNK_DefFileStmt active_stmt = LNK_DefFileStmt_Null;
+  String8         rest        = file;
+  while (rest.size != 0) {
+    String8 line = str8_chop_line(&rest);
+
+    // strip comments outside quotes
+    B32 in_quote = 0;
+    for EachIndex(i, line.size) {
+      U8 c = line.str[i];
+      if (in_quote && c == '\\') {
+        i += 1;
+        continue;
+      }
+      if (c == '"') {
+        in_quote = !in_quote;
+      } else if (c == ';' && !in_quote) {
+        line = str8_prefix(line, i);
+        break;
+      }
+    }
+
+    line = str8_skip_chop_whitespace(line);
+    if (line.size == 0) { continue; }
+
+    // parse statement keyword
+    String8         tail = line;
+    LNK_DefFileStmt stmt = LNK_DefFileStmt_Null;
+    B32             is_keyword = 0;
+    if (line.size != 0 && line.str[0] != '"') {
+      U64 keyword_opl = 0;
+      for (; keyword_opl < line.size; keyword_opl += 1) {
+        U8 c = line.str[keyword_opl];
+        if (char_is_space(c) || c == ':' || c == '=') {
+          break;
+        }
+      }
+
+      String8 keyword = str8_prefix(line, keyword_opl);
+      for EachElement(i, g_def_file_stmt_map) {
+        if (str8_matchi(g_def_file_stmt_map[i].name, keyword)) {
+          stmt = g_def_file_stmt_map[i].stmt;
+          break;
+        }
+      }
+
+      if (stmt != LNK_DefFileStmt_Null) {
+        U64 tail_pos = keyword_opl;
+        while (tail_pos < line.size && char_is_space(line.str[tail_pos])) {
+          tail_pos += 1;
+        }
+        if (tail_pos < line.size && (line.str[tail_pos] == ':' || line.str[tail_pos] == '=')) {
+          tail_pos += 1;
+        }
+        tail = str8_skip_chop_whitespace(str8_skip(line, tail_pos));
+      }
+    }
+
+    if (stmt != LNK_DefFileStmt_Null) {
+      B32 is_multiline = stmt == LNK_DefFileStmt_Exports ||
+                         stmt == LNK_DefFileStmt_Sections ||
+                         stmt == LNK_DefFileStmt_Imports ||
+                         stmt == LNK_DefFileStmt_Segments;
+      active_stmt = is_multiline ? stmt : LNK_DefFileStmt_Null;
+      is_keyword = 1;
+      line = tail;
+    } else {
+      stmt = active_stmt;
+    }
+
+    LNK_DefFileLineNode *node = push_array(scratch.arena, LNK_DefFileLineNode, 1);
+    node->stmt       = stmt;
+    node->line       = line;
+    node->is_keyword = is_keyword;
+    SLLQueuePush(def_lines.first, def_lines.last, node);
+    def_lines.count += 1;
+  }
+
+  // apply collected DEF lines to config
+  for EachNode(def_line, LNK_DefFileLineNode, def_lines.first) {
+    String8         line = def_line->line;
+    LNK_DefFileStmt stmt = def_line->stmt;
+
+    switch (stmt) {
+    case LNK_DefFileStmt_Description: {
+      lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, LNK_CmdSwitch_Def, "DESCRIPTION is ignored in DEF files");
+    } break;
+
+    case LNK_DefFileStmt_Imports: {
+      if (def_line->is_keyword) {
+        lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, LNK_CmdSwitch_Def, "IMPORTS is ignored in DEF files");
+      } else {
+        lnk_log(LNK_Log_Debug, "%S: unsupported old-style import specifications", path);
+      }
+    } break;
+
+    case LNK_DefFileStmt_Stub: {
+      lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, LNK_CmdSwitch_Def, "STUB is ignored in DEF files");
+    } break;
+
+    case LNK_DefFileStmt_Segments: {
+      lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, LNK_CmdSwitch_Def, "SEGMENTS is ignored in DEF files");
+    } break;
+
+    case LNK_DefFileStmt_Exports: {
+      String8List tokens = lnk_def_file_tokenize(scratch.arena, line);
+      if (tokens.node_count != 0) {
+        PE_ExportParse export_parse = {0};
+        if (lnk_parse_export_directive_ex(config->arena, tokens, obj, &export_parse)) {
+          export_parse.obj_path = path;
+          lnk_push_export_to_config(config, obj, export_parse);
+        }
+      }
+    } break;
+
+    case LNK_DefFileStmt_Library:
+    case LNK_DefFileStmt_Name: {
+      String8List tokens = lnk_def_file_tokenize(scratch.arena, line);
+      String8     name   = {0};
+
+      for EachNode(token_n, String8Node, tokens.first) {
+        String8 token = token_n->string;
+        String8 base_value = {0};
+        B32     has_base   = 0;
+
+        U64 sep_pos = str8_find_needle(token, 0, str8_lit("="), 0);
+        if (sep_pos < token.size) {
+          String8 key = str8_prefix(token, sep_pos);
+          if (str8_matchi(key, str8_lit("BASE"))) {
+            base_value = str8_skip(token, sep_pos + 1);
+            has_base = 1;
+          }
+        } else if (str8_matchi(token, str8_lit("BASE")) ||
+                   str8_match_lit("BASE:", token, StringMatchFlag_CaseInsensitive|StringMatchFlag_RightSideSloppy)) {
+          lnk_error_cmd_switch(LNK_Error_Cmdl, obj, LNK_CmdSwitch_Def, "syntax error in DEF file BASE specification");
+        }
+
+        if (has_base) {
+          String8List values = str8_split_by_string_chars(scratch.arena, base_value, str8_lit(","), 0);
+          lnk_apply_cmd_option_to_config(config, str8_lit("base"), values, obj);
+        } else if (name.size == 0) {
+          name = token;
+        } else {
+          lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, LNK_CmdSwitch_Def, "ignoring unexpected DEF token \"%S\"", token);
+        }
+      }
+
+      if (stmt == LNK_DefFileStmt_Library) {
+        config->file_characteristics |= PE_ImageFileCharacteristic_FILE_DLL;
+      }
+
+      if (name.size != 0) {
+        String8 image_name = name;
+        if (stmt == LNK_DefFileStmt_Library) {
+          // set DLL import name
+          String8 file_name = str8_skip_last_slash(name);
+          B32 has_ext = (str8_skip_last_dot(file_name).size != file_name.size);
+          if (!has_ext) {
+            image_name = path_replace_file_extension(scratch.arena, name, str8_lit("dll"));
+          }
+          if (config->image_alt_path.size == 0) {
+            config->image_alt_path = push_str8_copy(config->arena, image_name);
+          }
+        }
+
+        if (config->out_path.size == 0) {
+          config->out_path = push_str8_copy(config->arena, image_name);
+        }
+      }
+    } break;
+
+    case LNK_DefFileStmt_Sections: {
+      String8List tokens = lnk_def_file_tokenize(scratch.arena, line);
+      if (tokens.node_count != 0) {
+        B32 is_parse_ok = 1;
+        String8List section_values = {0};
+        str8_list_push(scratch.arena, &section_values, tokens.first->string);
+
+        for (String8Node *token_n = tokens.first->next; token_n != 0; token_n = token_n->next) {
+          String8 token = token_n->string;
+          if (str8_matchi(token, str8_lit("CLASS"))) {
+            if (token_n->next != 0) {
+              token_n = token_n->next;
+            }
+            continue;
+          }
+
+          String8 attr = {0};
+          if (str8_matchi(token, str8_lit("EXECUTE"))) {
+            attr = str8_lit("E");
+          } else if (str8_matchi(token, str8_lit("READ"))) {
+            attr = str8_lit("R");
+          } else if (str8_matchi(token, str8_lit("SHARED"))) {
+            attr = str8_lit("S");
+          } else if (str8_matchi(token, str8_lit("WRITE"))) {
+            attr = str8_lit("W");
+          } else {
+            lnk_error_cmd_switch(LNK_Error_Cmdl, obj, LNK_CmdSwitch_Def, "unknown DEF SECTIONS specifier \"%S\"", token);
+            is_parse_ok = 0;
+          }
+
+          if (attr.size != 0) {
+            str8_list_push(scratch.arena, &section_values, attr);
+          }
+        }
+
+        if (is_parse_ok) {
+          lnk_apply_cmd_option_to_config(config, str8_lit("section"), section_values, obj);
+        }
+      }
+    } break;
+
+    case LNK_DefFileStmt_StackSize: {
+      String8List values = str8_split_by_string_chars(scratch.arena, line, str8_lit(" \t,"), 0);
+      lnk_apply_cmd_option_to_config(config, str8_lit("stack"), values, obj);
+    } break;
+
+    case LNK_DefFileStmt_Version: {
+      String8List values = str8_split_by_string_chars(scratch.arena, line, str8_lit(" \t"), 0);
+      lnk_apply_cmd_option_to_config(config, str8_lit("version"), values, obj);
+    } break;
+
+    case LNK_DefFileStmt_HeapSize: {
+      String8List values = str8_split_by_string_chars(scratch.arena, line, str8_lit(" \t,"), 0);
+      lnk_apply_cmd_option_to_config(config, str8_lit("heap"), values, obj);
+    } break;
+
+    default: {
+      lnk_error_cmd_switch(LNK_Warning_Cmdl, obj, LNK_CmdSwitch_Def, "ignoring unrecognized DEF statement \"%S\"", line);
+    } break;
+    }
   }
 
   scratch_end(scratch);
@@ -2208,6 +2739,7 @@ lnk_config_init(LNK_CmdLine cmd_line)
   config->arena        = arena;
   config->raw_cmd_line = str8_list_copy(arena, &cmd_line.raw_cmd_line);
   config->work_dir     = get_current_path(arena);
+  config->force        = lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Force);
 
   // apply command line switches
   for EachNode(cmd, LNK_CmdOption, cmd_line.first_option) {
@@ -2333,13 +2865,15 @@ lnk_config_init(LNK_CmdLine cmd_line)
     config->dll_characteristics |= PE_DllCharacteristic_DYNAMIC_BASE;
   }
   
-  // set flag for /guard
+  // TODO: Set GUARD_CF only after emitting the Guard CF function tables.
+  // Marking the image without valid load-config tables makes CFG-enabled
+  // executables crash on indirect calls.
   if (config->guard_flags != LNK_Guard_None) {
-    config->dll_characteristics |= PE_DllCharacteristic_GUARD_CF;
+    // config->dll_characteristics |= PE_DllCharacteristic_GUARD_CF;
   }
 
   // handle empty /OUT
-  if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Out)) {
+  if (!config->out_path.size) {
     String8 name     = str8_list_first(&config->input_list[LNK_Input_Obj]);
     String8 ext      = (config->file_characteristics & PE_ImageFileCharacteristic_FILE_DLL) ? str8_lit("dll") : str8_lit("exe");
     config->out_path = path_replace_file_extension(scratch.arena, name, ext);
@@ -2422,4 +2956,3 @@ lnk_config_init(LNK_CmdLine cmd_line)
   ProfEnd();
   return config;
 }
-

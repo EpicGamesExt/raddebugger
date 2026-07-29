@@ -152,8 +152,8 @@ struct RD_ViewState
   
   // rjf: query state
   B32 query_is_open;
-  TxtPt query_cursor;
-  TxtPt query_mark;
+  U64 query_cursor;
+  U64 query_mark;
   U8 query_buffer[KB(1)];
   U64 query_string_size;
   
@@ -496,6 +496,7 @@ struct RD_State
   
   // rjf: text editing mode state
   B32 text_edit_mode;
+  B32 text_edit_mode_multiline;
   
   // rjf: contextual hover info
   RD_Regs *hover_regs;

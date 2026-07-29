@@ -1874,6 +1874,7 @@ e_push_irtree_and_type_from_expr(Arena *arena, E_IRTreeAndType *root_parent, E_I
                 U64 ip_voff = e_base_ctx->thread_ip_voff;
                 {
                   mapped_location = rdi_location_from_location_voff(rdi, local->location, ip_voff);
+                  mapped_bytecode_mode = E_Mode_Null;
                   if(mapped_location != 0)
                   {
                     got_location_block = 1;
