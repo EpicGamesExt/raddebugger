@@ -116,4 +116,5 @@ r_ogl_os_window_swap(WM_Window os, R_Handle r)
 {
   LNX_WM_Window *w = (LNX_WM_Window *)os.u64[0];
   glXSwapBuffers(lnx_wm_state->display, w->window);
+  lnx_window_finish_frame_sync(os);
 }

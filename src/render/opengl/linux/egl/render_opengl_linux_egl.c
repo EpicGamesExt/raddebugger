@@ -18,9 +18,11 @@ r_ogl_os_init(CmdLine *cmdln)
     r_ogl_lnx_state->arena = arena;
   }
   
-  //- rjf: get EGL display
   {
-    r_ogl_lnx_state->display = eglGetDisplay((EGLNativeDisplayType)lnx_wm_state->display);
+    EGLNativeDisplayType native_display = (lnx_wm_backend == LNX_WM_Backend_Wayland)
+      ? (EGLNativeDisplayType)wl_wm_state->display
+      : (EGLNativeDisplayType)lnx_wm_state->display;
+    r_ogl_lnx_state->display = eglGetDisplay(native_display);
     if(r_ogl_lnx_state->display == EGL_NO_DISPLAY)
     {
       wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Failed to get EGL display."));
@@ -74,38 +76,41 @@ r_ogl_os_init(CmdLine *cmdln)
       wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't choose EGL configuration."));
       abort_self(1);
     }
-    int screen = DefaultScreen(lnx_wm_state->display);
-    XVisualInfo vi_template = {0};
-    XVisualInfo *vi = 0;
-    int vi_count = 0;
-    for(EGLint idx = 0; idx < configs_count && vi == 0; idx += 1)
+    B32 found_config = 0;
+    for(EGLint idx = 0; idx < configs_count && !found_config; idx += 1)
     {
-      EGLint native_visual_id = 0;
-      if(!eglGetConfigAttrib(r_ogl_lnx_state->display, configs[idx], EGL_NATIVE_VISUAL_ID, &native_visual_id) || native_visual_id == 0)
+      EGLint probe_attribs[] = { EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_GL_COLORSPACE, EGL_GL_COLORSPACE_SRGB, EGL_NONE };
+      EGLSurface probe = eglCreatePbufferSurface(r_ogl_lnx_state->display, configs[idx], probe_attribs);
+      if(probe == EGL_NO_SURFACE) { continue; }
+      eglDestroySurface(r_ogl_lnx_state->display, probe);
+      if(lnx_wm_backend == LNX_WM_Backend_X11)
       {
-        continue;
+        EGLint native_visual_id = 0;
+        if(!eglGetConfigAttrib(r_ogl_lnx_state->display, configs[idx], EGL_NATIVE_VISUAL_ID, &native_visual_id) || native_visual_id == 0)
+        {
+          continue;
+        }
+        XVisualInfo vi_template = {0};
+        vi_template.visualid = native_visual_id;
+        vi_template.screen = DefaultScreen(lnx_wm_state->display);
+        int vi_count = 0;
+        XVisualInfo *vi = XGetVisualInfo(lnx_wm_state->display, VisualIDMask|VisualScreenMask, &vi_template, &vi_count);
+        if(vi == 0 || vi_count == 0) { if(vi) { XFree(vi); } continue; }
+        lnx_wm_state->window_visual = vi->visual;
+        lnx_wm_state->window_depth = vi->depth;
+        lnx_wm_state->window_colormap = XCreateColormap(lnx_wm_state->display,
+                                                        XRootWindow(lnx_wm_state->display, vi->screen),
+                                                        vi->visual, AllocNone);
+        XFree(vi);
       }
-      vi_template.visualid = native_visual_id;
-      vi_template.screen = screen;
-      vi = XGetVisualInfo(lnx_wm_state->display, VisualIDMask|VisualScreenMask, &vi_template, &vi_count);
-      if(vi != 0 && vi_count > 0)
-      {
-        r_ogl_lnx_state->config = configs[idx];
-        break;
-      }
-      if(vi != 0) { XFree(vi); vi = 0; }
+      r_ogl_lnx_state->config = configs[idx];
+      found_config = 1;
     }
-    if(vi == 0 || r_ogl_lnx_state->config == 0)
+    if(!found_config)
     {
-      wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't find an EGL config with a matching X11 visual."));
+      wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't find a suitable sRGB-capable EGL config."));
       abort_self(1);
     }
-    lnx_wm_state->window_visual = vi->visual;
-    lnx_wm_state->window_depth = vi->depth;
-    lnx_wm_state->window_colormap = XCreateColormap(lnx_wm_state->display,
-                                                    XRootWindow(lnx_wm_state->display, vi->screen),
-                                                    vi->visual, AllocNone);
-    XFree(vi);
   }
   
   //- rjf: construct context
@@ -144,7 +149,15 @@ r_ogl_os_init(CmdLine *cmdln)
 internal R_Handle
 r_ogl_os_window_equip(WM_Window window)
 {
-  LNX_WM_Window *window_os = (LNX_WM_Window *)window.u64[0];
+  EGLNativeWindowType native_window;
+  if(lnx_wm_backend == LNX_WM_Backend_Wayland)
+  {
+    native_window = (EGLNativeWindowType)((WL_WM_Window *)window.u64[0])->egl_window;
+  }
+  else
+  {
+    native_window = (EGLNativeWindowType)((LNX_WM_Window *)window.u64[0])->window;
+  }
   R_OGL_LNX_Window *w = r_ogl_lnx_state->free_window;
   if(w != 0)
   {
@@ -160,11 +173,11 @@ r_ogl_os_window_equip(WM_Window window)
       EGL_GL_COLORSPACE, EGL_GL_COLORSPACE_SRGB,
       EGL_NONE,
     };
-    w->surface = eglCreateWindowSurface(r_ogl_lnx_state->display, r_ogl_lnx_state->config, window_os->window, surface_options);
+    w->surface = eglCreateWindowSurface(r_ogl_lnx_state->display, r_ogl_lnx_state->config, native_window, surface_options);
     if(w->surface == EGL_NO_SURFACE)
     {
       EGLint surface_options_linear[] = { EGL_NONE };
-      w->surface = eglCreateWindowSurface(r_ogl_lnx_state->display, r_ogl_lnx_state->config, window_os->window, surface_options_linear);
+      w->surface = eglCreateWindowSurface(r_ogl_lnx_state->display, r_ogl_lnx_state->config, native_window, surface_options_linear);
     }
     if(w->surface == EGL_NO_SURFACE)
     {
@@ -199,4 +212,8 @@ r_ogl_os_window_swap(WM_Window os, R_Handle r)
   R_OGL_Window *outer = (R_OGL_Window *)r.u64[0];
   R_OGL_LNX_Window *w_r = (R_OGL_LNX_Window *)outer->os.u64[0];
   eglSwapBuffers(r_ogl_lnx_state->display, w_r->surface);
+  if(lnx_wm_backend == LNX_WM_Backend_X11)
+  {
+    lnx_window_finish_frame_sync(os);
+  }
 }

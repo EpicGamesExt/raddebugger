@@ -30,12 +30,12 @@ cc_link_dll="-fPIC"
 # --- External Libraries ------------------------------------------------------
 # sudo apt install -y pkg-config libfreetype6-dev libx11-dev libxext-dev libgl-dev libegl-dev
 if [[ -x "$(command -v pkg-config)" ]]; then
-  cc_font_provider="$(pkg-config --cflags --libs freetype2)"  
-  cc_os_gfx="$(pkg-config --cflags --libs x11 xext)"
+  cc_font_provider="$(pkg-config --cflags --libs freetype2)"
+  cc_os_gfx="$(pkg-config --cflags --libs x11 xext wayland-client wayland-egl wayland-cursor xkbcommon)"
   cc_render="$(pkg-config --cflags --libs gl egl)"
 else
   cc_font_provider="-I/usr/include/freetype2 -lfreetype"
-  cc_os_gfx="-lX11 -lXext"
+  cc_os_gfx="-lX11 -lXext -lwayland-client -lwayland-egl -lwayland-cursor -lxkbcommon"
   cc_render="-lGL -lEGL"
 fi
 
