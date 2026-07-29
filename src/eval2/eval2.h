@@ -326,6 +326,7 @@ struct E2_Expr
   U32 macro_arg_num;
   Rng1U64 src_range;
   String8 string;
+  String8List qualifiers;
 };
 
 typedef struct E2_ExprMapNode E2_ExprMapNode;
@@ -400,6 +401,7 @@ struct E2_Parse
 {
   E2_ParseStatus status;
   String8 identifier;
+  String8List qualifiers;
   E2_Expr *expr;
   String8 member_name;
   E2_Expr *params_expr;
@@ -469,6 +471,7 @@ struct E2_Compile
 {
   E2_CompileStatus status;
   String8 identifier;
+  String8List qualifiers;
   E2_IRNode *irtree;
   String8 member_name;
   E2_IRNode *params_irtree;

@@ -1917,12 +1917,46 @@ e2_parse_from_string(Arena *arena, E2_ParseState *state, B32 identifier_is_type,
     //- rjf: standalone identifiers (also could be definition or operator keyword)
     else if(need_new_expr && e2_try_token(lang, string, E2_TokenKind_Identifier, s(""), &off, &token))
     {
-      String8 identifier = str8_substr(string, token.range);
       B32 identifier_mapped = 0;
       B32 definitions_are_allowed = (state->top_task->expr_kind != E2_ExprKind_Macro);
       
+      // rjf: pick the last identifier as the target identifier, collect the rest as qualifiers
+      String8List qualifiers = {0};
+      String8 identifier = {0};
+      {
+        E2_Token last_identifier_token = token;
+        for(;;)
+        {
+          U64 next_off_maybe = off;
+          E2_Token ext_identifier_token = {E2_TokenKind_Null};
+          if(e2_try_token(lang, string, E2_TokenKind_Symbol, s("!"), &next_off_maybe, 0) ||
+             (e2_try_token(lang, string, E2_TokenKind_Symbol, s("."), &next_off_maybe, 0) &&
+              e2_try_token(lang, string, E2_TokenKind_Identifier, s(""), &next_off_maybe, &ext_identifier_token) &&
+              e2_try_token(lang, string, E2_TokenKind_Symbol, s("!"), &next_off_maybe, 0)))
+          {
+            Rng1U64 qualifier_range = last_identifier_token.range;
+            if(dim_1u64(ext_identifier_token.range) > 0)
+            {
+              qualifier_range = union_1u64(qualifier_range, ext_identifier_token.range);
+            }
+            String8 qualifier = str8_substr(string, qualifier_range);
+            str8_list_push(arena, &qualifiers, qualifier);
+            if(!e2_try_token(lang, string, E2_TokenKind_Identifier, s(""), &next_off_maybe, &last_identifier_token))
+            {
+              e2_msgf(arena, &parse.msgs, r1u64(off, off), "Expected identifier after qualifier `%S!`.", qualifier);
+            }
+            off = next_off_maybe;
+          }
+          else
+          {
+            identifier = str8_substr(string, last_identifier_token.range);
+            break;
+          }
+        }
+      }
+      
       // rjf: first try to resolve as a definition
-      if(definitions_are_allowed && !identifier_mapped && e2_try_token(lang, string, E2_TokenKind_Symbol, s("="), &off, 0))
+      if(qualifiers.node_count == 0 && definitions_are_allowed && !identifier_mapped && e2_try_token(lang, string, E2_TokenKind_Symbol, s("="), &off, 0))
       {
         identifier_mapped = 1;
         E2_ParseTask *task = state->free_task;
@@ -1944,7 +1978,7 @@ e2_parse_from_string(Arena *arena, E2_ParseState *state, B32 identifier_is_type,
       }
       
       // rjf: try to resolve it as a macro definition
-      if(definitions_are_allowed && !identifier_mapped)
+      if(qualifiers.node_count == 0 && definitions_are_allowed && !identifier_mapped)
       {
         U64 macro_off = off;
         if(e2_try_token(lang, string, E2_TokenKind_Symbol, s("("), &macro_off, 0))
@@ -2012,7 +2046,7 @@ e2_parse_from_string(Arena *arena, E2_ParseState *state, B32 identifier_is_type,
       }
       
       // rjf: first try to resolve as an operator name
-      if(!identifier_mapped)
+      if(qualifiers.node_count == 0 && !identifier_mapped)
       {
         // rjf: string -> op kind
         E2_ExprKind expr_kind = E2_ExprKind_Null;
@@ -2055,7 +2089,7 @@ e2_parse_from_string(Arena *arena, E2_ParseState *state, B32 identifier_is_type,
       }
       
       // rjf: try to resolve it as a macro argument
-      if(!identifier_mapped && state->top_task->expr_kind == E2_ExprKind_Macro)
+      if(qualifiers.node_count == 0 && !identifier_mapped && state->top_task->expr_kind == E2_ExprKind_Macro)
       {
         U64 macro_arg_num = 0;
         {
@@ -2086,6 +2120,7 @@ e2_parse_from_string(Arena *arena, E2_ParseState *state, B32 identifier_is_type,
           done = 1;
           parse.status = E2_ParseStatus_CheckIdentifierIsType;
           parse.identifier = identifier;
+          parse.qualifiers = qualifiers;
           off = start_off;
         }
         else
@@ -2093,6 +2128,7 @@ e2_parse_from_string(Arena *arena, E2_ParseState *state, B32 identifier_is_type,
           identifier_mapped = 1;
           expr = e2_expr(arena, identifier_is_type ? E2_ExprKind_TypeIdentifier : E2_ExprKind_Identifier);
           expr->string = str8_substr(string, token.range);
+          expr->qualifiers = qualifiers;
           state->caller_request_count = 0;
         }
       }
@@ -2651,6 +2687,7 @@ e2_compile_from_expr(Arena *arena, E2_CompileState *state, E2_IRNode *resolve_re
                 done = 1;
                 compile.status = E2_CompileStatus_MissedIdentifierResolution;
                 compile.identifier = e->string;
+                compile.qualifiers = e->qualifiers;
               }
             }break;
             

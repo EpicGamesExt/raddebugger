@@ -76,6 +76,7 @@
 #include "stap/stap_parse.h"
 #include "demon/demon_inc.h"
 #include "eval/eval_inc.h"
+#include "eval2/eval2.h"
 #include "dbg_engine/dbg_engine_inc.h"
 #include "eval_visualization/eval_visualization_inc.h"
 #include "font_provider/font_provider_inc.h"
@@ -156,6 +157,7 @@
 #include "stap/stap_parse.c"
 #include "demon/demon_inc.c"
 #include "eval/eval_inc.c"
+#include "eval2/eval2.c"
 #include "dbg_engine/dbg_engine_inc.c"
 #include "eval_visualization/eval_visualization_inc.c"
 #include "font_provider/font_provider_inc.c"
@@ -184,6 +186,7 @@
 #include "rdi_from_dwarf/tests/rdi_from_dwarf_tests.c"
 #include "rdi_from_pdb/tests/rdi_from_pdb_tests.c"
 #include "raddbg/tests/raddbg_tests.c"
+#include "eval2/tests/eval2_tests.c"
 
 internal B32 frame(void) { return 0; }
 

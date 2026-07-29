@@ -43,6 +43,7 @@ entry_point(CmdLine *cmdline)
     // (A)
     // int & B
     // (1 + (int)&B)
+    s("foo!bar"),
     s("int32(*)(int32, int32)"),
     s("int32 *(*)(int32, int32)"),
     s("int32 **(*)(int32, int32)"),

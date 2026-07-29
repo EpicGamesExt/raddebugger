@@ -2445,8 +2445,10 @@ txt_token_array_from_data(Arena *arena, TXT_LangKind lang_kind, TXT_TokenPt ctx_
       U64 advance = 1;
       
       //- rjf: adjust escaping state
-      if(active_token_kind != TXT_TokenKind_Null && byte == '\\')
+      B32 escaped_this_step = 0;
+      if(!escaped && active_token_kind != TXT_TokenKind_Null && byte == '\\')
       {
+        escaped_this_step = 1;
         escaped = 1;
       }
       
@@ -2599,7 +2601,12 @@ txt_token_array_from_data(Arena *arena, TXT_LangKind lang_kind, TXT_TokenPt ctx_
           }
         }break;
         case TXT_TokenKind_LineComment:
+        case TXT_TokenKind_Meta:
         {
+          if(byte == '\r' && escaped)
+          {
+            escaped_this_step = 1;
+          }
           if(byte == '\n' && !escaped)
           {
             token_finished = 1;
@@ -2612,14 +2619,6 @@ txt_token_array_from_data(Arena *arena, TXT_LangKind lang_kind, TXT_TokenPt ctx_
           {
             token_finished = 1;
             advance = 2;
-          }
-        }break;
-        case TXT_TokenKind_Meta:
-        {
-          if(byte == '\n' && !escaped)
-          {
-            token_finished = 1;
-            advance = 1;
           }
         }break;
       }
@@ -2654,7 +2653,10 @@ txt_token_array_from_data(Arena *arena, TXT_LangKind lang_kind, TXT_TokenPt ctx_
       }
       
       //- rjf: reset escaped state
-      escaped = 0;
+      if(!escaped_this_step)
+      {
+        escaped = 0;
+      }
       
       //- rjf: advance
       off += advance;
@@ -3734,7 +3736,6 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
       {
         U8 byte = data.str[off];
         U8 next_byte = (off+1 < data.size) ? data.str[off+1] : 0;
-        U8 prev_byte = (off > 0) ? data.str[off-1] : 0;
         B32 off_is_endpoint = 1;
         U64 extra_advance = 0;
         if(byte == '/' && next_byte == '*')
@@ -3757,9 +3758,27 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
         {
           // NOTE(rjf): no-op
         }
-        else if(prev_byte != '\\' && (byte == '"' || byte == '\''))
+        else if(byte == '"' || byte == '\'')
         {
-          // NOTE(rjf): no-op
+          B32 is_escaped = 0;
+          if(off > 0)
+          {
+            for(U64 lookback_off = off-1; lookback_off > 0; lookback_off -= 1)
+            {
+              if(data.str[lookback_off] == '\\')
+              {
+                is_escaped ^= 1;
+              }
+              else
+              {
+                break;
+              }
+            }
+          }
+          if(is_escaped)
+          {
+            off_is_endpoint = 0;
+          }
         }
         else
         {

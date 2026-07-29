@@ -72,7 +72,7 @@ rd_test__exemplar_test_finish(Arena *arena, TestCtx *ctx, String8List test_log_s
     }
     str8_list_push(scratch.arena, &exemplar_data_lines_sanitized, line_trimmed);
   }
-  exemplar_data = str8_list_join(scratch.arena, &exemplar_data_lines_sanitized, &(StringJoin){.sep = s("\n")});
+  exemplar_data = str8_list_join(scratch.arena, &exemplar_data_lines_sanitized, &(StringJoin){.sep = s("\n"), .post = s("\n")});
   
   // rjf: if exemplar data is empty -> just save our output as the new exemplar
   if(exemplar_data.size == 0)

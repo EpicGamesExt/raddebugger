@@ -179,7 +179,57 @@ t_run_caller(void *raw_ctx)
       .result_out = &ctx->result,
       .test_out = &test_out,
     };
+    log_scope_begin();
     ctx->test->test_fn(scratch.arena, &test_ctx);
+    LogScopeResult log_scope_result = log_scope_end(scratch.arena);
+    if(log_scope_result.strings[LogMsgKind_Info].size != 0)
+    {
+      String8 current_path = str8f(scratch.arena, "%S/current", g_wdir);
+      String8 exemplar_path = str8f(scratch.arena, "%S/exemplar_%S_%S", g_exemplar_dir, lower_from_str8(scratch.arena, string_from_operating_system(OperatingSystem_CURRENT)), lower_from_str8(scratch.arena, string_from_arch(Arch_CURRENT)));
+      String8 current = log_scope_result.strings[LogMsgKind_Info];
+      String8 exemplar = data_from_file_path(scratch.arena, exemplar_path);
+      write_data_to_file_path(current_path, current);
+      if(exemplar.size == 0)
+      {
+        make_directory(g_exemplar_dir);
+        copy_file_path(exemplar_path, current_path);
+      }
+      else
+      {
+        // TODO(rjf): @hack, see below
+        TestCtx *ctx = &test_ctx;
+        String8List exemplar_lines = str8_split(scratch.arena, exemplar, (U8 *)"\n", 1, StringSplitFlag_KeepEmpties);
+        String8List exemplar_lines_sanitized = {0};
+        for EachNode(n, String8Node, exemplar_lines.first)
+        {
+          String8 line_trimmed = n->string;
+          if(line_trimmed.size != 0 && line_trimmed.str[line_trimmed.size-1] == '\r')
+          {
+            line_trimmed.size -= 1;
+          }
+          str8_list_push(scratch.arena, &exemplar_lines_sanitized, line_trimmed);
+        }
+        StringJoin join = {.sep = s("\n"), .post = s("\n")};
+        String8 exemplar_sanitized = str8_list_join(scratch.arena, &exemplar_lines_sanitized, &join);
+        B32 current_matches_exemplar = str8_match(exemplar_sanitized, current, 0);
+        if(!current_matches_exemplar)
+        {
+          // TODO(rjf): @hack, because we need to do test things in the outer scope, but this is
+          // not a test function - all test helpers should wrap a 100% parameterized layer
+          Arena *arena = scratch.arena;
+          String8 diff_cmd = str8f(scratch.arena, "diff %S %S",
+                                   path_normalized_from_string(scratch.arena, exemplar_path),
+                                   path_normalized_from_string(scratch.arena, current_path));
+          test_outf("Current log does not match exemplar; run `%S`\n", diff_cmd);
+          // TODO(rjf): @hack need to hack this in, because TestCheck assumes `return`
+          ctx->result_out[0] = (TestResult){.fail_file = __FILE__, .fail_line = __LINE__, .fail_cond = "current_matches_exemplar"};
+          if(debugger_is_attached())
+          {
+            Trap();
+          }
+        }
+      }
+    }
   }
   
   if (ctx->result.status == TestStatus_Fail || ctx->result.status == TestStatus_Crash) {
@@ -1054,6 +1104,8 @@ internal void
 t_entry_point(CmdLine *cmdline)
 {
   Temp scratch = scratch_begin(0,0);
+  Log *log = log_alloc();
+  log_select(log);
   U64 exit_code = max_U64;
   
   U64 dashes_size = 9999;
