@@ -64,7 +64,6 @@ typedef enum E2_CompileStatus
   //- rjf: caller-provided info
   E2_CompileStatus_MissedIdentifierResolution,
   E2_CompileStatus_NewIdentifierDefinition,
-  E2_CompileStatus_NewCtxID,
   E2_CompileStatus_MemberAccess,
   E2_CompileStatus_IndexAccess,
   E2_CompileStatus_Call,
@@ -559,6 +558,7 @@ internal E2_IRNode *e2_irtree_from_identifier(E2_IdentifierMap *map, String8 nam
 
 internal E2_Msg *e2_msg(Arena *arena, E2_MsgList *msgs, Rng1U64 src_range, String8 string);
 internal E2_Msg *e2_msgf(Arena *arena, E2_MsgList *msgs, Rng1U64 src_range, char *fmt, ...);
+internal void e2_msg_list_concat_in_place(E2_MsgList *dst, E2_MsgList *src);
 
 ////////////////////////////////
 //~ rjf: Assets

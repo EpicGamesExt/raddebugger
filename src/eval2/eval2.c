@@ -199,6 +199,22 @@ e2_msgf(Arena *arena, E2_MsgList *msgs, Rng1U64 src_range, char *fmt, ...)
   return msg;
 }
 
+internal void
+e2_msg_list_concat_in_place(E2_MsgList *dst, E2_MsgList *src)
+{
+  if(dst->last != 0 && src->first != 0)
+  {
+    dst->last->next = src->first;
+    dst->last = src->last;
+    dst->count += src->count;
+  }
+  else if(src->first != 0)
+  {
+    MemoryCopyStruct(dst, src);
+  }
+  MemoryZeroStruct(src);
+}
+
 ////////////////////////////////
 //~ rjf: Assets
 
@@ -2594,7 +2610,7 @@ e2_parse_from_string(Arena *arena, E2_ParseState *state, B32 identifier_is_type,
 internal E2_Compile
 e2_compile_from_expr(Arena *arena, E2_CompileState *state, E2_IRNode *resolve_result, E2_Val compile_time_eval_result, E2_Expr *expr)
 {
-  E2_Compile compile = {E2_CompileStatus_Error};
+  E2_Compile compile = {E2_CompileStatus_Error, .irtree = &e2_irnode_nil, .params_irtree = &e2_irnode_nil};
   {
     E2_IRNode *next_resolve_result = resolve_result;
     
@@ -3720,6 +3736,7 @@ e2_interp_from_bytecode(Arena *arena, E2_InterpState *state, E2_SpaceMap *space_
           {
             good = 0;
             interp.status = E2_InterpStatus_BadRegCode;
+            e2_msgf(arena, &interp.msgs, r1u64(state->bytecode_off, state->bytecode_off+1), "Bad register code (%i).", base_reg_code);
           }
         }break;
         case RDI_EvalOp_FrameOff:  {ctx_flags = E2_CtxFlag_HasFrameBase;  ctx_base_addr = state->selected_ctx.frame_base_addr;}goto optional_base_off;
@@ -3735,6 +3752,16 @@ e2_interp_from_bytecode(Arena *arena, E2_InterpState *state, E2_SpaceMap *space_
           else
           {
             good = 0;
+            String8 missing_msg = {0};
+            switch(ctx_flags)
+            {
+              default:{}break;
+              case E2_CtxFlag_HasFrameBase: {missing_msg = s("Missing frame base address.");}break;
+              case E2_CtxFlag_HasModuleBase:{missing_msg = s("Missing module base address.");}break;
+              case E2_CtxFlag_HasTLSBase:   {missing_msg = s("Missing thread-local-storage base address.");}break;
+              case E2_CtxFlag_HasCFA:       {missing_msg = s("Missing canonical frame address.");}break;
+            }
+            e2_msg(arena, &interp.msgs, r1u64(state->bytecode_off, state->bytecode_off+1), missing_msg);
             interp.status = E2_InterpStatus_MissingCtxFlag;
             interp.missing_ctx_flags |= ctx_flags;
           }
@@ -3979,6 +4006,7 @@ BinOp(U, u64, u64, symbol);
           {
             good = 0;
             interp.status = E2_InterpStatus_BadOffset;
+            e2_msgf(arena, &interp.msgs, r1u64(state->bytecode_off, state->bytecode_off+1), "Couldn't read range [0x%I64x, 0x%I64x) (end of range is 0x%I64x).", offset, offset+bytes_to_read, popped_vals[1].string.size);
           }
         }break;
         
@@ -4026,6 +4054,25 @@ BinOp(U, u64, u64, symbol);
           // DW_OP_bit_piece marker. same caveat as PartialValue.
           good = 0;
           interp.status = E2_InterpStatus_UnsupportedOp;
+        }break;
+      }
+      
+      //- rjf: push generalized failure messages
+      switch(interp.status)
+      {
+        default:{}break;
+        case E2_InterpStatus_DivideByZero:
+        {
+          e2_msgf(arena, &interp.msgs, r1u64(state->bytecode_off, state->bytecode_off+1), "Divide by zero.");
+        }break;
+        case E2_InterpStatus_UnsupportedOp:
+        {
+          e2_msgf(arena, &interp.msgs, r1u64(state->bytecode_off, state->bytecode_off+1), "Unsupported opcode (%i).", op);
+        }break;
+        case E2_InterpStatus_BadOpTypes:
+        {
+          String8 opcode_name = rdi_string_from_eval_op(scratch.arena, op);
+          e2_msgf(arena, &interp.msgs, r1u64(state->bytecode_off, state->bytecode_off+1), "%S opcode cannot be applied to these types.", opcode_name);
         }break;
       }
       

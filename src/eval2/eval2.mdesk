@@ -65,6 +65,12 @@ E2_ExprKindTable:
   COUNT,
 }
 
+@data(String8) e2_expr_kind_string_table:
+{
+  `{0}`
+    @expand(E2_ExprKindTable a) `str8_lit_comp("$(a.name)")`
+}
+
 @data(B8) e2_expr_kind_allow_type_operands_table:
 {
   0,

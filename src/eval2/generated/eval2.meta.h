@@ -163,6 +163,7 @@ E2_ExprKindParseInfo *expr_kind_parse_infos;
 };
 
 C_LINKAGE_BEGIN
+extern String8 e2_expr_kind_string_table[48];
 extern B8 e2_expr_kind_allow_type_operands_table[48];
 extern B8 e2_expr_kind_is_type_expr_table[48];
 extern B8 e2_expr_kind_is_first_operand_type_maybe_table[48];

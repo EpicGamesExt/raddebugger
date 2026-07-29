@@ -4368,6 +4368,179 @@ rd_view_ui(Rng2F32 rect)
                             rd_set_autocomp_regs(cell->eval, .ui_key = line_edit_key, .string = input, .cursor = cell_edit_state->cursor);
                           }
                           
+                          // rjf: @eval2 show tooltip for eval2 evaluation
+#if 0
+                          if(ui_hovering(sig) && row_depth == 0) UI_Tooltip RD_Font(RD_FontSlot_Code)
+                          {
+                            String8 expr = cell->eval.string;
+                            D_Eval eval = d_eval_from_string(scratch.arena, expr);
+                            String8 indent = s("                                                                ");
+                            
+                            // rjf: log string
+                            ui_label(expr);
+                            
+                            // rjf: log expression tree
+                            if(eval.expr != &e2_expr_nil)
+                            {
+                              ui_spacer(ui_em(1.f, 1.f));
+                              UI_TagF("weak") ui_label(s("--- Expression Tree ---"));
+                              typedef struct Task Task;
+                              struct Task
+                              {
+                                Task *next;
+                                E2_Expr *expr;
+                                E2_ExprNode *last_child;
+                                S64 depth;
+                              };
+                              Task start_task = {0, eval.expr};
+                              Task *top_task = &start_task;
+                              Task *free_task = 0;
+                              for(;top_task != 0;)
+                              {
+                                E2_Expr *expr = top_task->expr;
+                                
+                                // rjf: do this expr node
+                                if(top_task->last_child == 0)
+                                {
+                                  String8 expr_kind_name = e2_expr_kind_string_table[expr->kind];
+                                  ui_labelf("%.*s%S", top_task->depth, indent.str, expr_kind_name);
+                                }
+                                
+                                // rjf: try to push a child
+                                B32 pushed_child = 0;
+                                {
+                                  E2_ExprNode *next_child = (top_task->last_child ? top_task->last_child->next : expr->first_child);
+                                  top_task->last_child = next_child;
+                                  if(next_child != 0)
+                                  {
+                                    Task *task = free_task;
+                                    if(task != 0)
+                                    {
+                                      SLLStackPop(free_task);
+                                    }
+                                    else
+                                    {
+                                      task = push_array_no_zero(scratch.arena, Task, 1);
+                                    }
+                                    MemoryZeroStruct(task);
+                                    task->expr = next_child->v;
+                                    task->depth = top_task->depth+1;
+                                    SLLStackPush(top_task, task);
+                                    pushed_child = 1;
+                                  }
+                                }
+                                
+                                // rjf: if we didn't push a child -> we're done
+                                if(!pushed_child)
+                                {
+                                  Task *popped = top_task;
+                                  SLLStackPop(top_task);
+                                  SLLStackPush(free_task, popped);
+                                }
+                              }
+                            }
+                            
+                            // rjf: log IR tree
+                            if(eval.irtree != &e2_irnode_nil)
+                            {
+                              ui_spacer(ui_em(1.f, 1.f));
+                              UI_TagF("weak") ui_label(s("--- IR Tree ---"));
+                              typedef struct Task Task;
+                              struct Task
+                              {
+                                Task *next;
+                                E2_IRNode *irnode;
+                                E2_IRNodePtrNode *last_child;
+                                S64 depth;
+                              };
+                              Task start_task = {0, eval.irtree};
+                              Task *top_task = &start_task;
+                              Task *free_task = 0;
+                              for(;top_task != 0;)
+                              {
+                                E2_IRNode *irnode = top_task->irnode;
+                                
+                                // rjf: do this irnode
+                                if(top_task->last_child == 0)
+                                {
+                                  String8 type_string = e2_string_from_type_key(scratch.arena, irnode->type_key);
+                                  String8 op_name = {0};
+                                  if(irnode->op < RDI_EvalOp_COUNT)
+                                  {
+                                    op_name = rdi_string_from_eval_op(scratch.arena, irnode->op);
+                                  }
+                                  else
+                                  {
+                                    op_name = str8f(scratch.arena, "#%x", irnode->op);
+                                  }
+                                  ui_labelf("%.*s%S (type: %S)", top_task->depth, indent.str, op_name, type_string);
+                                }
+                                
+                                // rjf: try to push a child
+                                B32 pushed_child = 0;
+                                {
+                                  E2_IRNodePtrNode *next_child = (top_task->last_child ? top_task->last_child->next : irnode->first_child);
+                                  top_task->last_child = next_child;
+                                  if(next_child != 0)
+                                  {
+                                    Task *task = free_task;
+                                    if(task != 0)
+                                    {
+                                      SLLStackPop(free_task);
+                                    }
+                                    else
+                                    {
+                                      task = push_array_no_zero(scratch.arena, Task, 1);
+                                    }
+                                    MemoryZeroStruct(task);
+                                    task->irnode = next_child->v;
+                                    task->depth = top_task->depth+1;
+                                    SLLStackPush(top_task, task);
+                                    pushed_child = 1;
+                                  }
+                                }
+                                
+                                // rjf: if we didn't push a child -> we're done
+                                if(!pushed_child)
+                                {
+                                  Task *popped = top_task;
+                                  SLLStackPop(top_task);
+                                  SLLStackPush(free_task, popped);
+                                }
+                              }
+                            }
+                            
+                            // rjf: log bytecode
+                            if(eval.bytecode.size != 0)
+                            {
+                              ui_spacer(ui_em(1.f, 1.f));
+                              UI_TagF("weak") ui_label(s("--- Bytecode ---"));
+                              String8 bytecode_string = rdi_string_from_bytecode(scratch.arena, rdi_arch_from_arch(Arch_CURRENT), eval.bytecode);
+                              ui_label(bytecode_string);
+                            }
+                            
+                            // rjf: log value
+                            {
+                              ui_spacer(ui_em(1.f, 1.f));
+                              UI_TagF("weak") ui_label(s("--- Value ---"));
+                              ui_labelf("U64: %I64u (0x%I64x)", eval.val.u64, eval.val.u64);
+                              ui_labelf("F32: %f", eval.val.f32);
+                              ui_labelf("F64: %f", eval.val.f64);
+                            }
+                            
+                            // rjf: log messages
+                            if(eval.msgs.count != 0)
+                            {
+                              ui_spacer(ui_em(1.f, 1.f));
+                              UI_TagF("weak") ui_label(s("--- Messages ---"));
+                              for EachNode(n, E2_Msg, eval.msgs.first)
+                              {
+                                ui_label(n->string);
+                              }
+                            }
+                          }
+#endif
+                          
                           // rjf: apply locks
                           {
                             CFG_Node *cfg = row_info->group_cfg_child;

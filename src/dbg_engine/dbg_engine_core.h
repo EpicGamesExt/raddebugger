@@ -5,6 +5,20 @@
 #define DBG_ENGINE_CORE_H
 
 ////////////////////////////////
+//~ rjf: @eval2 Evaluation Bundle
+
+typedef struct D_Eval D_Eval;
+struct D_Eval
+{
+  String8 string;
+  E2_Expr *expr;
+  E2_IRNode *irtree;
+  String8 bytecode;
+  E2_Val val;
+  E2_MsgList msgs;
+};
+
+////////////////////////////////
 //~ rjf: ID Types
 
 typedef U64 D_MsgID;
@@ -317,6 +331,11 @@ struct D_TrapNet
   B32 good_line_info;
   B32 good_read;
 };
+
+////////////////////////////////
+//~ rjf: @eval2 Bundled Evaluation Path
+
+internal D_Eval d_eval_from_string(Arena *arena, String8 string);
 
 ////////////////////////////////
 //~ rjf: Layer Initialization

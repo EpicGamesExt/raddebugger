@@ -7,6 +7,93 @@
 #include "generated/dbg_engine.meta.c"
 
 ////////////////////////////////
+//~ rjf: @eval2 Bundled Evaluation Path
+
+internal D_Eval
+d_eval_from_string(Arena *arena, String8 string)
+{
+  D_Eval eval = {0};
+  {
+    E2_MsgList msgs = {0};
+    
+    //- rjf: string -> expr
+    E2_Expr *expr = &e2_expr_nil;
+    {
+      E2_ParseState state = {0};
+      B32 identifier_is_type = 0;
+      for(;;)
+      {
+        E2_Parse parse = e2_parse_from_string(arena, &state, identifier_is_type, E2_LangKind_CLike, string);
+        identifier_is_type = 0;
+        expr = parse.expr;
+        e2_msg_list_concat_in_place(&msgs, &parse.msgs);
+        if(e2_parse_status_is_terminal(parse.status))
+        {
+          break;
+        }
+      }
+    }
+    
+    //- rjf: expr -> irtree
+    E2_IRNode *irtree = &e2_irnode_nil;
+    {
+      E2_IRNode *resolve_result = &e2_irnode_nil;
+      E2_Val compile_time_eval_result = {0};
+      E2_CompileState state = {0};
+      for(;;)
+      {
+        E2_Compile compile = e2_compile_from_expr(arena, &state, resolve_result, compile_time_eval_result, expr);
+        resolve_result = &e2_irnode_nil;
+        MemoryZeroStruct(&compile_time_eval_result);
+        irtree = compile.irtree;
+        e2_msg_list_concat_in_place(&msgs, &compile.msgs);
+        switch(compile.status)
+        {
+          default:{}break;
+          case E2_CompileStatus_MissedIdentifierResolution:
+          {
+            resolve_result = e2_irnode_const_u64_or_smaller(arena, 123);
+          }break;
+        }
+        if(e2_compile_status_is_terminal(compile.status))
+        {
+          break;
+        }
+      }
+    }
+    
+    //- rjf: ir tree -> bytecode
+    String8 bytecode = e2_bytecode_from_irnode(arena, irtree);
+    
+    //- rjf: bytecode -> value
+    E2_Val val = {0};
+    {
+      E2_InterpState state = {0};
+      E2_SpaceMap space_map = {0};
+      for(;;)
+      {
+        E2_Interp interp = e2_interp_from_bytecode(arena, &state, &space_map, bytecode);
+        val = interp.val;
+        e2_msg_list_concat_in_place(&msgs, &interp.msgs);
+        if(e2_interp_status_is_terminal(interp.status))
+        {
+          break;
+        }
+      }
+    }
+    
+    //- rjf: fill
+    eval.string   = string;
+    eval.expr     = expr;
+    eval.irtree   = irtree;
+    eval.bytecode = bytecode;
+    eval.val      = val;
+    eval.msgs     = msgs;
+  }
+  return eval;
+}
+
+////////////////////////////////
 //~ rjf: Layer Initialization
 
 internal void
