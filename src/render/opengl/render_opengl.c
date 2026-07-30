@@ -57,11 +57,64 @@ r_ogl_tex2d_from_handle(R_Handle h)
 internal R_OGL_FormatInfo
 r_ogl_format_info_from_tex2dformat(R_Tex2DFormat fmt)
 {
-  R_OGL_FormatInfo result;
-  result.internal_format = GL_RGBA;
-  result.format = GL_RGBA;
-  result.base_type = GL_UNSIGNED_BYTE;
-  // TODO(rjf)
+  R_OGL_FormatInfo result = {0};
+  switch (fmt) {
+  case R_Tex2DFormat_R8:
+  {
+    result.internal_format = GL_RED;
+    result.format = GL_RED;
+    result.base_type = GL_UNSIGNED_BYTE;
+  } break;
+  case R_Tex2DFormat_RG8:
+  {
+    result.internal_format = GL_RG;
+    result.format = GL_RG;
+    result.base_type = GL_UNSIGNED_BYTE;
+  } break;
+  case R_Tex2DFormat_RGBA8:
+  {
+    result.internal_format = GL_RGBA;
+    result.format = GL_RGBA;
+    result.base_type = GL_UNSIGNED_BYTE;
+  } break;
+  case R_Tex2DFormat_BGRA8:
+  {
+    result.internal_format = GL_RGBA;
+    result.format = GL_BGRA;
+    result.base_type = GL_UNSIGNED_BYTE;
+  } break;
+  case R_Tex2DFormat_R16:
+  {
+    result.internal_format = GL_RED;
+    result.format = GL_RED;
+    result.base_type = GL_UNSIGNED_SHORT;
+  } break;
+  case R_Tex2DFormat_RGBA16:
+  {
+    result.internal_format = GL_RGBA;
+    result.format = GL_RGBA;
+    result.base_type = GL_UNSIGNED_SHORT;
+  } break;
+  case R_Tex2DFormat_R32:
+  {
+    result.internal_format = GL_RED;
+    result.format = GL_RED;
+    result.base_type = GL_UNSIGNED_INT;
+  } break;
+  case R_Tex2DFormat_RG32:
+  {
+    result.internal_format = GL_RG;
+    result.format = GL_RG;
+    result.base_type = GL_UNSIGNED_INT;
+  } break;
+  case R_Tex2DFormat_RGBA32:
+  {
+    result.internal_format = GL_RGBA;
+    result.format = GL_RGBA;
+    result.base_type = GL_UNSIGNED_INT;
+  } break;
+  case R_Tex2DFormat_COUNT: {} break;
+  }
   return result;
 }
 
@@ -418,7 +471,7 @@ r_window_begin_frame(WM_Window os, R_Handle r)
       glBindFramebufferScope(GL_FRAMEBUFFER, targets[idx]->fbo)
         glBindTextureScope(GL_TEXTURE_2D, targets[idx]->color_texture)
       {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (S32)client_rect_dim.x, (S32)client_rect_dim.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_SRGB8_ALPHA8, (S32)client_rect_dim.x, (S32)client_rect_dim.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, targets[idx]->color_texture, 0);  
       }
     }
@@ -677,8 +730,8 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
           glBindFramebufferScope(GL_FRAMEBUFFER, w->stage_scratch_target.fbo)
             glBindTextureScope(GL_TEXTURE_2D, w->stage_target.color_texture)
           {
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glUniform2f(glGetUniformLocation(shader, "direction"), 1.f/viewport_dim.x, 0);
             glUniform1i(glGetUniformLocation(shader, "tex"), 0);
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -688,8 +741,8 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
           glBindFramebufferScope(GL_FRAMEBUFFER, w->stage_target.fbo)
             glBindTextureScope(GL_TEXTURE_2D, w->stage_scratch_target.color_texture)
           {
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
             glUniform2f(glGetUniformLocation(shader, "direction"), 0, 1.f/viewport_dim.y);
             glUniform1i(glGetUniformLocation(shader, "tex"), 0);
             glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
