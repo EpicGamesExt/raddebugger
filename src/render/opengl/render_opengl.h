@@ -52,6 +52,7 @@ typedef ptrdiff_t GLintptr;
 #define GL_COLOR_ATTACHMENT31             0x8CFF
 
 #define GL_R8                             0x8229
+#define GL_RGBA32F                        0x8814
 
 #define GL_ARRAY_BUFFER                   0x8892
 #define GL_STREAM_DRAW                    0x88E0

@@ -418,7 +418,7 @@ r_window_begin_frame(WM_Window os, R_Handle r)
       glBindFramebufferScope(GL_FRAMEBUFFER, targets[idx]->fbo)
         glBindTextureScope(GL_TEXTURE_2D, targets[idx]->color_texture)
       {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, (S32)client_rect_dim.x, (S32)client_rect_dim.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, (S32)client_rect_dim.x, (S32)client_rect_dim.y, 0, GL_RGBA, GL_FLOAT, 0);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, targets[idx]->color_texture, 0);  
       }
     }

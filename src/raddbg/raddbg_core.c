@@ -2756,9 +2756,9 @@ rd_view_ui(Rng2F32 rect)
                     D_Entity *entity = rd_ctrl_entity_from_eval_space(space);
                     B32 is_memory_eval = (space.kind == D_EvalSpaceKind_Entity && entity->kind == D_EntityKind_Process);
                     row_can_be_locked = (is_memory_eval &&
-                                         (row->eval.irtree.mode == E_Mode_Offset) ||
-                                         (row->eval.irtree.mode == E_Mode_Value &&
-                                          e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(row->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)))));
+                                         (row->eval.irtree.mode == E_Mode_Offset ||
+                                          (row->eval.irtree.mode == E_Mode_Value &&
+                                           e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(row->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative))))));
                   }
                   
                   // rjf: determine if row is locked
@@ -4136,9 +4136,9 @@ rd_view_ui(Rng2F32 rect)
                             D_Entity *entity = rd_ctrl_entity_from_eval_space(space);
                             B32 is_memory_eval = (space.kind == D_EvalSpaceKind_Entity && entity->kind == D_EntityKind_Process);
                             cell_can_be_locked = (is_memory_eval &&
-                                                  (cell->eval.irtree.mode == E_Mode_Offset) ||
-                                                  (cell->eval.irtree.mode == E_Mode_Value &&
-                                                   e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(cell->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative)))));
+                                                  ((cell->eval.irtree.mode == E_Mode_Offset) ||
+                                                   (cell->eval.irtree.mode == E_Mode_Value &&
+                                                    e_type_kind_is_pointer_or_ref(e_type_kind_from_key(e_type_key_unwrap(cell->eval.irtree.type_key, E_TypeUnwrapFlag_AllDecorative))))));
                           }
                           
                           // rjf: determine if this cell is locked
