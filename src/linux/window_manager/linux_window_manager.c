@@ -19,6 +19,81 @@ lnx_window_from_x11window(Window window)
   return result;
 }
 
+internal int
+lnx_moveresize_code_from_pos(LNX_WM_Window *window, Vec2F32 pos, B32 *out_is_in_client_area)
+{
+  B32 in_non_client_area = 0;
+  int moveresize_code = 0;
+  if(window->custom_border)
+  {
+    WM_Window handle = {(U64)window};
+    Rng2F32 window_rect = wm_client_rect_from_window(handle);
+    Rng2F32 inside_edges = pad_2f32(window_rect, -window->custom_edge_thickness);
+    Rng2F32 inside_edges_and_title_bar = inside_edges;
+    inside_edges_and_title_bar.y0 += window->custom_title_bar_thickness;
+    if(!contains_2f32(inside_edges_and_title_bar, pos))
+    {
+      in_non_client_area = 1;
+      for EachNode(n, LNX_WM_WindowClientArea, window->first_client_area)
+      {
+        if(contains_2f32(n->rect, pos))
+        {
+          in_non_client_area = 0;
+          break;
+        }
+      }
+    }
+    if(in_non_client_area)
+    {
+      Rng2F32 title_bar_rect = r2f32p(window_rect.x0 + window->custom_edge_thickness,
+                                      window_rect.y0 + window->custom_edge_thickness,
+                                      window_rect.x1 - window->custom_edge_thickness,
+                                      window_rect.y0 + window->custom_title_bar_thickness);
+      if(contains_2f32(title_bar_rect, pos))
+      {
+        moveresize_code = _NET_WM_MOVERESIZE_MOVE;
+      }
+      else if(contains_2f32(window_rect, pos) && !contains_2f32(inside_edges, pos))
+      {
+        if(pos.x <= inside_edges.x0 && pos.y <= inside_edges.y0)
+        {
+          moveresize_code = _NET_WM_MOVERESIZE_SIZE_TOPLEFT;
+        }
+        else if(pos.x <= inside_edges.x0 && pos.y >= inside_edges.y1)
+        {
+          moveresize_code = _NET_WM_MOVERESIZE_SIZE_BOTTOMLEFT;
+        }
+        else if(pos.x >= inside_edges.x1 && pos.y <= inside_edges.y0)
+        {
+          moveresize_code = _NET_WM_MOVERESIZE_SIZE_TOPRIGHT;
+        }
+        else if(pos.x >= inside_edges.x1 && pos.y >= inside_edges.y1)
+        {
+          moveresize_code = _NET_WM_MOVERESIZE_SIZE_BOTTOMRIGHT;
+        }
+        else if(pos.x <= inside_edges.x0)
+        {
+          moveresize_code = _NET_WM_MOVERESIZE_SIZE_LEFT;
+        }
+        else if(pos.x >= inside_edges.x1)
+        {
+          moveresize_code = _NET_WM_MOVERESIZE_SIZE_RIGHT;
+        }
+        else if(pos.y <= inside_edges.y0)
+        {
+          moveresize_code = _NET_WM_MOVERESIZE_SIZE_TOP;
+        }
+        else if(pos.y >= inside_edges.y1)
+        {
+          moveresize_code = _NET_WM_MOVERESIZE_SIZE_BOTTOM;
+        }
+      }
+    }
+  }
+  out_is_in_client_area[0] = !in_non_client_area;
+  return moveresize_code;
+}
+
 ////////////////////////////////
 //~ rjf: @per_os_impl Main Initialization API (Implemented Per-OS)
 
@@ -154,7 +229,9 @@ wm_window_open(Rng2F32 rect, WM_WindowFlags flags, String8 title)
                ButtonReleaseMask|
                KeyPressMask|
                KeyReleaseMask|
+               StructureNotifyMask|
                FocusChangeMask);
+  XSetWindowBackgroundPixmap(lnx_wm_state->display, w->window, None);
   Atom protocols[] =
   {
     lnx_wm_state->wm_delete_window_atom,
@@ -180,6 +257,24 @@ wm_window_open(Rng2F32 rect, WM_WindowFlags flags, String8 title)
   String8 title_copy = push_str8_copy(scratch.arena, title);
   XStoreName(lnx_wm_state->display, w->window, (char *)title_copy.str);
   scratch_end(scratch);
+  
+  //- rjf: set custom window border info
+  if(flags & WM_WindowFlag_CustomBorder)
+  {
+    w->custom_border = 1;
+    typedef struct Hints Hints;
+    struct Hints
+    {
+      U32 flags;
+      U32 functions;
+      U32 decorations;
+      S32 inputMode;
+      U32 status;
+    };
+    Hints hints = {.flags = 2, .decorations = 0};
+    Atom property = XInternAtom(lnx_wm_state->display, "_MOTIF_WM_HINTS", 1);
+    XChangeProperty(lnx_wm_state->display, w->window, property, property, 32, PropModeReplace, (unsigned char *)&hints, 5);
+  }
   
   //- rjf: convert to handle & return
   WM_Window handle = {(U64)w};
@@ -307,28 +402,47 @@ internal void
 wm_window_clear_custom_border_data(WM_Window handle)
 {
   if(wm_window_match(handle, wm_window_zero())) {return;}
-  // TODO(rjf)
+  LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
+  for(LNX_WM_WindowClientArea *n = w->first_client_area, *next = 0; n != 0; n = next)
+  {
+    next = n->next;
+    SLLStackPush(lnx_wm_state->free_client_area, n);
+  }
+  w->first_client_area = w->last_client_area = 0;
 }
 
 internal void
 wm_window_push_custom_title_bar(WM_Window handle, F32 thickness)
 {
   if(wm_window_match(handle, wm_window_zero())) {return;}
-  // TODO(rjf)
+  LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
+  w->custom_title_bar_thickness = thickness;
 }
 
 internal void
 wm_window_push_custom_edges(WM_Window handle, F32 thickness)
 {
   if(wm_window_match(handle, wm_window_zero())) {return;}
-  // TODO(rjf)
+  LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
+  w->custom_edge_thickness = thickness;
 }
 
 internal void
 wm_window_push_custom_title_bar_client_area(WM_Window handle, Rng2F32 rect)
 {
   if(wm_window_match(handle, wm_window_zero())) {return;}
-  // TODO(rjf)
+  LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
+  LNX_WM_WindowClientArea *n = lnx_wm_state->free_client_area;
+  if(n != 0)
+  {
+    SLLStackPop(lnx_wm_state->free_client_area);
+  }
+  else
+  {
+    n = push_array(lnx_wm_state->arena, LNX_WM_WindowClientArea, 1);
+  }
+  n->rect = rect;
+  SLLQueuePush(w->first_client_area, w->last_client_area, n);
 }
 
 internal Rng2F32
@@ -336,9 +450,17 @@ wm_rect_from_window(WM_Window handle)
 {
   if(wm_window_match(handle, wm_window_zero())) {return r2f32p(0, 0, 0, 0);}
   LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
-  XWindowAttributes atts = {0};
-  Status s = XGetWindowAttributes(lnx_wm_state->display, w->window, &atts);
-  Rng2F32 result = r2f32p((F32)atts.x, (F32)atts.y, (F32)atts.x + (F32)atts.width, (F32)atts.y + (F32)atts.height);
+  Rng2F32 result = {0};
+  if(w->resize_draw)
+  {
+    result = w->last_synced_rect;
+  }
+  else
+  {
+    XWindowAttributes atts = {0};
+    Status s = XGetWindowAttributes(lnx_wm_state->display, w->window, &atts);
+    result = r2f32p((F32)atts.x, (F32)atts.y, (F32)atts.x + (F32)atts.width, (F32)atts.y + (F32)atts.height);
+  }
   return result;
 }
 
@@ -346,9 +468,18 @@ internal Rng2F32
 wm_client_rect_from_window(WM_Window handle)
 {
   LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
-  XWindowAttributes atts = {0};
-  Status s = XGetWindowAttributes(lnx_wm_state->display, w->window, &atts);
-  Rng2F32 result = r2f32p(0, 0, (F32)atts.width, (F32)atts.height);
+  Rng2F32 result = {0};
+  if(w->resize_draw)
+  {
+    Vec2F32 dim = dim_2f32(w->last_synced_rect);
+    result = r2f32p(0, 0, dim.x, dim.y);
+  }
+  else
+  {
+    XWindowAttributes atts = {0};
+    Status s = XGetWindowAttributes(lnx_wm_state->display, w->window, &atts);
+    result = r2f32p(0, 0, (F32)atts.width, (F32)atts.height);
+  }
   return result;
 }
 
@@ -460,8 +591,11 @@ wm_get_events(Arena *arena, B32 wait)
     }
     while(XPending(lnx_wm_state->display))
     {
+      //- rjf: get next event
       XEvent evt = {0};
       XNextEvent(lnx_wm_state->display, &evt);
+      
+      //- rjf: do event response
       B32 set_mouse_cursor = 0;
       switch(evt.type)
       {
@@ -588,40 +722,77 @@ wm_get_events(Arena *arena, B32 wait)
         case ButtonPress:
         case ButtonRelease:
         {
-          // rjf: determine flags
-          WM_Modifiers modifiers = 0;
-          if(evt.xbutton.state & ShiftMask)   { modifiers |= WM_Modifier_Shift; }
-          if(evt.xbutton.state & ControlMask) { modifiers |= WM_Modifier_Ctrl; }
-          if(evt.xbutton.state & Mod1Mask)    { modifiers |= WM_Modifier_Alt; }
-          
-          // rjf: map button -> WM_Key
-          WM_Key key = WM_Key_Null;
-          switch(evt.xbutton.button)
-          {
-            default:{}break;
-            case Button1:{key = WM_Key_LeftMouseButton;}break;
-            case Button2:{key = WM_Key_MiddleMouseButton;}break;
-            case Button3:{key = WM_Key_RightMouseButton;}break;
-          }
-          
-          // rjf: push event
           LNX_WM_Window *window = lnx_window_from_x11window(evt.xbutton.window);
-          if(key != WM_Key_Null)
+          
+          // rjf: determine if this is outside client area, & where it is
+          B32 in_client_area = 0;
+          int moveresize_code = lnx_moveresize_code_from_pos(window, v2f32((F32)evt.xbutton.x, (F32)evt.xbutton.y), &in_client_area);
+          
+          // rjf: if in non-client area -> redirect to default x11 server behavior
+          if(!in_client_area)
           {
-            WM_Event *e = wm_event_list_push_new(arena, &evts, evt.type == ButtonPress ? WM_EventKind_Press : WM_EventKind_Release);
-            e->window.u64[0] = (U64)window;
-            e->modifiers = modifiers;
-            e->key = key;
-            e->pos = v2f32((F32)evt.xbutton.x, (F32)evt.xbutton.y);
+            // rjf: ungrab pointer
+            XUngrabPointer(lnx_wm_state->display, evt.xbutton.time);
+            
+            // rjf: get atom for moving/resizing event kind
+            Atom net_wm_moveresize = XInternAtom(lnx_wm_state->display, "_NET_WM_MOVERESIZE", 0);
+            
+            // rjf: fill event
+            XEvent xev;
+            MemoryZeroStruct(&xev);
+            {
+              xev.xclient.type = ClientMessage;
+              xev.xclient.display = lnx_wm_state->display;
+              xev.xclient.window = window->window;
+              xev.xclient.message_type = net_wm_moveresize;
+              xev.xclient.format = 32;
+              xev.xclient.data.l[0] = evt.xbutton.x_root;
+              xev.xclient.data.l[1] = evt.xbutton.y_root;
+              xev.xclient.data.l[2] = moveresize_code;
+            }
+            
+            // rjf: send event
+            XSendEvent(lnx_wm_state->display, DefaultRootWindow(lnx_wm_state->display), 0, SubstructureRedirectMask|SubstructureNotifyMask, &xev);
+            XFlush(lnx_wm_state->display);
           }
-          else if(evt.xbutton.button == Button4 ||
-                  evt.xbutton.button == Button5)
+          
+          // rjf: otherwise -> pipe the event to the application
+          else
           {
-            WM_Event *e = wm_event_list_push_new(arena, &evts, WM_EventKind_Scroll);
-            e->window.u64[0] = (U64)window;
-            e->modifiers = modifiers;
-            e->delta = v2f32(0, evt.xbutton.button == Button4 ? -1.f : +1.f);
-            e->pos = v2f32((F32)evt.xbutton.x, (F32)evt.xbutton.y);
+            // rjf: determine flags
+            WM_Modifiers modifiers = 0;
+            if(evt.xbutton.state & ShiftMask)   { modifiers |= WM_Modifier_Shift; }
+            if(evt.xbutton.state & ControlMask) { modifiers |= WM_Modifier_Ctrl; }
+            if(evt.xbutton.state & Mod1Mask)    { modifiers |= WM_Modifier_Alt; }
+            
+            // rjf: map button -> WM_Key
+            WM_Key key = WM_Key_Null;
+            switch(evt.xbutton.button)
+            {
+              default:{}break;
+              case Button1:{key = WM_Key_LeftMouseButton;}break;
+              case Button2:{key = WM_Key_MiddleMouseButton;}break;
+              case Button3:{key = WM_Key_RightMouseButton;}break;
+            }
+            
+            // rjf: push event
+            if(key != WM_Key_Null)
+            {
+              WM_Event *e = wm_event_list_push_new(arena, &evts, evt.type == ButtonPress ? WM_EventKind_Press : WM_EventKind_Release);
+              e->window.u64[0] = (U64)window;
+              e->modifiers = modifiers;
+              e->key = key;
+              e->pos = v2f32((F32)evt.xbutton.x, (F32)evt.xbutton.y);
+            }
+            else if(evt.xbutton.button == Button4 ||
+                    evt.xbutton.button == Button5)
+            {
+              WM_Event *e = wm_event_list_push_new(arena, &evts, WM_EventKind_Scroll);
+              e->window.u64[0] = (U64)window;
+              e->modifiers = modifiers;
+              e->delta = v2f32(0, evt.xbutton.button == Button4 ? -1.f : +1.f);
+              e->pos = v2f32((F32)evt.xbutton.x, (F32)evt.xbutton.y);
+            }
           }
         }break;
         
@@ -634,6 +805,26 @@ wm_get_events(Arena *arena, B32 wait)
           e->pos.x = (F32)evt.xmotion.x;
           e->pos.y = (F32)evt.xmotion.y;
           set_mouse_cursor = 1;
+          if(window->custom_border)
+          {
+            B32 in_client_area;
+            int moveresize_code = lnx_moveresize_code_from_pos(window, e->pos, &in_client_area);
+            if(!in_client_area)
+            {
+              switch(moveresize_code)
+              {
+                default:{}break;
+                case _NET_WM_MOVERESIZE_SIZE_TOPLEFT:{lnx_wm_state->last_set_cursor = WM_Cursor_DownRight;}break;
+                case _NET_WM_MOVERESIZE_SIZE_BOTTOMRIGHT:{lnx_wm_state->last_set_cursor = WM_Cursor_DownRight;}break;
+                case _NET_WM_MOVERESIZE_SIZE_TOPRIGHT:{lnx_wm_state->last_set_cursor = WM_Cursor_UpRight;}break;
+                case _NET_WM_MOVERESIZE_SIZE_BOTTOMLEFT:{lnx_wm_state->last_set_cursor = WM_Cursor_UpRight;}break;
+                case _NET_WM_MOVERESIZE_SIZE_LEFT:{lnx_wm_state->last_set_cursor = WM_Cursor_LeftRight;}break;
+                case _NET_WM_MOVERESIZE_SIZE_RIGHT:{lnx_wm_state->last_set_cursor = WM_Cursor_LeftRight;}break;
+                case _NET_WM_MOVERESIZE_SIZE_TOP:{lnx_wm_state->last_set_cursor = WM_Cursor_UpDown;}break;
+                case _NET_WM_MOVERESIZE_SIZE_BOTTOM:{lnx_wm_state->last_set_cursor = WM_Cursor_UpDown;}break;
+              }
+            }
+          }
         }break;
         
         //- rjf: window focus/unfocus
@@ -645,6 +836,36 @@ wm_get_events(Arena *arena, B32 wait)
           LNX_WM_Window *window = lnx_window_from_x11window(evt.xfocus.window);
           WM_Event *e = wm_event_list_push_new(arena, &evts, WM_EventKind_WindowLoseFocus);
           e->window.u64[0] = (U64)window;
+        }break;
+        
+        //- rjf: window moves & resizes
+        case ConfigureNotify:
+        {
+          LNX_WM_Window *window = lnx_window_from_x11window(evt.xconfigure.window);
+          if(!window->resize_draw)
+          {
+            window->last_synced_rect = r2f32p((F32)evt.xconfigure.x, (F32)evt.xconfigure.y, (F32)evt.xconfigure.x + (F32)evt.xconfigure.width, (F32)evt.xconfigure.y + (F32)evt.xconfigure.height);
+          }
+        }break;
+        
+        //- rjf: re-paints
+        case Expose:
+        {
+          LNX_WM_Window *window = lnx_window_from_x11window(evt.xexpose.window);
+          if(XPending(lnx_wm_state->display) == 0)
+          {
+            window->resize_draw = window->waiting_for_resize;
+            update();
+            window->resize_draw = 0;
+            if(window->waiting_for_resize)
+            {
+              window->waiting_for_resize = 0;
+              XSyncValue sync_value;
+              XSyncIntsToValue(&sync_value, window->counter_value & 0xffffffffu, (int)((window->counter_value & 0xffffffff00000000ull) >> 32));
+              XSyncSetCounter(lnx_wm_state->display, window->counter_xid, sync_value);
+              XFlush(lnx_wm_state->display);
+            }
+          }
         }break;
         
         //- rjf: client messages
@@ -661,17 +882,16 @@ wm_get_events(Arena *arena, B32 wait)
             LNX_WM_Window *window = lnx_window_from_x11window(evt.xclient.window);
             if(window != 0)
             {
-              window->counter_value = 0;
-              window->counter_value |= evt.xclient.data.l[2];
-              window->counter_value |= (evt.xclient.data.l[3] << 32);
-              XSyncValue value;
-              XSyncIntToValue(&value, window->counter_value);
-              XSyncSetCounter(lnx_wm_state->display, window->counter_xid, value);
+              U32 counter_low = (U32)evt.xclient.data.l[2];
+              U32 counter_hi  = (U32)evt.xclient.data.l[3];
+              window->counter_value = (counter_low | ((U64)counter_hi << 32));
+              window->waiting_for_resize = 1;
             }
           }
         }break;
       }
       
+      //- rjf: set mouse cursor
       if(set_mouse_cursor)
       {
         Window root_window = 0;
