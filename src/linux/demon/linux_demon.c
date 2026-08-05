@@ -1526,7 +1526,7 @@ lnx_dmn_thread_read_reg_block(LNX_DMN_Thread *thread)
           // get xsave
           if(x64_is_xsave_supported())
           {
-            void *xsave_raw = push_array(scratch.arena, U8, process_ctx->xsave_size);
+            void *xsave_raw = push_array_aligned(scratch.arena, U8, process_ctx->xsave_size, 64);
             int ptrace_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, thread->tid, (void *)NT_X86_XSTATE, &(struct iovec){ .iov_len = process_ctx->xsave_size, .iov_base = xsave_raw }));
             if(ptrace_result < 0) { goto exit; }
             xsave  = xsave_raw;
@@ -1536,7 +1536,7 @@ lnx_dmn_thread_read_reg_block(LNX_DMN_Thread *thread)
           // get fxsave
           if(fxsave == 0)
           {
-            fxsave = push_array(scratch.arena, X64_FXSave, 1);
+            fxsave = push_array_aligned(scratch.arena, X64_FXSave, 1, 64);
             int ptrace_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, thread->tid, (void *)NT_FPREGSET, &(struct iovec){ .iov_len = sizeof(*fxsave), .iov_base = fxsave }));
             if(ptrace_result < 0) { goto exit; }
             fxsave = 0;
@@ -1739,8 +1739,8 @@ lnx_dmn_thread_write_reg_block(LNX_DMN_Thread *thread)
         
         if(x64_is_xsave_supported())
         {
-          U8        *xsave_raw = push_array(scratch.arena, U8, process_ctx->xsave_size);
-          X64_XSave *dst       = (X64_XSave *)xsave_raw;
+          U8 *xsave_raw = push_array_aligned(scratch.arena, U8, process_ctx->xsave_size, 64);
+          X64_XSave *dst = (X64_XSave *)xsave_raw;
           dst->fxsave = dst_fxsave;
           dst->header.xstate_bv |= X64_XStateComponentFlag_FP;
           dst->header.xstate_bv |= X64_XStateComponentFlag_SSE;

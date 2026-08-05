@@ -48,7 +48,7 @@ lnx_moveresize_code_from_pos(LNX_WM_Window *window, Vec2F32 pos, B32 *out_is_in_
       Rng2F32 title_bar_rect = r2f32p(window_rect.x0 + window->custom_edge_thickness,
                                       window_rect.y0 + window->custom_edge_thickness,
                                       window_rect.x1 - window->custom_edge_thickness,
-                                      window_rect.y0 + window->custom_title_bar_thickness);
+                                      window_rect.y0 + window->custom_edge_thickness + window->custom_title_bar_thickness);
       if(contains_2f32(title_bar_rect, pos))
       {
         moveresize_code = _NET_WM_MOVERESIZE_MOVE;
@@ -86,6 +86,10 @@ lnx_moveresize_code_from_pos(LNX_WM_Window *window, Vec2F32 pos, B32 *out_is_in_
         else if(pos.y >= inside_edges.y1)
         {
           moveresize_code = _NET_WM_MOVERESIZE_SIZE_BOTTOM;
+        }
+        else
+        {
+          in_non_client_area = 0;
         }
       }
     }
@@ -807,7 +811,7 @@ wm_get_events(Arena *arena, B32 wait)
           set_mouse_cursor = 1;
           if(window->custom_border)
           {
-            B32 in_client_area;
+            B32 in_client_area = 0;
             int moveresize_code = lnx_moveresize_code_from_pos(window, e->pos, &in_client_area);
             if(!in_client_area)
             {
