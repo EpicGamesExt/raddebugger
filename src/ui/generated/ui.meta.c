@@ -36,6 +36,7 @@
 #define UI_CornerRadius01(v) DeferLoop(ui_push_corner_radius_01(v), ui_pop_corner_radius_01())
 #define UI_CornerRadius10(v) DeferLoop(ui_push_corner_radius_10(v), ui_pop_corner_radius_10())
 #define UI_CornerRadius11(v) DeferLoop(ui_push_corner_radius_11(v), ui_pop_corner_radius_11())
+#define UI_VisualMargin(v) DeferLoop(ui_push_visual_margin(v), ui_pop_visual_margin())
 #define UI_BlurSize(v) DeferLoop(ui_push_blur_size(v), ui_pop_blur_size())
 #define UI_TextPadding(v) DeferLoop(ui_push_text_padding(v), ui_pop_text_padding())
 #define UI_TextAlignment(v) DeferLoop(ui_push_text_alignment(v), ui_pop_text_alignment())
@@ -71,6 +72,7 @@ internal F32 ui_top_corner_radius_00(void) { UI_StackTopImpl(ui_state, CornerRad
 internal F32 ui_top_corner_radius_01(void) { UI_StackTopImpl(ui_state, CornerRadius01, corner_radius_01) }
 internal F32 ui_top_corner_radius_10(void) { UI_StackTopImpl(ui_state, CornerRadius10, corner_radius_10) }
 internal F32 ui_top_corner_radius_11(void) { UI_StackTopImpl(ui_state, CornerRadius11, corner_radius_11) }
+internal F32 ui_top_visual_margin(void) { UI_StackTopImpl(ui_state, VisualMargin, visual_margin) }
 internal F32 ui_top_blur_size(void) { UI_StackTopImpl(ui_state, BlurSize, blur_size) }
 internal F32 ui_top_text_padding(void) { UI_StackTopImpl(ui_state, TextPadding, text_padding) }
 internal UI_TextAlign ui_top_text_alignment(void) { UI_StackTopImpl(ui_state, TextAlignment, text_alignment) }
@@ -105,6 +107,7 @@ internal F32 ui_bottom_corner_radius_00(void) { UI_StackBottomImpl(ui_state, Cor
 internal F32 ui_bottom_corner_radius_01(void) { UI_StackBottomImpl(ui_state, CornerRadius01, corner_radius_01) }
 internal F32 ui_bottom_corner_radius_10(void) { UI_StackBottomImpl(ui_state, CornerRadius10, corner_radius_10) }
 internal F32 ui_bottom_corner_radius_11(void) { UI_StackBottomImpl(ui_state, CornerRadius11, corner_radius_11) }
+internal F32 ui_bottom_visual_margin(void) { UI_StackBottomImpl(ui_state, VisualMargin, visual_margin) }
 internal F32 ui_bottom_blur_size(void) { UI_StackBottomImpl(ui_state, BlurSize, blur_size) }
 internal F32 ui_bottom_text_padding(void) { UI_StackBottomImpl(ui_state, TextPadding, text_padding) }
 internal UI_TextAlign ui_bottom_text_alignment(void) { UI_StackBottomImpl(ui_state, TextAlignment, text_alignment) }
@@ -139,6 +142,7 @@ internal F32 ui_push_corner_radius_00(F32 v) { UI_StackPushImpl(ui_state, Corner
 internal F32 ui_push_corner_radius_01(F32 v) { UI_StackPushImpl(ui_state, CornerRadius01, corner_radius_01, F32, v) }
 internal F32 ui_push_corner_radius_10(F32 v) { UI_StackPushImpl(ui_state, CornerRadius10, corner_radius_10, F32, v) }
 internal F32 ui_push_corner_radius_11(F32 v) { UI_StackPushImpl(ui_state, CornerRadius11, corner_radius_11, F32, v) }
+internal F32 ui_push_visual_margin(F32 v) { UI_StackPushImpl(ui_state, VisualMargin, visual_margin, F32, v) }
 internal F32 ui_push_blur_size(F32 v) { UI_StackPushImpl(ui_state, BlurSize, blur_size, F32, v) }
 internal F32 ui_push_text_padding(F32 v) { UI_StackPushImpl(ui_state, TextPadding, text_padding, F32, v) }
 internal UI_TextAlign ui_push_text_alignment(UI_TextAlign v) { UI_StackPushImpl(ui_state, TextAlignment, text_alignment, UI_TextAlign, v) }
@@ -173,6 +177,7 @@ internal F32 ui_pop_corner_radius_00(void) { UI_StackPopImpl(ui_state, CornerRad
 internal F32 ui_pop_corner_radius_01(void) { UI_StackPopImpl(ui_state, CornerRadius01, corner_radius_01) }
 internal F32 ui_pop_corner_radius_10(void) { UI_StackPopImpl(ui_state, CornerRadius10, corner_radius_10) }
 internal F32 ui_pop_corner_radius_11(void) { UI_StackPopImpl(ui_state, CornerRadius11, corner_radius_11) }
+internal F32 ui_pop_visual_margin(void) { UI_StackPopImpl(ui_state, VisualMargin, visual_margin) }
 internal F32 ui_pop_blur_size(void) { UI_StackPopImpl(ui_state, BlurSize, blur_size) }
 internal F32 ui_pop_text_padding(void) { UI_StackPopImpl(ui_state, TextPadding, text_padding) }
 internal UI_TextAlign ui_pop_text_alignment(void) { UI_StackPopImpl(ui_state, TextAlignment, text_alignment) }
@@ -207,6 +212,7 @@ internal F32 ui_set_next_corner_radius_00(F32 v) { UI_StackSetNextImpl(ui_state,
 internal F32 ui_set_next_corner_radius_01(F32 v) { UI_StackSetNextImpl(ui_state, CornerRadius01, corner_radius_01, F32, v) }
 internal F32 ui_set_next_corner_radius_10(F32 v) { UI_StackSetNextImpl(ui_state, CornerRadius10, corner_radius_10, F32, v) }
 internal F32 ui_set_next_corner_radius_11(F32 v) { UI_StackSetNextImpl(ui_state, CornerRadius11, corner_radius_11, F32, v) }
+internal F32 ui_set_next_visual_margin(F32 v) { UI_StackSetNextImpl(ui_state, VisualMargin, visual_margin, F32, v) }
 internal F32 ui_set_next_blur_size(F32 v) { UI_StackSetNextImpl(ui_state, BlurSize, blur_size, F32, v) }
 internal F32 ui_set_next_text_padding(F32 v) { UI_StackSetNextImpl(ui_state, TextPadding, text_padding, F32, v) }
 internal UI_TextAlign ui_set_next_text_alignment(UI_TextAlign v) { UI_StackSetNextImpl(ui_state, TextAlignment, text_alignment, UI_TextAlign, v) }

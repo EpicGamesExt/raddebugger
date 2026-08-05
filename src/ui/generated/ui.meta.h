@@ -38,6 +38,7 @@ typedef struct UI_CornerRadius00Node UI_CornerRadius00Node; struct UI_CornerRadi
 typedef struct UI_CornerRadius01Node UI_CornerRadius01Node; struct UI_CornerRadius01Node{UI_CornerRadius01Node *next; F32 v;};
 typedef struct UI_CornerRadius10Node UI_CornerRadius10Node; struct UI_CornerRadius10Node{UI_CornerRadius10Node *next; F32 v;};
 typedef struct UI_CornerRadius11Node UI_CornerRadius11Node; struct UI_CornerRadius11Node{UI_CornerRadius11Node *next; F32 v;};
+typedef struct UI_VisualMarginNode UI_VisualMarginNode; struct UI_VisualMarginNode{UI_VisualMarginNode *next; F32 v;};
 typedef struct UI_BlurSizeNode UI_BlurSizeNode; struct UI_BlurSizeNode{UI_BlurSizeNode *next; F32 v;};
 typedef struct UI_TextPaddingNode UI_TextPaddingNode; struct UI_TextPaddingNode{UI_TextPaddingNode *next; F32 v;};
 typedef struct UI_TextAlignmentNode UI_TextAlignmentNode; struct UI_TextAlignmentNode{UI_TextAlignmentNode *next; UI_TextAlign v;};
@@ -76,6 +77,7 @@ UI_CornerRadius00Node corner_radius_00_nil_stack_top;\
 UI_CornerRadius01Node corner_radius_01_nil_stack_top;\
 UI_CornerRadius10Node corner_radius_10_nil_stack_top;\
 UI_CornerRadius11Node corner_radius_11_nil_stack_top;\
+UI_VisualMarginNode visual_margin_nil_stack_top;\
 UI_BlurSizeNode blur_size_nil_stack_top;\
 UI_TextPaddingNode text_padding_nil_stack_top;\
 UI_TextAlignmentNode text_alignment_nil_stack_top;\
@@ -113,6 +115,7 @@ state->corner_radius_00_nil_stack_top.v = 0;\
 state->corner_radius_01_nil_stack_top.v = 0;\
 state->corner_radius_10_nil_stack_top.v = 0;\
 state->corner_radius_11_nil_stack_top.v = 0;\
+state->visual_margin_nil_stack_top.v = 0;\
 state->blur_size_nil_stack_top.v = 0;\
 state->text_padding_nil_stack_top.v = 0;\
 state->text_alignment_nil_stack_top.v = UI_TextAlign_Left;\
@@ -152,6 +155,7 @@ struct { UI_CornerRadius00Node *top; F32 bottom_val; UI_CornerRadius00Node *free
 struct { UI_CornerRadius01Node *top; F32 bottom_val; UI_CornerRadius01Node *free; U64 gen; B32 auto_pop; } corner_radius_01_stack;\
 struct { UI_CornerRadius10Node *top; F32 bottom_val; UI_CornerRadius10Node *free; U64 gen; B32 auto_pop; } corner_radius_10_stack;\
 struct { UI_CornerRadius11Node *top; F32 bottom_val; UI_CornerRadius11Node *free; U64 gen; B32 auto_pop; } corner_radius_11_stack;\
+struct { UI_VisualMarginNode *top; F32 bottom_val; UI_VisualMarginNode *free; U64 gen; B32 auto_pop; } visual_margin_stack;\
 struct { UI_BlurSizeNode *top; F32 bottom_val; UI_BlurSizeNode *free; U64 gen; B32 auto_pop; } blur_size_stack;\
 struct { UI_TextPaddingNode *top; F32 bottom_val; UI_TextPaddingNode *free; U64 gen; B32 auto_pop; } text_padding_stack;\
 struct { UI_TextAlignmentNode *top; UI_TextAlign bottom_val; UI_TextAlignmentNode *free; U64 gen; B32 auto_pop; } text_alignment_stack;\
@@ -189,6 +193,7 @@ state->corner_radius_00_stack.top = &state->corner_radius_00_nil_stack_top; stat
 state->corner_radius_01_stack.top = &state->corner_radius_01_nil_stack_top; state->corner_radius_01_stack.bottom_val = 0; state->corner_radius_01_stack.free = 0; state->corner_radius_01_stack.auto_pop = 0;\
 state->corner_radius_10_stack.top = &state->corner_radius_10_nil_stack_top; state->corner_radius_10_stack.bottom_val = 0; state->corner_radius_10_stack.free = 0; state->corner_radius_10_stack.auto_pop = 0;\
 state->corner_radius_11_stack.top = &state->corner_radius_11_nil_stack_top; state->corner_radius_11_stack.bottom_val = 0; state->corner_radius_11_stack.free = 0; state->corner_radius_11_stack.auto_pop = 0;\
+state->visual_margin_stack.top = &state->visual_margin_nil_stack_top; state->visual_margin_stack.bottom_val = 0; state->visual_margin_stack.free = 0; state->visual_margin_stack.auto_pop = 0;\
 state->blur_size_stack.top = &state->blur_size_nil_stack_top; state->blur_size_stack.bottom_val = 0; state->blur_size_stack.free = 0; state->blur_size_stack.auto_pop = 0;\
 state->text_padding_stack.top = &state->text_padding_nil_stack_top; state->text_padding_stack.bottom_val = 0; state->text_padding_stack.free = 0; state->text_padding_stack.auto_pop = 0;\
 state->text_alignment_stack.top = &state->text_alignment_nil_stack_top; state->text_alignment_stack.bottom_val = UI_TextAlign_Left; state->text_alignment_stack.free = 0; state->text_alignment_stack.auto_pop = 0;\
@@ -226,6 +231,7 @@ if(state->corner_radius_00_stack.auto_pop) { ui_pop_corner_radius_00(); state->c
 if(state->corner_radius_01_stack.auto_pop) { ui_pop_corner_radius_01(); state->corner_radius_01_stack.auto_pop = 0; }\
 if(state->corner_radius_10_stack.auto_pop) { ui_pop_corner_radius_10(); state->corner_radius_10_stack.auto_pop = 0; }\
 if(state->corner_radius_11_stack.auto_pop) { ui_pop_corner_radius_11(); state->corner_radius_11_stack.auto_pop = 0; }\
+if(state->visual_margin_stack.auto_pop) { ui_pop_visual_margin(); state->visual_margin_stack.auto_pop = 0; }\
 if(state->blur_size_stack.auto_pop) { ui_pop_blur_size(); state->blur_size_stack.auto_pop = 0; }\
 if(state->text_padding_stack.auto_pop) { ui_pop_text_padding(); state->text_padding_stack.auto_pop = 0; }\
 if(state->text_alignment_stack.auto_pop) { ui_pop_text_alignment(); state->text_alignment_stack.auto_pop = 0; }\
@@ -262,6 +268,7 @@ internal F32                        ui_top_corner_radius_00(void);
 internal F32                        ui_top_corner_radius_01(void);
 internal F32                        ui_top_corner_radius_10(void);
 internal F32                        ui_top_corner_radius_11(void);
+internal F32                        ui_top_visual_margin(void);
 internal F32                        ui_top_blur_size(void);
 internal F32                        ui_top_text_padding(void);
 internal UI_TextAlign               ui_top_text_alignment(void);
@@ -297,6 +304,7 @@ internal F32                        ui_bottom_corner_radius_00(void);
 internal F32                        ui_bottom_corner_radius_01(void);
 internal F32                        ui_bottom_corner_radius_10(void);
 internal F32                        ui_bottom_corner_radius_11(void);
+internal F32                        ui_bottom_visual_margin(void);
 internal F32                        ui_bottom_blur_size(void);
 internal F32                        ui_bottom_text_padding(void);
 internal UI_TextAlign               ui_bottom_text_alignment(void);
@@ -332,6 +340,7 @@ internal F32                        ui_push_corner_radius_00(F32 v);
 internal F32                        ui_push_corner_radius_01(F32 v);
 internal F32                        ui_push_corner_radius_10(F32 v);
 internal F32                        ui_push_corner_radius_11(F32 v);
+internal F32                        ui_push_visual_margin(F32 v);
 internal F32                        ui_push_blur_size(F32 v);
 internal F32                        ui_push_text_padding(F32 v);
 internal UI_TextAlign               ui_push_text_alignment(UI_TextAlign v);
@@ -367,6 +376,7 @@ internal F32                        ui_pop_corner_radius_00(void);
 internal F32                        ui_pop_corner_radius_01(void);
 internal F32                        ui_pop_corner_radius_10(void);
 internal F32                        ui_pop_corner_radius_11(void);
+internal F32                        ui_pop_visual_margin(void);
 internal F32                        ui_pop_blur_size(void);
 internal F32                        ui_pop_text_padding(void);
 internal UI_TextAlign               ui_pop_text_alignment(void);
@@ -402,6 +412,7 @@ internal F32                        ui_set_next_corner_radius_00(F32 v);
 internal F32                        ui_set_next_corner_radius_01(F32 v);
 internal F32                        ui_set_next_corner_radius_10(F32 v);
 internal F32                        ui_set_next_corner_radius_11(F32 v);
+internal F32                        ui_set_next_visual_margin(F32 v);
 internal F32                        ui_set_next_blur_size(F32 v);
 internal F32                        ui_set_next_text_padding(F32 v);
 internal UI_TextAlign               ui_set_next_text_alignment(UI_TextAlign v);

@@ -402,6 +402,7 @@ struct UI_Box
   F32 tab_size;
   FNT_RasterFlags text_raster_flags;
   F32 corner_radii[Corner_COUNT];
+  F32 visual_margin;
   F32 blur_size;
   F32 transparency;
   F32 squish;
@@ -993,6 +994,7 @@ internal F32                        ui_top_corner_radius_00(void);
 internal F32                        ui_top_corner_radius_01(void);
 internal F32                        ui_top_corner_radius_10(void);
 internal F32                        ui_top_corner_radius_11(void);
+internal F32                        ui_top_visual_margin(void);
 internal F32                        ui_top_blur_size(void);
 internal F32                        ui_top_text_padding(void);
 internal UI_TextAlign               ui_top_text_alignment(void);
@@ -1028,6 +1030,7 @@ internal F32                        ui_bottom_corner_radius_00(void);
 internal F32                        ui_bottom_corner_radius_01(void);
 internal F32                        ui_bottom_corner_radius_10(void);
 internal F32                        ui_bottom_corner_radius_11(void);
+internal F32                        ui_bottom_visual_margin(void);
 internal F32                        ui_bottom_blur_size(void);
 internal F32                        ui_bottom_text_padding(void);
 internal UI_TextAlign               ui_bottom_text_alignment(void);
@@ -1063,6 +1066,7 @@ internal F32                        ui_push_corner_radius_00(F32 v);
 internal F32                        ui_push_corner_radius_01(F32 v);
 internal F32                        ui_push_corner_radius_10(F32 v);
 internal F32                        ui_push_corner_radius_11(F32 v);
+internal F32                        ui_push_visual_margin(F32 v);
 internal F32                        ui_push_blur_size(F32 v);
 internal F32                        ui_push_text_padding(F32 v);
 internal UI_TextAlign               ui_push_text_alignment(UI_TextAlign v);
@@ -1098,6 +1102,7 @@ internal F32                        ui_pop_corner_radius_00(void);
 internal F32                        ui_pop_corner_radius_01(void);
 internal F32                        ui_pop_corner_radius_10(void);
 internal F32                        ui_pop_corner_radius_11(void);
+internal F32                        ui_pop_visual_margin(void);
 internal F32                        ui_pop_blur_size(void);
 internal F32                        ui_pop_text_padding(void);
 internal UI_TextAlign               ui_pop_text_alignment(void);
@@ -1133,6 +1138,7 @@ internal F32                        ui_set_next_corner_radius_00(F32 v);
 internal F32                        ui_set_next_corner_radius_01(F32 v);
 internal F32                        ui_set_next_corner_radius_10(F32 v);
 internal F32                        ui_set_next_corner_radius_11(F32 v);
+internal F32                        ui_set_next_visual_margin(F32 v);
 internal F32                        ui_set_next_blur_size(F32 v);
 internal F32                        ui_set_next_text_padding(F32 v);
 internal UI_TextAlign               ui_set_next_text_alignment(UI_TextAlign v);
@@ -1174,6 +1180,7 @@ internal F32      ui_top_px_height(void);
 #define UI_Tag(v) DeferLoop(ui_push_tag(v), ui_pop_tag())
 #define UI_BackgroundColor(v) DeferLoop(ui_push_background_color(v), ui_pop_background_color())
 #define UI_TextColor(v) DeferLoop(ui_push_text_color(v), ui_pop_text_color())
+#define UI_BorderColor(v) DeferLoop(ui_push_border_color(v), ui_pop_border_color())
 #define UI_Squish(v) DeferLoop(ui_push_squish(v), ui_pop_squish())
 #define UI_HoverCursor(v) DeferLoop(ui_push_hover_cursor(v), ui_pop_hover_cursor())
 #define UI_Font(v) DeferLoop(ui_push_font(v), ui_pop_font())
@@ -1184,6 +1191,7 @@ internal F32      ui_top_px_height(void);
 #define UI_CornerRadius01(v) DeferLoop(ui_push_corner_radius_01(v), ui_pop_corner_radius_01())
 #define UI_CornerRadius10(v) DeferLoop(ui_push_corner_radius_10(v), ui_pop_corner_radius_10())
 #define UI_CornerRadius11(v) DeferLoop(ui_push_corner_radius_11(v), ui_pop_corner_radius_11())
+#define UI_VisualMargin(v) DeferLoop(ui_push_visual_margin(v), ui_pop_visual_margin())
 #define UI_BlurSize(v) DeferLoop(ui_push_blur_size(v), ui_pop_blur_size())
 #define UI_TextPadding(v) DeferLoop(ui_push_text_padding(v), ui_pop_text_padding())
 #define UI_TextAlignment(v) DeferLoop(ui_push_text_alignment(v), ui_pop_text_alignment())
