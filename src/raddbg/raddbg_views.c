@@ -4360,7 +4360,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
              .do_lister = 1,
              .activate_with_single_click = 1,
              .ui_key = ui_get_selected_state()->root->key,
-             .off_px = ui_mouse(),);
+             .off_px = ui_mouse());
     }
     
     // rjf: ctrl+scroll -> change font size

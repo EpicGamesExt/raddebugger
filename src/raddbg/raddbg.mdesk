@@ -274,7 +274,7 @@ RD_VocabTable:
         'cursor_scope_end_annotations': bool,
       
       //- rjf: cursor decorations
-      @default(1) @display_name('Cursor Trail') @description("Controls whether or not a movement trail of the cursor is drawn.")
+      @default(1) @display_name('Cursor Trail') @expand_if("$.animations") @description("Controls whether or not a movement trail animation of the cursor is drawn.")
         'cursor_trail': bool,
       
       //- rjf: thread & breakpoint decorations

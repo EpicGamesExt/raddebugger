@@ -1320,7 +1320,7 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
   B32 do_bp_glow = rd_setting_b32_from_name(s("breakpoint_glow"));
   B32 do_scope_lines = rd_setting_b32_from_name(s("cursor_scope_lines"));
   B32 do_scope_end_annotations = rd_setting_b32_from_name(s("cursor_scope_end_annotations"));
-  B32 do_cursor_trail = rd_setting_b32_from_name(s("cursor_trail"));
+  B32 do_cursor_trail = rd_setting_b32_from_name(s("animations")) && rd_setting_b32_from_name(s("cursor_trail"));
   B32 do_autos = rd_setting_b32_from_name(s("show_autos_in_src_and_disasm"));
   Vec4F32 pop_color = {0};
   UI_TagF("pop")
