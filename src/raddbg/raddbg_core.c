@@ -8948,11 +8948,14 @@ rd_window_frame(void)
                     }
                     if(tab_is_selected && panel_tree.focused == panel)
                     {
-                      UI_PrefWidth(ui_px(tab_close_width_px, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
+                      UI_PrefWidth(ui_px(tab_close_width_px, 1.f))
+                        UI_TextAlignment(UI_TextAlign_Center)
                         RD_Font(RD_FontSlot_Icons)
                         UI_FontSize(ui_top_font_size()*0.75f)
                         UI_TagF(".") UI_TagF("tab") UI_TagF("weak") UI_TagF("implicit")
-                        UI_CornerRadius(0)
+                        UI_VisualMarginX(ceil_f32(ui_top_font_size()*0.5f))
+                        UI_VisualMarginY(floor_f32(tab_bar_vheight - tab_close_width_px + ui_top_font_size()*0.25f))
+                        UI_CornerRadius(ui_top_font_size()*1.f)
                       {
                         UI_Box *edit_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                                                      UI_BoxFlag_DrawBorder|
@@ -8978,12 +8981,14 @@ rd_window_frame(void)
                         }
                       }
                     }
-                    UI_PrefWidth(ui_px(tab_close_width_px, 1.f)) UI_TextAlignment(UI_TextAlign_Center)
+                    UI_PrefWidth(ui_px(tab_close_width_px, 1.f))
+                      UI_TextAlignment(UI_TextAlign_Center)
                       RD_Font(RD_FontSlot_Icons)
                       UI_FontSize(ui_top_font_size()*0.75f)
                       UI_TagF(".") UI_TagF("tab") UI_TagF("weak") UI_TagF("implicit")
-                      UI_CornerRadius00(0)
-                      UI_CornerRadius01(0)
+                      UI_VisualMarginX(ceil_f32(ui_top_font_size()*0.5f))
+                      UI_VisualMarginY(floor_f32(tab_bar_vheight - tab_close_width_px + ui_top_font_size()*0.25f))
+                      UI_CornerRadius(ui_top_font_size()*1.f)
                     {
                       UI_Box *close_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
                                                                     UI_BoxFlag_DrawBorder|
@@ -9405,7 +9410,10 @@ rd_window_frame(void)
       // rjf: draw background
       if(box->flags & UI_BoxFlag_DrawBackground)
       {
-        Rng2F32 box_bg_rect = pad_2f32(box->rect, -box->visual_margin);
+        Rng2F32 box_bg_rect = r2f32p(box->rect.x0 + box->visual_margin.x,
+                                     box->rect.y0 + box->visual_margin.y,
+                                     box->rect.x1 - box->visual_margin.x,
+                                     box->rect.y1 - box->visual_margin.y);
         
         // rjf: hot effect extension (drop shadow)
         if(box->flags & UI_BoxFlag_DrawHotEffects)
@@ -9634,7 +9642,10 @@ rd_window_frame(void)
           if(b->flags & UI_BoxFlag_DrawBorder)
           {
             Vec4F32 border_color = b->border_color;
-            Rng2F32 b_border_rect = pad_2f32(b->rect, 1.f - b->visual_margin);
+            Rng2F32 b_border_rect = r2f32p(b->rect.x0 - 1.f + b->visual_margin.x,
+                                           b->rect.y0 - 1.f + b->visual_margin.y,
+                                           b->rect.x1 + 1.f - b->visual_margin.x,
+                                           b->rect.y1 + 1.f - b->visual_margin.y);
             R_Rect2DInst *inst = dr_rect(b_border_rect, border_color, 0, 1.f, border_softness*1.f);
             MemoryCopyArray(inst->corner_radii, b_corner_radii);
             

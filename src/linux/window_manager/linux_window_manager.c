@@ -381,19 +381,6 @@ wm_window_open(Rng2F32 rect, WM_WindowFlags flags, String8 title)
     XFlush(lnx_wm_state->display);
   }
   
-  //- rjf: ignore .desktop files
-  {
-    XClassHint *class_hint = XAllocClassHint();
-    if(class_hint)
-    {
-      class_hint->res_name = "custom_raddbg_class"; 
-      class_hint->res_class = "CustomRaddbgClass";   
-      XSetClassHint(lnx_wm_state->display, w->window, class_hint);
-      XFree(class_hint);
-      XFlush(lnx_wm_state->display);
-    }
-  }
-  
   //- rjf: create xic
   w->xic = XCreateIC(lnx_wm_state->xim,
                      XNInputStyle, XIMPreeditNothing|XIMStatusNothing,
@@ -843,7 +830,7 @@ wm_get_events(Arena *arena, B32 wait)
             for(U64 off = 0; off < text_size;)
             {
               UnicodeDecode decode = utf8_decode(text+off, text_size-off);
-              if(decode.codepoint != 0 && decode.codepoint != 127 && (decode.codepoint >= 32 || decode.codepoint == '\t'))
+              if(decode.codepoint != 0 && decode.codepoint != 127 && decode.codepoint >= 32)
               {
                 WM_Event *e = wm_event_list_push_new(arena, &evts, WM_EventKind_Text);
                 e->window.u64[0] = (U64)window;

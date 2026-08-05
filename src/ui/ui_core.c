@@ -2524,7 +2524,8 @@ ui_build_box_from_key(UI_BoxFlags flags, UI_Key key)
     box->corner_radii[Corner_01] = ui_state->corner_radius_01_stack.top->v;
     box->corner_radii[Corner_10] = ui_state->corner_radius_10_stack.top->v;
     box->corner_radii[Corner_11] = ui_state->corner_radius_11_stack.top->v;
-    box->visual_margin = ui_state->visual_margin_stack.top->v;
+    box->visual_margin.x = ui_state->visual_margin_x_stack.top->v;
+    box->visual_margin.y = ui_state->visual_margin_y_stack.top->v;
     box->blur_size = ui_state->blur_size_stack.top->v;
     box->transparency = ui_state->transparency_stack.top->v;
     box->squish = ui_state->squish_stack.top->v;

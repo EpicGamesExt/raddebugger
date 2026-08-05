@@ -4355,11 +4355,12 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     if(ui_right_clicked(sig))
     {
       rd_cmd(RD_CmdKind_PushQuery,
-             .expr = s("query:memory_commands"),
+             .expr = str8f(scratch.arena, "query:config.$%I64x", rd_regs()->view),
              .do_implicit_root = 1,
              .do_lister = 1,
              .activate_with_single_click = 1,
-             .ui_key = sig.box->key);
+             .ui_key = ui_get_selected_state()->root->key,
+             .off_px = ui_mouse(),);
     }
     
     // rjf: ctrl+scroll -> change font size

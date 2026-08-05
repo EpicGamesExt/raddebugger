@@ -2097,9 +2097,10 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
       }
       rd_cmd(RD_CmdKind_FocusPanel);
       rd_cmd(RD_CmdKind_PushQuery,
-             .expr = commands_expr,
+             .expr = str8f(scratch.arena, "%S, query:config.$%I64x", commands_expr, rd_regs()->view),
              .do_implicit_root = 1,
              .do_lister = 1,
+             .small_size = 1,
              .activate_with_single_click = 1,
              .ui_key = ui_get_selected_state()->root->key,
              .off_px = ui_mouse(),
