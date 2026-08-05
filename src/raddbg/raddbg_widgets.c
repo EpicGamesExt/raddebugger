@@ -3510,6 +3510,7 @@ rd_cell(RD_CellParams *params, String8 string)
   //- rjf: build line edit container box
   //
   UI_Box *edit_box = &ui_nil_box;
+  F32 editable_edit_box_dim = dim_2f32(box->rect).x;
   if((is_focus_active || is_focus_active_disabled) || build_line_edit)
     UI_Parent(box)
   {
@@ -3519,7 +3520,8 @@ rd_cell(RD_CellParams *params, String8 string)
     {
       if(is_editing)
       {
-        edit_box_size = ui_px(floor_f32(dim_2f32(box->rect).x*0.5f), 1.f);
+        editable_edit_box_dim = floor_f32(dim_2f32(box->rect).x*0.5f);
+        edit_box_size = ui_px(editable_edit_box_dim, 1.f);
       }
       else
       {
@@ -3604,7 +3606,7 @@ rd_cell(RD_CellParams *params, String8 string)
   {
     UI_Parent(edit_box) UI_PrefWidth(ui_children_sum(0))
     {
-      scrollable_box = ui_build_box_from_stringf(is_focus_active*(UI_BoxFlag_AllowOverflowX), "scroll_box_%p", params->edit_buffer);
+      scrollable_box = ui_build_box_from_stringf(is_focus_active*(UI_BoxFlag_AllowOverflowX|UI_BoxFlag_Clip), "scroll_box_%p", params->edit_buffer);
     }
   }
   
@@ -4171,7 +4173,8 @@ rd_cell(RD_CellParams *params, String8 string)
   //
   if(scrollable_box != &ui_nil_box)
   {
-    F32 visible_dim_px = dim_2f32(box->rect).x - expander_size_px - ui_top_font_size()*params->depth;
+    F32 edit_box_dim_px = editable_edit_box_dim;
+    F32 visible_dim_px = edit_box_dim_px - expander_size_px - ui_top_font_size()*params->depth;
     if(visible_dim_px > 0)
     {
       Rng1F32 cursor_range_px  = r1f32(cursor_off-ui_top_font_size()*2.f, cursor_off+ui_top_font_size()*1.f);

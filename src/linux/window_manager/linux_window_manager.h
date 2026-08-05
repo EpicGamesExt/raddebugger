@@ -84,7 +84,14 @@ struct LNX_WM_State
   int window_depth;
   Colormap window_colormap;
   LNX_WM_WindowClientArea *free_client_area;
+  long *icon_image_data;
+  U64 icon_image_data_count;
 };
+
+////////////////////////////////
+//~ rjf: Generated Code
+
+#include "generated/linux_window_manager.meta.h"
 
 ////////////////////////////////
 //~ rjf: Globals

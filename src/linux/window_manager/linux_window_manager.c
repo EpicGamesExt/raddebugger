@@ -2,6 +2,11 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
+//~ rjf: Generated Code
+
+#include "generated/linux_window_manager.meta.c"
+
+////////////////////////////////
 //~ rjf: Helpers
 
 internal LNX_WM_Window *
@@ -101,6 +106,13 @@ lnx_moveresize_code_from_pos(LNX_WM_Window *window, Vec2F32 pos, B32 *out_is_in_
 ////////////////////////////////
 //~ rjf: @per_os_impl Main Initialization API (Implemented Per-OS)
 
+#if LNX_WM_ICON && !defined(STBI_INCLUDE_STB_IMAGE_H)
+# define STB_IMAGE_IMPLEMENTATION
+# define STBI_ONLY_PNG
+# define STBI_ONLY_BMP
+# include "third_party/stb/stb_image.h"
+#endif
+
 internal void
 wm_init(void)
 {
@@ -148,9 +160,122 @@ wm_init(void)
     }
   }
   
-  // create wakeup event for polling
+  //- rjf: load icon
+#if LNX_WM_ICON
+  {
+    // rjf: unpack icon image data
+    {
+      Temp scratch = scratch_begin(0, 0);
+      String8 data = lnx_wm_icon_file_bytes;
+      U8 *ptr = data.str;
+      U8 *opl = ptr+data.size;
+      
+      // rjf: read header
+#pragma pack(push, 1)
+      typedef struct ICO_Header ICO_Header;
+      struct ICO_Header
+      {
+        U16 reserved_padding; // must be 0
+        U16 image_type; // if 1 -> ICO, if 2 -> CUR
+        U16 num_images;
+      };
+      typedef struct ICO_Entry ICO_Entry;
+      struct ICO_Entry
+      {
+        U8 image_width_px;
+        U8 image_height_px;
+        U8 num_colors;
+        U8 reserved_padding; // should be 0
+        union
+        {
+          U16 ico_color_planes; // in ICO
+          U16 cur_hotspot_x_px; // in CUR
+        };
+        union
+        {
+          U16 ico_bits_per_pixel; // in ICO
+          U16 cur_hotspot_y_px;   // in CUR
+        };
+        U32 image_data_size;
+        U32 image_data_off;
+      };
+#pragma pack(pop)
+      ICO_Header hdr = {0};
+      if(ptr+sizeof(hdr) < opl)
+      {
+        MemoryCopy(&hdr, ptr, sizeof(hdr));
+        ptr += sizeof(hdr);
+      }
+      
+      // rjf: read image entries
+      U64 entries_count = hdr.num_images;
+      ICO_Entry *entries = push_array(scratch.arena, ICO_Entry, hdr.num_images);
+      {
+        U64 bytes_to_read = sizeof(ICO_Entry)*entries_count;
+        bytes_to_read = Min(bytes_to_read, opl-ptr);
+        MemoryCopy(entries, ptr, bytes_to_read);
+        ptr += bytes_to_read;
+      }
+      
+      // rjf: find largest image
+      ICO_Entry *best_entry = 0;
+      U64 best_entry_area = 0;
+      for(U64 idx = 0; idx < entries_count; idx += 1)
+      {
+        ICO_Entry *entry = &entries[idx];
+        U64 width = entry->image_width_px;
+        if(width == 0) { width = 256; }
+        U64 height = entry->image_height_px;
+        if(height == 0) { height = 256; }
+        U64 entry_area = width*height;
+        if(entry_area > best_entry_area)
+        {
+          best_entry = entry;
+          best_entry_area = entry_area;
+        }
+      }
+      
+      // rjf: deserialize raw image data from best entry's offset
+      U8 *image_data = 0;
+      Vec2S32 image_dim = {0};
+      if(best_entry != 0)
+      {
+        U8 *file_data_ptr = data.str + best_entry->image_data_off;
+        U64 file_data_size = best_entry->image_data_size;
+        int width = 0;
+        int height = 0;
+        int components = 0;
+        image_data = stbi_load_from_memory(file_data_ptr, file_data_size, &width, &height, &components, 4);
+        image_dim.x = width;
+        image_dim.y = height;
+      }
+      
+      // rjf: swizzle to ARGB, store
+      {
+        U64 width = (U64)image_dim.x;
+        U64 height = (U64)image_dim.y;
+        U64 pixel_count = width*height;
+        lnx_wm_state->icon_image_data_count = 2 + pixel_count;
+        lnx_wm_state->icon_image_data = push_array(arena, long, lnx_wm_state->icon_image_data_count);
+        lnx_wm_state->icon_image_data[0] = width;
+        lnx_wm_state->icon_image_data[1] = height;
+        for EachIndex(pixel_idx, pixel_count)
+        {
+          U32 *src_pixel = (U32 *)image_data + pixel_idx;
+          long *dst_pixel = &(lnx_wm_state->icon_image_data + 2)[pixel_idx];
+          dst_pixel[0] |= (src_pixel[0] & 0x000000ffu) << 24;
+          dst_pixel[0] |= (src_pixel[0] & 0xffffff00u) >> 8;
+        }
+      }
+      
+      stbi_image_free(image_data);
+      scratch_end(scratch);
+    }
+  }
+#endif
+  
+  //- rjf: create wakeup event for polling
   lnx_wm_state->wakeup_fd = eventfd(0, EFD_CLOEXEC);
-  Assert(lnx_wm_state->wakeup_fd > 0);
 }
 
 ////////////////////////////////
@@ -248,6 +373,26 @@ wm_window_open(Rng2F32 rect, WM_WindowFlags flags, String8 title)
     w->counter_xid = XSyncCreateCounter(lnx_wm_state->display, initial_value);
   }
   XChangeProperty(lnx_wm_state->display, w->window, lnx_wm_state->wm_sync_request_counter_atom, XA_CARDINAL, 32, PropModeReplace, (U8 *)&w->counter_xid, 1);
+  
+  //- rjf: set icon
+  {
+    Atom net_wm_icon = XInternAtom(lnx_wm_state->display, "_NET_WM_ICON", 0);
+    XChangeProperty(lnx_wm_state->display, w->window, net_wm_icon, XA_CARDINAL, 32, PropModeReplace, (U8 *)lnx_wm_state->icon_image_data, lnx_wm_state->icon_image_data_count);
+    XFlush(lnx_wm_state->display);
+  }
+  
+  //- rjf: ignore .desktop files
+  {
+    XClassHint *class_hint = XAllocClassHint();
+    if(class_hint)
+    {
+      class_hint->res_name = "custom_raddbg_class"; 
+      class_hint->res_class = "CustomRaddbgClass";   
+      XSetClassHint(lnx_wm_state->display, w->window, class_hint);
+      XFree(class_hint);
+      XFlush(lnx_wm_state->display);
+    }
+  }
   
   //- rjf: create xic
   w->xic = XCreateIC(lnx_wm_state->xim,
