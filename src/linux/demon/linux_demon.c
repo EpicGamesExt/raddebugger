@@ -690,7 +690,7 @@ lnx_dmn_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase, B32 is_rebased
       U64 bloom_word  = (elf_class == ELF_Class_64) ? 8 : 4;
       U64 buckets_vaddr = dynamic_info.gnu_hash_vaddr + sizeof(gnu_header) + bloom_size * bloom_word;
       U64 chain_vaddr   = buckets_vaddr + (U64)nbuckets * sizeof(U32);
-
+      
       // find largest symbol index referenced by any bucket
       U32 max_bucket = 0;
       for(U32 b = 0; b < nbuckets; b += 1)
@@ -702,7 +702,7 @@ lnx_dmn_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase, B32 is_rebased
         }
         if(entry > max_bucket) { max_bucket = entry; }
       }
-
+      
       if(max_bucket < symoffset)
       {
         // no symbols in hash; total count is symoffset
@@ -735,7 +735,7 @@ lnx_dmn_rdebug_vaddr_from_memory(int memory_fd, U64 loader_vbase, B32 is_rebased
       }
     }
   }
-
+  
   // scan symbol table for the rendezvous symbol
   if(dynamic_info.symtab_vaddr && dynamic_info.symtab_entry_size && symbol_count)
   {

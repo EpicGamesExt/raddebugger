@@ -133,6 +133,7 @@ eh_uwnd_step(Arch arch, MemoryMap *memory_map, UWND_ModuleInfo *module_info, U64
       // rjf: determine CIE's full address range
       Rng1U64 cie_vaddr_range = {0};
       DW_Format cie_fmt = DW_Format_Null;
+      if(!done)
       {
         // rjf: read initial length data
         String8 initial_length_data = {0};
