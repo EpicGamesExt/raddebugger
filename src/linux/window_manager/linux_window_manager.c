@@ -488,45 +488,179 @@ internal B32
 wm_window_is_fullscreen(WM_Window handle)
 {
   if(wm_window_match(handle, wm_window_zero())) {return 0;}
-  // TODO(rjf)
-  return 0;
+  B32 is_fullscreen = 0;
+  {
+    LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
+    
+    // rjf: get atoms
+    Atom wm_state = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE", 0);
+    Atom fullscreen = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE_FULLSCREEN", 0);
+    
+    // rjf: get window properties
+    unsigned long props_count = 0;
+    Atom *props = 0;
+    {
+      Atom actual_type;
+      int actual_format;
+      unsigned long bytes_after = 0;
+      int result = XGetWindowProperty(lnx_wm_state->display, w->window, wm_state, 0, 1024, 0, AnyPropertyType,
+                                      &actual_type, &actual_format, &props_count, &bytes_after, 
+                                      (unsigned char **)&props);
+    }
+    
+    // rjf: find if horizontal / vertical fullscreen properties are set
+    {
+      for(unsigned long idx = 0; idx < props_count; idx += 1)
+      {
+        if(props[idx] == fullscreen)
+        {
+          is_fullscreen = 1;
+          break;
+        }
+      }
+    }
+    
+    // rjf: free properties
+    XFree(props);
+  }
+  return is_fullscreen;
 }
 
 internal void
 wm_window_set_fullscreen(WM_Window handle, B32 fullscreen)
 {
   if(wm_window_match(handle, wm_window_zero())) {return;}
-  // TODO(rjf)
+  LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
+  XEvent evt;
+  MemoryZeroStruct(&evt);
+  {
+    evt.type = ClientMessage;
+    evt.xclient.window = w->window;
+    evt.xclient.message_type = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE", 0);
+    evt.xclient.format = 32;
+    evt.xclient.data.l[0] = !!fullscreen;
+    evt.xclient.data.l[1] = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE_FULLSCREEN", 0);
+    evt.xclient.data.l[3] = 1;
+  }
+  XSendEvent(lnx_wm_state->display, DefaultRootWindow(lnx_wm_state->display), 0,
+             SubstructureNotifyMask | SubstructureRedirectMask, &evt);
+  XFlush(lnx_wm_state->display);
 }
 
 internal B32
 wm_window_is_maximized(WM_Window handle)
 {
   if(wm_window_match(handle, wm_window_zero())) {return 0;}
-  // TODO(rjf)
-  return 0;
+  B32 is_maximized = 0;
+  {
+    LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
+    
+    // rjf: get atoms
+    Atom wm_state = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE", 0);
+    Atom x_max = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE_MAXIMIZED_HORZ", 0);
+    Atom y_max = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE_MAXIMIZED_VERT", 0);
+    
+    // rjf: get window properties
+    unsigned long props_count = 0;
+    Atom *props = 0;
+    {
+      Atom actual_type;
+      int actual_format;
+      unsigned long bytes_after = 0;
+      int result = XGetWindowProperty(lnx_wm_state->display, w->window, wm_state, 0, 1024, 0, AnyPropertyType,
+                                      &actual_type, &actual_format, &props_count, &bytes_after, 
+                                      (unsigned char **)&props);
+    }
+    
+    // rjf: find if horizontal / vertical maximized properties are set
+    B32 x_max_set = 0;
+    B32 y_max_set = 0;
+    {
+      for(unsigned long idx = 0; idx < props_count; idx += 1)
+      {
+        if(props[idx] == x_max) { x_max_set = 1; }
+        if(props[idx] == y_max) { y_max_set = 1; }
+      }
+    }
+    
+    // rjf: free properties
+    XFree(props);
+    
+    // rjf: maximized -> both vert/horizontal set
+    is_maximized = (x_max_set && y_max_set);
+  }
+  return is_maximized;
 }
 
 internal void
 wm_window_set_maximized(WM_Window handle, B32 maximized)
 {
   if(wm_window_match(handle, wm_window_zero())) {return;}
-  // TODO(rjf)
+  LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
+  XEvent evt;
+  MemoryZeroStruct(&evt);
+  {
+    evt.type = ClientMessage;
+    evt.xclient.window = w->window;
+    evt.xclient.message_type = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE", 0);
+    evt.xclient.format = 32;
+    evt.xclient.data.l[0] = !!maximized;
+    evt.xclient.data.l[1] = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE_MAXIMIZED_HORZ", 0);
+    evt.xclient.data.l[2] = XInternAtom(lnx_wm_state->display, "_NET_WM_STATE_MAXIMIZED_VERT", 0);
+    evt.xclient.data.l[3] = 1;
+  }
+  XSendEvent(lnx_wm_state->display, DefaultRootWindow(lnx_wm_state->display), 0,
+             SubstructureNotifyMask | SubstructureRedirectMask, &evt);
+  XFlush(lnx_wm_state->display);
 }
 
 internal B32
 wm_window_is_minimized(WM_Window handle)
 {
   if(wm_window_match(handle, wm_window_zero())) {return 0;}
-  // TODO(rjf)
-  return 0;
+  B32 is_minimized = 0;
+  {
+    LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
+    Atom wm_state = XInternAtom(lnx_wm_state->display, "WM_STATE", 0);
+    
+    // rjf: get window property data
+    unsigned long props_count = 0;
+    U8 *prop_data = 0;
+    {
+      Atom actual_type;
+      int actual_format;
+      unsigned long bytes_after = 0;
+      int result = XGetWindowProperty(lnx_wm_state->display, w->window, wm_state, 0, 1024, 0, AnyPropertyType,
+                                      &actual_type, &actual_format, &props_count, &bytes_after, 
+                                      (unsigned char **)&prop_data);
+    }
+    
+    // rjf: is_minimized -> first unsigned long of property data == IconicState
+    if(prop_data != 0)
+    {
+      is_minimized = (*(unsigned long *)prop_data) == IconicState;
+    }
+    
+    // rjf: free properties
+    XFree(prop_data);
+  }
+  return is_minimized;
 }
 
 internal void
 wm_window_set_minimized(WM_Window handle, B32 minimized)
 {
   if(wm_window_match(handle, wm_window_zero())) {return;}
-  // TODO(rjf)
+  LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
+  if(minimized)
+  {
+    XIconifyWindow(lnx_wm_state->display, w->window, DefaultScreen(lnx_wm_state->display));
+  }
+  else
+  {
+    XMapWindow(lnx_wm_state->display, w->window);
+  }
+  XFlush(lnx_wm_state->display);
 }
 
 internal void
