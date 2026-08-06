@@ -5956,13 +5956,13 @@ rd_window_frame(void)
     ////////////////////////////
     //- rjf: @window_ui_part calculate top-level rectangles/sizes
     //
+    F32 window_edge_px = ui_top_font_size()*0.2f;
     Rng2F32 window_rect = wm_client_rect_from_window(ws->os);
     Vec2F32 window_rect_dim = dim_2f32(window_rect);
     F32 top_bar_dim_px = floor_f32(ui_top_font_size()*3.f);
     Rng2F32 top_bar_rect = r2f32p(window_rect.x0, window_rect.y0, window_rect.x0+window_rect_dim.x+1, window_rect.y0+top_bar_dim_px);
     Rng2F32 bottom_bar_rect = r2f32p(window_rect.x0, window_rect_dim.y - top_bar_dim_px, window_rect.x0+window_rect_dim.x, window_rect.y0+window_rect_dim.y);
-    Rng2F32 content_rect = r2f32p(window_rect.x0, top_bar_rect.y1, window_rect.x0+window_rect_dim.x, bottom_bar_rect.y0);
-    F32 window_edge_px = wm_dpi_from_window(ws->os)*0.035f;
+    Rng2F32 content_rect = r2f32p(window_rect.x0, top_bar_rect.y1 + window_edge_px*1.5f, window_rect.x0+window_rect_dim.x, bottom_bar_rect.y0);
     content_rect = pad_2f32(content_rect, -window_edge_px);
     
     ////////////////////////////
@@ -7252,7 +7252,7 @@ rd_window_frame(void)
       wm_window_clear_custom_border_data(ws->os);
       wm_window_push_custom_edges(ws->os, window_edge_px);
       wm_window_push_custom_title_bar(ws->os, dim_2f32(top_bar_rect).y);
-      ui_set_next_flags(UI_BoxFlag_DefaultFocusNav|UI_BoxFlag_DisableFocusOverlay);
+      ui_set_next_flags(UI_BoxFlag_DefaultFocusNav|UI_BoxFlag_DisableFocusOverlay|UI_BoxFlag_DrawDropShadow);
       UI_Focus((ws->menu_bar_focused && window_is_focused && !ui_any_ctx_menu_is_open()) ? UI_FocusKind_On : UI_FocusKind_Null)
         UI_TagF("menu_bar")
         UI_Pane(top_bar_rect, str8_lit("###top_bar"))
@@ -8399,7 +8399,7 @@ rd_window_frame(void)
                                       panel_rect_pct.y0*content_rect_dim.y,
                                       panel_rect_pct.x1*content_rect_dim.x,
                                       panel_rect_pct.y1*content_rect_dim.y);
-          panel_rect = pad_2f32(panel_rect, floor_f32(-ui_top_font_size()*0.15f));
+          panel_rect = pad_2f32(panel_rect, floor_f32(-ui_top_font_size()*0.25f));
           panel_rect = r2f32p(round_f32(panel_rect.x0), round_f32(panel_rect.y0), round_f32(panel_rect.x1), round_f32(panel_rect.y1));
           F32 tab_bar_rheight = floor_f32(ui_top_font_size()*3.5f);
           F32 tab_bar_vheight = floor_f32(ui_top_font_size()*rd_setting_f32_from_name(str8_lit("tab_height")));
