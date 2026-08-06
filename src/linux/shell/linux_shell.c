@@ -127,9 +127,10 @@ sh_open_in_browser(String8 url)
   }
 }
 
-internal void
-sh_install_or_uninstall_self(B32 install)
+internal B32
+sh_install_or_uninstall_self(B32 write, B32 install)
 {
+  B32 install_state = 0;
   Temp scratch = scratch_begin(0, 0);
   
   //- rjf: unpack context
@@ -159,42 +160,55 @@ sh_install_or_uninstall_self(B32 install)
   }
 #endif
   
-  //- rjf: install -> write info
-  if(install)
+  //- rjf: if writing -> do mutation
+  if(write)
   {
-    //- rjf: write icon
-    write_data_to_file_path(icon_path, lnx_sh_logo_file_bytes);
+    //- rjf: install -> write info
+    if(install)
+    {
+      //- rjf: write icon
+      write_data_to_file_path(icon_path, lnx_sh_logo_file_bytes);
+      
+      //- rjf: write .desktop file
+      String8 desktop_file_data = str8f(scratch.arena,
+                                        "[Desktop Entry]\n"
+                                        "Type=Application\n"
+                                        "Version=" BUILD_VERSION_STRING_LITERAL "\n"
+                                        "Name=" BUILD_TITLE "\n"
+                                        "Comment=" BUILD_TITLE_STRING_LITERAL "\n"
+                                        "Exec=%S\n"
+                                        "%s%S%s" // (optional icon)
+                                        "Terminal=%s\n"
+                                        "Categories=Utility;Development;",
+                                        get_process_info()->binary_file_path,
+                                        has_icon ? "Icon=" : "",
+                                        has_icon ? icon_path : s(""),
+                                        has_icon ? "\n" : "",
+                                        BUILD_CONSOLE_INTERFACE ? "true" : "false");
+      write_data_to_file_path(desktop_file_path, desktop_file_data);
+      
+      //- rjf: make symlink in binary path to this exe
+      make_directory(str8_chop_last_slash(symlink_path));
+      symlink((char *)get_process_info()->binary_file_path.str, (char *)symlink_path.str);
+    }
     
-    //- rjf: write .desktop file
-    String8 desktop_file_data = str8f(scratch.arena,
-                                      "[Desktop Entry]\n"
-                                      "Type=Application\n"
-                                      "Version=" BUILD_VERSION_STRING_LITERAL "\n"
-                                      "Name=" BUILD_TITLE "\n"
-                                      "Comment=" BUILD_TITLE_STRING_LITERAL "\n"
-                                      "Exec=%S\n"
-                                      "%s%S%s" // (optional icon)
-                                      "Terminal=%s\n"
-                                      "Categories=Utility;Development;",
-                                      get_process_info()->binary_file_path,
-                                      has_icon ? "Icon=" : "",
-                                      has_icon ? icon_path : s(""),
-                                      has_icon ? "\n" : "",
-                                      BUILD_CONSOLE_INTERFACE ? "true" : "false");
-    write_data_to_file_path(desktop_file_path, desktop_file_data);
+    //- rjf: uninstall -> delete files
+    else
+    {
+      delete_file_at_path(icon_path);
+      delete_file_at_path(desktop_file_path);
+      unlink((char *)symlink_path.str);
+    }
     
-    //- rjf: make symlink in binary path to this exe
-    make_directory(str8_chop_last_slash(symlink_path));
-    symlink((char *)get_process_info()->binary_file_path.str, (char *)symlink_path.str);
+    install_state = install;
   }
   
-  //- rjf: uninstall -> delete files
+  //- rjf: do reading -> check if installation state exists
   else
   {
-    delete_file_at_path(icon_path);
-    delete_file_at_path(desktop_file_path);
-    unlink((char *)symlink_path.str);
+    install_state = file_path_exists(desktop_file_path);
   }
   
   scratch_end(scratch);
+  return install_state;
 }

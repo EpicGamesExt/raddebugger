@@ -11486,6 +11486,9 @@ rd_init(CmdLine *cmdln)
     scratch_end(scratch);
   }
   
+  // rjf: check initial installation status
+  rd_state->installed = sh_install_or_uninstall_self(0, 0);
+  
   ProfEnd();
   scratch_end(scratch);
 }
@@ -13208,7 +13211,7 @@ rd_frame(void)
     B32 last_installed = rd_state->installed;
     if(installed != last_installed)
     {
-      sh_install_or_uninstall_self(installed);
+      sh_install_or_uninstall_self(1, installed);
       rd_state->installed = installed;
     }
     
