@@ -75,6 +75,6 @@ target:
 target:
 {
   executable: "build/raddbg"
-  working_directory: "build/"
+  working_directory: build
   enabled: 1
 }

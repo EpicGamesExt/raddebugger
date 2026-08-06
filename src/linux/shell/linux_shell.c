@@ -132,13 +132,19 @@ sh_install_or_uninstall_self(B32 install)
 {
   Temp scratch = scratch_begin(0, 0);
   
+  //- rjf: unpack context
+  char *home = getenv("HOME");
+  
+  //- rjf: get local user binary path
+  String8 bin_path = str8f(scratch.arena, "%s/.local/bin", home);
+  String8 symlink_path = str8f(scratch.arena, "%S/raddbg", bin_path);
+  
   //- rjf: get xdg local application install info path
   String8 application_name = str8_chop_last_dot(str8_skip_last_slash(get_process_info()->binary_file_path));
   char *xdg_data_home_cstring = getenv("XDG_DATA_HOME");
   String8 desktop_entries_folder_name = str8_cstring(xdg_data_home_cstring);
   if(desktop_entries_folder_name.size == 0)
   {
-    char *home = getenv("HOME");
     desktop_entries_folder_name = str8f(scratch.arena, "%s/.local/share", home);
   }
   String8 desktop_file_path = str8f(scratch.arena, "%S/applications/%S.desktop", desktop_entries_folder_name, application_name);
@@ -153,7 +159,7 @@ sh_install_or_uninstall_self(B32 install)
   }
 #endif
   
-  //- rjf: install -> write files
+  //- rjf: install -> write info
   if(install)
   {
     //- rjf: write icon
@@ -176,6 +182,10 @@ sh_install_or_uninstall_self(B32 install)
                                       has_icon ? "\n" : "",
                                       BUILD_CONSOLE_INTERFACE ? "true" : "false");
     write_data_to_file_path(desktop_file_path, desktop_file_data);
+    
+    //- rjf: make symlink in binary path to this exe
+    make_directory(str8_chop_last_slash(symlink_path));
+    symlink((char *)get_process_info()->binary_file_path.str, (char *)symlink_path.str);
   }
   
   //- rjf: uninstall -> delete files
@@ -183,6 +193,7 @@ sh_install_or_uninstall_self(B32 install)
   {
     delete_file_at_path(icon_path);
     delete_file_at_path(desktop_file_path);
+    unlink((char *)symlink_path.str);
   }
   
   scratch_end(scratch);
