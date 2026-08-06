@@ -198,7 +198,7 @@ r_init(CmdLine *cmdln)
   {
     char buffer[256] = {0};
     raddbg_snprintf(buffer, sizeof(buffer), "D3D11 device creation failure (%lx). The process is terminating.", error);
-    wm_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+    sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
     abort_self(1);
   }
   ProfEnd();
@@ -370,7 +370,7 @@ r_init(CmdLine *cmdln)
       {
         errors = str8((U8 *)vshad_source_errors->lpVtbl->GetBufferPointer(vshad_source_errors),
                       (U64)vshad_source_errors->lpVtbl->GetBufferSize(vshad_source_errors));
-        wm_graphical_message(1, str8_lit("Vertex Shader Compilation Failure"), errors);
+        sh_message(1, str8_lit("Vertex Shader Compilation Failure"), errors);
       }
       else
       {
@@ -425,7 +425,7 @@ r_init(CmdLine *cmdln)
       {
         errors = str8((U8 *)pshad_source_errors->lpVtbl->GetBufferPointer(pshad_source_errors),
                       (U64)pshad_source_errors->lpVtbl->GetBufferSize(pshad_source_errors));
-        wm_graphical_message(1, str8_lit("Pixel Shader Compilation Failure"), errors);
+        sh_message(1, str8_lit("Pixel Shader Compilation Failure"), errors);
       }
       else
       {
@@ -534,7 +534,7 @@ r_window_equip(WM_Window handle)
     {
       char buffer[256] = {0};
       raddbg_snprintf(buffer, sizeof(buffer), "DXGI swap chain creation failure (%lx). The process is terminating.", error);
-      wm_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+      sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
       abort_self(1);
     }
     
@@ -1052,7 +1052,7 @@ r_window_end_frame(WM_Window window, R_Handle window_equip)
     {
       char buffer[256] = {0};
       raddbg_snprintf(buffer, sizeof(buffer), "D3D11 present failure (%lx). The process is terminating.", error);
-      wm_graphical_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+      sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
       abort_self(1);
     }
     d_ctx->lpVtbl->ClearState(d_ctx);

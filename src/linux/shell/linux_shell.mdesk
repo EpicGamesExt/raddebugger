@@ -1,0 +1,4 @@
+// Copyright (c) Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
+@embed_file lnx_sh_logo_file_bytes: "../data/logo.png"

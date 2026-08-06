@@ -381,6 +381,15 @@ wm_window_open(Rng2F32 rect, WM_WindowFlags flags, String8 title)
     XFlush(lnx_wm_state->display);
   }
   
+  //- rjf: set class
+  {
+    XClassHint *class_hints = XAllocClassHint();
+    class_hints->res_name = "raddbg";
+    class_hints->res_class = "RADDBG";
+    XSetClassHint(lnx_wm_state->display, w->window, class_hints);
+    XFree(class_hints);
+  }
+  
   //- rjf: create xic
   w->xic = XCreateIC(lnx_wm_state->xim,
                      XNInputStyle, XIMPreeditNothing|XIMStatusNothing,
@@ -1096,39 +1105,4 @@ internal void
 wm_set_cursor(WM_Cursor cursor)
 {
   lnx_wm_state->last_set_cursor = cursor;
-}
-
-////////////////////////////////
-//~ rjf: @per_os_impl Native User-Facing Graphical Messages (Implemented Per-OS)
-
-internal void
-wm_graphical_message(B32 error, String8 title, String8 message)
-{
-  if(error)
-  {
-    fprintf(stderr, "[X] ");
-  }
-  fprintf(stderr, "%.*s\n", str8_varg(title));
-  fprintf(stderr, "%.*s\n\n", str8_varg(message));
-}
-
-internal String8
-wm_graphical_pick_file(Arena *arena, String8 title, String8 initial_path)
-{
-  return str8_zero();
-}
-
-////////////////////////////////
-//~ rjf: @per_os_impl Shell Operations
-
-internal void
-wm_show_in_filesystem_ui(String8 path)
-{
-  // TODO(rjf)
-}
-
-internal void
-wm_open_in_browser(String8 url)
-{
-  // TODO(rjf)
 }

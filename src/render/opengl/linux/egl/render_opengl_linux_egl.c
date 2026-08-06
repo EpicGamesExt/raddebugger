@@ -23,7 +23,7 @@ r_ogl_os_init(CmdLine *cmdln)
     r_ogl_lnx_state->display = eglGetDisplay((EGLNativeDisplayType)lnx_wm_state->display);
     if(r_ogl_lnx_state->display == EGL_NO_DISPLAY)
     {
-      wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Failed to get EGL display."));
+      sh_message(1, str8_lit("Fatal Error"), str8_lit("Failed to get EGL display."));
       abort_self(1);
     }
   }
@@ -33,14 +33,14 @@ r_ogl_os_init(CmdLine *cmdln)
   EGLint egl_version_minor = 0;
   if(!eglInitialize(r_ogl_lnx_state->display, &egl_version_major, &egl_version_minor))
   {
-    wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't initialize EGL display."));
+    sh_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't initialize EGL display."));
     abort_self(1);
   }
   if(egl_version_major < 1 || (egl_version_major == 1 && egl_version_minor < 5))
   {
     Temp scratch = scratch_begin(0, 0);
     String8 message = push_str8f(scratch.arena, "Unsupported EGL version (%i.%i, need at least 1.5)", egl_version_major, egl_version_minor);
-    wm_graphical_message(1, str8_lit("Fatal Error"), message);
+    sh_message(1, str8_lit("Fatal Error"), message);
     abort_self(1);
     scratch_end(scratch);
   }
@@ -48,7 +48,7 @@ r_ogl_os_init(CmdLine *cmdln)
   //- rjf: pick GL API
   if(!eglBindAPI(EGL_OPENGL_API))
   {
-    wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't initialize EGL API to OpenGL."));
+    sh_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't initialize EGL API to OpenGL."));
     abort_self(1);
   }
   
@@ -71,7 +71,7 @@ r_ogl_os_init(CmdLine *cmdln)
     EGLint configs_count = 0;
     if(!eglChooseConfig(r_ogl_lnx_state->display, config_filter, configs, ArrayCount(configs), &configs_count) || configs_count == 0)
     {
-      wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't choose EGL configuration."));
+      sh_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't choose EGL configuration."));
       abort_self(1);
     }
     int screen = DefaultScreen(lnx_wm_state->display);
@@ -97,7 +97,7 @@ r_ogl_os_init(CmdLine *cmdln)
     }
     if(vi == 0 || r_ogl_lnx_state->config == 0)
     {
-      wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't find an EGL config with a matching X11 visual."));
+      sh_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't find an EGL config with a matching X11 visual."));
       abort_self(1);
     }
     lnx_wm_state->window_visual = vi->visual;
@@ -125,7 +125,7 @@ r_ogl_os_init(CmdLine *cmdln)
     r_ogl_lnx_state->context = eglCreateContext(r_ogl_lnx_state->display, r_ogl_lnx_state->config, EGL_NO_CONTEXT, options);
     if(r_ogl_lnx_state->context == EGL_NO_CONTEXT)
     {
-      wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't create OpenGL context with EGL."));
+      sh_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't create OpenGL context with EGL."));
       abort_self(1);
     }
   }
@@ -168,7 +168,7 @@ r_ogl_os_window_equip(WM_Window window)
     }
     if(w->surface == EGL_NO_SURFACE)
     {
-      wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't create EGL surface."));
+      sh_message(1, str8_lit("Fatal Error"), str8_lit("Couldn't create EGL surface."));
       abort_self(1);
     }
   }

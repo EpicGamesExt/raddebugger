@@ -390,6 +390,9 @@ struct RD_State
   S32 frame_depth;
   U64 frame_eval_memread_endt_us;
   
+  // rjf: installation setting state
+  B32 installed;
+  
   // rjf: update checker
   B32 sent_update_check;
   B32 got_update_check;

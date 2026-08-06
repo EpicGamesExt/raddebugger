@@ -20,7 +20,7 @@ r_ogl_os_init(CmdLine *cmdln)
   {
     Temp scratch = scratch_begin(0, 0);
     String8 message = push_str8f(scratch.arena, "Unsupported GLX version (%i.%i, need at least 1.3)", glx_version_major, glx_version_minor);
-    wm_graphical_message(1, str8_lit("Fatal Error"), message);
+    sh_message(1, str8_lit("Fatal Error"), message);
     abort_self(1);
     scratch_end(scratch);
   }
@@ -45,25 +45,25 @@ r_ogl_os_init(CmdLine *cmdln)
   GLXFBConfig *framebuffer_configs = glXChooseFBConfig(lnx_wm_state->display, DefaultScreen(lnx_wm_state->display), framebuffer_config_options, &framebuffer_configs_count);
   if(framebuffer_configs == 0)
   {
-    wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Could not find a suitable framebuffer configuration."));
+    sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not find a suitable framebuffer configuration."));
     abort_self(1);
   }
   GLXFBConfig framebuffer_config = framebuffer_configs[0];
   XFree(framebuffer_configs);
-
+  
   //- extract visual/colormap from chosen fbconfig, publish to os layer
   {
     XVisualInfo *vi = glXGetVisualFromFBConfig(lnx_wm_state->display, framebuffer_config);
     if(vi == 0)
     {
-      wm_graphical_message(1, str8_lit("Fatal Error"), str8_lit("Could not get visual from GLX framebuffer config."));
+      sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not get visual from GLX framebuffer config."));
       abort_self(1);
     }
     lnx_wm_state->window_visual = vi->visual;
     lnx_wm_state->window_depth = vi->depth;
     lnx_wm_state->window_colormap = XCreateColormap(lnx_wm_state->display,
-                                                        XRootWindow(lnx_wm_state->display, vi->screen),
-                                                        vi->visual, AllocNone);
+                                                    XRootWindow(lnx_wm_state->display, vi->screen),
+                                                    vi->visual, AllocNone);
     XFree(vi);
   }
   

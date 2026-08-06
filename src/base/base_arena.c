@@ -29,7 +29,7 @@ internal Arena *
 arena_alloc_(ArenaParams *params)
 {
   ProfBeginFunction();
-
+  
   U64 reserve_size = params->reserve_size;
   U64 commit_size  = params->commit_size;
   
@@ -69,13 +69,13 @@ arena_alloc_(ArenaParams *params)
   }
   
   // rjf: panic on arena creation failure
-#if OS_FEATURE_GRAPHICAL
   if(Unlikely(base == 0))
   {
-    wm_graphical_message(1, str8_lit("Fatal Allocation Failure"), str8_lit("Unexpected memory allocation failure."));
+#if defined(SHELL_H)
+    sh_message(1, s("Fatal Allocation Failure"), s("Unexpected memory allocation failure."));
+#endif
     abort_self(1);
   }
-#endif
   
   // rjf: extract arena header & fill
   AsanUnpoisonMemoryRegion(base, ARENA_HEADER_SIZE);
@@ -143,7 +143,7 @@ internal void
 arena_release(Arena *arena)
 {
   ProfBeginFunction();
-
+  
 #if PROFILE_TELEMETRY
   {
     Arena *base_arena = arena;
@@ -176,7 +176,7 @@ arena_release(Arena *arena)
     AsanUnpoisonMemoryRegion(n, n->cmt);
     release_memory(n, n->res);
   }
-
+  
   ProfEnd();
 }
 
@@ -295,13 +295,13 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
 #endif
   
   // rjf: panic on failure
-#if OS_FEATURE_GRAPHICAL
   if(Unlikely(result == 0))
   {
-    wm_graphical_message(1, str8_lit("Fatal Allocation Failure"), str8_lit("Unexpected memory allocation failure."));
+#if defined(SHELL_H)
+    sh_message(1, str8_lit("Fatal Allocation Failure"), str8_lit("Unexpected memory allocation failure."));
+#endif
     abort_self(1);
   }
-#endif
   
   return result;
 }

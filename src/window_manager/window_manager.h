@@ -231,16 +231,4 @@ internal Vec2F32        wm_mouse_from_window(WM_Window window);
 
 internal void           wm_set_cursor(WM_Cursor cursor);
 
-////////////////////////////////
-//~ rjf: @per_os_impl Native User-Facing Graphical Messages (Implemented Per-OS)
-
-internal void           wm_graphical_message(B32 error, String8 title, String8 message);
-internal String8        wm_graphical_pick_file(Arena *arena, String8 title, String8 initial_path);
-
-////////////////////////////////
-//~ rjf: @per_os_impl Shell Operations
-
-internal void           wm_show_in_filesystem_ui(String8 path);
-internal void           wm_open_in_browser(String8 url);
-
 #endif // WINDOW_MANAGER_H

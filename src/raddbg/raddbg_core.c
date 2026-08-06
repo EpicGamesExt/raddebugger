@@ -7549,7 +7549,7 @@ rd_window_frame(void)
                     UI_Signal sig = ui_button(str8_lit("Submit request, issue, or bug report"));
                     if(ui_clicked(sig))
                     {
-                      wm_open_in_browser(url);
+                      sh_open_in_browser(url);
                     }
                   }
                   ui_spacer(ui_em(0.5f, 1.f));
@@ -8018,7 +8018,7 @@ rd_window_frame(void)
           ui_box_equip_display_fstrs(label, &fstrs);
           if(ui_clicked(sig))
           {
-            wm_open_in_browser(s("https://github.com/EpicGames/raddebugger/releases/latest"));
+            sh_open_in_browser(s("https://github.com/EpicGames/raddebugger/releases/latest"));
           }
         }
         
@@ -13202,6 +13202,17 @@ rd_frame(void)
     }
     
     ////////////////////////////
+    //- rjf: do installation/uninstallation of app
+    //
+    B32 installed = rd_setting_b32_from_name(s("install_to_system"));
+    B32 last_installed = rd_state->installed;
+    if(installed != last_installed)
+    {
+      sh_install_or_uninstall_self(installed);
+      rd_state->installed = installed;
+    }
+    
+    ////////////////////////////
     //- rjf: send update check if needed
     //
     if(!rd_state->sent_update_check && !rd_state->got_update_check && rd_setting_b32_from_name(s("check_for_updates")))
@@ -13503,7 +13514,7 @@ rd_frame(void)
               {
                 cmd_title = info->string;
               }
-              String8 file_path = wm_graphical_pick_file(scratch.arena, cmd_title, current_path_string);
+              String8 file_path = sh_pick_file(scratch.arena, cmd_title, current_path_string);
               file_path = path_normalized_from_string(scratch.arena, file_path);
               if(file_path.size != 0)
               {
@@ -15084,7 +15095,7 @@ rd_frame(void)
           if(rd_regs()->file_path.size != 0)
           {
             String8 full_path = rd_regs()->file_path;
-            wm_show_in_filesystem_ui(full_path);
+            sh_show_in_file_browser(full_path);
           }break;
           
           //- rjf: source <-> disasm
