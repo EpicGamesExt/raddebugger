@@ -5960,7 +5960,7 @@ rd_window_frame(void)
     Rng2F32 window_rect = wm_client_rect_from_window(ws->os);
     Vec2F32 window_rect_dim = dim_2f32(window_rect);
     F32 top_bar_dim_px = floor_f32(ui_top_font_size()*3.f);
-    Rng2F32 top_bar_rect = r2f32p(window_rect.x0, window_rect.y0, window_rect.x0+window_rect_dim.x+1, window_rect.y0+top_bar_dim_px);
+    Rng2F32 top_bar_rect = r2f32p(window_rect.x0, window_rect.y0, window_rect.x0+window_rect_dim.x, window_rect.y0+top_bar_dim_px);
     Rng2F32 bottom_bar_rect = r2f32p(window_rect.x0, window_rect_dim.y - top_bar_dim_px, window_rect.x0+window_rect_dim.x, window_rect.y0+window_rect_dim.y);
     Rng2F32 content_rect = r2f32p(window_rect.x0, top_bar_rect.y1 + window_edge_px*1.5f, window_rect.x0+window_rect_dim.x, bottom_bar_rect.y0);
     content_rect = pad_2f32(content_rect, -window_edge_px);
