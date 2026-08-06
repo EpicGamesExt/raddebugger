@@ -71,8 +71,9 @@ sh_open_in_browser(String8 url)
   scratch_end(scratch);
 }
 
-internal void
-sh_install_or_uninstall_self(B32 install)
+internal B32
+sh_install_or_uninstall_self(B32 write, B32 install)
 {
   // TODO(rjf)
+  return 0;
 }
