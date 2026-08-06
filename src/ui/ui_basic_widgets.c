@@ -151,7 +151,7 @@ internal UI_BOX_CUSTOM_DRAW(ui_line_edit_draw)
   U64 cursor = draw_data->cursor;
   U64 mark = draw_data->mark;
   F32 cursor_pixel_off = fnt_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, cursor)).x;
-  F32 cursor_pixel_off__animated = ui_anim(ui_key_from_stringf(box->key, "cursor_off_px"), cursor_pixel_off);
+  F32 cursor_pixel_off__animated = ui_anim(ui_key_from_stringf(box->key, "cursor_off_px"), cursor_pixel_off, .initial = cursor_pixel_off);
   F32 mark_pixel_off   = fnt_dim_from_tag_size_string(font, font_size, 0, tab_size, str8_prefix(edited_string, mark)).x;
   F32 cursor_thickness = ClampBot(1.f, floor_f32(font_size/10.f));
   Rng2F32 cursor_rect =
