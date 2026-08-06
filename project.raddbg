@@ -7,7 +7,6 @@ target:
   working_directory: "../raddebugger"
   arguments: "--user:C:/devel/raddebugger/build/raddbg_test.user"
   debug_subprocesses: 0
-  enabled: 1
 }
 target:
 {
@@ -72,4 +71,10 @@ target:
 {
   executable: "../../Program Files/SuperTux/bin/supertux2.exe"
   working_directory: "../../Program Files/SuperTux/bin"
+}
+target:
+{
+  executable: "build/raddbg"
+  working_directory: "build/"
+  enabled: 1
 }

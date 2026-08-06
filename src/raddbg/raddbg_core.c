@@ -2533,7 +2533,7 @@ rd_view_ui(Rng2F32 rect)
                       case E_SpaceKind_FileSystem:
                       {
                         String8 file = rd_file_path_from_eval(scratch.arena, eval);
-                        rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = file, .vaddr = 0);
+                        rd_cmd(RD_CmdKind_FindCodeLocation, .file_path = file, .vaddr = 0, .prefer_new_tab = cfg_node_child_from_string(view, s("prefer_new_tab")) != &cfg_nil_node);
                       }break;
                       case RD_EvalSpaceKind_MetaCfg:
                       {
@@ -9094,25 +9094,25 @@ rd_window_frame(void)
                 {
                   ui_spacer(ui_px(1.f, 1.f));
                 }
-                UI_CornerRadius00(panel->tab_side == Side_Min ? corner_radius : 0)
-                  UI_CornerRadius10(panel->tab_side == Side_Min ? corner_radius : 0)
-                  UI_CornerRadius01(panel->tab_side == Side_Max ? corner_radius : 0)
-                  UI_CornerRadius11(panel->tab_side == Side_Max ? corner_radius : 0)
-                  RD_Font(RD_FontSlot_Icons)
-                  UI_FontSize(ui_top_font_size())
-                  UI_TagF("implicit")
-                  UI_TagF("weak")
                 {
-                  UI_Box *add_new_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
-                                                                  UI_BoxFlag_DrawBorder|
-                                                                  UI_BoxFlag_DrawBackground|
-                                                                  UI_BoxFlag_DrawHotEffects|
-                                                                  UI_BoxFlag_DrawActiveEffects|
-                                                                  UI_BoxFlag_Clickable|
-                                                                  UI_BoxFlag_DisableTextTrunc,
-                                                                  "%S##add_new_tab_button_%p",
-                                                                  rd_icon_kind_text_table[RD_IconKind_Add],
-                                                                  panel->cfg);
+                  UI_Box *add_new_box = &ui_nil_box;
+                  RD_Font(RD_FontSlot_Icons)
+                    UI_CornerRadius((tab_bar_vheight - tab_bar_vheight/4.f) / 3.f)
+                    UI_VisualMargin(tab_bar_vheight/4.f)
+                    UI_TagF("implicit")
+                    UI_TagF("weak")
+                  {
+                    add_new_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
+                                                            UI_BoxFlag_DrawBorder|
+                                                            UI_BoxFlag_DrawBackground|
+                                                            UI_BoxFlag_DrawHotEffects|
+                                                            UI_BoxFlag_DrawActiveEffects|
+                                                            UI_BoxFlag_Clickable|
+                                                            UI_BoxFlag_DisableTextTrunc,
+                                                            "%S##add_new_tab_button_%p",
+                                                            rd_icon_kind_text_table[RD_IconKind_Add],
+                                                            panel->cfg);
+                  }
                   UI_Signal sig = ui_signal_from_box(add_new_box);
                   if(ui_pressed(sig))
                   {
@@ -9124,14 +9124,17 @@ rd_window_frame(void)
                     }
                     else
                     {
-                      rd_cmd(RD_CmdKind_PushQuery,
-                             .expr = str8_lit("query:tab_commands"),
-                             .panel = panel->cfg->id,
-                             .do_implicit_root = 1,
-                             .small_size = 1,
-                             .do_lister = 1,
-                             .activate_with_single_click = 1,
-                             .ui_key = add_new_box->key);
+                      rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_OpenTab].string);
+                    }
+                  }
+                  if(ui_hovering(sig)) UI_Tooltip
+                  {
+                    ui_state->tooltip_anchor_key = add_new_box->key;
+                    ui_set_next_pref_width(ui_children_sum(1));
+                    UI_Row
+                    {
+                      ui_labelf("Open New Tab");
+                      rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenTab].string, s(""), 1, RD_CmdBindingButtonFlag_NoEdit);
                     }
                   }
                 }
@@ -13468,9 +13471,14 @@ rd_frame(void)
             rd_cmd(RD_CmdKind_PushQuery, .expr = expr, .do_implicit_root = 1, .do_lister = 1, .do_big_rows = 1, .view = tab->id, .tab = tab->id);
           }break;
           
+          //- rjf: tab opening
+          case RD_CmdKind_OpenTab:
+          {
+            rd_cmd(RD_CmdKind_PushQuery, .expr = s("query:tab_commands, query:source_files"), .do_implicit_root = 1, .do_lister = 1, .prefer_new_tab = 1);
+          }break;
+          
           //- rjf: command fast paths
           case RD_CmdKind_RunCommand:
-          case RD_CmdKind_OpenTab:
           {
             RD_CmdKindInfo *info = rd_cmd_kind_info_from_string(cmd->regs->cmd_name);
             
@@ -16397,6 +16405,14 @@ rd_frame(void)
                 else
                 {
                   cfg_node_child_from_string_or_alloc(rd_state->cfg, view, str8_lit("activate_with_single_click"));
+                }
+                if(!rd_regs()->prefer_new_tab)
+                {
+                  cfg_node_release(rd_state->cfg, cfg_node_child_from_string(view, s("prefer_new_tab")));
+                }
+                else
+                {
+                  cfg_node_child_from_string_or_alloc(rd_state->cfg, view, s("prefer_new_tab"));
                 }
               }
               
