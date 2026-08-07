@@ -1,0 +1,37 @@
+// Copyright (c) Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
+@table(name args_count string}
+LNX_DMN_ProbeTable:
+{
+  {InitStart     2 "init_start"}
+  {InitComplete  2 "init_complete"}
+  {RelocStart    2 "reloc_start"}
+  {RelocComplete 3 "reloc_complete"}
+  {MapStart      2 "map_start"}
+  {MapComplete   3 "map_complete"}
+  {UnmapStart    2 "unmap_start"}
+  {UnmapComplete 2 "unmap_complete"}
+  {LongJmp       3 "longjmp"}
+  {LongJmpTarget 3 "longjmp_target"}
+  {SetJmp        3 "setjmp"}
+}
+
+@enum LNX_DMN_ProbeKind:
+{
+  Null
+  @expand(LNX_DMN_ProbeTable row) `$(row.name)`
+  COUNT
+}
+
+@data(U8) lnx_dmn_probe_kind_args_count_table:
+{
+  0,
+  @expand(LNX_DMN_ProbeTable row) `$(row.args_count)`
+}
+
+@data(String8) lnx_dmn_probe_kind_string_table:
+{
+  `{0}`,
+  @expand(LNX_DMN_ProbeTable row) `str8_lit_comp("$(row.string)")`
+}

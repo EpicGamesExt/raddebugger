@@ -25,7 +25,7 @@ entry_point(CmdLine *cmd_line)
   if (error.size != 0) { goto exit; }
   AssertAlways(arg.value_type == STAP_ArgValueType_S);
   AssertAlways(arg.value_size == 2);
-  AssertAlways(arg.type == STAP_ArgType_Imm);
+  AssertAlways(arg.type == STAP_ArgKind_Imm);
   AssertAlways((S64)arg.imm == -123);
   
   string = str8_lit("1@$43");
@@ -33,7 +33,7 @@ entry_point(CmdLine *cmd_line)
   if (error.size != 0) { goto exit; }
   AssertAlways(arg.value_type == STAP_ArgValueType_U);
   AssertAlways(arg.value_size == 1);
-  AssertAlways(arg.type == STAP_ArgType_Imm);
+  AssertAlways(arg.type == STAP_ArgKind_Imm);
   AssertAlways((S64)arg.imm == 43);
   
   string = str8_lit("4f@%eax");
@@ -41,7 +41,7 @@ entry_point(CmdLine *cmd_line)
   if (error.size != 0) { goto exit; }
   AssertAlways(arg.value_type == STAP_ArgValueType_F);
   AssertAlways(arg.value_size == 4);
-  AssertAlways(arg.type == STAP_ArgType_Reg);
+  AssertAlways(arg.type == STAP_ArgKind_Reg);
   AssertAlways(arg.reg.is_alias == 1);
   AssertAlways(arg.reg.reg_code == REGS_AliasCodeX64_eax);
   
@@ -50,7 +50,7 @@ entry_point(CmdLine *cmd_line)
   if (error.size != 0) { goto exit; }
   AssertAlways(arg.value_size == 4);
   AssertAlways(arg.value_type == STAP_ArgValueType_U);
-  AssertAlways(arg.type == STAP_ArgType_MemoryRef);
+  AssertAlways(arg.type == STAP_ArgKind_MemoryRef);
   AssertAlways(arg.memory_ref.disp == 0);
   AssertAlways(arg.memory_ref.base.reg_code == REGS_RegCodeX64_rdi);
   AssertAlways(!arg.memory_ref.base.is_alias);
@@ -63,7 +63,7 @@ entry_point(CmdLine *cmd_line)
   if (error.size != 0) { goto exit; }
   AssertAlways(arg.value_size == 4);
   AssertAlways(arg.value_type == STAP_ArgValueType_U);
-  AssertAlways(arg.type == STAP_ArgType_MemoryRef);
+  AssertAlways(arg.type == STAP_ArgKind_MemoryRef);
   AssertAlways(arg.memory_ref.disp == -22);
   AssertAlways(arg.memory_ref.base.reg_code == REGS_RegCodeX64_rdi);
   AssertAlways(!arg.memory_ref.base.is_alias);

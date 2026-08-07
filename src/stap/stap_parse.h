@@ -4,13 +4,13 @@
 #ifndef STAP_PARSE_H
 #define STAP_PARSE_H
 
-typedef enum STAP_ArgType
+typedef enum STAP_ArgKind
 {
-  STAP_ArgType_Null,
-  STAP_ArgType_Imm,
-  STAP_ArgType_Reg,
-  STAP_ArgType_MemoryRef,
-} STAP_ArgType;
+  STAP_ArgKind_Null,
+  STAP_ArgKind_Imm,
+  STAP_ArgKind_Reg,
+  STAP_ArgKind_MemoryRef,
+} STAP_ArgKind;
 
 typedef enum STAP_ArgValueType
 {
@@ -24,7 +24,7 @@ typedef struct STAP_Arg
 {
   STAP_ArgValueType value_type;
   U64               value_size;
-  STAP_ArgType      type;
+  STAP_ArgKind      kind;
   union {
     U64 imm;
     struct {
