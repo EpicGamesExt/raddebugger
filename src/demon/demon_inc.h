@@ -4,7 +4,7 @@
 #ifndef DEMON_INC_H
 #define DEMON_INC_H
 
-#include "demon/demon_core.h"
+#include "demon/demon.h"
 
 #if OS_WINDOWS
 # include "win32/demon/win32_demon.h"

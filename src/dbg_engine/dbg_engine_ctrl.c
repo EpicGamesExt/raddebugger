@@ -2476,14 +2476,11 @@ d_ctrl_thread__entry_point(void *p)
     ProfScope("update thread register cache")
     {
       D_EntityArray threads = d_entity_array_from_kind(D_EntityKind_Thread);
-      X64_RegBlock *blocks = push_array(scratch.arena, X64_RegBlock, threads.count);
+      for EachIndex(idx, threads.count)
       {
-        for EachIndex(idx, threads.count)
-        {
-          Temp scratch = scratch_begin(0, 0);
-          d_cached_reg_block_from_thread(scratch.arena, threads.v[idx]->handle);
-          scratch_end(scratch);
-        }
+        Temp scratch = scratch_begin(0, 0);
+        d_cached_reg_block_from_thread(scratch.arena, threads.v[idx]->handle);
+        scratch_end(scratch);
       }
     }
     

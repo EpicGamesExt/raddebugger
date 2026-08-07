@@ -1,8 +1,8 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-#ifndef DEMON_CORE_H
-#define DEMON_CORE_H
+#ifndef DEMON_H
+#define DEMON_H
 
 ////////////////////////////////
 //~ rjf: Control-Thread-Only Context
@@ -16,17 +16,6 @@ typedef struct DMN_CtrlCtx DMN_CtrlCtx;
 struct DMN_CtrlCtx
 {
   U64 u64[1];
-};
-
-////////////////////////////////
-//~ Dynamic Linker Types
-
-typedef U32 DMN_TlsModel;
-enum
-{
-  DMN_TlsModel_Null,
-  DMN_TlsModel_WinodwsNt,
-  DMN_TlsModel_Gnu
 };
 
 ////////////////////////////////
@@ -128,9 +117,6 @@ struct DMN_Event
   U64 stack_pointer;
   U64 user_data;
   B32 exception_repeated;
-  
-  // rjf: process info
-  DMN_TlsModel tls_model;
   
   // rjf: module info
   DMN_ModuleInfo *module_info;
@@ -248,11 +234,6 @@ internal DMN_HandleArray dmn_handle_array_copy(Arena *arena, DMN_HandleArray *sr
 internal DMN_Event *dmn_event_list_push(Arena *arena, DMN_EventList *list);
 
 ////////////////////////////////
-//~ rjf: Process Reading Helper Functions (Helpers, Implemented Once)
-
-internal String8 dmn_data_from_process_vaddr_range(Arena *arena, DMN_Handle process, Rng1U64 vrange);
-
-////////////////////////////////
 //~ rjf: @dmn_os_hooks Main Layer Initialization (Implemented Per-OS)
 
 internal void dmn_init(void);
@@ -302,4 +283,4 @@ internal void dmn_process_iter_begin(DMN_ProcessIter *iter);
 internal B32  dmn_process_iter_next(Arena *arena, DMN_ProcessIter *iter, DMN_ProcessInfo *info_out);
 internal void dmn_process_iter_end(DMN_ProcessIter *iter);
 
-#endif // DEMON_CORE_H
+#endif // DEMON_H

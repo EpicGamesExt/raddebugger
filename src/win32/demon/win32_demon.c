@@ -1365,118 +1365,117 @@ dmn_ctrl_launch(DMN_CtrlCtx *ctx, ProcessLaunchParams *params)
 {
   Temp scratch = scratch_begin(0, 0);
   U32 result = 0;
-  DMN_AccessScope
+  
+  //- rjf: produce exe / arguments string
+  String8 cmd = {0};
+  if(params->cmd_line.first != 0)
   {
-    //- rjf: produce exe / arguments string
-    String8 cmd = {0};
-    if(params->cmd_line.first != 0)
+    String8List args = {0};
+    String8 exe_path = params->cmd_line.first->string;
+    String8List exe_path_parts = str8_split_path(scratch.arena, exe_path);
+    exe_path = str8_list_join(scratch.arena, &exe_path_parts, &(StringJoin){.sep = str8_lit("\\")});
+    str8_list_pushf(scratch.arena, &args, "\"%S\"", exe_path);
+    for(String8Node *n = params->cmd_line.first->next; n != 0; n = n->next)
     {
-      String8List args = {0};
-      String8 exe_path = params->cmd_line.first->string;
-      String8List exe_path_parts = str8_split_path(scratch.arena, exe_path);
-      exe_path = str8_list_join(scratch.arena, &exe_path_parts, &(StringJoin){.sep = str8_lit("\\")});
-      str8_list_pushf(scratch.arena, &args, "\"%S\"", exe_path);
-      for(String8Node *n = params->cmd_line.first->next; n != 0; n = n->next)
-      {
-        str8_list_push(scratch.arena, &args, n->string);
-      }
-      StringJoin join_params = {0};
-      join_params.sep = str8_lit(" ");
-      cmd = str8_list_join(scratch.arena, &args, &join_params);
+      str8_list_push(scratch.arena, &args, n->string);
     }
-    
-    //- rjf: produce environment strings
-    String8 env = {0};
-    {
-      String8List all_opts = params->env;
-      if(params->inherit_env != 0)
-      {
-        MemoryZeroStruct(&all_opts);
-        str8_list_push(scratch.arena, &all_opts, str8_lit("_NO_DEBUG_HEAP=1"));
-        for(String8Node *n = params->env.first; n != 0; n = n->next)
-        {
-          str8_list_push(scratch.arena, &all_opts, n->string);
-        }
-        for(String8Node *n = w32_dmn_shared->env_strings.first; n != 0; n = n->next)
-        {
-          str8_list_push(scratch.arena, &all_opts, n->string);
-        }
-      }
-      StringJoin join_params2 = {0};
-      join_params2.sep = str8_lit("\0");
-      join_params2.post = str8_lit("\0");
-      env = str8_list_join(scratch.arena, &all_opts, &join_params2);
-    }
-    
-    //- rjf: produce utf-16 strings
-    String16 cmd16 = str16_from_8(scratch.arena, cmd);
-    String16 dir16 = str16_from_8(scratch.arena, params->path);
-    String16 env16 = str16_from_8(scratch.arena, env);
-    
-    //- rjf: launch
-    DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT;
-    if(params->debug_subprocesses)
-    {
-      creation_flags |= DEBUG_PROCESS;
-    }
-    else
-    {
-      creation_flags |= DEBUG_ONLY_THIS_PROCESS;
-    }
-    BOOL inherit_handles = 0;
-    STARTUPINFOW startup_info = {sizeof(startup_info)};
-    if(!file_match(params->stdout_file, file_zero()))
-    {
-      HANDLE stdout_handle = (HANDLE)params->stdout_file.u64[0];
-      startup_info.hStdOutput = stdout_handle;
-      startup_info.dwFlags |= STARTF_USESTDHANDLES;
-      inherit_handles = 1;
-    }
-    if(!file_match(params->stderr_file, file_zero()))
-    {
-      HANDLE stderr_handle = (HANDLE)params->stderr_file.u64[0];
-      startup_info.hStdError = stderr_handle;
-      startup_info.dwFlags |= STARTF_USESTDHANDLES;
-      inherit_handles = 1;
-    }
-    if(!file_match(params->stdin_file, file_zero()))
-    {
-      HANDLE stdin_handle = (HANDLE)params->stdin_file.u64[0];
-      startup_info.hStdInput = stdin_handle;
-      startup_info.dwFlags |= STARTF_USESTDHANDLES;
-      inherit_handles = 1;
-    }
-    PROCESS_INFORMATION process_info = {0};
-    if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, 1, creation_flags, (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
-    {
-      // check if we are 32-bit app, and just close it immediately
-      BOOL is_wow = 0;
-      IsWow64Process(process_info.hProcess, &is_wow);
-      if(is_wow)
-      {
-        log_user_errorf("Only 64-bit applications can be debugged currently.");
-        DebugActiveProcessStop(process_info.dwProcessId);
-        TerminateProcess(process_info.hProcess,0xffffffff);
-      }
-      else
-      {
-        result = process_info.dwProcessId;
-        w32_dmn_shared->new_process_pending = 1;
-      }
-      CloseHandle(process_info.hProcess);
-      CloseHandle(process_info.hThread);
-    }
-    else
-    {
-      DWORD error = GetLastError();
-      LPWSTR message = 0;
-      FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, 0, error, MAKELANGID(LANG_NEUTRAL,SUBLANG_NEUTRAL), (LPWSTR)&message, 0, 0);
-      String8 message8 = message ? str8_from_16(scratch.arena, str16_cstring(message)) : str8_lit("unknown error");
-      LocalFree(message);
-      
-      log_user_errorf("There was an error starting %S: %S", params->cmd_line.first->string, message8);
-    }
+    StringJoin join_params = {0};
+    join_params.sep = str8_lit(" ");
+    cmd = str8_list_join(scratch.arena, &args, &join_params);
   }
+  
+  //- rjf: produce environment strings
+  String8 env = {0};
+  {
+    String8List all_opts = params->env;
+    if(params->inherit_env != 0)
+    {
+      MemoryZeroStruct(&all_opts);
+      str8_list_push(scratch.arena, &all_opts, str8_lit("_NO_DEBUG_HEAP=1"));
+      for(String8Node *n = params->env.first; n != 0; n = n->next)
+      {
+        str8_list_push(scratch.arena, &all_opts, n->string);
+      }
+      for(String8Node *n = w32_dmn_shared->env_strings.first; n != 0; n = n->next)
+      {
+        str8_list_push(scratch.arena, &all_opts, n->string);
+      }
+    }
+    StringJoin join_params2 = {0};
+    join_params2.sep = str8_lit("\0");
+    join_params2.post = str8_lit("\0");
+    env = str8_list_join(scratch.arena, &all_opts, &join_params2);
+  }
+  
+  //- rjf: produce utf-16 strings
+  String16 cmd16 = str16_from_8(scratch.arena, cmd);
+  String16 dir16 = str16_from_8(scratch.arena, params->path);
+  String16 env16 = str16_from_8(scratch.arena, env);
+  
+  //- rjf: launch
+  DWORD creation_flags = CREATE_UNICODE_ENVIRONMENT;
+  if(params->debug_subprocesses)
+  {
+    creation_flags |= DEBUG_PROCESS;
+  }
+  else
+  {
+    creation_flags |= DEBUG_ONLY_THIS_PROCESS;
+  }
+  BOOL inherit_handles = 0;
+  STARTUPINFOW startup_info = {sizeof(startup_info)};
+  if(!file_match(params->stdout_file, file_zero()))
+  {
+    HANDLE stdout_handle = (HANDLE)params->stdout_file.u64[0];
+    startup_info.hStdOutput = stdout_handle;
+    startup_info.dwFlags |= STARTF_USESTDHANDLES;
+    inherit_handles = 1;
+  }
+  if(!file_match(params->stderr_file, file_zero()))
+  {
+    HANDLE stderr_handle = (HANDLE)params->stderr_file.u64[0];
+    startup_info.hStdError = stderr_handle;
+    startup_info.dwFlags |= STARTF_USESTDHANDLES;
+    inherit_handles = 1;
+  }
+  if(!file_match(params->stdin_file, file_zero()))
+  {
+    HANDLE stdin_handle = (HANDLE)params->stdin_file.u64[0];
+    startup_info.hStdInput = stdin_handle;
+    startup_info.dwFlags |= STARTF_USESTDHANDLES;
+    inherit_handles = 1;
+  }
+  PROCESS_INFORMATION process_info = {0};
+  if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, 1, creation_flags, (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
+  {
+    // check if we are 32-bit app, and just close it immediately
+    BOOL is_wow = 0;
+    IsWow64Process(process_info.hProcess, &is_wow);
+    if(is_wow)
+    {
+      log_user_errorf("Only 64-bit applications can be debugged currently.");
+      DebugActiveProcessStop(process_info.dwProcessId);
+      TerminateProcess(process_info.hProcess,0xffffffff);
+    }
+    else
+    {
+      result = process_info.dwProcessId;
+      w32_dmn_shared->new_process_pending = 1;
+    }
+    CloseHandle(process_info.hProcess);
+    CloseHandle(process_info.hThread);
+  }
+  else
+  {
+    DWORD error = GetLastError();
+    LPWSTR message = 0;
+    FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, 0, error, MAKELANGID(LANG_NEUTRAL,SUBLANG_NEUTRAL), (LPWSTR)&message, 0, 0);
+    String8 message8 = message ? str8_from_16(scratch.arena, str16_cstring(message)) : str8_lit("unknown error");
+    LocalFree(message);
+    
+    log_user_errorf("There was an error starting %S: %S", params->cmd_line.first->string, message8);
+  }
+  
   scratch_end(scratch);
   return result;
 }
@@ -1485,7 +1484,7 @@ internal B32
 dmn_ctrl_attach(DMN_CtrlCtx *ctx, U32 pid)
 {
   B32 result = 0;
-  DMN_AccessScope if(DebugActiveProcess((DWORD)pid))
+  if(DebugActiveProcess((DWORD)pid))
   {
     result = 1;
     w32_dmn_shared->new_process_pending = 1;
@@ -1514,13 +1513,10 @@ internal B32
 dmn_ctrl_kill(DMN_CtrlCtx *ctx, DMN_Handle process, U32 exit_code)
 {
   B32 result = 0;
-  DMN_AccessScope
+  W32_DMN_Entity *process_entity = w32_dmn_entity_from_handle(process);
+  if(TerminateProcess(process_entity->handle, exit_code))
   {
-    W32_DMN_Entity *process_entity = w32_dmn_entity_from_handle(process);
-    if(TerminateProcess(process_entity->handle, exit_code))
-    {
-      result = 1;
-    }
+    result = 1;
   }
   return result;
 }
@@ -1529,7 +1525,6 @@ internal B32
 dmn_ctrl_detach(DMN_CtrlCtx *ctx, DMN_Handle process)
 {
   B32 result = 0;
-  DMN_AccessScope
   {
     W32_DMN_Entity *process_entity = w32_dmn_entity_from_handle(process);
     
@@ -1567,7 +1562,6 @@ internal DMN_EventList
 dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 {
   DMN_EventList events = {0};
-  dmn_access_open();
   
   //////////////////////////////
   //- rjf: determine event generation path
@@ -2148,7 +2142,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   e->process   = w32_dmn_handle_from_entity(process);
                   e->arch      = module_info->arch;
                   e->code      = evt.dwProcessId;
-                  e->tls_model = DMN_TlsModel_WinodwsNt;
                 }
                 
                 // rjf: create thread
@@ -3151,7 +3144,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     }break;
   }
   
-  dmn_access_close();
   return events;
 }
 

@@ -1953,7 +1953,6 @@ lnx_dmn_push_event_create_process(Arena *arena, DMN_EventList *events, LNX_DMN_P
   e->process   = lnx_dmn_handle_from_process(process);
   e->arch      = process->ctx->arch;
   e->code      = process->pid;
-  e->tls_model = DMN_TlsModel_Gnu; // TODO: use dynamic linker path to figure out correct enum here
 }
 
 internal void
