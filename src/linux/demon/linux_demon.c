@@ -7,42 +7,29 @@
 #include "generated/linux_demon.meta.c"
 
 ////////////////////////////////
-//~ rjf: Memory R/W
-
-internal U64
-lnx_dmn_size_from_fd(int memory_fd, U64 cap)
-{
-  U8 temp[4096];
-  size_t cursor = 0;
-  while(cursor < cap)
-  {
-    ssize_t actual_read = LNX_RETRY_ON_EINTR(pread(memory_fd, temp, sizeof(temp), cursor));
-    if(actual_read <= 0) { break; }
-    cursor += (U64)actual_read;
-  }
-  return (U64)cursor;
-}
+//~ rjf: Memory R/W Helpers
 
 internal U64
 lnx_dmn_read(int memory_fd, Rng1U64 range, void *dst)
 {
-  size_t cursor = 0, size = dim_1u64(range);
-  while(cursor < size)
+  size_t cursor = 0;
+  size_t size = (size_t)dim_1u64(range);
+  for(;cursor < size;)
   {
-    size_t  to_read     = size - cursor;
+    size_t to_read = size - cursor;
     ssize_t actual_read = LNX_RETRY_ON_EINTR(pread(memory_fd, (U8 *)dst + cursor, to_read, range.min + cursor));
-    if(actual_read < 0) { break; }
-    if(actual_read == 0) { break; }
+    if(actual_read <= 0) { break; }
     cursor += actual_read;
   }
-  return cursor;
+  return (U64)cursor;
 }
 
 internal B32
 lnx_dmn_write(int memory_fd, Rng1U64 range, void *src)
 {
-  size_t cursor = 0, size = dim_1u64(range);
-  while(cursor < size)
+  size_t cursor = 0;
+  size_t size = (size_t)dim_1u64(range);
+  for(;cursor < size;)
   {
     size_t to_write = size - cursor;
     ssize_t actual_write = LNX_RETRY_ON_EINTR(pwrite(memory_fd, (U8 *)src + cursor, to_write, range.min + cursor));
@@ -98,152 +85,6 @@ lnx_dmn_ptrace_seize(pid_t pid)
 {
   // TODO: PTRACE_O_TRACEVFORK | PTRACE_O_TRACEVFORKDONE | PTRACE_O_TRACEFORK
   return LNX_RETRY_ON_EINTR(ptrace(PTRACE_SEIZE, pid, 0, PTRACE_O_TRACEEXEC | PTRACE_O_EXITKILL | PTRACE_O_TRACECLONE));
-}
-
-internal String8
-lnx_dmn_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base)
-{
-  String8 dl_path = {0};
-  Temp scratch = scratch_begin(&arena, 1);
-  int maps_fd = LNX_RETRY_ON_EINTR(open((char *)str8f(scratch.arena, "/proc/%d/maps", pid).str, O_RDONLY));
-  if(maps_fd != -1)
-  {
-    // rjf: read entire /proc/pid/maps
-    U64  maps_size = lnx_dmn_size_from_fd(maps_fd, MB(1));
-    U8  *maps_ptr  = push_array(scratch.arena, U8, maps_size);
-    U64  read_size = lnx_dmn_read(maps_fd, r1u64(0, maps_size), maps_ptr);
-    
-    // split map file on lines
-    String8List lines = str8_split_by_string_chars(scratch.arena, str8(maps_ptr, maps_size), str8_lit("\n"), 0);
-    
-    // scan each line until a virtual mapping whose low part matches the DL base address is found
-    for EachNode(n, String8Node, lines.first)
-    {
-      String8 line = n->string;
-      
-      // split the string while respecting escape sequences
-      String8List parts = {0};
-      for EachIndex(cursor, line.size)
-      {
-        if(parts.node_count > 5)    { break; }
-        if(line.str[cursor] == ' ') { continue; }
-        
-        // scan forward to the closing delimiter
-        U64 token_start = cursor;
-        for(; cursor < line.size; cursor += 1)
-        {
-          if(line.str[cursor] == '\\')
-          {
-            cursor += 1;
-            continue;
-          }
-          if(line.str[cursor] == ' ') { break; }
-        }
-        
-        // push sub-string to the list
-        str8_list_push(scratch.arena, &parts, str8_substr(line, r1u64(token_start, cursor)));
-      }
-      
-      // was line parsed correctly?
-      if(parts.node_count < 5) { Assert(0 && "failed to parse map line"); continue; }
-      
-      // parse map virtual range
-      String8List vaddr_list = str8_split_by_string_chars(scratch.arena, parts.first->string, str8_lit("-"), 0);
-      if(vaddr_list.node_count != 2) { Assert(0 && "failed to parse virtual range portion of map line"); continue; }
-      
-      // does the low part match DL base address?
-      U64 lo_vaddr = u64_from_str8(vaddr_list.first->string, 16);
-      if(lo_vaddr == auxv_base)
-      {
-        dl_path = parts.node_count == 5 ? str8_zero() : parts.last->string;
-        dl_path = push_str8_copy(arena, dl_path);
-        break;
-      }
-    }
-    
-    LNX_RETRY_ON_EINTR(close(maps_fd));
-  }
-  else { Assert(0 && "failed to open DL fd"); }
-  
-  scratch_end(scratch);
-  Assert(dl_path.size);
-  return dl_path;
-}
-
-internal ELF_Hdr64
-lnx_dmn_ehdr_from_pid(pid_t pid)
-{
-  Temp scratch = scratch_begin(0, 0);
-  
-  ELF_Hdr64 exe     = {0};
-  B32       is_read = 0;
-  
-  char *exe_path = (char *)str8f(scratch.arena, "/proc/%d/exe", pid).str;
-  int   exe_fd   = LNX_RETRY_ON_EINTR(open(exe_path, O_RDONLY));
-  
-  if(exe_fd >= 0)
-  {
-    is_read = elf_read_ehdr(lnx_dmn_machine_op_mem_read, &exe_fd, 0, &exe);
-    LNX_RETRY_ON_EINTR(close(exe_fd));
-  }
-  
-  Assert(is_read);
-  scratch_end(scratch);
-  return exe;
-}
-
-internal LNX_DMN_Auxv
-lnx_dmn_auxv_from_pid(pid_t pid, ELF_Class elf_class)
-{
-  Temp scratch = scratch_begin(0, 0);
-  LNX_DMN_Auxv result = {0};
-  
-  // rjf: open aux data
-  String8 auxv_path = str8f(scratch.arena, "/proc/%d/auxv", pid);
-  int auxv_fd = LNX_RETRY_ON_EINTR(open((char *)auxv_path.str, O_RDONLY));
-  
-  // rjf: scan aux data
-  if(auxv_fd >= 0)
-  {
-    for(;;)
-    {
-      // rjf: read next aux
-      ELF_Auxv64 auxv = {0};
-      switch(elf_class)
-      {
-        case ELF_Class_None:{}break;
-        case ELF_Class_32:
-        {
-          ELF_Auxv32 auxv32 = {0};
-          if(read(auxv_fd, &auxv32, sizeof(auxv32)) != sizeof(auxv32)) { goto brkloop; }
-          auxv = elf_auxv64_from_auxv32(auxv32);
-        }break;
-        case ELF_Class_64:
-        {
-          if(read(auxv_fd, &auxv, sizeof(auxv)) != sizeof(auxv)) { goto brkloop; }
-        }break;
-        default:{NotImplemented;}break;
-      }
-      
-      // rjf: fill result
-      switch(auxv.a_type)
-      {
-        default:{}break;
-        case ELF_AuxType_Null:   goto brkloop; break;
-        case ELF_AuxType_Base:   result.base   = auxv.a_val; break;
-        case ELF_AuxType_Phnum:  result.phnum  = auxv.a_val; break;
-        case ELF_AuxType_Phent:  result.phent  = auxv.a_val; break;
-        case ELF_AuxType_Phdr:   result.phdr   = auxv.a_val; break;
-        case ELF_AuxType_ExecFn: result.execfn = auxv.a_val; break;
-        case ELF_AuxType_Pagesz: result.pagesz = auxv.a_val; break;
-      }
-    }
-    brkloop:;
-    LNX_RETRY_ON_EINTR(close(auxv_fd));
-  }
-  
-  scratch_end(scratch);
-  return result;
 }
 
 internal LNX_DMN_Thread *
@@ -533,132 +374,6 @@ lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64
   }
   
   return result;
-}
-
-internal LNX_DMN_ProbeList
-lnx_dmn_read_probes(Arena *arena, int fd, U64 offset, U64 image_base)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  
-  LNX_DMN_ProbeList probes = {0};
-  
-  ELF_Hdr64 ehdr = {0};
-  if(elf_read_ehdr(lnx_dmn_machine_op_mem_read, &fd, offset, &ehdr) != MachineOpResult_Ok) { goto exit; }
-  
-  U64        strtab_shdr_offset = offset + ehdr.e_shoff + ehdr.e_shstrndx * ehdr.e_shentsize;
-  ELF_Shdr64 strtab_shdr        = {0};
-  if(elf_read_shdr(lnx_dmn_machine_op_mem_read, &fd, strtab_shdr_offset, ehdr.e_ident[ELF_Identifier_Class], &strtab_shdr) != MachineOpResult_Ok) { goto exit; }
-  
-  B32 found_probes      = 0;
-  B32 found_probes_base = 0;
-  ELF_Shdr64 text_shdr         = {0};
-  ELF_Shdr64 stapsdt_base_shdr = {0};
-  ELF_Shdr64 stapsdt_shdr      = {0};
-  for(U64 shdr_off = offset + ehdr.e_shoff, shdr_opl = shdr_off + ehdr.e_shentsize * ehdr.e_shnum;
-      shdr_off < shdr_opl;
-      shdr_off += ehdr.e_shentsize) {
-    ELF_Shdr64 shdr = {0};
-    if(elf_read_shdr(lnx_dmn_machine_op_mem_read, &fd, shdr_off, ehdr.e_ident[ELF_Identifier_Class], &shdr) != MachineOpResult_Ok) { goto exit; }
-    
-    if(shdr.sh_type == ELF_ShType_Note)
-    {
-      U64     name_offset = offset + strtab_shdr.sh_offset + shdr.sh_name;
-      U64     name_cap    = offset + strtab_shdr.sh_offset + strtab_shdr.sh_size;
-      String8 name        = lnx_dmn_read_string_capped(scratch.arena, fd, name_offset, name_cap);
-      
-      if(str8_match(name, str8_lit(".note.stapsdt"), 0))
-      {
-        stapsdt_shdr = shdr;
-        found_probes = 1;
-      }
-    }
-    else if(shdr.sh_type == ELF_ShType_ProgBits)
-    {
-      U64     name_offset = offset + strtab_shdr.sh_offset + shdr.sh_name;
-      U64     name_cap    = offset + strtab_shdr.sh_offset + strtab_shdr.sh_size;
-      String8 name        = lnx_dmn_read_string_capped(scratch.arena, fd, name_offset, name_cap);
-      
-      if(str8_match(name, str8_lit(".stapsdt.base"), 0))
-      {
-        stapsdt_base_shdr = shdr;
-        found_probes_base = 1;
-      } else if(str8_match(name, str8_lit(".text"), 0))
-      {
-        text_shdr = shdr;
-      }
-    }
-    
-    if(found_probes && found_probes_base) { break; }
-  }
-  
-  if(!found_probes || !found_probes_base) { goto exit; }
-  
-  U64 probes_base = stapsdt_base_shdr.sh_addr;
-  
-  Rng1U64  note_range     = shift_1u64(r1u64(stapsdt_shdr.sh_offset, stapsdt_shdr.sh_offset + stapsdt_shdr.sh_size), offset);
-  void    *raw_note       = push_array(arena, U8, stapsdt_shdr.sh_size);
-  U64      note_read_size = lnx_dmn_read(fd, note_range, raw_note);
-  if(note_read_size != dim_1u64(note_range)) { goto exit; }
-  
-  Arch         arch = arch_from_elf_machine(ehdr.e_machine);
-  ELF_NoteList note = elf_parse_note(scratch.arena, str8(raw_note, dim_1u64(note_range)), ehdr.e_ident[ELF_Identifier_Class], ehdr.e_machine);
-  
-  for EachNode(n, ELF_NoteNode, note.first)
-  {
-    ELF_Note *note = &n->v;
-    if(!str8_match(note->owner, str8_lit("stapsdt"), 0)) { continue; }
-    if(note->type != ELF_NoteType_STapSdt)               { continue; }
-    
-    LNX_DMN_Probe probe = {0};
-    {
-      U64 cursor    = 0;
-      U64 addr_size = ehdr.e_ident[ELF_Identifier_Class] == ELF_Class_64 ? 8 : 4;
-      
-      U64 pc = 0;
-      U64 pc_size = str8_deserial_read(note->desc, cursor, &pc, addr_size, addr_size);
-      if (pc_size == 0) { goto exit; }
-      cursor += pc_size;
-      
-      U64 base_addr = 0;
-      U64 base_addr_size = str8_deserial_read(note->desc, cursor, &base_addr, addr_size, addr_size);
-      if (base_addr_size == 0) { goto exit; }
-      cursor += base_addr_size;
-      
-      U64 semaphore = 0;
-      U64 semaphore_size = str8_deserial_read(note->desc, cursor, &semaphore, addr_size, addr_size);
-      if (semaphore_size == 0) { goto exit; }
-      cursor += semaphore_size;
-      
-      String8 provider = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
-      cursor += provider.size + 1;
-      if (cursor > note->desc.size) { goto exit; }
-      
-      String8 name = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
-      cursor += name.size + 1;
-      if (cursor > note->desc.size) { goto exit; }
-      
-      String8 args = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
-      cursor += args.size + 1;
-      if (cursor > note->desc.size) { goto exit; }
-      
-      U64 probe_rebase = image_base + (base_addr - probes_base);
-      
-      probe.provider  = provider;
-      probe.name      = name;
-      probe.args      = stap_arg_array_from_string(arena, arch, args);
-      probe.pc        = pc + probe_rebase;
-      probe.semaphore = semaphore ? semaphore + probe_rebase : 0;
-    }
-    
-    LNX_DMN_ProbeNode *n = push_array(arena, LNX_DMN_ProbeNode, 1);
-    n->v = probe;
-    SLLQueuePush(probes.first, probes.last, n);
-    probes.count += 1;
-  }
-  
-  exit:;
-  scratch_end(scratch);
-  return probes;
 }
 
 internal
@@ -965,25 +680,13 @@ lnx_dmn_process_ctx_clone(LNX_DMN_Process *new_owner, LNX_DMN_ProcessCtx *ctx)
   // clone modules
   for EachNode(module, LNX_DMN_Module, ctx->first_module)
   {
-    lnx_dmn_module_clone(result, module);
+    LNX_DMN_Module *dst = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Module)->module;
+    MemoryCopyStruct(dst, module);
+    dst->next = dst->prev = 0;
+    hash_table_push_u64_raw(result->arena, result->loaded_modules_ht, dst->base_vaddr, dst);
+    DLLPushBack(result->first_module, result->last_module, dst);
+    result->module_count += 1;
   }
-  
-  return result;
-}
-
-internal LNX_DMN_Module *
-lnx_dmn_module_clone(LNX_DMN_ProcessCtx *process_ctx, LNX_DMN_Module *module)
-{
-  LNX_DMN_Module *result = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Module)->module;
-  *result = *module;
-  result->next = result->prev = 0;
-  
-  // clone base addr mapping
-  hash_table_push_u64_raw(process_ctx->arena, process_ctx->loaded_modules_ht, result->base_vaddr, result);
-  
-  // push module to the list
-  DLLPushBack(process_ctx->first_module, process_ctx->last_module, module);
-  process_ctx->module_count += 1;
   
   return result;
 }
@@ -1644,7 +1347,9 @@ lnx_dmn_event_create_process(Arena *arena, DMN_EventList *events, pid_t pid, LNX
 {
   LNX_DMN_Process *process = lnx_dmn_process_alloc(pid, LNX_DMN_ProcessState_Normal, parent_process, !!(flags & LNX_DMN_CreateProcessFlag_DebugSubprocesses), !!(flags & LNX_DMN_CreateProcessFlag_Cow));
   
+  //////////////////////////////
   //- rjf: get process context - create if this isn't cloning parent process
+  //
   LNX_DMN_ProcessCtx *ctx = 0;
   if(flags & LNX_DMN_CreateProcessFlag_ClonedMemory)
   {
@@ -1652,21 +1357,107 @@ lnx_dmn_event_create_process(Arena *arena, DMN_EventList *events, pid_t pid, LNX
   }
   else
   {
+    //- rjf: allocate ctx
     ctx = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_ProcessCtx)->process_ctx;
     
-    ELF_Hdr64     exe_ehdr     = lnx_dmn_ehdr_from_pid(process->pid);
-    LNX_DMN_Auxv  auxv         = lnx_dmn_auxv_from_pid(process->pid, exe_ehdr.e_ident[ELF_Identifier_Class]);
-    Arch          arch         = arch_from_elf_machine(exe_ehdr.e_machine);
-    U64           base_vaddr   = (auxv.phdr & ~(auxv.pagesz-1));
-    U64           rebase       = exe_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
-    Rng1U64       image_vrange = lnx_dmn_compute_image_vrange(process->fd, exe_ehdr.e_ident[ELF_Identifier_Class], rebase, auxv.phdr, auxv.phent, auxv.phnum);
-    Arena        *ctx_arena    = arena_alloc();
+    //- rjf: read main executable ELF header
+    ELF_Hdr64 exe_ehdr = {0};
+    {
+      Temp scratch = scratch_begin(&arena, 1);
+      char *exe_path = (char *)str8f(scratch.arena, "/proc/%d/exe", pid).str;
+      int exe_fd = LNX_RETRY_ON_EINTR(open(exe_path, O_RDONLY));
+      if(exe_fd >= 0)
+      {
+        U8 e_ident[ELF_Identifier_Max] = {0};
+        lnx_dmn_read(exe_fd, r1u64(0, sizeof(e_ident)), e_ident);
+        if(MemoryMatch(e_ident, elf_magic_string.str, elf_magic_string.size))
+        {
+          switch(e_ident[ELF_Identifier_Class])
+          {
+            default:{}break;
+            case ELF_Class_None:{}break;
+            case ELF_Class_32:
+            {
+              ELF_Hdr32 ehdr32 = {0};
+              lnx_dmn_read(exe_fd, r1u64(0, sizeof(ehdr32)), &ehdr32);
+              exe_ehdr = elf_hdr64_from_hdr32(ehdr32);
+            }break;
+            case ELF_Class_64:
+            {
+              lnx_dmn_read(exe_fd, r1u64(0, sizeof(exe_ehdr)), &exe_ehdr);
+            }break;
+          }
+        }
+      }
+      LNX_RETRY_ON_EINTR(close(exe_fd));
+      scratch_end(scratch);
+    }
     
+    //- rjf: read auxv info for pid
+    LNX_DMN_Auxv auxv = {0};
+    {
+      Temp scratch = scratch_begin(0, 0);
+      
+      // rjf: open aux data
+      String8 auxv_path = str8f(scratch.arena, "/proc/%d/auxv", pid);
+      int auxv_fd = LNX_RETRY_ON_EINTR(open((char *)auxv_path.str, O_RDONLY));
+      
+      // rjf: scan aux data
+      if(auxv_fd >= 0)
+      {
+        for(U64 off = 0;;)
+        {
+          // rjf: read next aux
+          ELF_Auxv64 auxv_entry = {0};
+          switch(exe_ehdr.e_ident[ELF_Identifier_Class])
+          {
+            default:
+            case ELF_Class_None:{}break;
+            case ELF_Class_32:
+            {
+              ELF_Auxv32 auxv32 = {0};
+              off += lnx_dmn_read_struct(auxv_fd, off, &auxv32);
+              auxv_entry = elf_auxv64_from_auxv32(auxv32);
+            }break;
+            case ELF_Class_64:
+            {
+              off += lnx_dmn_read_struct(auxv_fd, off, &auxv_entry);
+            }break;
+          }
+          
+          // rjf: fill result
+          switch(auxv_entry.a_type)
+          {
+            default:{}break;
+            case ELF_AuxType_Null:   goto brkloop; break;
+            case ELF_AuxType_Base:   auxv.base   = auxv_entry.a_val; break;
+            case ELF_AuxType_Phnum:  auxv.phnum  = auxv_entry.a_val; break;
+            case ELF_AuxType_Phent:  auxv.phent  = auxv_entry.a_val; break;
+            case ELF_AuxType_Phdr:   auxv.phdr   = auxv_entry.a_val; break;
+            case ELF_AuxType_ExecFn: auxv.execfn = auxv_entry.a_val; break;
+            case ELF_AuxType_Pagesz: auxv.pagesz = auxv_entry.a_val; break;
+          }
+        }
+        brkloop:;
+        LNX_RETRY_ON_EINTR(close(auxv_fd));
+      }
+      
+      scratch_end(scratch);
+    }
+    
+    //- rjf: unpack context
+    Arch arch = arch_from_elf_machine(exe_ehdr.e_machine);
+    U64 base_vaddr = (auxv.phdr & ~(auxv.pagesz-1));
+    U64 rebase = exe_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
+    Rng1U64 image_vrange = lnx_dmn_compute_image_vrange(process->fd, exe_ehdr.e_ident[ELF_Identifier_Class], rebase, auxv.phdr, auxv.phent, auxv.phnum);
+    Arena *ctx_arena = arena_alloc();
+    
+    //- rjf: read dynamically loaded ELF header
     ELF_Hdr64 dl_ehdr = {0};
     elf_read_ehdr(lnx_dmn_machine_op_mem_read, &process->fd, auxv.base, &dl_ehdr);
     ELF_Class dl_class = dl_ehdr.e_ident[ELF_Identifier_Class];
     
-    // rjf: compute rdebug vaddr
+    //- rjf: compute rdebug vaddr
     U64 rdebug_vaddr = 0;
     {
       Temp scratch = scratch_begin(0, 0);
@@ -1841,9 +1632,9 @@ lnx_dmn_event_create_process(Arena *arena, DMN_EventList *events, pid_t pid, LNX
       scratch_end(scratch);
     }
     
-    // query xsave layout
-    U64             xcr0         = 0;
-    U64             xsave_size   = 0;
+    //- query xsave layout
+    U64 xcr0 = 0;
+    U64 xsave_size = 0;
     X64_XSaveLayout xsave_layout = {0};
     if(arch == Arch_x64)
     {
@@ -1852,11 +1643,14 @@ lnx_dmn_event_create_process(Arena *arena, DMN_EventList *events, pid_t pid, LNX
       {
         // Linux stores xcr0 bits in fxstate padding,
         // see https://github.com/torvalds/linux/blob/6548d364a3e850326831799d7e3ea2d7bb97ba08/arch/x86/include/asm/user.h#L25
-        xcr0         = *(U64 *)((U8 *)&xsave + 464);
-        xsave_size   = x64_get_xsave_size();
+        xcr0 = *(U64 *)((U8 *)&xsave + 464);
+        xsave_size = x64_get_xsave_size();
         xsave_layout = x64_get_xsave_layout(xcr0);
       }
-      else { Assert(0 && "failed to get xstate"); }
+      else
+      {
+        Assert(0 && "failed to get xstate");
+      }
     }
     
     // gather probes
@@ -1864,16 +1658,217 @@ lnx_dmn_event_create_process(Arena *arena, DMN_EventList *events, pid_t pid, LNX
     {
       Temp scratch = scratch_begin(0, 0);
       
-      String8 dl_path = lnx_dmn_dl_path_from_pid(scratch.arena, process->pid, auxv.base);
-      int dl_fd = LNX_RETRY_ON_EINTR(open((char *)dl_path.str, O_RDONLY));
+      // rjf: get dl path for this pid
+      String8 dl_path = {0};
+      {
+        int maps_fd = LNX_RETRY_ON_EINTR(open((char *)str8f(scratch.arena, "/proc/%d/maps", pid).str, O_RDONLY));
+        if(maps_fd != -1)
+        {
+          // rjf: determine how big /proc/pid/maps is (this is a "special file", so we have to compute the size
+          // by reading the whole thing - very very good
+          //
+          // TODO(rjf): probably just read it once into a list & join?
+          //
+          U64 maps_size = 0;
+          {
+            U8 temp[4096];
+            size_t cap = MB(1);
+            size_t cursor = 0;
+            for(;cursor < cap;)
+            {
+              ssize_t actual_read = LNX_RETRY_ON_EINTR(pread(maps_fd, temp, sizeof(temp), cursor));
+              if(actual_read <= 0) { break; }
+              cursor += (U64)actual_read;
+            }
+            maps_size = (U64)cursor;
+          }
+          
+          // rjf: read entire /proc/pid/maps
+          U8 *maps_ptr = push_array(scratch.arena, U8, maps_size);
+          U64 read_size = lnx_dmn_read(maps_fd, r1u64(0, maps_size), maps_ptr);
+          
+          // split map file on lines
+          String8List lines = str8_split_by_string_chars(scratch.arena, str8(maps_ptr, maps_size), str8_lit("\n"), 0);
+          
+          // scan each line until a virtual mapping whose low part matches the DL base address is found
+          for EachNode(n, String8Node, lines.first)
+          {
+            String8 line = n->string;
+            
+            // split the string while respecting escape sequences
+            String8List parts = {0};
+            for EachIndex(cursor, line.size)
+            {
+              if(parts.node_count > 5)    { break; }
+              if(line.str[cursor] == ' ') { continue; }
+              
+              // scan forward to the closing delimiter
+              U64 token_start = cursor;
+              for(; cursor < line.size; cursor += 1)
+              {
+                if(line.str[cursor] == '\\')
+                {
+                  cursor += 1;
+                  continue;
+                }
+                if(line.str[cursor] == ' ') { break; }
+              }
+              
+              // push sub-string to the list
+              str8_list_push(scratch.arena, &parts, str8_substr(line, r1u64(token_start, cursor)));
+            }
+            
+            // was line parsed correctly?
+            if(parts.node_count < 5) { Assert(0 && "failed to parse map line"); continue; }
+            
+            // parse map virtual range
+            String8List vaddr_list = str8_split_by_string_chars(scratch.arena, parts.first->string, str8_lit("-"), 0);
+            if(vaddr_list.node_count != 2) { Assert(0 && "failed to parse virtual range portion of map line"); continue; }
+            
+            // does the low part match DL base address?
+            U64 lo_vaddr = u64_from_str8(vaddr_list.first->string, 16);
+            if(lo_vaddr == auxv.base)
+            {
+              dl_path = parts.node_count == 5 ? str8_zero() : parts.last->string;
+              dl_path = push_str8_copy(arena, dl_path);
+              break;
+            }
+          }
+          
+          LNX_RETRY_ON_EINTR(close(maps_fd));
+        }
+        else
+        {
+          Assert(0 && "failed to open DL fd");
+        }
+        Assert(dl_path.size);
+      }
       
+      // rjf: read probes for this dl
+      int dl_fd = LNX_RETRY_ON_EINTR(open((char *)dl_path.str, O_RDONLY));
       LNX_DMN_ProbeList probes = {0};
       if(dl_fd >= 0)
       {
-        probes = lnx_dmn_read_probes(ctx_arena, dl_fd, 0, auxv.base);
+        U64 offset = 0;
+        ELF_Hdr64 ehdr = {0};
+        if(elf_read_ehdr(lnx_dmn_machine_op_mem_read, &dl_fd, offset, &ehdr) != MachineOpResult_Ok) { goto exit; }
+        
+        U64        strtab_shdr_offset = offset + ehdr.e_shoff + ehdr.e_shstrndx * ehdr.e_shentsize;
+        ELF_Shdr64 strtab_shdr        = {0};
+        if(elf_read_shdr(lnx_dmn_machine_op_mem_read, &dl_fd, strtab_shdr_offset, ehdr.e_ident[ELF_Identifier_Class], &strtab_shdr) != MachineOpResult_Ok) { goto exit; }
+        
+        B32 found_probes      = 0;
+        B32 found_probes_base = 0;
+        ELF_Shdr64 text_shdr         = {0};
+        ELF_Shdr64 stapsdt_base_shdr = {0};
+        ELF_Shdr64 stapsdt_shdr      = {0};
+        for(U64 shdr_off = offset + ehdr.e_shoff, shdr_opl = shdr_off + ehdr.e_shentsize * ehdr.e_shnum;
+            shdr_off < shdr_opl;
+            shdr_off += ehdr.e_shentsize) {
+          ELF_Shdr64 shdr = {0};
+          if(elf_read_shdr(lnx_dmn_machine_op_mem_read, &dl_fd, shdr_off, ehdr.e_ident[ELF_Identifier_Class], &shdr) != MachineOpResult_Ok) { goto exit; }
+          
+          if(shdr.sh_type == ELF_ShType_Note)
+          {
+            U64     name_offset = offset + strtab_shdr.sh_offset + shdr.sh_name;
+            U64     name_cap    = offset + strtab_shdr.sh_offset + strtab_shdr.sh_size;
+            String8 name        = lnx_dmn_read_string_capped(scratch.arena, dl_fd, name_offset, name_cap);
+            
+            if(str8_match(name, str8_lit(".note.stapsdt"), 0))
+            {
+              stapsdt_shdr = shdr;
+              found_probes = 1;
+            }
+          }
+          else if(shdr.sh_type == ELF_ShType_ProgBits)
+          {
+            U64     name_offset = offset + strtab_shdr.sh_offset + shdr.sh_name;
+            U64     name_cap    = offset + strtab_shdr.sh_offset + strtab_shdr.sh_size;
+            String8 name        = lnx_dmn_read_string_capped(scratch.arena, dl_fd, name_offset, name_cap);
+            
+            if(str8_match(name, str8_lit(".stapsdt.base"), 0))
+            {
+              stapsdt_base_shdr = shdr;
+              found_probes_base = 1;
+            } else if(str8_match(name, str8_lit(".text"), 0))
+            {
+              text_shdr = shdr;
+            }
+          }
+          
+          if(found_probes && found_probes_base) { break; }
+        }
+        
+        if(!found_probes || !found_probes_base) { goto exit; }
+        
+        U64 probes_base = stapsdt_base_shdr.sh_addr;
+        
+        Rng1U64  note_range     = shift_1u64(r1u64(stapsdt_shdr.sh_offset, stapsdt_shdr.sh_offset + stapsdt_shdr.sh_size), offset);
+        void    *raw_note       = push_array(arena, U8, stapsdt_shdr.sh_size);
+        U64      note_read_size = lnx_dmn_read(dl_fd, note_range, raw_note);
+        if(note_read_size != dim_1u64(note_range)) { goto exit; }
+        
+        Arch         arch = arch_from_elf_machine(ehdr.e_machine);
+        ELF_NoteList note = elf_parse_note(scratch.arena, str8(raw_note, dim_1u64(note_range)), ehdr.e_ident[ELF_Identifier_Class], ehdr.e_machine);
+        
+        for EachNode(n, ELF_NoteNode, note.first)
+        {
+          ELF_Note *note = &n->v;
+          if(!str8_match(note->owner, str8_lit("stapsdt"), 0)) { continue; }
+          if(note->type != ELF_NoteType_STapSdt)               { continue; }
+          
+          LNX_DMN_Probe probe = {0};
+          {
+            U64 cursor    = 0;
+            U64 addr_size = ehdr.e_ident[ELF_Identifier_Class] == ELF_Class_64 ? 8 : 4;
+            
+            U64 pc = 0;
+            U64 pc_size = str8_deserial_read(note->desc, cursor, &pc, addr_size, addr_size);
+            if (pc_size == 0) { goto exit; }
+            cursor += pc_size;
+            
+            U64 base_addr = 0;
+            U64 base_addr_size = str8_deserial_read(note->desc, cursor, &base_addr, addr_size, addr_size);
+            if (base_addr_size == 0) { goto exit; }
+            cursor += base_addr_size;
+            
+            U64 semaphore = 0;
+            U64 semaphore_size = str8_deserial_read(note->desc, cursor, &semaphore, addr_size, addr_size);
+            if (semaphore_size == 0) { goto exit; }
+            cursor += semaphore_size;
+            
+            String8 provider = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
+            cursor += provider.size + 1;
+            if (cursor > note->desc.size) { goto exit; }
+            
+            String8 name = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
+            cursor += name.size + 1;
+            if (cursor > note->desc.size) { goto exit; }
+            
+            String8 args = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
+            cursor += args.size + 1;
+            if (cursor > note->desc.size) { goto exit; }
+            
+            U64 probe_rebase = auxv.base + (base_addr - probes_base);
+            
+            probe.provider  = provider;
+            probe.name      = name;
+            probe.args      = stap_arg_array_from_string(arena, arch, args);
+            probe.pc        = pc + probe_rebase;
+            probe.semaphore = semaphore ? semaphore + probe_rebase : 0;
+          }
+          
+          LNX_DMN_ProbeNode *n = push_array(arena, LNX_DMN_ProbeNode, 1);
+          n->v = probe;
+          SLLQueuePush(probes.first, probes.last, n);
+          probes.count += 1;
+        }
+        
+        exit:;
         LNX_RETRY_ON_EINTR(close(dl_fd));
       }
       
+      // rjf: store probes
       for EachNode(n, LNX_DMN_ProbeNode, probes.first)
       {
         LNX_DMN_Probe *p = &n->v;
@@ -1893,8 +1888,9 @@ lnx_dmn_event_create_process(Arena *arena, DMN_EventList *events, pid_t pid, LNX
       scratch_end(scratch);
     }
     
+    //- rjf: build context
     ctx = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_ProcessCtx)->process_ctx;
-    ctx->arena             = arena_alloc();
+    ctx->arena             = ctx_arena;
     ctx->arch              = arch;
     ctx->rdebug_vaddr      = rdebug_vaddr;
     ctx->dl_class          = dl_class;
@@ -1904,18 +1900,22 @@ lnx_dmn_event_create_process(Arena *arena, DMN_EventList *events, pid_t pid, LNX
     ctx->xsave_size        = Max(xsave_size, sizeof(X64_XSave));
     ctx->xsave_layout      = xsave_layout;
     
-    // create main module
+    //- create main module
     LNX_DMN_Module *main_module = lnx_dmn_module_alloc(ctx, process->fd, base_vaddr, auxv.execfn, 1, 1);
     
-    // glibc has a shortcut mapping for the main module
+    //- glibc has a shortcut mapping for the main module
     hash_table_push_u64_raw(ctx->arena, ctx->loaded_modules_ht, 0, main_module);
   }
   
+  //////////////////////////////
   //- rjf: set process' context
+  //
   process->ctx = ctx;
   process->ctx->ref_count += 1;
   
-  //- rjf: install probes - only in processes without cloned memory
+  //////////////////////////////
+  //- rjf: install probe traps - only needed in processes without cloned memory
+  //
   if(!(flags & LNX_DMN_CreateProcessFlag_ClonedMemory))
   {
     for EachNonZeroEnumVal(LNX_DMN_ProbeKind, k)
@@ -1930,10 +1930,14 @@ lnx_dmn_event_create_process(Arena *arena, DMN_EventList *events, pid_t pid, LNX
     }
   }
   
-  // create main thread
+  //////////////////////////////
+  //- rjf: create main thread
+  //
   lnx_dmn_thread_alloc(process, LNX_DMN_ThreadState_Stopped, pid);
   
-  // push events
+  //////////////////////////////
+  //- rjf: push events
+  //
   {
     DMN_Event *e = dmn_event_list_push(arena, events);
     e->kind      = DMN_EventKind_CreateProcess;
@@ -1964,7 +1968,6 @@ internal void
 lnx_dmn_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 name_space_id, U64 new_link_map_vaddr)
 {
   LNX_DMN_Process *process = thread->process;
-  
   GNU_LinkMap64 map = {0};
   for(U64 map_vaddr = new_link_map_vaddr; map_vaddr != 0; map_vaddr = map.next_vaddr)
   {

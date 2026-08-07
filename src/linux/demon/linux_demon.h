@@ -357,7 +357,7 @@ struct LNX_DMN_State
   
   // rjf: access locking mechanism
   Mutex access_mutex;
-  B32   access_run_state;
+  B32 access_run_state;
   
   // rjf: entity storage
   Arena *entities_arena;
@@ -399,7 +399,6 @@ thread_static B32 lnx_dmn_ctrl_thread = 0;
 ////////////////////////////////
 //~ rjf: Memory R/W Helpers
 
-internal U64 lnx_dmn_size_from_fd(int memory_fd, U64 cap);
 internal U64 lnx_dmn_read(int memory_fd, Rng1U64 range, void *dst);
 internal B32 lnx_dmn_write(int memory_fd, Rng1U64 range, void *src);
 internal String8 lnx_dmn_read_string_capped(Arena *arena, int memory_fd, U64 base_vaddr, U64 cap_size);
@@ -419,10 +418,6 @@ internal Rng1U64 lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class
 
 ////////////////////////////////
 //~ rjf: Process Info Parsing Functions
-
-internal String8           lnx_dmn_dl_path_from_pid(Arena *arena, pid_t pid, U64 auxv_base);
-internal ELF_Hdr64         lnx_dmn_ehdr_from_pid(pid_t pid);
-internal LNX_DMN_Auxv      lnx_dmn_auxv_from_pid(pid_t pid, ELF_Class elf_class);
 
 internal LNX_DMN_Thread *  lnx_dmn_thread_from_pid(pid_t pid);
 internal LNX_DMN_Process * lnx_dmn_process_from_pid(pid_t pid);
@@ -449,7 +444,6 @@ internal void lnx_dmn_module_release(LNX_DMN_ProcessCtx *ctx, LNX_DMN_Module *mo
 
 // clone
 internal LNX_DMN_ProcessCtx * lnx_dmn_process_ctx_clone(LNX_DMN_Process *process, LNX_DMN_ProcessCtx *ctx);
-internal LNX_DMN_Module *     lnx_dmn_module_clone(LNX_DMN_ProcessCtx *process_ctx, LNX_DMN_Module *module);
 
 // entity -> handle
 internal DMN_Handle lnx_dmn_handle_from_entity(LNX_DMN_Entity *entity);
