@@ -206,9 +206,6 @@ struct LNX_DMN_Module
   U64 base_vaddr;
   U64 name_space_id;
   U64 size;
-  U64 phvaddr;
-  U64 phentsize;
-  U64 phcount;
   U64 tls_index;
   U64 tls_offset;
   B8 is_live;
@@ -407,58 +404,54 @@ internal String8 lnx_dmn_read_string(Arena *arena, int memory_fd, U64 base_vaddr
 #define lnx_dmn_write_struct(fd, vaddr, ptr) lnx_dmn_write((fd), r1u64((vaddr), (vaddr)+sizeof(*(ptr))), (ptr))
 
 ////////////////////////////////
-//~ rjf: Trap Setting
-
-internal LNX_DMN_ActiveTrap *lnx_dmn_set_trap(Arena *arena, DMN_Trap *trap);
-
-////////////////////////////////
-//~ ELF/GNU info
-
-internal Rng1U64 lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum);
-
-////////////////////////////////
-//~ rjf: Process Info Parsing Functions
-
-internal LNX_DMN_Thread *  lnx_dmn_thread_from_pid(pid_t pid);
-internal LNX_DMN_Process * lnx_dmn_process_from_pid(pid_t pid);
-
-////////////////////////////////
 //~ rjf: Module Info Parsing
 
 internal DMN_ModuleInfo *lnx_dmn_module_info_from_process_module(Arena *arena, pid_t pid, int memory_fd, U64 base_vaddr, U64 link_map_vaddr, B32 is_main);
 
 ////////////////////////////////
+//~ rjf: Trap Setting
+
+internal LNX_DMN_ActiveTrap *lnx_dmn_set_trap(Arena *arena, DMN_Trap *trap);
+
+////////////////////////////////
+//~ rjf: ELF/GNU Parsing
+
+internal Rng1U64 lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum);
+
+////////////////////////////////
 //~ rjf: Entity Functions
 
-// alloc
-internal LNX_DMN_Entity *     lnx_dmn_entity_alloc(LNX_DMN_EntityKind kind);
-internal LNX_DMN_Process *    lnx_dmn_process_alloc(pid_t pid, LNX_DMN_ProcessState state, LNX_DMN_Process *parent_process, B32 debug_subprocess, B32 is_cow);
-internal LNX_DMN_Thread *     lnx_dmn_thread_alloc(LNX_DMN_Process *process, LNX_DMN_ThreadState thread_state, pid_t tid);
-internal LNX_DMN_Module *     lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64 name_vaddr, U64 name_space_id, B32 is_main);
-
-// release
+//- rjf: base allocation / deallocation
+internal LNX_DMN_Entity *lnx_dmn_entity_alloc(LNX_DMN_EntityKind kind);
 internal void lnx_dmn_entity_release(LNX_DMN_Entity *entity);
+
+//- rjf: specialized allocation / deallocation helpers
+internal LNX_DMN_Process *lnx_dmn_process_alloc(pid_t pid, LNX_DMN_ProcessState state, LNX_DMN_Process *parent_process, B32 debug_subprocess, B32 is_cow);
+internal LNX_DMN_Thread *lnx_dmn_thread_alloc(LNX_DMN_Process *process, LNX_DMN_ThreadState thread_state, pid_t tid);
+internal LNX_DMN_Module *lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64 name_vaddr, U64 name_space_id, B32 is_main);
 internal void lnx_dmn_process_release(LNX_DMN_Process *process);
 internal void lnx_dmn_thread_release(LNX_DMN_Thread *thread);
 internal void lnx_dmn_module_release(LNX_DMN_ProcessCtx *ctx, LNX_DMN_Module *module);
 
-// clone
+//- rjf: context cloning
 internal LNX_DMN_ProcessCtx * lnx_dmn_process_ctx_clone(LNX_DMN_Process *process, LNX_DMN_ProcessCtx *ctx);
 
-// entity -> handle
+//- rjf: entity <-> handle
 internal DMN_Handle lnx_dmn_handle_from_entity(LNX_DMN_Entity *entity);
 internal DMN_Handle lnx_dmn_handle_from_process(LNX_DMN_Process *process);
 internal DMN_Handle lnx_dmn_handle_from_thread(LNX_DMN_Thread *thread);
 internal DMN_Handle lnx_dmn_handle_from_module(LNX_DMN_Module *module);
+internal LNX_DMN_Entity *lnx_dmn_entity_from_handle(DMN_Handle handle, LNX_DMN_EntityKind expected_kind);
+internal LNX_DMN_Process *lnx_dmn_process_from_handle(DMN_Handle process_handle);
+internal LNX_DMN_Thread *lnx_dmn_thread_from_handle(DMN_Handle thread_handle);
+internal LNX_DMN_Module *lnx_dmn_module_from_handle(DMN_Handle module_handle);
 
-// handle -> entity
-internal LNX_DMN_Entity *     lnx_dmn_entity_from_handle(DMN_Handle handle, LNX_DMN_EntityKind expected_kind);
-internal LNX_DMN_Process *    lnx_dmn_process_from_handle(DMN_Handle process_handle);
-internal LNX_DMN_Thread *     lnx_dmn_thread_from_handle(DMN_Handle thread_handle);
-internal LNX_DMN_Module *     lnx_dmn_module_from_handle(DMN_Handle module_handle);
+//- rjf: entity <-> pid
+internal LNX_DMN_Thread *lnx_dmn_thread_from_pid(pid_t pid);
+internal LNX_DMN_Process *lnx_dmn_process_from_pid(pid_t pid);
 
 ////////////////////////////////
-//~ Thread Helpers
+//~ rjf: Thread Helpers
 
 internal U64  lnx_dmn_thread_read_ip(LNX_DMN_Thread *thread);
 internal void lnx_dmn_thread_write_ip(LNX_DMN_Thread *thread, U64 ip);

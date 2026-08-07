@@ -87,18 +87,6 @@ lnx_dmn_ptrace_seize(pid_t pid)
   return LNX_RETRY_ON_EINTR(ptrace(PTRACE_SEIZE, pid, 0, PTRACE_O_TRACEEXEC | PTRACE_O_EXITKILL | PTRACE_O_TRACECLONE));
 }
 
-internal LNX_DMN_Thread *
-lnx_dmn_thread_from_pid(pid_t tid)
-{
-  return hash_table_search_u64_raw(lnx_dmn_state->tid_ht, tid);
-}
-
-internal LNX_DMN_Process *
-lnx_dmn_process_from_pid(pid_t pid)
-{
-  return hash_table_search_u64_raw(lnx_dmn_state->pid_ht, pid);
-}
-
 ////////////////////////////////
 //~ rjf: Module Info Parsing
 
@@ -351,6 +339,9 @@ lnx_dmn_set_trap(Arena *arena, DMN_Trap *trap)
   return result;
 }
 
+////////////////////////////////
+//~ rjf: ELF/GNU Parsing
+
 internal Rng1U64
 lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum)
 { 
@@ -376,13 +367,10 @@ lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64
   return result;
 }
 
-internal
-STAP_MEMORY_READ(lnx_dmn_stap_memory_read)
-{
-  LNX_DMN_Process *process = raw_ctx;
-  U64 bytes_read = lnx_dmn_read(process->fd, r1u64(addr, addr + read_size), buffer);
-  return bytes_read == read_size;
-}
+////////////////////////////////
+//~ rjf: Entity Functions
+
+//- rjf: base allocation / deallocation
 
 internal LNX_DMN_Entity *
 lnx_dmn_entity_alloc(LNX_DMN_EntityKind kind)
@@ -402,6 +390,17 @@ lnx_dmn_entity_alloc(LNX_DMN_EntityKind kind)
   entity->kind = kind;
   return entity;
 }
+
+internal void
+lnx_dmn_entity_release(LNX_DMN_Entity *entity)
+{
+  U32 gen = entity->gen + 1;
+  MemoryZeroStruct(entity);
+  entity->gen = gen;
+  SLLStackPush(lnx_dmn_state->free_entity, entity);
+}
+
+//- rjf: specialized allocation / deallocation helpers
 
 internal LNX_DMN_Process *
 lnx_dmn_process_alloc(pid_t pid, LNX_DMN_ProcessState state, LNX_DMN_Process *parent_process, B32 debug_subprocesses, B32 is_cow)
@@ -518,9 +517,6 @@ lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64
   module->name_vaddr    = name_vaddr;
   module->name_space_id = name_space_id;
   module->size          = dim_1u64(module_vrange);
-  module->phvaddr       = base_vaddr + module_ehdr.e_phoff;
-  module->phcount       = module_ehdr.e_phnum;
-  module->phentsize     = module_ehdr.e_phentsize;
   module->tls_index     = tls_index;
   module->tls_offset    = tls_offset;
   module->is_main       = is_main;
@@ -534,15 +530,6 @@ lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64
   
   exit:;
   return module;
-}
-
-internal void
-lnx_dmn_entity_release(LNX_DMN_Entity *entity)
-{
-  U32 gen = entity->gen + 1;
-  MemoryZeroStruct(entity);
-  entity->gen = gen;
-  SLLStackPush(lnx_dmn_state->free_entity, entity);
 }
 
 internal void
@@ -631,6 +618,8 @@ lnx_dmn_module_release(LNX_DMN_ProcessCtx *ctx, LNX_DMN_Module *module)
   lnx_dmn_entity_release((LNX_DMN_Entity *)module);
 }
 
+//- rjf: context cloning
+
 internal LNX_DMN_ProcessCtx *
 lnx_dmn_process_ctx_clone(LNX_DMN_Process *new_owner, LNX_DMN_ProcessCtx *ctx)
 {
@@ -691,6 +680,8 @@ lnx_dmn_process_ctx_clone(LNX_DMN_Process *new_owner, LNX_DMN_ProcessCtx *ctx)
   return result;
 }
 
+//- rjf: entity <-> handle
+
 internal DMN_Handle
 lnx_dmn_handle_from_entity(LNX_DMN_Entity *entity)
 {
@@ -731,7 +722,7 @@ lnx_dmn_entity_from_handle(DMN_Handle handle, LNX_DMN_EntityKind expected_kind)
 {
   LNX_DMN_Entity *result = 0;
   U32 index = handle.u32[0];
-  U32 gen   = handle.u32[1];
+  U32 gen = handle.u32[1];
   if(index < lnx_dmn_state->entities_count && lnx_dmn_state->entities_base[index].gen == gen)
   {
     if(lnx_dmn_state->entities_base[index].kind == expected_kind)
@@ -759,6 +750,23 @@ lnx_dmn_module_from_handle(DMN_Handle module_handle)
 {
   return (LNX_DMN_Module *)lnx_dmn_entity_from_handle(module_handle, LNX_DMN_EntityKind_Module);
 }
+
+//- rjf: entity <-> pid
+
+internal LNX_DMN_Thread *
+lnx_dmn_thread_from_pid(pid_t tid)
+{
+  return hash_table_search_u64_raw(lnx_dmn_state->tid_ht, tid);
+}
+
+internal LNX_DMN_Process *
+lnx_dmn_process_from_pid(pid_t pid)
+{
+  return hash_table_search_u64_raw(lnx_dmn_state->pid_ht, pid);
+}
+
+////////////////////////////////
+//~ rjf: Thread Helpers
 
 internal U64
 lnx_dmn_thread_read_ip(LNX_DMN_Thread *thread)
@@ -2182,6 +2190,14 @@ dmn_ctrl_detach(DMN_CtrlCtx *ctx, DMN_Handle process_handle)
   return result;
 }
 
+internal
+STAP_MEMORY_READ(lnx_dmn_stap_memory_read)
+{
+  LNX_DMN_Process *process = raw_ctx;
+  U64 bytes_read = lnx_dmn_read(process->fd, r1u64(addr, addr + read_size), buffer);
+  return bytes_read == read_size;
+}
+
 internal DMN_EventList
 dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
 {
@@ -2823,7 +2839,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             //
             case PTRACE_EVENT_EXEC:
             {
-              LNX_DMN_Thread  *thread  = lnx_dmn_thread_from_pid(wait_id);
               LNX_DMN_Process *process = thread->process;
               if(process->debug_subprocesses)
               {
@@ -2860,7 +2875,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             //
             case PTRACE_EVENT_STOP:
             {
-              LNX_DMN_Thread *thread = lnx_dmn_thread_from_pid(wait_id);
               if(thread->state == LNX_DMN_ThreadState_PendingCreation)
               {
                 LNX_DMN_Process *process = thread->process;
