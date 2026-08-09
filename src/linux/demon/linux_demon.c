@@ -1305,674 +1305,6 @@ lnx_dmn_push_event_unload_module(Arena *arena, DMN_EventList *events, LNX_DMN_Pr
 //~ Debug Event
 
 internal void
-lnx_dmn_event_exit_thread(Arena *arena, DMN_EventList *events, pid_t tid, U64 exit_code)
-{
-  LNX_DMN_Thread  *thread  = lnx_dmn_thread_from_pid(tid);
-  LNX_DMN_Process *process = thread->process;
-  
-  // store main thread's exit code
-  if(thread->tid == thread->process->pid)
-  {
-    thread->process->main_thread_exit_code = exit_code;
-  }
-  
-  // push exit event
-  {
-    DMN_Event *e = dmn_event_list_push(arena, events);
-    e->kind    = DMN_EventKind_ExitThread;
-    e->process = lnx_dmn_handle_from_process(thread->process);
-    e->thread  = lnx_dmn_handle_from_thread(thread);
-    e->code    = exit_code;
-  }
-  
-  // release entity
-  lnx_dmn_thread_release(thread);
-  
-  // auto exit process on last thread
-  if(process->thread_count == 0)
-  {
-    // push module events
-    for EachNode(module, LNX_DMN_Module, process->ctx->first_module)
-    {
-      lnx_dmn_push_event_unload_module(arena, events, process, module);
-    }
-    
-    // push process exit event
-    {
-      DMN_Event *e = dmn_event_list_push(arena, events);
-      e->kind    = DMN_EventKind_ExitProcess;
-      e->process = lnx_dmn_handle_from_process(process);
-      e->code    = process->main_thread_exit_code;
-    }
-    
-    // release process
-    lnx_dmn_process_release(process);
-  }
-}
-
-internal LNX_DMN_Process *
-lnx_dmn_event_create_process(Arena *arena, DMN_EventList *events, pid_t pid, LNX_DMN_Process *parent_process, LNX_DMN_CreateProcessFlags flags)
-{
-  LNX_DMN_Process *process = lnx_dmn_process_alloc(pid, LNX_DMN_ProcessState_Normal, parent_process, !!(flags & LNX_DMN_CreateProcessFlag_DebugSubprocesses), !!(flags & LNX_DMN_CreateProcessFlag_Cow));
-  
-  //////////////////////////////
-  //- rjf: get process context - create if this isn't cloning parent process
-  //
-  LNX_DMN_ProcessCtx *ctx = 0;
-  if(flags & LNX_DMN_CreateProcessFlag_ClonedMemory)
-  {
-    ctx = parent_process->ctx;
-  }
-  else
-  {
-    //- rjf: allocate ctx
-    ctx = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_ProcessCtx)->process_ctx;
-    
-    //- rjf: read main executable ELF header
-    ELF_Hdr64 exe_ehdr = {0};
-    {
-      Temp scratch = scratch_begin(&arena, 1);
-      char *exe_path = (char *)str8f(scratch.arena, "/proc/%d/exe", pid).str;
-      int exe_fd = LNX_RETRY_ON_EINTR(open(exe_path, O_RDONLY));
-      if(exe_fd >= 0)
-      {
-        U8 e_ident[ELF_Identifier_Max] = {0};
-        lnx_dmn_read(exe_fd, r1u64(0, sizeof(e_ident)), e_ident);
-        if(MemoryMatch(e_ident, elf_magic_string.str, elf_magic_string.size))
-        {
-          switch(e_ident[ELF_Identifier_Class])
-          {
-            default:{}break;
-            case ELF_Class_None:{}break;
-            case ELF_Class_32:
-            {
-              ELF_Hdr32 ehdr32 = {0};
-              lnx_dmn_read(exe_fd, r1u64(0, sizeof(ehdr32)), &ehdr32);
-              exe_ehdr = elf_hdr64_from_hdr32(ehdr32);
-            }break;
-            case ELF_Class_64:
-            {
-              lnx_dmn_read(exe_fd, r1u64(0, sizeof(exe_ehdr)), &exe_ehdr);
-            }break;
-          }
-        }
-      }
-      LNX_RETRY_ON_EINTR(close(exe_fd));
-      scratch_end(scratch);
-    }
-    
-    //- rjf: read auxv info for pid
-    LNX_DMN_Auxv auxv = {0};
-    {
-      Temp scratch = scratch_begin(0, 0);
-      
-      // rjf: open aux data
-      String8 auxv_path = str8f(scratch.arena, "/proc/%d/auxv", pid);
-      int auxv_fd = LNX_RETRY_ON_EINTR(open((char *)auxv_path.str, O_RDONLY));
-      
-      // rjf: scan aux data
-      if(auxv_fd >= 0)
-      {
-        for(U64 off = 0;;)
-        {
-          // rjf: read next aux
-          ELF_Auxv64 auxv_entry = {0};
-          switch(exe_ehdr.e_ident[ELF_Identifier_Class])
-          {
-            default:
-            case ELF_Class_None:{}break;
-            case ELF_Class_32:
-            {
-              ELF_Auxv32 auxv32 = {0};
-              off += lnx_dmn_read_struct(auxv_fd, off, &auxv32);
-              auxv_entry = elf_auxv64_from_auxv32(auxv32);
-            }break;
-            case ELF_Class_64:
-            {
-              off += lnx_dmn_read_struct(auxv_fd, off, &auxv_entry);
-            }break;
-          }
-          
-          // rjf: fill result
-          switch(auxv_entry.a_type)
-          {
-            default:{}break;
-            case ELF_AuxType_Null:   goto brkloop; break;
-            case ELF_AuxType_Base:   auxv.base   = auxv_entry.a_val; break;
-            case ELF_AuxType_Phnum:  auxv.phnum  = auxv_entry.a_val; break;
-            case ELF_AuxType_Phent:  auxv.phent  = auxv_entry.a_val; break;
-            case ELF_AuxType_Phdr:   auxv.phdr   = auxv_entry.a_val; break;
-            case ELF_AuxType_ExecFn: auxv.execfn = auxv_entry.a_val; break;
-            case ELF_AuxType_Pagesz: auxv.pagesz = auxv_entry.a_val; break;
-          }
-        }
-        brkloop:;
-        LNX_RETRY_ON_EINTR(close(auxv_fd));
-      }
-      
-      scratch_end(scratch);
-    }
-    
-    //- rjf: unpack context
-    Arch arch = arch_from_elf_machine(exe_ehdr.e_machine);
-    U64 base_vaddr = (auxv.phdr & ~(auxv.pagesz-1));
-    U64 rebase = exe_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
-    Rng1U64 image_vrange = lnx_dmn_compute_image_vrange(process->fd, exe_ehdr.e_ident[ELF_Identifier_Class], rebase, auxv.phdr, auxv.phent, auxv.phnum);
-    Arena *ctx_arena = arena_alloc();
-    
-    //- rjf: read dynamically loaded ELF header
-    ELF_Hdr64 dl_ehdr = {0};
-    elf_read_ehdr(lnx_dmn_machine_op_mem_read, &process->fd, auxv.base, &dl_ehdr);
-    ELF_Class dl_class = dl_ehdr.e_ident[ELF_Identifier_Class];
-    
-    //- rjf: compute rdebug vaddr
-    U64 rdebug_vaddr = 0;
-    {
-      Temp scratch = scratch_begin(0, 0);
-      
-      // load DL's header
-      ELF_Hdr64 ehdr = {0};
-      elf_read_ehdr(lnx_dmn_machine_op_mem_read, &process->fd, auxv.base, &ehdr);
-      
-      U64 rebase = dl_ehdr.e_type == ELF_Type_Dyn ? auxv.base : 0;
-      ELF_Class elf_class = ehdr.e_ident[ELF_Identifier_Class];
-      
-      // rjf: find dynamic program header
-      U64 dynamic_vaddr = 0;
-      {
-        U64 phdr_vaddr    = auxv.base + dl_ehdr.e_phoff;
-        for(U64 ph_cursor = phdr_vaddr, ph_opl = (phdr_vaddr + ehdr.e_phentsize * ehdr.e_phentsize); ph_cursor < ph_opl; ph_cursor += ehdr.e_phentsize)
-        {
-          ELF_Phdr64 phdr = {0};
-          elf_read_phdr(lnx_dmn_machine_op_mem_read, &process->fd, ph_cursor, elf_class, &phdr);
-          if(phdr.p_type == ELF_PType_Dynamic)
-          {
-            dynamic_vaddr = rebase + phdr.p_vaddr;
-            break;
-          }
-        }
-      }
-      
-      // rjf: get dynamic info for this module
-      // extract necessary info out of dynamic program header
-      LNX_DMN_DynamicInfo dynamic_info = {0};
-      {
-        B32 is_rebased = !!(flags & LNX_DMN_CreateProcessFlag_Rebased);
-        U64 dynamic_info_rebase = is_rebased ? 0 : rebase;
-        for(U64 dynamic_cursor = dynamic_vaddr; ; dynamic_cursor += elf_dyn_size_from_class(elf_class))
-        {
-          // rjf: read next dyn entry
-          ELF_Dyn64 dyn = {0};
-          if(elf_read_dyn(lnx_dmn_machine_op_mem_read, &process->fd, dynamic_cursor, elf_class, &dyn) != MachineOpResult_Ok) { Assert(0 && "unable to read dynamic"); }
-          
-          // rjf: break on zero
-          if(dyn.tag == ELF_DynTag_Null) { break; }
-          
-          // rjf: extract info from dynamic section
-          switch(dyn.tag)
-          {
-            default:{}break;
-            case ELF_DynTag_Strtab:   {dynamic_info.strtab_vaddr = dynamic_info_rebase + dyn.val;}break;
-            case ELF_DynTag_Strsz:    {dynamic_info.strtab_size = dyn.val;}break;
-            case ELF_DynTag_Symtab:   {dynamic_info.symtab_vaddr = dynamic_info_rebase + dyn.val;}break;
-            case ELF_DynTag_Syment:   {dynamic_info.symtab_entry_size = dyn.val;}break;
-            case ELF_DynTag_Hash:     {dynamic_info.hash_vaddr = dynamic_info_rebase + dyn.val;}break;
-            case ELF_DynTag_GNU_Hash: {dynamic_info.gnu_hash_vaddr = dynamic_info_rebase + dyn.val;}break;
-          }
-        }
-      }
-      
-      // extract symbol table count from available options
-      U64 symbol_count = 0;
-      if(dynamic_info.hash_vaddr)
-      {
-        U64 hash_entry_size = 4;
-        if(elf_class == ELF_Class_64 && (ehdr.e_machine == ELF_MachineKind_ALPHA || ehdr.e_machine == ELF_MachineKind_S390 || ehdr.e_machine == ELF_MachineKind_S390_OLD))
-        {
-          hash_entry_size = 8;
-        }
-        
-        U64 chain_count = 0;
-        if(lnx_dmn_read(process->fd, r1u64(dynamic_info.hash_vaddr, dynamic_info.hash_vaddr + hash_entry_size), &chain_count) == hash_entry_size)
-        {
-          symbol_count = chain_count;
-        }
-        else
-        {
-          Assert(0 && "failed to read hash table's chain count out of HASH");
-        }
-      }
-      else if(dynamic_info.gnu_hash_vaddr)
-      {
-        // GNU_HASH header: u32 nbuckets, u32 symoffset, u32 bloom_size, u32 bloom_shift,
-        // followed by bloom[bloom_size] (word size = 4 on 32-bit ELF, 8 on 64-bit),
-        // buckets[nbuckets] (u32), chains[...] (u32, terminated by entry w/ LSB set).
-        U32 gnu_header[4] = {0};
-        if(lnx_dmn_read(process->fd, r1u64(dynamic_info.gnu_hash_vaddr, dynamic_info.gnu_hash_vaddr + sizeof(gnu_header)), gnu_header) == sizeof(gnu_header))
-        {
-          U32 nbuckets    = gnu_header[0];
-          U32 symoffset   = gnu_header[1];
-          U32 bloom_size  = gnu_header[2];
-          U64 bloom_word  = (elf_class == ELF_Class_64) ? 8 : 4;
-          U64 buckets_vaddr = dynamic_info.gnu_hash_vaddr + sizeof(gnu_header) + bloom_size * bloom_word;
-          U64 chain_vaddr   = buckets_vaddr + (U64)nbuckets * sizeof(U32);
-          
-          // find largest symbol index referenced by any bucket
-          U32 max_bucket = 0;
-          for(U32 b = 0; b < nbuckets; b += 1)
-          {
-            U32 entry = 0;
-            if(lnx_dmn_read(process->fd, r1u64(buckets_vaddr + b*sizeof(U32), buckets_vaddr + (b+1)*sizeof(U32)), &entry) != sizeof(U32))
-            {
-              break;
-            }
-            if(entry > max_bucket) { max_bucket = entry; }
-          }
-          
-          if(max_bucket < symoffset)
-          {
-            // no symbols in hash; total count is symoffset
-            symbol_count = symoffset;
-          }
-          else
-          {
-            // walk chain from max_bucket until terminator (entry w/ LSB set)
-            U64 idx = max_bucket;
-            for(;;)
-            {
-              U32 chain_entry = 0;
-              U64 entry_vaddr = chain_vaddr + (idx - symoffset) * sizeof(U32);
-              if(lnx_dmn_read(process->fd, r1u64(entry_vaddr, entry_vaddr + sizeof(U32)), &chain_entry) != sizeof(U32))
-              {
-                break;
-              }
-              if(chain_entry & 1)
-              {
-                symbol_count = idx + 1;
-                break;
-              }
-              idx += 1;
-              if(idx - max_bucket > (1u<<24))
-              {
-                // sanity bound: don't loop forever on a corrupt chain
-                break;
-              }
-            }
-          }
-        }
-      }
-      
-      // scan symbol table for the rendezvous symbol
-      if(dynamic_info.symtab_vaddr && dynamic_info.symtab_entry_size && symbol_count)
-      {
-        for EachIndex(symbol_idx, symbol_count)
-        {
-          ELF_Sym64 symbol = {0};
-          if(elf_read_symbol(lnx_dmn_machine_op_mem_read, &process->fd, dynamic_info.symtab_vaddr + symbol_idx * dynamic_info.symtab_entry_size, elf_class, &symbol) != MachineOpResult_Ok)
-          {
-            Assert(0 && "failed to read symbol table");
-            break;
-          }
-          
-          Temp temp = temp_begin(scratch.arena);
-          
-          String8 symbol_name = {0};
-          if(symbol.st_name < dynamic_info.strtab_size)
-          {
-            U64 cap = dynamic_info.strtab_size - symbol.st_name;
-            symbol_name = lnx_dmn_read_string_capped(temp.arena, process->fd, dynamic_info.strtab_vaddr + symbol.st_name, cap);
-          }
-          
-          if(str8_match(symbol_name, str8_lit("_r_debug"), 0))
-          {
-            ELF_SymType symbol_type = ELF_ST_TYPE(symbol.st_info);
-            if(symbol_type == ELF_SymType_Object && symbol.st_size > 0)
-            {
-              rdebug_vaddr = rebase + symbol.st_value;
-              break;
-            }
-          }
-          
-          temp_end(temp);
-        }
-      }
-      
-      scratch_end(scratch);
-    }
-    
-    //- query xsave layout
-    U64 xcr0 = 0;
-    U64 xsave_size = 0;
-    X64_XSaveLayout xsave_layout = {0};
-    if(arch == Arch_x64)
-    {
-      X64_XSave xsave = {0};
-      if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, process->pid, (void *)NT_X86_XSTATE, &(struct iovec){.iov_base = &xsave, .iov_len = sizeof(xsave) }) >= 0))
-      {
-        // Linux stores xcr0 bits in fxstate padding,
-        // see https://github.com/torvalds/linux/blob/6548d364a3e850326831799d7e3ea2d7bb97ba08/arch/x86/include/asm/user.h#L25
-        xcr0 = *(U64 *)((U8 *)&xsave + 464);
-        xsave_size = x64_get_xsave_size();
-        xsave_layout = x64_get_xsave_layout(xcr0);
-      }
-      else
-      {
-        Assert(0 && "failed to get xstate");
-      }
-    }
-    
-    // gather probes
-    LNX_DMN_Probe **known_probes = push_array(ctx_arena, LNX_DMN_Probe *, LNX_DMN_ProbeKind_COUNT);
-    {
-      Temp scratch = scratch_begin(0, 0);
-      
-      // rjf: get dl path for this pid
-      String8 dl_path = {0};
-      {
-        int maps_fd = LNX_RETRY_ON_EINTR(open((char *)str8f(scratch.arena, "/proc/%d/maps", pid).str, O_RDONLY));
-        if(maps_fd != -1)
-        {
-          // rjf: determine how big /proc/pid/maps is (this is a "special file", so we have to compute the size
-          // by reading the whole thing - very very good
-          //
-          // TODO(rjf): probably just read it once into a list & join?
-          //
-          U64 maps_size = 0;
-          {
-            U8 temp[4096];
-            size_t cap = MB(1);
-            size_t cursor = 0;
-            for(;cursor < cap;)
-            {
-              ssize_t actual_read = LNX_RETRY_ON_EINTR(pread(maps_fd, temp, sizeof(temp), cursor));
-              if(actual_read <= 0) { break; }
-              cursor += (U64)actual_read;
-            }
-            maps_size = (U64)cursor;
-          }
-          
-          // rjf: read entire /proc/pid/maps
-          U8 *maps_ptr = push_array(scratch.arena, U8, maps_size);
-          U64 read_size = lnx_dmn_read(maps_fd, r1u64(0, maps_size), maps_ptr);
-          
-          // split map file on lines
-          String8List lines = str8_split_by_string_chars(scratch.arena, str8(maps_ptr, maps_size), str8_lit("\n"), 0);
-          
-          // scan each line until a virtual mapping whose low part matches the DL base address is found
-          for EachNode(n, String8Node, lines.first)
-          {
-            String8 line = n->string;
-            
-            // split the string while respecting escape sequences
-            String8List parts = {0};
-            for EachIndex(cursor, line.size)
-            {
-              if(parts.node_count > 5)    { break; }
-              if(line.str[cursor] == ' ') { continue; }
-              
-              // scan forward to the closing delimiter
-              U64 token_start = cursor;
-              for(; cursor < line.size; cursor += 1)
-              {
-                if(line.str[cursor] == '\\')
-                {
-                  cursor += 1;
-                  continue;
-                }
-                if(line.str[cursor] == ' ') { break; }
-              }
-              
-              // push sub-string to the list
-              str8_list_push(scratch.arena, &parts, str8_substr(line, r1u64(token_start, cursor)));
-            }
-            
-            // was line parsed correctly?
-            if(parts.node_count < 5) { Assert(0 && "failed to parse map line"); continue; }
-            
-            // parse map virtual range
-            String8List vaddr_list = str8_split_by_string_chars(scratch.arena, parts.first->string, str8_lit("-"), 0);
-            if(vaddr_list.node_count != 2) { Assert(0 && "failed to parse virtual range portion of map line"); continue; }
-            
-            // does the low part match DL base address?
-            U64 lo_vaddr = u64_from_str8(vaddr_list.first->string, 16);
-            if(lo_vaddr == auxv.base)
-            {
-              dl_path = parts.node_count == 5 ? str8_zero() : parts.last->string;
-              dl_path = push_str8_copy(arena, dl_path);
-              break;
-            }
-          }
-          
-          LNX_RETRY_ON_EINTR(close(maps_fd));
-        }
-        else
-        {
-          Assert(0 && "failed to open DL fd");
-        }
-        Assert(dl_path.size);
-      }
-      
-      // rjf: read probes for this dl
-      int dl_fd = LNX_RETRY_ON_EINTR(open((char *)dl_path.str, O_RDONLY));
-      LNX_DMN_ProbeList probes = {0};
-      if(dl_fd >= 0)
-      {
-        U64 offset = 0;
-        ELF_Hdr64 ehdr = {0};
-        if(elf_read_ehdr(lnx_dmn_machine_op_mem_read, &dl_fd, offset, &ehdr) != MachineOpResult_Ok) { goto exit; }
-        
-        U64        strtab_shdr_offset = offset + ehdr.e_shoff + ehdr.e_shstrndx * ehdr.e_shentsize;
-        ELF_Shdr64 strtab_shdr        = {0};
-        if(elf_read_shdr(lnx_dmn_machine_op_mem_read, &dl_fd, strtab_shdr_offset, ehdr.e_ident[ELF_Identifier_Class], &strtab_shdr) != MachineOpResult_Ok) { goto exit; }
-        
-        B32 found_probes      = 0;
-        B32 found_probes_base = 0;
-        ELF_Shdr64 text_shdr         = {0};
-        ELF_Shdr64 stapsdt_base_shdr = {0};
-        ELF_Shdr64 stapsdt_shdr      = {0};
-        for(U64 shdr_off = offset + ehdr.e_shoff, shdr_opl = shdr_off + ehdr.e_shentsize * ehdr.e_shnum;
-            shdr_off < shdr_opl;
-            shdr_off += ehdr.e_shentsize) {
-          ELF_Shdr64 shdr = {0};
-          if(elf_read_shdr(lnx_dmn_machine_op_mem_read, &dl_fd, shdr_off, ehdr.e_ident[ELF_Identifier_Class], &shdr) != MachineOpResult_Ok) { goto exit; }
-          
-          if(shdr.sh_type == ELF_ShType_Note)
-          {
-            U64     name_offset = offset + strtab_shdr.sh_offset + shdr.sh_name;
-            U64     name_cap    = offset + strtab_shdr.sh_offset + strtab_shdr.sh_size;
-            String8 name        = lnx_dmn_read_string_capped(scratch.arena, dl_fd, name_offset, name_cap);
-            
-            if(str8_match(name, str8_lit(".note.stapsdt"), 0))
-            {
-              stapsdt_shdr = shdr;
-              found_probes = 1;
-            }
-          }
-          else if(shdr.sh_type == ELF_ShType_ProgBits)
-          {
-            U64     name_offset = offset + strtab_shdr.sh_offset + shdr.sh_name;
-            U64     name_cap    = offset + strtab_shdr.sh_offset + strtab_shdr.sh_size;
-            String8 name        = lnx_dmn_read_string_capped(scratch.arena, dl_fd, name_offset, name_cap);
-            
-            if(str8_match(name, str8_lit(".stapsdt.base"), 0))
-            {
-              stapsdt_base_shdr = shdr;
-              found_probes_base = 1;
-            } else if(str8_match(name, str8_lit(".text"), 0))
-            {
-              text_shdr = shdr;
-            }
-          }
-          
-          if(found_probes && found_probes_base) { break; }
-        }
-        
-        if(!found_probes || !found_probes_base) { goto exit; }
-        
-        U64 probes_base = stapsdt_base_shdr.sh_addr;
-        
-        Rng1U64  note_range     = shift_1u64(r1u64(stapsdt_shdr.sh_offset, stapsdt_shdr.sh_offset + stapsdt_shdr.sh_size), offset);
-        void    *raw_note       = push_array(arena, U8, stapsdt_shdr.sh_size);
-        U64      note_read_size = lnx_dmn_read(dl_fd, note_range, raw_note);
-        if(note_read_size != dim_1u64(note_range)) { goto exit; }
-        
-        Arch         arch = arch_from_elf_machine(ehdr.e_machine);
-        ELF_NoteList note = elf_parse_note(scratch.arena, str8(raw_note, dim_1u64(note_range)), ehdr.e_ident[ELF_Identifier_Class], ehdr.e_machine);
-        
-        for EachNode(n, ELF_NoteNode, note.first)
-        {
-          ELF_Note *note = &n->v;
-          if(!str8_match(note->owner, str8_lit("stapsdt"), 0)) { continue; }
-          if(note->type != ELF_NoteType_STapSdt)               { continue; }
-          
-          LNX_DMN_Probe probe = {0};
-          {
-            U64 cursor    = 0;
-            U64 addr_size = ehdr.e_ident[ELF_Identifier_Class] == ELF_Class_64 ? 8 : 4;
-            
-            U64 pc = 0;
-            U64 pc_size = str8_deserial_read(note->desc, cursor, &pc, addr_size, addr_size);
-            if (pc_size == 0) { goto exit; }
-            cursor += pc_size;
-            
-            U64 base_addr = 0;
-            U64 base_addr_size = str8_deserial_read(note->desc, cursor, &base_addr, addr_size, addr_size);
-            if (base_addr_size == 0) { goto exit; }
-            cursor += base_addr_size;
-            
-            U64 semaphore = 0;
-            U64 semaphore_size = str8_deserial_read(note->desc, cursor, &semaphore, addr_size, addr_size);
-            if (semaphore_size == 0) { goto exit; }
-            cursor += semaphore_size;
-            
-            String8 provider = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
-            cursor += provider.size + 1;
-            if (cursor > note->desc.size) { goto exit; }
-            
-            String8 name = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
-            cursor += name.size + 1;
-            if (cursor > note->desc.size) { goto exit; }
-            
-            String8 args = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
-            cursor += args.size + 1;
-            if (cursor > note->desc.size) { goto exit; }
-            
-            U64 probe_rebase = auxv.base + (base_addr - probes_base);
-            
-            probe.provider  = provider;
-            probe.name      = name;
-            probe.args      = stap_arg_array_from_string(arena, arch, args);
-            probe.pc        = pc + probe_rebase;
-            probe.semaphore = semaphore ? semaphore + probe_rebase : 0;
-          }
-          
-          LNX_DMN_ProbeNode *n = push_array(arena, LNX_DMN_ProbeNode, 1);
-          n->v = probe;
-          SLLQueuePush(probes.first, probes.last, n);
-          probes.count += 1;
-        }
-        
-        exit:;
-        LNX_RETRY_ON_EINTR(close(dl_fd));
-      }
-      
-      // rjf: store probes
-      for EachNode(n, LNX_DMN_ProbeNode, probes.first)
-      {
-        LNX_DMN_Probe *p = &n->v;
-        if(str8_match(p->provider, s("rtld"), 0))
-        {
-          for EachNonZeroEnumVal(LNX_DMN_ProbeKind, k)
-          {
-            if(str8_match(p->name, lnx_dmn_probe_kind_string_table[k], 0))
-            {
-              known_probes[k] = p;
-              break;
-            }
-          }
-        }
-      }
-      
-      scratch_end(scratch);
-    }
-    
-    //- rjf: build context
-    ctx = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_ProcessCtx)->process_ctx;
-    ctx->arena             = ctx_arena;
-    ctx->arch              = arch;
-    ctx->rdebug_vaddr      = rdebug_vaddr;
-    ctx->dl_class          = dl_class;
-    ctx->loaded_modules_ht = hash_table_init(ctx_arena, 0x1000);
-    ctx->probes            = known_probes;
-    ctx->xcr0              = xcr0;
-    ctx->xsave_size        = Max(xsave_size, sizeof(X64_XSave));
-    ctx->xsave_layout      = xsave_layout;
-    
-    //- create main module
-    LNX_DMN_Module *main_module = lnx_dmn_module_alloc(ctx, process->fd, base_vaddr, auxv.execfn, 1, 1);
-    
-    //- glibc has a shortcut mapping for the main module
-    hash_table_push_u64_raw(ctx->arena, ctx->loaded_modules_ht, 0, main_module);
-  }
-  
-  //////////////////////////////
-  //- rjf: set process' context
-  //
-  process->ctx = ctx;
-  process->ctx->ref_count += 1;
-  
-  //////////////////////////////
-  //- rjf: install probe traps - only needed in processes without cloned memory
-  //
-  if(!(flags & LNX_DMN_CreateProcessFlag_ClonedMemory))
-  {
-    for EachNonZeroEnumVal(LNX_DMN_ProbeKind, k)
-    {
-      if(process->ctx->probes[k] == 0) { continue; }
-      DMN_Trap *trap = push_array(process->ctx->arena, DMN_Trap, 1);
-      trap->process = lnx_dmn_handle_from_process(process);
-      trap->vaddr   = process->ctx->probes[k]->pc;
-      trap->id      = k;
-      LNX_DMN_ActiveTrap *active_trap = lnx_dmn_set_trap(process->ctx->arena, trap);
-      SLLQueuePush(process->ctx->first_probe_trap, process->ctx->last_probe_trap, active_trap);
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: create main thread
-  //
-  lnx_dmn_thread_alloc(process, LNX_DMN_ThreadState_Stopped, pid);
-  
-  //////////////////////////////
-  //- rjf: push events
-  //
-  {
-    DMN_Event *e = dmn_event_list_push(arena, events);
-    e->kind      = DMN_EventKind_CreateProcess;
-    e->process   = lnx_dmn_handle_from_process(process);
-    e->arch      = process->ctx->arch;
-    e->code      = process->pid;
-  }
-  for EachNode(thread, LNX_DMN_Thread, process->first_thread)
-  {
-    lnx_dmn_push_event_create_thread(arena, events, thread);
-  }
-  for EachNode(module, LNX_DMN_Module, process->ctx->first_module)
-  {
-    lnx_dmn_push_event_load_module(arena, events, process->first_thread, module);
-  }
-  {
-    DMN_Event *e = dmn_event_list_push(arena, events);
-    e->kind    = DMN_EventKind_HandshakeComplete;
-    e->process = lnx_dmn_handle_from_process(process);
-    e->thread  = lnx_dmn_handle_from_thread(process->first_thread);
-    e->arch    = process->ctx->arch;
-  }
-  
-  return process;
-}
-
-internal void
 lnx_dmn_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 name_space_id, U64 new_link_map_vaddr)
 {
   LNX_DMN_Process *process = thread->process;
@@ -2204,13 +1536,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
   Temp scratch = scratch_begin(&arena, 1);
   DMN_EventList events = {0};
   
-  // TODO(rjf): wait... we can't take the halter mutex here???
-  // callers of dmn_halt need to be able to call *while* a run
-  // is happening!
-  //
-  // TODO(rjf): *after further reading* oh, I see, it is dropped
-  // before we do a wait_pid... we should try to clean this up?
-  // rather than a mutex dance that spans this whole path...
+  //////////////////////////////
+  //- rjf: prevent halts temporarily, while debuggee state can change -
+  // we will resume before actually waiting for a signal, so that a halt
+  // can correctly interrupt debuggee execution.
   //
   mutex_take(lnx_dmn_state->halter_mutex);
   
@@ -2220,7 +1549,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
   if(lnx_dmn_state->process_count > 0)
   {
     ////////////////////////////
-    //- rjf: write all traps
+    //- rjf: write all trap instructions
     //
     LNX_DMN_ActiveTrap *active_trap_first = 0;
     LNX_DMN_ActiveTrap *active_trap_last = 0;
@@ -2395,10 +1724,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     //
     B32 is_halt_done = 0;
     LNX_DMN_ThreadPtrList stopped_threads = {0};
-    do
+    for(;;)
     {
       //////////////////////////
-      //- rjf: wait for a signal
+      //- rjf: wait for a signal (unblock halts)
       //
       int status = 0;
       pid_t wait_id = 0;
@@ -2424,16 +1753,21 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       int event_code  = (status >> 16);
       
       //////////////////////////
-      //- rjf: intercept initing processes
+      //- rjf: handle signals from initializing processes
       //
+      B32 signal_handled = 0;
+      B32 process_done = 0;
+      B32 process_new = 0;
+      LNX_DMN_CreateProcessFlags process_new_flags = 0;
+      B32 thread_done = 0;
+      U64 thread_done_exit_code = 0;
+      B32 thread_new = 0;
       if(process && process->state != LNX_DMN_ProcessState_Normal)
       {
+        //- rjf: advance process initialization state
         switch(process->state)
         {
-          case LNX_DMN_ProcessState_Null:
-          case LNX_DMN_ProcessState_Normal:
-          {
-          }break;
+          default:{}break;
           case LNX_DMN_ProcessState_Launch:
           {
             if(wstopsig == SIGSTOP)
@@ -2441,46 +1775,40 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_CONT, process->pid, 0, 0)) >= 0)
               {
                 process->state = LNX_DMN_ProcessState_WaitForExec;
-                goto wait_for_signal;
+                signal_handled = 1;
               }
-              else { Assert(0 && "failed to resume tracee"); }
+              else
+              {
+                log_infof("ptrace error: Failed to resume tracee.");
+              }
             }
-            // else { Assert(0 && "unexpected signal"); }
-          } break;
+          }break;
           case LNX_DMN_ProcessState_WaitForExec:
+          if(wstopsig == SIGTRAP && event_code == PTRACE_EVENT_EXEC)
           {
-            if(wstopsig == SIGTRAP && event_code == PTRACE_EVENT_EXEC)
-            {
-              LNX_DMN_CreateProcessFlags create_flags = process->debug_subprocesses ? LNX_DMN_CreateProcessFlag_DebugSubprocesses : 0;
-              lnx_dmn_process_release(process);
-              lnx_dmn_event_create_process(arena, &events, wait_id, 0, create_flags);
-              goto wait_for_signal;
-            }
-            //else { Assert(0 && "unexpected signal"); }
-          } break;
+            process_done = 1;
+            process_new = 1;
+            process_new_flags = process->debug_subprocesses ? LNX_DMN_CreateProcessFlag_DebugSubprocesses : 0;
+            signal_handled = 1;
+          }break;
           case LNX_DMN_ProcessState_ExecFailedDoExit:
+          if(wifexited)
           {
-            if(wifexited)
-            {
-              lnx_dmn_process_release(process);
-              goto wait_for_signal;
-            }
-            else { Assert(0 && "unexpected signal"); }
-          } break;
+            process_done = 1;
+            signal_handled = 1;
+          }break;
           case LNX_DMN_ProcessState_Attach:
+          if(wstopsig == SIGSTOP)
           {
-            if(wstopsig == SIGSTOP)
-            {
-              LNX_DMN_CreateProcessFlags create_flags = process->debug_subprocesses ? LNX_DMN_CreateProcessFlag_DebugSubprocesses : 0;
-              lnx_dmn_process_release(process);
-              lnx_dmn_event_create_process(arena, &events, wait_id, 0, create_flags);
-              goto wait_for_signal;
-            }
-            else { Assert(0 && "unexpected signal"); }
-          } break;
+            process_done = 1;
+            process_new = 1;
+            process_new_flags = process->debug_subprocesses ? LNX_DMN_CreateProcessFlag_DebugSubprocesses : 0;
+            signal_handled = 1;
+          }break;
         }
         
-        // shutdown process
+        //- rjf: if signal was unhandled at this point -> kill process
+        if(!signal_handled)
         {
           if(LNX_RETRY_ON_EINTR(kill(wait_id, SIGKILL)) >= 0)
           {
@@ -2488,19 +1816,16 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           }
           else
           {
-            //Assert(0 && "failed to send kill signal to the tracee");
-            lnx_dmn_process_release(process);
+            log_infof("ptrace error: Couldn't successfully kill process; releasing debugger state.");
+            process_done = 1;
           }
         }
-        
-        wait_for_signal:;
-        continue;
       }
       
       //////////////////////////
       //- rjf: any thread stop -> interrupt all threads
       //
-      if(wifexited || wifsignaled || wifstopped)
+      if(!signal_handled && (wifexited || wifsignaled || wifstopped))
       {
         LNX_DMN_ThreadPtrNode *thread_n = hash_table_search_u64_raw(running_threads_ht, wait_id);
         if(thread_n)
@@ -2542,17 +1867,20 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       // wifexited -> normal process exit via _exit or exit()
       // wifsignaled -> exit because child did not handle a signal
       //
-      if(wifexited || wifsignaled)
+      if(!signal_handled && (wifexited || wifsignaled))
       {
-        U64 exit_code = wifexited ? WEXITSTATUS(status) : WTERMSIG(status);
-        lnx_dmn_event_exit_thread(arena, &events, wait_id, exit_code);
+        thread_done = 1;
+        thread_done_exit_code = wifexited ? WEXITSTATUS(status) : WTERMSIG(status);
+        signal_handled = 1;
       }
       
       //////////////////////////
       //- rjf: wifstopped -> thread or group stop
       //
-      else if(wifstopped)
+      else if(!signal_handled && wifstopped)
       {
+        signal_handled = 1;
+        
         ////////////////////////
         //- rjf: read stop thread's new registers
         //
@@ -2842,14 +2170,17 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               LNX_DMN_Process *process = thread->process;
               if(process->debug_subprocesses)
               {
-                lnx_dmn_event_exit_thread(arena, &events, wait_id, 0);
-                lnx_dmn_event_create_process(arena, &events, wait_id, 0, LNX_DMN_CreateProcessFlag_DebugSubprocesses);
+                thread_done = 1;
+                thread_done_exit_code = 0;
+                process_new = 1;
+                process_new_flags = LNX_DMN_CreateProcessFlag_DebugSubprocesses;
               }
               else
               {
                 if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_DETACH, wait_id, 0, 0)) >= 0)
                 {
-                  lnx_dmn_event_exit_thread(arena, &events, wait_id, 0);
+                  thread_done = 1;
+                  thread_done_exit_code = 0;
                 }
                 else { Assert(0 && "failed to detach"); }
               }
@@ -2972,13 +2303,697 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       }
       
       //////////////////////////
-      //- rjf: otherwise -> unexpected stop code.
+      //- rjf: signal not handled -> log
       //
-      else
+      if(!signal_handled)
       {
         // TODO(rjf)
       }
-    } while(running_threads.count > 0 || lnx_dmn_state->process_pending_creation > 0 || lnx_dmn_state->threads_pending_creation > 0);
+      
+      //////////////////////////
+      //- rjf: thread done -> release
+      //
+      if(thread_done)
+      {
+        // rjf: store main thread's exit code
+        if(thread->tid == thread->process->pid)
+        {
+          thread->process->main_thread_exit_code = thread_done_exit_code;
+        }
+        
+        // rjf: push exit event
+        {
+          DMN_Event *e = dmn_event_list_push(arena, &events);
+          e->kind    = DMN_EventKind_ExitThread;
+          e->process = lnx_dmn_handle_from_process(thread->process);
+          e->thread  = lnx_dmn_handle_from_thread(thread);
+          e->code    = (U32)thread_done_exit_code;
+        }
+        
+        // rjf: release thread storage
+        lnx_dmn_thread_release(thread);
+        
+        // rjf: last thread in process? -> exit process too
+        if(thread->process->thread_count == 0)
+        {
+          // rjf: push module events
+          for EachNode(module, LNX_DMN_Module, thread->process->ctx->first_module)
+          {
+            lnx_dmn_push_event_unload_module(arena, &events, thread->process, module);
+          }
+          
+          // rjf: push process exit event
+          {
+            DMN_Event *e = dmn_event_list_push(arena, &events);
+            e->kind    = DMN_EventKind_ExitProcess;
+            e->process = lnx_dmn_handle_from_process(thread->process);
+            e->code    = thread->process->main_thread_exit_code;
+          }
+          
+          // rjf: release process storage
+          lnx_dmn_process_release(thread->process);
+        }
+      }
+      
+      //////////////////////////
+      //- rjf: process done -> release
+      //
+      if(process_done)
+      {
+        lnx_dmn_process_release(process);
+      }
+      
+      //////////////////////////
+      //- rjf: new process -> create
+      //
+      if(process_new)
+      {
+        LNX_DMN_Process *parent_process = 0;
+        LNX_DMN_Process *new_process = lnx_dmn_process_alloc(wait_id, LNX_DMN_ProcessState_Normal, 0, !!(process_new_flags & LNX_DMN_CreateProcessFlag_DebugSubprocesses), !!(process_new_flags & LNX_DMN_CreateProcessFlag_Cow));
+        
+        ////////////////////////
+        //- rjf: get process context - create if this isn't cloning parent process
+        //
+        LNX_DMN_ProcessCtx *ctx = 0;
+        if(parent_process != 0 && process_new_flags & LNX_DMN_CreateProcessFlag_ClonedMemory)
+        {
+          ctx = parent_process->ctx;
+        }
+        else
+        {
+          //- rjf: allocate ctx
+          ctx = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_ProcessCtx)->process_ctx;
+          
+          //- rjf: read main executable ELF header
+          ELF_Hdr64 exe_ehdr = {0};
+          {
+            Temp scratch = scratch_begin(&arena, 1);
+            char *exe_path = (char *)str8f(scratch.arena, "/proc/%d/exe", wait_id).str;
+            int exe_fd = LNX_RETRY_ON_EINTR(open(exe_path, O_RDONLY));
+            if(exe_fd >= 0)
+            {
+              U8 e_ident[ELF_Identifier_Max] = {0};
+              lnx_dmn_read(exe_fd, r1u64(0, sizeof(e_ident)), e_ident);
+              if(MemoryMatch(e_ident, elf_magic_string.str, elf_magic_string.size))
+              {
+                switch(e_ident[ELF_Identifier_Class])
+                {
+                  default:{}break;
+                  case ELF_Class_None:{}break;
+                  case ELF_Class_32:
+                  {
+                    ELF_Hdr32 ehdr32 = {0};
+                    lnx_dmn_read(exe_fd, r1u64(0, sizeof(ehdr32)), &ehdr32);
+                    exe_ehdr = elf_hdr64_from_hdr32(ehdr32);
+                  }break;
+                  case ELF_Class_64:
+                  {
+                    lnx_dmn_read(exe_fd, r1u64(0, sizeof(exe_ehdr)), &exe_ehdr);
+                  }break;
+                }
+              }
+            }
+            LNX_RETRY_ON_EINTR(close(exe_fd));
+            scratch_end(scratch);
+          }
+          
+          //- rjf: read auxv info for pid
+          LNX_DMN_Auxv auxv = {0};
+          {
+            Temp scratch = scratch_begin(0, 0);
+            
+            // rjf: open aux data
+            String8 auxv_path = str8f(scratch.arena, "/proc/%d/auxv", wait_id);
+            int auxv_fd = LNX_RETRY_ON_EINTR(open((char *)auxv_path.str, O_RDONLY));
+            
+            // rjf: scan aux data
+            if(auxv_fd >= 0)
+            {
+              for(U64 off = 0;;)
+              {
+                // rjf: read next aux
+                ELF_Auxv64 auxv_entry = {0};
+                switch(exe_ehdr.e_ident[ELF_Identifier_Class])
+                {
+                  default:
+                  case ELF_Class_None:{}break;
+                  case ELF_Class_32:
+                  {
+                    ELF_Auxv32 auxv32 = {0};
+                    off += lnx_dmn_read_struct(auxv_fd, off, &auxv32);
+                    auxv_entry = elf_auxv64_from_auxv32(auxv32);
+                  }break;
+                  case ELF_Class_64:
+                  {
+                    off += lnx_dmn_read_struct(auxv_fd, off, &auxv_entry);
+                  }break;
+                }
+                
+                // rjf: fill result
+                switch(auxv_entry.a_type)
+                {
+                  default:{}break;
+                  case ELF_AuxType_Null:   goto brkloop; break;
+                  case ELF_AuxType_Base:   auxv.base   = auxv_entry.a_val; break;
+                  case ELF_AuxType_Phnum:  auxv.phnum  = auxv_entry.a_val; break;
+                  case ELF_AuxType_Phent:  auxv.phent  = auxv_entry.a_val; break;
+                  case ELF_AuxType_Phdr:   auxv.phdr   = auxv_entry.a_val; break;
+                  case ELF_AuxType_ExecFn: auxv.execfn = auxv_entry.a_val; break;
+                  case ELF_AuxType_Pagesz: auxv.pagesz = auxv_entry.a_val; break;
+                }
+              }
+              brkloop:;
+              LNX_RETRY_ON_EINTR(close(auxv_fd));
+            }
+            
+            scratch_end(scratch);
+          }
+          
+          //- rjf: unpack context
+          Arch arch = arch_from_elf_machine(exe_ehdr.e_machine);
+          U64 base_vaddr = (auxv.phdr & ~(auxv.pagesz-1));
+          U64 rebase = exe_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
+          Rng1U64 image_vrange = lnx_dmn_compute_image_vrange(new_process->fd, exe_ehdr.e_ident[ELF_Identifier_Class], rebase, auxv.phdr, auxv.phent, auxv.phnum);
+          Arena *ctx_arena = arena_alloc();
+          
+          //- rjf: read dynamically loaded ELF header
+          ELF_Hdr64 dl_ehdr = {0};
+          elf_read_ehdr(lnx_dmn_machine_op_mem_read, &new_process->fd, auxv.base, &dl_ehdr);
+          ELF_Class dl_class = dl_ehdr.e_ident[ELF_Identifier_Class];
+          
+          //- rjf: compute rdebug vaddr
+          U64 rdebug_vaddr = 0;
+          {
+            Temp scratch = scratch_begin(0, 0);
+            
+            // load DL's header
+            ELF_Hdr64 ehdr = {0};
+            elf_read_ehdr(lnx_dmn_machine_op_mem_read, &new_process->fd, auxv.base, &ehdr);
+            
+            U64 rebase = dl_ehdr.e_type == ELF_Type_Dyn ? auxv.base : 0;
+            ELF_Class elf_class = ehdr.e_ident[ELF_Identifier_Class];
+            
+            // rjf: find dynamic program header
+            U64 dynamic_vaddr = 0;
+            {
+              U64 phdr_vaddr    = auxv.base + dl_ehdr.e_phoff;
+              for(U64 ph_cursor = phdr_vaddr, ph_opl = (phdr_vaddr + ehdr.e_phentsize * ehdr.e_phentsize); ph_cursor < ph_opl; ph_cursor += ehdr.e_phentsize)
+              {
+                ELF_Phdr64 phdr = {0};
+                elf_read_phdr(lnx_dmn_machine_op_mem_read, &new_process->fd, ph_cursor, elf_class, &phdr);
+                if(phdr.p_type == ELF_PType_Dynamic)
+                {
+                  dynamic_vaddr = rebase + phdr.p_vaddr;
+                  break;
+                }
+              }
+            }
+            
+            // rjf: get dynamic info for this module
+            // extract necessary info out of dynamic program header
+            LNX_DMN_DynamicInfo dynamic_info = {0};
+            {
+              B32 is_rebased = !!(process_new_flags & LNX_DMN_CreateProcessFlag_Rebased);
+              U64 dynamic_info_rebase = is_rebased ? 0 : rebase;
+              for(U64 dynamic_cursor = dynamic_vaddr; ; dynamic_cursor += elf_dyn_size_from_class(elf_class))
+              {
+                // rjf: read next dyn entry
+                ELF_Dyn64 dyn = {0};
+                if(elf_read_dyn(lnx_dmn_machine_op_mem_read, &new_process->fd, dynamic_cursor, elf_class, &dyn) != MachineOpResult_Ok) { Assert(0 && "unable to read dynamic"); }
+                
+                // rjf: break on zero
+                if(dyn.tag == ELF_DynTag_Null) { break; }
+                
+                // rjf: extract info from dynamic section
+                switch(dyn.tag)
+                {
+                  default:{}break;
+                  case ELF_DynTag_Strtab:   {dynamic_info.strtab_vaddr = dynamic_info_rebase + dyn.val;}break;
+                  case ELF_DynTag_Strsz:    {dynamic_info.strtab_size = dyn.val;}break;
+                  case ELF_DynTag_Symtab:   {dynamic_info.symtab_vaddr = dynamic_info_rebase + dyn.val;}break;
+                  case ELF_DynTag_Syment:   {dynamic_info.symtab_entry_size = dyn.val;}break;
+                  case ELF_DynTag_Hash:     {dynamic_info.hash_vaddr = dynamic_info_rebase + dyn.val;}break;
+                  case ELF_DynTag_GNU_Hash: {dynamic_info.gnu_hash_vaddr = dynamic_info_rebase + dyn.val;}break;
+                }
+              }
+            }
+            
+            // extract symbol table count from available options
+            U64 symbol_count = 0;
+            if(dynamic_info.hash_vaddr)
+            {
+              U64 hash_entry_size = 4;
+              if(elf_class == ELF_Class_64 && (ehdr.e_machine == ELF_MachineKind_ALPHA || ehdr.e_machine == ELF_MachineKind_S390 || ehdr.e_machine == ELF_MachineKind_S390_OLD))
+              {
+                hash_entry_size = 8;
+              }
+              
+              U64 chain_count = 0;
+              if(lnx_dmn_read(new_process->fd, r1u64(dynamic_info.hash_vaddr, dynamic_info.hash_vaddr + hash_entry_size), &chain_count) == hash_entry_size)
+              {
+                symbol_count = chain_count;
+              }
+              else
+              {
+                Assert(0 && "failed to read hash table's chain count out of HASH");
+              }
+            }
+            else if(dynamic_info.gnu_hash_vaddr)
+            {
+              // GNU_HASH header: u32 nbuckets, u32 symoffset, u32 bloom_size, u32 bloom_shift,
+              // followed by bloom[bloom_size] (word size = 4 on 32-bit ELF, 8 on 64-bit),
+              // buckets[nbuckets] (u32), chains[...] (u32, terminated by entry w/ LSB set).
+              U32 gnu_header[4] = {0};
+              if(lnx_dmn_read(new_process->fd, r1u64(dynamic_info.gnu_hash_vaddr, dynamic_info.gnu_hash_vaddr + sizeof(gnu_header)), gnu_header) == sizeof(gnu_header))
+              {
+                U32 nbuckets    = gnu_header[0];
+                U32 symoffset   = gnu_header[1];
+                U32 bloom_size  = gnu_header[2];
+                U64 bloom_word  = (elf_class == ELF_Class_64) ? 8 : 4;
+                U64 buckets_vaddr = dynamic_info.gnu_hash_vaddr + sizeof(gnu_header) + bloom_size * bloom_word;
+                U64 chain_vaddr   = buckets_vaddr + (U64)nbuckets * sizeof(U32);
+                
+                // find largest symbol index referenced by any bucket
+                U32 max_bucket = 0;
+                for(U32 b = 0; b < nbuckets; b += 1)
+                {
+                  U32 entry = 0;
+                  if(lnx_dmn_read(new_process->fd, r1u64(buckets_vaddr + b*sizeof(U32), buckets_vaddr + (b+1)*sizeof(U32)), &entry) != sizeof(U32))
+                  {
+                    break;
+                  }
+                  if(entry > max_bucket) { max_bucket = entry; }
+                }
+                
+                if(max_bucket < symoffset)
+                {
+                  // no symbols in hash; total count is symoffset
+                  symbol_count = symoffset;
+                }
+                else
+                {
+                  // walk chain from max_bucket until terminator (entry w/ LSB set)
+                  U64 idx = max_bucket;
+                  for(;;)
+                  {
+                    U32 chain_entry = 0;
+                    U64 entry_vaddr = chain_vaddr + (idx - symoffset) * sizeof(U32);
+                    if(lnx_dmn_read(new_process->fd, r1u64(entry_vaddr, entry_vaddr + sizeof(U32)), &chain_entry) != sizeof(U32))
+                    {
+                      break;
+                    }
+                    if(chain_entry & 1)
+                    {
+                      symbol_count = idx + 1;
+                      break;
+                    }
+                    idx += 1;
+                    if(idx - max_bucket > (1u<<24))
+                    {
+                      // sanity bound: don't loop forever on a corrupt chain
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+            
+            // scan symbol table for the rendezvous symbol
+            if(dynamic_info.symtab_vaddr && dynamic_info.symtab_entry_size && symbol_count)
+            {
+              for EachIndex(symbol_idx, symbol_count)
+              {
+                ELF_Sym64 symbol = {0};
+                if(elf_read_symbol(lnx_dmn_machine_op_mem_read, &new_process->fd, dynamic_info.symtab_vaddr + symbol_idx * dynamic_info.symtab_entry_size, elf_class, &symbol) != MachineOpResult_Ok)
+                {
+                  Assert(0 && "failed to read symbol table");
+                  break;
+                }
+                
+                Temp temp = temp_begin(scratch.arena);
+                
+                String8 symbol_name = {0};
+                if(symbol.st_name < dynamic_info.strtab_size)
+                {
+                  U64 cap = dynamic_info.strtab_size - symbol.st_name;
+                  symbol_name = lnx_dmn_read_string_capped(temp.arena, new_process->fd, dynamic_info.strtab_vaddr + symbol.st_name, cap);
+                }
+                
+                if(str8_match(symbol_name, str8_lit("_r_debug"), 0))
+                {
+                  ELF_SymType symbol_type = ELF_ST_TYPE(symbol.st_info);
+                  if(symbol_type == ELF_SymType_Object && symbol.st_size > 0)
+                  {
+                    rdebug_vaddr = rebase + symbol.st_value;
+                    break;
+                  }
+                }
+                
+                temp_end(temp);
+              }
+            }
+            
+            scratch_end(scratch);
+          }
+          
+          //- query xsave layout
+          U64 xcr0 = 0;
+          U64 xsave_size = 0;
+          X64_XSaveLayout xsave_layout = {0};
+          if(arch == Arch_x64)
+          {
+            X64_XSave xsave = {0};
+            if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETREGSET, new_process->pid, (void *)NT_X86_XSTATE, &(struct iovec){.iov_base = &xsave, .iov_len = sizeof(xsave) }) >= 0))
+            {
+              // Linux stores xcr0 bits in fxstate padding,
+              // see https://github.com/torvalds/linux/blob/6548d364a3e850326831799d7e3ea2d7bb97ba08/arch/x86/include/asm/user.h#L25
+              xcr0 = *(U64 *)((U8 *)&xsave + 464);
+              xsave_size = x64_get_xsave_size();
+              xsave_layout = x64_get_xsave_layout(xcr0);
+            }
+            else
+            {
+              Assert(0 && "failed to get xstate");
+            }
+          }
+          
+          // gather probes
+          LNX_DMN_Probe **known_probes = push_array(ctx_arena, LNX_DMN_Probe *, LNX_DMN_ProbeKind_COUNT);
+          {
+            Temp scratch = scratch_begin(0, 0);
+            
+            // rjf: get dl path for this pid
+            String8 dl_path = {0};
+            {
+              int maps_fd = LNX_RETRY_ON_EINTR(open((char *)str8f(scratch.arena, "/proc/%d/maps", wait_id).str, O_RDONLY));
+              if(maps_fd != -1)
+              {
+                // rjf: determine how big /proc/pid/maps is (this is a "special file", so we have to compute the size
+                // by reading the whole thing - very very good
+                //
+                // TODO(rjf): probably just read it once into a list & join?
+                //
+                U64 maps_size = 0;
+                {
+                  U8 temp[4096];
+                  size_t cap = MB(1);
+                  size_t cursor = 0;
+                  for(;cursor < cap;)
+                  {
+                    ssize_t actual_read = LNX_RETRY_ON_EINTR(pread(maps_fd, temp, sizeof(temp), cursor));
+                    if(actual_read <= 0) { break; }
+                    cursor += (U64)actual_read;
+                  }
+                  maps_size = (U64)cursor;
+                }
+                
+                // rjf: read entire /proc/pid/maps
+                U8 *maps_ptr = push_array(scratch.arena, U8, maps_size);
+                U64 read_size = lnx_dmn_read(maps_fd, r1u64(0, maps_size), maps_ptr);
+                
+                // split map file on lines
+                String8List lines = str8_split_by_string_chars(scratch.arena, str8(maps_ptr, maps_size), str8_lit("\n"), 0);
+                
+                // scan each line until a virtual mapping whose low part matches the DL base address is found
+                for EachNode(n, String8Node, lines.first)
+                {
+                  String8 line = n->string;
+                  
+                  // split the string while respecting escape sequences
+                  String8List parts = {0};
+                  for EachIndex(cursor, line.size)
+                  {
+                    if(parts.node_count > 5)    { break; }
+                    if(line.str[cursor] == ' ') { continue; }
+                    
+                    // scan forward to the closing delimiter
+                    U64 token_start = cursor;
+                    for(; cursor < line.size; cursor += 1)
+                    {
+                      if(line.str[cursor] == '\\')
+                      {
+                        cursor += 1;
+                        continue;
+                      }
+                      if(line.str[cursor] == ' ') { break; }
+                    }
+                    
+                    // push sub-string to the list
+                    str8_list_push(scratch.arena, &parts, str8_substr(line, r1u64(token_start, cursor)));
+                  }
+                  
+                  // was line parsed correctly?
+                  if(parts.node_count < 5) { Assert(0 && "failed to parse map line"); continue; }
+                  
+                  // parse map virtual range
+                  String8List vaddr_list = str8_split_by_string_chars(scratch.arena, parts.first->string, str8_lit("-"), 0);
+                  if(vaddr_list.node_count != 2) { Assert(0 && "failed to parse virtual range portion of map line"); continue; }
+                  
+                  // does the low part match DL base address?
+                  U64 lo_vaddr = u64_from_str8(vaddr_list.first->string, 16);
+                  if(lo_vaddr == auxv.base)
+                  {
+                    dl_path = parts.node_count == 5 ? str8_zero() : parts.last->string;
+                    dl_path = push_str8_copy(arena, dl_path);
+                    break;
+                  }
+                }
+                
+                LNX_RETRY_ON_EINTR(close(maps_fd));
+              }
+              else
+              {
+                Assert(0 && "failed to open DL fd");
+              }
+              Assert(dl_path.size);
+            }
+            
+            // rjf: read probes for this dl
+            int dl_fd = LNX_RETRY_ON_EINTR(open((char *)dl_path.str, O_RDONLY));
+            LNX_DMN_ProbeList probes = {0};
+            if(dl_fd >= 0)
+            {
+              U64 offset = 0;
+              ELF_Hdr64 ehdr = {0};
+              if(elf_read_ehdr(lnx_dmn_machine_op_mem_read, &dl_fd, offset, &ehdr) != MachineOpResult_Ok) { goto exit; }
+              
+              U64        strtab_shdr_offset = offset + ehdr.e_shoff + ehdr.e_shstrndx * ehdr.e_shentsize;
+              ELF_Shdr64 strtab_shdr        = {0};
+              if(elf_read_shdr(lnx_dmn_machine_op_mem_read, &dl_fd, strtab_shdr_offset, ehdr.e_ident[ELF_Identifier_Class], &strtab_shdr) != MachineOpResult_Ok) { goto exit; }
+              
+              B32 found_probes      = 0;
+              B32 found_probes_base = 0;
+              ELF_Shdr64 text_shdr         = {0};
+              ELF_Shdr64 stapsdt_base_shdr = {0};
+              ELF_Shdr64 stapsdt_shdr      = {0};
+              for(U64 shdr_off = offset + ehdr.e_shoff, shdr_opl = shdr_off + ehdr.e_shentsize * ehdr.e_shnum;
+                  shdr_off < shdr_opl;
+                  shdr_off += ehdr.e_shentsize) {
+                ELF_Shdr64 shdr = {0};
+                if(elf_read_shdr(lnx_dmn_machine_op_mem_read, &dl_fd, shdr_off, ehdr.e_ident[ELF_Identifier_Class], &shdr) != MachineOpResult_Ok) { goto exit; }
+                
+                if(shdr.sh_type == ELF_ShType_Note)
+                {
+                  U64     name_offset = offset + strtab_shdr.sh_offset + shdr.sh_name;
+                  U64     name_cap    = offset + strtab_shdr.sh_offset + strtab_shdr.sh_size;
+                  String8 name        = lnx_dmn_read_string_capped(scratch.arena, dl_fd, name_offset, name_cap);
+                  
+                  if(str8_match(name, str8_lit(".note.stapsdt"), 0))
+                  {
+                    stapsdt_shdr = shdr;
+                    found_probes = 1;
+                  }
+                }
+                else if(shdr.sh_type == ELF_ShType_ProgBits)
+                {
+                  U64     name_offset = offset + strtab_shdr.sh_offset + shdr.sh_name;
+                  U64     name_cap    = offset + strtab_shdr.sh_offset + strtab_shdr.sh_size;
+                  String8 name        = lnx_dmn_read_string_capped(scratch.arena, dl_fd, name_offset, name_cap);
+                  
+                  if(str8_match(name, str8_lit(".stapsdt.base"), 0))
+                  {
+                    stapsdt_base_shdr = shdr;
+                    found_probes_base = 1;
+                  } else if(str8_match(name, str8_lit(".text"), 0))
+                  {
+                    text_shdr = shdr;
+                  }
+                }
+                
+                if(found_probes && found_probes_base) { break; }
+              }
+              
+              if(!found_probes || !found_probes_base) { goto exit; }
+              
+              U64 probes_base = stapsdt_base_shdr.sh_addr;
+              
+              Rng1U64  note_range     = shift_1u64(r1u64(stapsdt_shdr.sh_offset, stapsdt_shdr.sh_offset + stapsdt_shdr.sh_size), offset);
+              void    *raw_note       = push_array(arena, U8, stapsdt_shdr.sh_size);
+              U64      note_read_size = lnx_dmn_read(dl_fd, note_range, raw_note);
+              if(note_read_size != dim_1u64(note_range)) { goto exit; }
+              
+              Arch         arch = arch_from_elf_machine(ehdr.e_machine);
+              ELF_NoteList note = elf_parse_note(scratch.arena, str8(raw_note, dim_1u64(note_range)), ehdr.e_ident[ELF_Identifier_Class], ehdr.e_machine);
+              
+              for EachNode(n, ELF_NoteNode, note.first)
+              {
+                ELF_Note *note = &n->v;
+                if(!str8_match(note->owner, str8_lit("stapsdt"), 0)) { continue; }
+                if(note->type != ELF_NoteType_STapSdt)               { continue; }
+                
+                LNX_DMN_Probe probe = {0};
+                {
+                  U64 cursor    = 0;
+                  U64 addr_size = ehdr.e_ident[ELF_Identifier_Class] == ELF_Class_64 ? 8 : 4;
+                  
+                  U64 pc = 0;
+                  U64 pc_size = str8_deserial_read(note->desc, cursor, &pc, addr_size, addr_size);
+                  if (pc_size == 0) { goto exit; }
+                  cursor += pc_size;
+                  
+                  U64 base_addr = 0;
+                  U64 base_addr_size = str8_deserial_read(note->desc, cursor, &base_addr, addr_size, addr_size);
+                  if (base_addr_size == 0) { goto exit; }
+                  cursor += base_addr_size;
+                  
+                  U64 semaphore = 0;
+                  U64 semaphore_size = str8_deserial_read(note->desc, cursor, &semaphore, addr_size, addr_size);
+                  if (semaphore_size == 0) { goto exit; }
+                  cursor += semaphore_size;
+                  
+                  String8 provider = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
+                  cursor += provider.size + 1;
+                  if (cursor > note->desc.size) { goto exit; }
+                  
+                  String8 name = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
+                  cursor += name.size + 1;
+                  if (cursor > note->desc.size) { goto exit; }
+                  
+                  String8 args = str8_cstring_capped(note->desc.str + cursor, note->desc.str + note->desc.size);
+                  cursor += args.size + 1;
+                  if (cursor > note->desc.size) { goto exit; }
+                  
+                  U64 probe_rebase = auxv.base + (base_addr - probes_base);
+                  
+                  probe.provider  = provider;
+                  probe.name      = name;
+                  probe.args      = stap_arg_array_from_string(arena, arch, args);
+                  probe.pc        = pc + probe_rebase;
+                  probe.semaphore = semaphore ? semaphore + probe_rebase : 0;
+                }
+                
+                LNX_DMN_ProbeNode *n = push_array(arena, LNX_DMN_ProbeNode, 1);
+                n->v = probe;
+                SLLQueuePush(probes.first, probes.last, n);
+                probes.count += 1;
+              }
+              
+              exit:;
+              LNX_RETRY_ON_EINTR(close(dl_fd));
+            }
+            
+            // rjf: store probes
+            for EachNode(n, LNX_DMN_ProbeNode, probes.first)
+            {
+              LNX_DMN_Probe *p = &n->v;
+              if(str8_match(p->provider, s("rtld"), 0))
+              {
+                for EachNonZeroEnumVal(LNX_DMN_ProbeKind, k)
+                {
+                  if(str8_match(p->name, lnx_dmn_probe_kind_string_table[k], 0))
+                  {
+                    known_probes[k] = p;
+                    break;
+                  }
+                }
+              }
+            }
+            
+            scratch_end(scratch);
+          }
+          
+          //- rjf: build context
+          ctx = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_ProcessCtx)->process_ctx;
+          ctx->arena             = ctx_arena;
+          ctx->arch              = arch;
+          ctx->rdebug_vaddr      = rdebug_vaddr;
+          ctx->dl_class          = dl_class;
+          ctx->loaded_modules_ht = hash_table_init(ctx_arena, 0x1000);
+          ctx->probes            = known_probes;
+          ctx->xcr0              = xcr0;
+          ctx->xsave_size        = Max(xsave_size, sizeof(X64_XSave));
+          ctx->xsave_layout      = xsave_layout;
+          
+          //- create main module
+          LNX_DMN_Module *main_module = lnx_dmn_module_alloc(ctx, new_process->fd, base_vaddr, auxv.execfn, 1, 1);
+          
+          //- glibc has a shortcut mapping for the main module
+          hash_table_push_u64_raw(ctx->arena, ctx->loaded_modules_ht, 0, main_module);
+        }
+        
+        ////////////////////////
+        //- rjf: set process' context
+        //
+        new_process->ctx = ctx;
+        new_process->ctx->ref_count += 1;
+        
+        ////////////////////////
+        //- rjf: install probe traps - only needed in processes without cloned memory
+        //
+        if(!(process_new_flags & LNX_DMN_CreateProcessFlag_ClonedMemory))
+        {
+          for EachNonZeroEnumVal(LNX_DMN_ProbeKind, k)
+          {
+            if(new_process->ctx->probes[k] == 0) { continue; }
+            DMN_Trap *trap = push_array(new_process->ctx->arena, DMN_Trap, 1);
+            trap->process = lnx_dmn_handle_from_process(new_process);
+            trap->vaddr   = new_process->ctx->probes[k]->pc;
+            trap->id      = k;
+            LNX_DMN_ActiveTrap *active_trap = lnx_dmn_set_trap(new_process->ctx->arena, trap);
+            SLLQueuePush(new_process->ctx->first_probe_trap, new_process->ctx->last_probe_trap, active_trap);
+          }
+        }
+        
+        ////////////////////////
+        //- rjf: create main thread
+        //
+        lnx_dmn_thread_alloc(new_process, LNX_DMN_ThreadState_Stopped, wait_id);
+        
+        ////////////////////////
+        //- rjf: push events
+        //
+        {
+          DMN_Event *e = dmn_event_list_push(arena, &events);
+          e->kind      = DMN_EventKind_CreateProcess;
+          e->process   = lnx_dmn_handle_from_process(new_process);
+          e->arch      = new_process->ctx->arch;
+          e->code      = new_process->pid;
+        }
+        for EachNode(thread, LNX_DMN_Thread, new_process->first_thread)
+        {
+          lnx_dmn_push_event_create_thread(arena, &events, thread);
+        }
+        for EachNode(module, LNX_DMN_Module, new_process->ctx->first_module)
+        {
+          lnx_dmn_push_event_load_module(arena, &events, new_process->first_thread, module);
+        }
+        {
+          DMN_Event *e = dmn_event_list_push(arena, &events);
+          e->kind    = DMN_EventKind_HandshakeComplete;
+          e->process = lnx_dmn_handle_from_process(new_process);
+          e->thread  = lnx_dmn_handle_from_thread(new_process->first_thread);
+          e->arch    = new_process->ctx->arch;
+        }
+      }
+      
+      //////////////////////////
+      //- rjf: break if all threads are stopped, no pending processes, no pending threads
+      //
+      if(running_threads.count == 0 && lnx_dmn_state->process_pending_creation == 0 && lnx_dmn_state->threads_pending_creation == 0)
+      {
+        break;
+      }
+    }
     
     ////////////////////////////
     //- rjf: do halt
@@ -3023,7 +3038,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     e->error_kind = DMN_ErrorKind_NotAttached;
   }
   
-  // TODO(rjf): WRONG, see `take`
+  //////////////////////////////
+  //- rjf: re-allow halts
+  //
   mutex_drop(lnx_dmn_state->halter_mutex);
   
   scratch_end(scratch);

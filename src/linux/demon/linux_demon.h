@@ -478,8 +478,6 @@ internal void lnx_dmn_push_event_unload_module(Arena *arena, DMN_EventList *even
 ////////////////////////////////
 //~ Debug Event
 
-internal void              lnx_dmn_event_exit_thread(Arena *arena, DMN_EventList *events, pid_t tid, U64 exit_code);
-internal LNX_DMN_Process * lnx_dmn_event_create_process(Arena *arena, DMN_EventList *events, pid_t pid, LNX_DMN_Process *parent_process, LNX_DMN_CreateProcessFlags flags);
 internal void              lnx_dmn_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 name_space_id, U64 new_link_map_vaddr);
 
 #endif // LINUX_DEMON_H
