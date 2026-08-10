@@ -170,6 +170,8 @@ struct LNX_DMN_Thread
 {
   LNX_DMN_Thread *next;
   LNX_DMN_Thread *prev;
+  LNX_DMN_Thread *tid_next;
+  LNX_DMN_Thread *tid_prev;
   pid_t tid;
   LNX_DMN_ThreadState state;
   struct LNX_DMN_Process *process;
@@ -179,6 +181,13 @@ struct LNX_DMN_Thread
   U64 pass_through_signo;
   U64 orig_rax;
   U64 dtv_base_vaddr;
+};
+
+typedef struct LNX_DMN_ThreadSlot LNX_DMN_ThreadSlot;
+struct LNX_DMN_ThreadSlot
+{
+  LNX_DMN_Thread *first;
+  LNX_DMN_Thread *last;
 };
 
 typedef struct LNX_DMN_Module LNX_DMN_Module;
@@ -234,10 +243,12 @@ LNX_DMN_CreateProcessFlags;
 typedef struct LNX_DMN_Process LNX_DMN_Process;
 struct LNX_DMN_Process
 {
-  LNX_DMN_Process *parent_process;
-  struct LNX_DMN_ProcessCtx *ctx;
   LNX_DMN_Process *next;
   LNX_DMN_Process *prev;
+  LNX_DMN_Process *pid_next;
+  LNX_DMN_Process *pid_prev;
+  LNX_DMN_Process *parent_process;
+  struct LNX_DMN_ProcessCtx *ctx;
   pid_t pid;
   int fd;
   LNX_DMN_ProcessState state;
@@ -248,6 +259,13 @@ struct LNX_DMN_Process
   LNX_DMN_Thread *first_thread;
   LNX_DMN_Thread *last_thread;
   U64 main_thread_exit_code;
+};
+
+typedef struct LNX_DMN_ProcessSlot LNX_DMN_ProcessSlot;
+struct LNX_DMN_ProcessSlot
+{
+  LNX_DMN_Process *first;
+  LNX_DMN_Process *last;
 };
 
 typedef struct LNX_DMN_ProcessPtrNode LNX_DMN_ProcessPtrNode;
@@ -340,32 +358,35 @@ struct LNX_DMN_State
   Mutex access_mutex;
   B32 access_run_state;
   
-  // rjf: entity storage
+  // rjf: main entity storage
   Arena *entities_arena;
   LNX_DMN_Entity *entities_base;
   LNX_DMN_Entity *free_entity;
   U64 entities_count;
   
-  HashTable *tid_ht; // thread id -> thread entity
-  HashTable *pid_ht; // process id -> process entity
+  // rjf: id -> entity tables
+  LNX_DMN_ProcessSlot *process_from_pid_slots;
+  U64 process_from_pid_slots_count;
+  LNX_DMN_ThreadSlot *thread_from_tid_slots;
+  U64 thread_from_tid_slots_count;
   
-  // process tracking
-  U64 process_count;
+  // rjf: process entity list
   LNX_DMN_Process *first_process;
   LNX_DMN_Process *last_process;
+  U64 process_count;
   
-  // process/thread creation tracking
+  // rjf: pending process/thread counts
   U64 process_pending_creation;
   U64 threads_pending_creation;
   
-  // halter
+  // rjf: halting state
   Mutex halter_mutex;
   pid_t halter_tid;
   U64 halt_code;
   U64 halt_user_data;
   B32 is_halting;
   
-  // TLS
+  // rjf: TLS
   B32 is_tls_detected;
   LNX_DMN_DbDesc tls_modid_desc;
   LNX_DMN_DbDesc tls_offset_desc;
@@ -412,7 +433,6 @@ internal void lnx_dmn_entity_release(LNX_DMN_Entity *entity);
 //- rjf: specialized allocation / deallocation helpers
 internal LNX_DMN_Process *lnx_dmn_process_alloc(pid_t pid, LNX_DMN_ProcessState state, LNX_DMN_Process *parent_process, B32 debug_subprocess, B32 is_cow);
 internal LNX_DMN_Module *lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64 name_vaddr, U64 name_space_id, B32 is_main);
-internal void lnx_dmn_thread_release(LNX_DMN_Thread *thread);
 internal void lnx_dmn_module_release(LNX_DMN_ProcessCtx *ctx, LNX_DMN_Module *module);
 
 //- rjf: context cloning

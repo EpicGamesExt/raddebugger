@@ -425,8 +425,13 @@ lnx_dmn_process_alloc(pid_t pid, LNX_DMN_ProcessState state, LNX_DMN_Process *pa
   DLLPushBack(lnx_dmn_state->first_process, lnx_dmn_state->last_process, process);
   lnx_dmn_state->process_count += 1;
   
-  // push pid -> LNX_DMN_Process mapping
-  hash_table_push_u64_raw(lnx_dmn_state->arena, lnx_dmn_state->pid_ht, pid, process);
+  // rjf: record in id -> process table
+  {
+    U64 key = (U64)pid;
+    U64 hash = u64_hash_from_str8(str8_struct(&key));
+    U64 slot_idx = hash%lnx_dmn_state->process_from_pid_slots_count;
+    DLLPushBack_NP(lnx_dmn_state->process_from_pid_slots[slot_idx].first, lnx_dmn_state->process_from_pid_slots[slot_idx].last, process, pid_next, pid_prev);
+  }
   
   scratch_end(scratch);
   return process;
@@ -486,42 +491,6 @@ lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64
   
   exit:;
   return module;
-}
-
-internal void
-lnx_dmn_thread_release(LNX_DMN_Thread *thread)
-{
-  LNX_DMN_Process *process = thread->process;
-  
-  // purge tid mapping
-  hash_table_purge_u64(lnx_dmn_state->tid_ht, thread->tid);
-  
-  // update global thread counter
-  if(thread->state == LNX_DMN_ThreadState_PendingCreation)
-  {
-    AssertAlways(lnx_dmn_state->threads_pending_creation > 0);
-    lnx_dmn_state->threads_pending_creation -= 1;
-  }
-  
-  // remove thread from the list
-  Assert(process->thread_count > 0);
-  DLLRemove(process->first_thread, process->last_thread, thread);
-  process->thread_count -= 1;
-  
-  // push reg block to the free list
-  String8Node *reg_block_node;
-  if(process->ctx->free_reg_block_nodes.node_count)
-  {
-    reg_block_node = str8_list_pop_front(&process->ctx->free_reg_block_nodes);
-  }
-  else
-  {
-    reg_block_node = push_array(process->ctx->arena, String8Node, 1);
-  }
-  reg_block_node->string = str8(thread->reg_block, 0);
-  str8_list_push_node(&process->ctx->free_reg_blocks, reg_block_node);
-  
-  lnx_dmn_entity_release((LNX_DMN_Entity *)thread);
 }
 
 internal void
@@ -676,13 +645,37 @@ lnx_dmn_module_from_handle(DMN_Handle module_handle)
 internal LNX_DMN_Thread *
 lnx_dmn_thread_from_pid(pid_t tid)
 {
-  return hash_table_search_u64_raw(lnx_dmn_state->tid_ht, tid);
+  LNX_DMN_Thread *result = 0;
+  U64 key = (U64)tid;
+  U64 hash = u64_hash_from_str8(str8_struct(&key));
+  U64 slot_idx = hash%lnx_dmn_state->thread_from_tid_slots_count;
+  for(LNX_DMN_Thread *t = lnx_dmn_state->thread_from_tid_slots[slot_idx].first; t != 0; t = t->tid_next)
+  {
+    if(t->tid == tid)
+    {
+      result = t;
+      break;
+    }
+  }
+  return result;
 }
 
 internal LNX_DMN_Process *
 lnx_dmn_process_from_pid(pid_t pid)
 {
-  return hash_table_search_u64_raw(lnx_dmn_state->pid_ht, pid);
+  LNX_DMN_Process *result = 0;
+  U64 key = (U64)pid;
+  U64 hash = u64_hash_from_str8(str8_struct(&key));
+  U64 slot_idx = hash%lnx_dmn_state->process_from_pid_slots_count;
+  for(LNX_DMN_Process *p = lnx_dmn_state->process_from_pid_slots[slot_idx].first; p != 0; p = p->pid_next)
+  {
+    if(p->pid == pid)
+    {
+      result = p;
+      break;
+    }
+  }
+  return result;
 }
 
 ////////////////////////////////
@@ -1229,14 +1222,21 @@ dmn_init(void)
   lnx_dmn_state->access_mutex   = mutex_alloc();
   lnx_dmn_state->entities_arena = arena_alloc(.reserve_size = GB(32), .commit_size = KB(64), .flags = ArenaFlag_NoChain);
   lnx_dmn_state->entities_base  = push_array(lnx_dmn_state->entities_arena, LNX_DMN_Entity, 0);
-  lnx_dmn_state->tid_ht         = hash_table_init(lnx_dmn_state->arena, 0x2000);
-  lnx_dmn_state->pid_ht         = hash_table_init(lnx_dmn_state->arena, 0x400);
   lnx_dmn_state->halter_mutex   = mutex_alloc();
   lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Null);
+  
+  // rjf: set up id <-> entity tables
+  {
+    lnx_dmn_state->process_from_pid_slots_count = 4096;
+    lnx_dmn_state->process_from_pid_slots = push_array(arena, LNX_DMN_ProcessSlot, lnx_dmn_state->process_from_pid_slots_count);
+    lnx_dmn_state->thread_from_tid_slots_count = 16384;
+    lnx_dmn_state->thread_from_tid_slots = push_array(arena, LNX_DMN_ThreadSlot, lnx_dmn_state->thread_from_tid_slots_count);
+  }
   
   // find offsets of TLS index and TLS offset in the link_map struct
   // 
   // TODO: assuming that target is using same libc version as debugger
+  //
   {
     LNX_DMN_DbDesc *tls_modid_desc  = dlsym(RTLD_DEFAULT, "_thread_db_link_map_l_tls_modid");
     LNX_DMN_DbDesc *tls_offset_desc = dlsym(RTLD_DEFAULT, "_thread_db_link_map_l_tls_offset");
@@ -1248,7 +1248,6 @@ dmn_init(void)
         lnx_dmn_state->tls_offset_desc = *tls_offset_desc;
         lnx_dmn_state->is_tls_detected = 1;
       }
-      else { Assert(0 && "invalid TLS desc"); }
     }
   }
 }
@@ -2252,7 +2251,41 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         }
         
         // rjf: release thread storage
-        lnx_dmn_thread_release(thread);
+        {
+          // update global thread counter
+          if(thread->state == LNX_DMN_ThreadState_PendingCreation)
+          {
+            lnx_dmn_state->threads_pending_creation -= 1;
+          }
+          
+          // rjf: remove thread from per-process thread list
+          DLLRemove(thread_process->first_thread, thread_process->last_thread, thread);
+          thread_process->thread_count -= 1;
+          
+          // rjf: remove thread from id -> thread table
+          {
+            U64 key = (U64)thread->tid;
+            U64 hash = u64_hash_from_str8(str8_struct(&key));
+            U64 slot_idx = hash%lnx_dmn_state->thread_from_tid_slots_count;
+            DLLRemove_NP(lnx_dmn_state->thread_from_tid_slots[slot_idx].first, lnx_dmn_state->thread_from_tid_slots[slot_idx].last, thread, tid_next, tid_prev);
+          }
+          
+          // rjf: release reg block
+          String8Node *reg_block_node;
+          if(thread_process->ctx->free_reg_block_nodes.node_count)
+          {
+            reg_block_node = str8_list_pop_front(&thread_process->ctx->free_reg_block_nodes);
+          }
+          else
+          {
+            reg_block_node = push_array(thread_process->ctx->arena, String8Node, 1);
+          }
+          reg_block_node->string = str8(thread->reg_block, 0);
+          str8_list_push_node(&thread_process->ctx->free_reg_blocks, reg_block_node);
+          
+          // rjf: release entity record
+          lnx_dmn_entity_release((LNX_DMN_Entity *)thread);
+        }
         
         // rjf: last thread in process? -> exit process too
         if(thread_process->thread_count == 0)
@@ -2293,7 +2326,12 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           lnx_dmn_state->process_pending_creation -= 1;
         }
         LNX_RETRY_ON_EINTR(close(process->fd));
-        hash_table_purge_u64(lnx_dmn_state->pid_ht, process->pid);
+        {
+          U64 key = (U64)process->pid;
+          U64 hash = u64_hash_from_str8(str8_struct(&key));
+          U64 slot_idx = hash%lnx_dmn_state->process_from_pid_slots_count;
+          DLLRemove_NP(lnx_dmn_state->process_from_pid_slots[slot_idx].first, lnx_dmn_state->process_from_pid_slots[slot_idx].last, process, pid_next, pid_prev);
+        }
         if(process->ctx)
         {
           process->ctx->ref_count -= 1;
@@ -2954,8 +2992,13 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           DLLPushBack(thread_new_parent->first_thread, thread_new_parent->last_thread, new_thread);
           thread_new_parent->thread_count += 1;
           
-          // rjf: map tid -> thread mapping
-          hash_table_push_u64_raw(lnx_dmn_state->arena, lnx_dmn_state->tid_ht, new_thread->tid, new_thread);
+          // rjf: map id -> thread
+          {
+            U64 key = (U64)wait_id;
+            U64 hash = u64_hash_from_str8(str8_struct(&key));
+            U64 slot_idx = hash%lnx_dmn_state->thread_from_tid_slots_count;
+            DLLPushBack_NP(lnx_dmn_state->thread_from_tid_slots[slot_idx].first, lnx_dmn_state->thread_from_tid_slots[slot_idx].last, new_thread, tid_next, tid_prev);
+          }
         }
         
         // rjf: report
