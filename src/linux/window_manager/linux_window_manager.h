@@ -103,5 +103,7 @@ global LNX_WM_State *lnx_wm_state = 0;
 
 internal LNX_WM_Window *lnx_window_from_x11window(Window window);
 internal int lnx_moveresize_code_from_pos(LNX_WM_Window *window, Vec2F32 pos, B32 *out_is_in_client_area);
+internal KeySym lnx_wm_keysym_from_key(WM_Key key);
+internal WM_Key lnx_wm_key_from_keysym(KeySym ks, B32 *out_is_right_sided);
 
 #endif // LINUX_WINDOW_MANAGER_H

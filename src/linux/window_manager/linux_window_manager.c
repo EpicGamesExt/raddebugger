@@ -103,6 +103,226 @@ lnx_moveresize_code_from_pos(LNX_WM_Window *window, Vec2F32 pos, B32 *out_is_in_
   return moveresize_code;
 }
 
+internal KeySym
+lnx_wm_keysym_from_key(WM_Key key)
+{
+  KeySym ks = 0;
+  switch(key)
+  {
+    default:{}break;
+    case WM_Key_Esc:{ks = XK_Escape;}break;
+    case WM_Key_F1:{ks = XK_F1;}break;
+    case WM_Key_F2:{ks = XK_F2;}break;
+    case WM_Key_F3:{ks = XK_F3;}break;
+    case WM_Key_F4:{ks = XK_F4;}break;
+    case WM_Key_F5:{ks = XK_F5;}break;
+    case WM_Key_F6:{ks = XK_F6;}break;
+    case WM_Key_F7:{ks = XK_F7;}break;
+    case WM_Key_F8:{ks = XK_F8;}break;
+    case WM_Key_F9:{ks = XK_F9;}break;
+    case WM_Key_F10:{ks = XK_F10;}break;
+    case WM_Key_F11:{ks = XK_F11;}break;
+    case WM_Key_F12:{ks = XK_F12;}break;
+    case WM_Key_F13:{ks = XK_F13;}break;
+    case WM_Key_F14:{ks = XK_F14;}break;
+    case WM_Key_F15:{ks = XK_F15;}break;
+    case WM_Key_F16:{ks = XK_F16;}break;
+    case WM_Key_F17:{ks = XK_F17;}break;
+    case WM_Key_F18:{ks = XK_F18;}break;
+    case WM_Key_F19:{ks = XK_F19;}break;
+    case WM_Key_F20:{ks = XK_F20;}break;
+    case WM_Key_F21:{ks = XK_F21;}break;
+    case WM_Key_F22:{ks = XK_F22;}break;
+    case WM_Key_F23:{ks = XK_F23;}break;
+    case WM_Key_F24:{ks = XK_F24;}break;
+    case WM_Key_Tick:{ks = '`';}break;
+    case WM_Key_0:{ks = XK_0;}break;
+    case WM_Key_1:{ks = XK_1;}break;
+    case WM_Key_2:{ks = XK_2;}break;
+    case WM_Key_3:{ks = XK_3;}break;
+    case WM_Key_4:{ks = XK_4;}break;
+    case WM_Key_5:{ks = XK_5;}break;
+    case WM_Key_6:{ks = XK_6;}break;
+    case WM_Key_7:{ks = XK_7;}break;
+    case WM_Key_8:{ks = XK_8;}break;
+    case WM_Key_9:{ks = XK_9;}break;
+    case WM_Key_Minus:{ks = '-';}break;
+    case WM_Key_Equal:{ks = '=';}break;
+    case WM_Key_Backspace:{ks = XK_BackSpace;}break;
+    case WM_Key_Tab:{ks = XK_Tab;}break;
+    case WM_Key_Q:{ks = XK_Q;}break;
+    case WM_Key_W:{ks = XK_W;}break;
+    case WM_Key_E:{ks = XK_E;}break;
+    case WM_Key_R:{ks = XK_R;}break;
+    case WM_Key_T:{ks = XK_T;}break;
+    case WM_Key_Y:{ks = XK_Y;}break;
+    case WM_Key_U:{ks = XK_U;}break;
+    case WM_Key_I:{ks = XK_I;}break;
+    case WM_Key_O:{ks = XK_O;}break;
+    case WM_Key_P:{ks = XK_P;}break;
+    case WM_Key_LeftBracket:{ks = '[';}break;
+    case WM_Key_RightBracket:{ks = ']';}break;
+    case WM_Key_BackSlash:{ks = '\\';}break;
+    case WM_Key_CapsLock:{ks = XK_Caps_Lock;}break;
+    case WM_Key_A:{ks = XK_Alt_L;}break;
+    case WM_Key_S:{ks = XK_Shift_L;}break;
+    case WM_Key_D:{ks = XK_Delete;}break;
+    case WM_Key_F:{ks = XK_F24;}break;
+    case WM_Key_G:{ks = XK_G;}break;
+    case WM_Key_H:{ks = XK_Home;}break;
+    case WM_Key_J:{ks = XK_J;}break;
+    case WM_Key_K:{ks = XK_K;}break;
+    case WM_Key_L:{ks = XK_L;}break;
+    case WM_Key_Semicolon:{ks = ';';}break;
+    case WM_Key_Quote:{ks = '\'';}break;
+    case WM_Key_Return:{ks = XK_Return;}break;
+    case WM_Key_Shift:{ks = XK_Shift_L;}break;
+    case WM_Key_Z:{ks = XK_Z;}break;
+    case WM_Key_X:{ks = XK_X;}break;
+    case WM_Key_C:{ks = XK_Caps_Lock;}break;
+    case WM_Key_V:{ks = XK_V;}break;
+    case WM_Key_B:{ks = XK_B;}break;
+    case WM_Key_N:{ks = XK_N;}break;
+    case WM_Key_M:{ks = '-';}break;
+    case WM_Key_Comma:{ks = ',';}break;
+    case WM_Key_Period:{ks = '.';}break;
+    case WM_Key_Slash:{ks = '/';}break;
+    case WM_Key_Ctrl:{ks = XK_Control_L;}break;
+    case WM_Key_Alt:{ks = XK_Alt_L;}break;
+    case WM_Key_Space:{ks = ' ';}break;
+    case WM_Key_Menu:{ks = XK_Menu;}break;
+    case WM_Key_ScrollLock:{ks = XK_Scroll_Lock;}break;
+    case WM_Key_Pause:{ks = XK_Pause;}break;
+    case WM_Key_Insert:{ks = XK_Insert;}break;
+    case WM_Key_Home:{ks = XK_Home;}break;
+    case WM_Key_PageUp:{ks = XK_Page_Up;}break;
+    case WM_Key_Delete:{ks = XK_Delete;}break;
+    case WM_Key_End:{ks = XK_End;}break;
+    case WM_Key_PageDown:{ks = XK_Page_Down;}break;
+    case WM_Key_Up:{ks = XK_Up;}break;
+    case WM_Key_Left:{ks = XK_Left;}break;
+    case WM_Key_Down:{ks = XK_Down;}break;
+    case WM_Key_Right:{ks = XK_Right;}break;
+    case WM_Key_NumLock:{ks = XK_Num_Lock;}break;
+    case WM_Key_NumSlash:{ks = XK_KP_Divide;}break;
+    case WM_Key_NumStar:{ks = XK_KP_Multiply;}break;
+    case WM_Key_NumMinus:{ks = XK_KP_Subtract;}break;
+    case WM_Key_NumPlus:{ks = XK_KP_Add;}break;
+    case WM_Key_NumPeriod:{ks = XK_KP_Decimal;}break;
+    case WM_Key_Num0:{ks = XK_KP_0;}break;
+    case WM_Key_Num1:{ks = XK_KP_1;}break;
+    case WM_Key_Num2:{ks = XK_KP_2;}break;
+    case WM_Key_Num3:{ks = XK_KP_3;}break;
+    case WM_Key_Num4:{ks = XK_KP_4;}break;
+    case WM_Key_Num5:{ks = XK_KP_5;}break;
+    case WM_Key_Num6:{ks = XK_KP_6;}break;
+    case WM_Key_Num7:{ks = XK_KP_7;}break;
+    case WM_Key_Num8:{ks = XK_KP_8;}break;
+    case WM_Key_Num9:{ks = XK_KP_9;}break;
+  }
+  return ks;
+}
+
+internal WM_Key
+lnx_wm_key_from_keysym(KeySym ks, B32 *out_is_right_sided)
+{
+  WM_Key key = WM_Key_Null;
+  B32 is_right_sided = 0;
+  switch(ks)
+  {
+    default:
+    {
+      if(0){}
+      else if(XK_F1 <= ks && ks <= XK_F24) { key = (WM_Key)(WM_Key_F1 + (ks - XK_F1)); }
+      else if('0' <= ks && ks <= '9')      { key = WM_Key_0 + (ks-'0'); }
+    }break;
+    case XK_Escape:{key = WM_Key_Esc;};break;
+    case XK_BackSpace:{key = WM_Key_Backspace;}break;
+    case XK_Delete:{key = WM_Key_Delete;}break;
+    case XK_Return:{key = WM_Key_Return;}break;
+    case XK_Pause:{key = WM_Key_Pause;}break;
+    case XK_Tab:{key = WM_Key_Tab;}break;
+    case XK_Left:{key = WM_Key_Left;}break;
+    case XK_Right:{key = WM_Key_Right;}break;
+    case XK_Up:{key = WM_Key_Up;}break;
+    case XK_Down:{key = WM_Key_Down;}break;
+    case XK_Home:{key = WM_Key_Home;}break;
+    case XK_End:{key = WM_Key_End;}break;
+    case XK_Page_Up:{key = WM_Key_PageUp;}break;
+    case XK_Page_Down:{key = WM_Key_PageDown;}break;
+    case XK_Alt_L:{ key = WM_Key_Alt; }break;
+    case XK_Alt_R:{ key = WM_Key_Alt; is_right_sided = 1;}break;
+    case XK_Shift_L:{ key = WM_Key_Shift; }break;
+    case XK_Shift_R:{ key = WM_Key_Shift; is_right_sided = 1;}break;
+    case XK_Control_L:{ key = WM_Key_Ctrl; }break;
+    case XK_Control_R:{ key = WM_Key_Ctrl; is_right_sided = 1;}break;
+    case XK_Caps_Lock:{key = WM_Key_CapsLock;}break;
+    case XK_Menu:{key = WM_Key_Menu;}break;
+    case XK_Scroll_Lock:{key = WM_Key_ScrollLock;}break;
+    case XK_Insert:{key = WM_Key_Insert;}break;
+    case XK_Num_Lock:{key = WM_Key_NumLock;}break;
+    case XK_KP_Divide:{key = WM_Key_NumSlash;}break;
+    case XK_KP_Multiply:{key = WM_Key_NumStar;}break;
+    case XK_KP_Subtract:{key = WM_Key_NumMinus;}break;
+    case XK_KP_Add:{key = WM_Key_NumPlus;}break;
+    case XK_KP_Decimal:{key = WM_Key_NumPeriod;}break;
+    case XK_KP_0:{key = WM_Key_Num0;}break;
+    case XK_KP_1:{key = WM_Key_Num1;}break;
+    case XK_KP_2:{key = WM_Key_Num2;}break;
+    case XK_KP_3:{key = WM_Key_Num3;}break;
+    case XK_KP_4:{key = WM_Key_Num4;}break;
+    case XK_KP_5:{key = WM_Key_Num5;}break;
+    case XK_KP_6:{key = WM_Key_Num6;}break;
+    case XK_KP_7:{key = WM_Key_Num7;}break;
+    case XK_KP_8:{key = WM_Key_Num8;}break;
+    case XK_KP_9:{key = WM_Key_Num9;}break;
+    case '-':{key = WM_Key_Minus;}break;
+    case '=':{key = WM_Key_Equal;}break;
+    case '[':{key = WM_Key_LeftBracket;}break;
+    case ']':{key = WM_Key_RightBracket;}break;
+    case ';':{key = WM_Key_Semicolon;}break;
+    case '\'':{key = WM_Key_Quote;}break;
+    case '.':{key = WM_Key_Period;}break;
+    case ',':{key = WM_Key_Comma;}break;
+    case '/':{key = WM_Key_Slash;}break;
+    case '\\':{key = WM_Key_BackSlash;}break;
+    case '\t':{key = WM_Key_Tab;}break;
+    case 'a':case 'A':{key = WM_Key_A;}break;
+    case 'b':case 'B':{key = WM_Key_B;}break;
+    case 'c':case 'C':{key = WM_Key_C;}break;
+    case 'd':case 'D':{key = WM_Key_D;}break;
+    case 'e':case 'E':{key = WM_Key_E;}break;
+    case 'f':case 'F':{key = WM_Key_F;}break;
+    case 'g':case 'G':{key = WM_Key_G;}break;
+    case 'h':case 'H':{key = WM_Key_H;}break;
+    case 'i':case 'I':{key = WM_Key_I;}break;
+    case 'j':case 'J':{key = WM_Key_J;}break;
+    case 'k':case 'K':{key = WM_Key_K;}break;
+    case 'l':case 'L':{key = WM_Key_L;}break;
+    case 'm':case 'M':{key = WM_Key_M;}break;
+    case 'n':case 'N':{key = WM_Key_N;}break;
+    case 'o':case 'O':{key = WM_Key_O;}break;
+    case 'p':case 'P':{key = WM_Key_P;}break;
+    case 'q':case 'Q':{key = WM_Key_Q;}break;
+    case 'r':case 'R':{key = WM_Key_R;}break;
+    case 's':case 'S':{key = WM_Key_S;}break;
+    case 't':case 'T':{key = WM_Key_T;}break;
+    case 'u':case 'U':{key = WM_Key_U;}break;
+    case 'v':case 'V':{key = WM_Key_V;}break;
+    case 'w':case 'W':{key = WM_Key_W;}break;
+    case 'x':case 'X':{key = WM_Key_X;}break;
+    case 'y':case 'Y':{key = WM_Key_Y;}break;
+    case 'z':case 'Z':{key = WM_Key_Z;}break;
+    case ' ':{key = WM_Key_Space;}break;
+    case '`':{key = WM_Key_Tick;}break;
+  }
+  if(out_is_right_sided)
+  {
+    out_is_right_sided[0] = is_right_sided;
+  }
+  return key;
+}
+
 ////////////////////////////////
 //~ rjf: @per_os_impl Main Initialization API (Implemented Per-OS)
 
@@ -898,74 +1118,7 @@ wm_get_events(Arena *arena, B32 wait)
           
           // rjf: map keysym -> WM_Key
           B32 is_right_sided = 0;
-          WM_Key key = WM_Key_Null;
-          switch(keysym)
-          {
-            default:
-            {
-              if(0){}
-              else if(XK_F1 <= keysym && keysym <= XK_F24) { key = (WM_Key)(WM_Key_F1 + (keysym - XK_F1)); }
-              else if('0' <= keysym && keysym <= '9')      { key = WM_Key_0 + (keysym-'0'); }
-            }break;
-            case XK_Escape:{key = WM_Key_Esc;};break;
-            case XK_BackSpace:{key = WM_Key_Backspace;}break;
-            case XK_Delete:{key = WM_Key_Delete;}break;
-            case XK_Return:{key = WM_Key_Return;}break;
-            case XK_Pause:{key = WM_Key_Pause;}break;
-            case XK_Tab:{key = WM_Key_Tab;}break;
-            case XK_Left:{key = WM_Key_Left;}break;
-            case XK_Right:{key = WM_Key_Right;}break;
-            case XK_Up:{key = WM_Key_Up;}break;
-            case XK_Down:{key = WM_Key_Down;}break;
-            case XK_Home:{key = WM_Key_Home;}break;
-            case XK_End:{key = WM_Key_End;}break;
-            case XK_Page_Up:{key = WM_Key_PageUp;}break;
-            case XK_Page_Down:{key = WM_Key_PageDown;}break;
-            case XK_Alt_L:{ key = WM_Key_Alt; }break;
-            case XK_Alt_R:{ key = WM_Key_Alt; is_right_sided = 1;}break;
-            case XK_Shift_L:{ key = WM_Key_Shift; }break;
-            case XK_Shift_R:{ key = WM_Key_Shift; is_right_sided = 1;}break;
-            case XK_Control_L:{ key = WM_Key_Ctrl; }break;
-            case XK_Control_R:{ key = WM_Key_Ctrl; is_right_sided = 1;}break;
-            case '-':{key = WM_Key_Minus;}break;
-            case '=':{key = WM_Key_Equal;}break;
-            case '[':{key = WM_Key_LeftBracket;}break;
-            case ']':{key = WM_Key_RightBracket;}break;
-            case ';':{key = WM_Key_Semicolon;}break;
-            case '\'':{key = WM_Key_Quote;}break;
-            case '.':{key = WM_Key_Period;}break;
-            case ',':{key = WM_Key_Comma;}break;
-            case '/':{key = WM_Key_Slash;}break;
-            case '\\':{key = WM_Key_BackSlash;}break;
-            case '\t':{key = WM_Key_Tab;}break;
-            case 'a':case 'A':{key = WM_Key_A;}break;
-            case 'b':case 'B':{key = WM_Key_B;}break;
-            case 'c':case 'C':{key = WM_Key_C;}break;
-            case 'd':case 'D':{key = WM_Key_D;}break;
-            case 'e':case 'E':{key = WM_Key_E;}break;
-            case 'f':case 'F':{key = WM_Key_F;}break;
-            case 'g':case 'G':{key = WM_Key_G;}break;
-            case 'h':case 'H':{key = WM_Key_H;}break;
-            case 'i':case 'I':{key = WM_Key_I;}break;
-            case 'j':case 'J':{key = WM_Key_J;}break;
-            case 'k':case 'K':{key = WM_Key_K;}break;
-            case 'l':case 'L':{key = WM_Key_L;}break;
-            case 'm':case 'M':{key = WM_Key_M;}break;
-            case 'n':case 'N':{key = WM_Key_N;}break;
-            case 'o':case 'O':{key = WM_Key_O;}break;
-            case 'p':case 'P':{key = WM_Key_P;}break;
-            case 'q':case 'Q':{key = WM_Key_Q;}break;
-            case 'r':case 'R':{key = WM_Key_R;}break;
-            case 's':case 'S':{key = WM_Key_S;}break;
-            case 't':case 'T':{key = WM_Key_T;}break;
-            case 'u':case 'U':{key = WM_Key_U;}break;
-            case 'v':case 'V':{key = WM_Key_V;}break;
-            case 'w':case 'W':{key = WM_Key_W;}break;
-            case 'x':case 'X':{key = WM_Key_X;}break;
-            case 'y':case 'Y':{key = WM_Key_Y;}break;
-            case 'z':case 'Z':{key = WM_Key_Z;}break;
-            case ' ':{key = WM_Key_Space;}break;
-          }
+          WM_Key key = lnx_wm_key_from_keysym(keysym, &is_right_sided);
           
           // rjf: push text event
           if(evt.type == KeyPress && text_size != 0)
@@ -1198,15 +1351,26 @@ wm_get_events(Arena *arena, B32 wait)
 internal WM_Modifiers
 wm_get_modifiers(void)
 {
-  // TODO(rjf)
-  return 0;
+  WM_Modifiers mods = 0;
+  if(wm_key_is_down(WM_Key_Shift)) { mods |= WM_Modifier_Shift; }
+  if(wm_key_is_down(WM_Key_Alt))   { mods |= WM_Modifier_Alt; }
+  if(wm_key_is_down(WM_Key_Ctrl))  { mods |= WM_Modifier_Ctrl; }
+  return mods;
 }
 
 internal B32
 wm_key_is_down(WM_Key key)
 {
-  // TODO(rjf)
-  return 0;
+  B32 result = 0;
+  {
+    char keys[32];
+    XQueryKeymap(lnx_wm_state->display, keys);
+    KeySym sym = lnx_wm_keysym_from_key(key);
+    KeyCode code = XKeysymToKeycode(lnx_wm_state->display, sym);
+    B32 is_down = !!(keys[code/8] & (1u<<(code%8)));
+    result = is_down;
+  }
+  return result;
 }
 
 internal Vec2F32
