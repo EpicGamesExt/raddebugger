@@ -435,7 +435,7 @@ internal LNX_DMN_Process *lnx_dmn_process_from_pid(pid_t pid);
 ////////////////////////////////
 //~ rjf: Thread Helpers
 
-internal U64  lnx_dmn_thread_read_ip(LNX_DMN_Thread *thread);
+internal U64  lnx_dmn_ip_from_thread(LNX_DMN_Thread *thread);
 internal void lnx_dmn_thread_write_ip(LNX_DMN_Thread *thread, U64 ip);
 internal B32  lnx_dmn_thread_read_reg_block(LNX_DMN_Thread *thread);
 internal B32  lnx_dmn_thread_write_reg_block(LNX_DMN_Thread *thread);
@@ -450,13 +450,12 @@ internal LNX_DMN_ModulePtrNode *lnx_dmn_module_ptr_list_push(Arena *arena, LNX_D
 ////////////////////////////////
 //~ Debug Event Pushers
 
-internal void lnx_dmn_push_event_create_thread(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread);
 internal void lnx_dmn_push_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, LNX_DMN_Module *module);
 internal void lnx_dmn_push_event_unload_module(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process, LNX_DMN_Module *module);
 
 ////////////////////////////////
 //~ Debug Event
 
-internal void              lnx_dmn_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 name_space_id, U64 new_link_map_vaddr);
+internal void lnx_dmn_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 name_space_id, U64 new_link_map_vaddr);
 
 #endif // LINUX_DEMON_H

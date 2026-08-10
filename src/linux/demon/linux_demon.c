@@ -689,7 +689,7 @@ lnx_dmn_process_from_pid(pid_t pid)
 //~ rjf: Thread Helpers
 
 internal U64
-lnx_dmn_thread_read_ip(LNX_DMN_Thread *thread)
+lnx_dmn_ip_from_thread(LNX_DMN_Thread *thread)
 {
   ARCH_Info *arch_info = arch_info_from_arch(thread->process->ctx->arch);
   U64 result = arch_ip_from_reg_block(arch_info, thread->reg_block);
@@ -1155,19 +1155,6 @@ lnx_dmn_module_ptr_list_push(Arena *arena, LNX_DMN_ModulePtrList *list, LNX_DMN_
 //~ Debug Event Pushers
 
 internal void
-lnx_dmn_push_event_create_thread(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread)
-{
-  DMN_Event *e = dmn_event_list_push(arena, events);
-  e->kind    = DMN_EventKind_CreateThread;
-  e->process = lnx_dmn_handle_from_process(thread->process);
-  e->thread  = lnx_dmn_handle_from_thread(thread);
-  e->arch    = thread->process->ctx->arch;
-  e->code    = thread->tid;
-  // TODO(rjf): e->stack_pointer = ???;
-  e->tls_root_vaddr = thread->dtv_base_vaddr;
-}
-
-internal void
 lnx_dmn_push_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, LNX_DMN_Module *module)
 {
   LNX_DMN_Process *process = thread->process;
@@ -1445,44 +1432,42 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
   //
   if(lnx_dmn_state->process_count > 0)
   {
+    ARCH_Info *arch_info = arch_info_from_arch(Arch_CURRENT);
+    
     ////////////////////////////
-    //- rjf: write all trap instructions
+    //- rjf: read initial bytes at all trap locations
     //
-    LNX_DMN_ActiveTrap *active_trap_first = 0;
-    LNX_DMN_ActiveTrap *active_trap_last = 0;
+    U64 bytes_per_trap = arch_info->trap_instruction.size;
+    U8 *trap_swap_bytes = push_array(scratch.arena, U8, ctrls->traps.trap_count * bytes_per_trap);
     {
-      HashTable *process_ht = hash_table_init(scratch.arena, lnx_dmn_state->process_count);
+      U64 trap_idx = 0;
       for EachNode(n, DMN_TrapChunkNode, ctrls->traps.first)
       {
         for EachIndex(n_idx, n->count)
         {
-          // skip hardware breakpoints
           DMN_Trap *trap = n->v+n_idx;
-          if(trap->flags) { continue; }
-          
-          HashTable *active_trap_ht = hash_table_search_u64_raw(process_ht, trap->process.u64[0]);
-          if(active_trap_ht == 0)
+          if(trap->flags == 0)
           {
-            active_trap_ht = hash_table_init(scratch.arena, ctrls->traps.trap_count);
-            hash_table_push_u64_raw(scratch.arena, process_ht, trap->process.u64[0], active_trap_ht);
+            dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr + bytes_per_trap), trap_swap_bytes + trap_idx*bytes_per_trap);
           }
-          
-          // TODO: ctrl sends down duplicate traps
-          LNX_DMN_ActiveTrap *is_set = hash_table_search_u64_raw(active_trap_ht, trap->vaddr);
-          if(is_set) { continue; }
-          
-          // TODO: ctrl sends down traps for exited process
-          LNX_DMN_Process *process = lnx_dmn_process_from_handle(trap->process);
-          if(!process) { continue; }
-          
-          // trap instruction
-          LNX_DMN_ActiveTrap *active_trap = lnx_dmn_set_trap(scratch.arena, trap);
-          
-          // add trap to the active list
-          SLLQueuePush(active_trap_first, active_trap_last, active_trap);
-          
-          // add (address -> trap)
-          hash_table_push_u64_raw(scratch.arena, active_trap_ht, trap->vaddr, active_trap);
+          trap_idx += 1;
+        }
+      }
+    }
+    
+    ////////////////////////////
+    //- rjf: write all trap instructions
+    //
+    {
+      for EachNode(n, DMN_TrapChunkNode, ctrls->traps.first)
+      {
+        for EachIndex(n_idx, n->count)
+        {
+          DMN_Trap *trap = n->v+n_idx;
+          if(trap->flags == 0)
+          {
+            dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr + bytes_per_trap), arch_info->trap_instruction.str);
+          }
         }
       }
     }
@@ -1823,7 +1808,6 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             //
             case 0:
             {
-              // translate signal code to event
               siginfo_t siginfo = {0};
               if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETSIGINFO, wait_id, 0, &siginfo)) >= 0)
               {
@@ -1833,26 +1817,29 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   case SI_KERNEL:
                   case TRAP_BRKPT:
                   {
-                    U64 ip = lnx_dmn_thread_read_ip(thread);
+                    //- rjf: unpack thread IP / process
+                    U64 ip = lnx_dmn_ip_from_thread(thread);
+                    DMN_Handle process_handle = lnx_dmn_handle_from_process(process);
                     
-                    // is this user trap?
-                    LNX_DMN_ActiveTrap *hit_user_trap = 0;
+                    //- rjf: IP -> find associated user trap
+                    DMN_Trap *hit_user_trap = 0;
                     {
-                      DMN_Handle process_handle = lnx_dmn_handle_from_process(process);
-                      for EachNode(active_trap, LNX_DMN_ActiveTrap, active_trap_first)
+                      for EachNode(n, DMN_TrapChunkNode, ctrls->traps.first)
                       {
-                        if(MemoryCompare(&active_trap->trap->process, &process_handle, sizeof(DMN_Handle)) == 0)
+                        for EachIndex(n_idx, n->count)
                         {
-                          if(active_trap->trap->vaddr == ip-1)
+                          DMN_Trap *trap = n->v+n_idx;
+                          if(trap->flags == 0 && dmn_handle_match(trap->process, process_handle) && trap->vaddr == ip - bytes_per_trap)
                           {
-                            hit_user_trap = active_trap;
-                            break;
+                            hit_user_trap = trap;
+                            goto dbl_break_find_user_trap;
                           }
                         }
                       }
+                      dbl_break_find_user_trap:;
                     }
                     
-                    // is this a probe trap?
+                    //- rjf: no user trap -> correllate w/ probe
                     LNX_DMN_ProbeKind probe_kind = LNX_DMN_ProbeKind_Null;
                     if(hit_user_trap == 0)
                     {
@@ -1866,6 +1853,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                       }
                     }
                     
+                    //- rjf: probe trap: (module) initialization complete
                     if(probe_kind == LNX_DMN_ProbeKind_InitComplete)
                     {
                       B32 is_init_completed = 0;
@@ -1885,6 +1873,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                       init_complete_exit:;
                       AssertAlways(is_init_completed);
                     }
+                    
+                    //- rjf: probe trap: (module) relocation complete
                     else if(probe_kind == LNX_DMN_ProbeKind_RelocComplete)
                     {
                       B32 is_reloc_completed = 0;
@@ -1900,6 +1890,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                       reloc_complete_exit:;
                       AssertAlways(is_reloc_completed);
                     }
+                    
+                    //- rjf: probe trap: (module) unmap complete
                     else if(probe_kind == LNX_DMN_ProbeKind_UnmapComplete)
                     {
                       B32 is_unmap_completed = 0;
@@ -1968,20 +1960,23 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                       AssertAlways(is_unmap_completed);
                     }
                     
+                    //- rjf: no associated probe -> either trap or breakpoint
                     if(probe_kind == LNX_DMN_ProbeKind_Null)
                     {
-                      // rollback IP on user traps
+                      // rjf: on user breakpoint trap -> roll back IP
                       if(hit_user_trap)
                       {
-                        U64 ip = lnx_dmn_thread_read_ip(thread);
+                        U64 ip = lnx_dmn_ip_from_thread(thread);
                         lnx_dmn_thread_write_ip(thread, ip - 1);
                       }
                       
+                      // rjf: generate event
                       DMN_Event *e = dmn_event_list_push(arena, &events);
-                      e->kind                = DMN_EventKind_Breakpoint;
+                      e->kind                = hit_user_trap ? DMN_EventKind_Breakpoint : DMN_EventKind_Trap;
                       e->process             = lnx_dmn_handle_from_process(process);
                       e->thread              = lnx_dmn_handle_from_thread(thread);
-                      e->instruction_pointer = lnx_dmn_thread_read_ip(thread);
+                      e->instruction_pointer = lnx_dmn_ip_from_thread(thread);
+                      e->user_data           = hit_user_trap ? hit_user_trap->id : 0;
                     }
                   }break;
                   
@@ -1993,7 +1988,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                     e->kind                = DMN_EventKind_SingleStep;
                     e->process             = lnx_dmn_handle_from_process(thread->process);
                     e->thread              = lnx_dmn_handle_from_thread(thread);
-                    e->instruction_pointer = lnx_dmn_thread_read_ip(thread);
+                    e->instruction_pointer = lnx_dmn_ip_from_thread(thread);
                     e->address             = e->instruction_pointer;
                   }break;
                   
@@ -2045,7 +2040,11 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   case TRAP_UNK:    { NotImplemented; }break;
                   default: { InvalidPath; } break;
                 }
-              } else { Assert(0 && "failed to get signal info"); }
+              }
+              else
+              {
+                log_infof("ptrace error: Failed to get signal info via PTRACE_GETSIGINFO.");
+              }
             }break;
             
             ////////////////////
@@ -2208,7 +2207,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           e->kind                = DMN_EventKind_Exception;
           e->process             = lnx_dmn_handle_from_process(thread->process);
           e->thread              = lnx_dmn_handle_from_thread(thread);
-          e->instruction_pointer = lnx_dmn_thread_read_ip(thread);
+          e->instruction_pointer = lnx_dmn_ip_from_thread(thread);
           e->address             = e->instruction_pointer;
           e->code                = wstopsig;
           e->exception_repeated  = wstopsig < ArrayCount(is_repeatable) ? is_repeatable[wstopsig] : 0;
@@ -3040,15 +3039,18 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     ////////////////////////////
     //- rjf: unset all traps - restore original bytes
     //
-    for EachNode(active_trap, LNX_DMN_ActiveTrap, active_trap_first)
     {
-      if(active_trap->good)
+      U64 trap_idx = 0;
+      for EachNode(n, DMN_TrapChunkNode, ctrls->traps.first)
       {
-        LNX_DMN_Process *process = lnx_dmn_process_from_handle(active_trap->trap->process);
-        // NOTE(rjf): this process may have been killed during the wait - skip such processes
-        if(process != 0)
+        for EachIndex(n_idx, n->count)
         {
-          dmn_process_write(active_trap->trap->process, r1u64(active_trap->trap->vaddr, active_trap->trap->vaddr + active_trap->swap_bytes.size), active_trap->swap_bytes.str);
+          DMN_Trap *trap = n->v+n_idx;
+          if(trap->flags == 0)
+          {
+            dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr + bytes_per_trap), trap_swap_bytes + trap_idx*bytes_per_trap);
+          }
+          trap_idx += 1;
         }
       }
     }
@@ -3161,10 +3163,13 @@ internal U64
 dmn_process_read(DMN_Handle process_handle, Rng1U64 range, void *dst)
 {
   U64 result = 0;
-  LNX_DMN_Process *process = lnx_dmn_process_from_handle(process_handle);
-  if(process)
+  DMN_AccessScope
   {
-    result = lnx_dmn_read(process->fd, range, dst);
+    LNX_DMN_Process *process = lnx_dmn_process_from_handle(process_handle);
+    if(process)
+    {
+      result = lnx_dmn_read(process->fd, range, dst);
+    }
   }
   return result;
 }
@@ -3173,10 +3178,13 @@ internal B32
 dmn_process_write(DMN_Handle process_handle, Rng1U64 range, void *src)
 {
   B32 result = 0;
-  LNX_DMN_Process *process = lnx_dmn_process_from_handle(process_handle);
-  if(process)
+  DMN_AccessScope
   {
-    result = lnx_dmn_write(process->fd, range, src);
+    LNX_DMN_Process *process = lnx_dmn_process_from_handle(process_handle);
+    if(process)
+    {
+      result = lnx_dmn_write(process->fd, range, src);
+    }
   }
   return result;
 }

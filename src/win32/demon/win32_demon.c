@@ -1686,9 +1686,29 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       }
       
       //////////////////////////
+      //- rjf: read all initial memory at trap locations
+      //
+      U8 *trap_swap_bytes = push_array(scratch.arena, U8, ctrls->traps.trap_count);
+      {
+        U64 trap_idx = 0;
+        for(DMN_TrapChunkNode *n = ctrls->traps.first; n != 0; n = n->next)
+        {
+          for(U64 n_idx = 0; n_idx < n->count; n_idx += 1, trap_idx += 1)
+          {
+            DMN_Trap *trap = n->v+n_idx;
+            if(trap->flags == 0)
+            {
+              // TODO(rjf): assumes x86
+              trap_swap_bytes[trap_idx] = 0xCC;
+              dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr+1), trap_swap_bytes+trap_idx);
+            }
+          }
+        }
+      }
+      
+      //////////////////////////
       //- rjf: write all traps into memory
       //
-      U8 *trap_swap_bytes = push_array_no_zero(scratch.arena, U8, ctrls->traps.trap_count);
       ProfScope("write all traps into memory")
       {
         U64 trap_idx = 0;
@@ -1699,8 +1719,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             DMN_Trap *trap = n->v+n_idx;
             if(trap->flags == 0)
             {
-              trap_swap_bytes[trap_idx] = 0xCC;
-              dmn_process_read(trap->process, r1u64(trap->vaddr, trap->vaddr+1), trap_swap_bytes+trap_idx);
+              // TODO(rjf): assumes x86
               U8 int3 = 0xCC;
               dmn_process_write(trap->process, r1u64(trap->vaddr, trap->vaddr+1), &int3);
             }
