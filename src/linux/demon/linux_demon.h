@@ -193,8 +193,10 @@ struct LNX_DMN_ThreadSlot
 typedef struct LNX_DMN_Module LNX_DMN_Module;
 struct LNX_DMN_Module
 {
-  LNX_DMN_Module *next;
-  LNX_DMN_Module *prev;
+  LNX_DMN_Module *order_next;
+  LNX_DMN_Module *order_prev;
+  LNX_DMN_Module *hash_next;
+  LNX_DMN_Module *hash_prev;
   U64 name_vaddr;
   U64 base_vaddr;
   U64 name_space_id;
@@ -203,6 +205,13 @@ struct LNX_DMN_Module
   U64 tls_offset;
   B8 is_live;
   B8 is_main;
+};
+
+typedef struct LNX_DMN_ModuleSlot LNX_DMN_ModuleSlot;
+struct LNX_DMN_ModuleSlot
+{
+  LNX_DMN_Module *first;
+  LNX_DMN_Module *last;
 };
 
 typedef struct LNX_DMN_ModulePtrNode LNX_DMN_ModulePtrNode;
@@ -299,13 +308,14 @@ struct LNX_DMN_ProcessCtx
   Arch arch;
   U64 rdebug_vaddr;
   ELF_Class dl_class;
-  HashTable *loaded_modules_ht;
   LNX_DMN_Probe **probes;
   LNX_DMN_ActiveTrap *first_probe_trap;
   LNX_DMN_ActiveTrap *last_probe_trap;
   LNX_DMN_Module *first_module;
   LNX_DMN_Module *last_module;
   U64 module_count;
+  U64 module_slots_count;
+  LNX_DMN_ModuleSlot *module_slots;
   U64 ref_count;
   String8List free_reg_blocks;
   String8List free_reg_block_nodes;

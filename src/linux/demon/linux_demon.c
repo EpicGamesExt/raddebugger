@@ -440,70 +440,91 @@ lnx_dmn_process_alloc(pid_t pid, LNX_DMN_ProcessState state, LNX_DMN_Process *pa
 internal LNX_DMN_Module *
 lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64 name_vaddr, U64 name_space_id, B32 is_main)
 {
-  LNX_DMN_Module *module = hash_table_search_u64_raw(ctx->loaded_modules_ht, base_vaddr);
-  if(module) { goto exit; }
-  
-  // parse out module's ELF header
-  ELF_Hdr64 module_ehdr = {0};
-  if(elf_read_ehdr(lnx_dmn_machine_op_mem_read, &memory_fd, base_vaddr, &module_ehdr) != MachineOpResult_Ok) { goto exit; }
-  
-  // gather info about module
-  U64     module_rebase     = module_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
-  U64     module_phdr_vaddr = module_rebase + module_ehdr.e_phoff;
-  Rng1U64 module_vrange     = lnx_dmn_compute_image_vrange(memory_fd, module_ehdr.e_ident[ELF_Identifier_Class], module_rebase, module_phdr_vaddr, module_ehdr.e_phentsize, module_ehdr.e_phnum);
-  
-  // read TLS index and TLS offset
-  U64 tls_index  = max_U64;
-  U64 tls_offset = max_U64;
-  if(is_main)
+  //- rjf: find this module, if it is already loaded
+  LNX_DMN_Module *module = 0;
+  U64 hash = u64_hash_from_str8(str8_struct(&base_vaddr));
+  U64 slot_idx = hash%ctx->module_slots_count;
   {
-    tls_index  = 1;
-    tls_offset = 0;
-  }
-  else
-  {
-    if(lnx_dmn_state->is_tls_detected)
+    for(LNX_DMN_Module *m = ctx->module_slots[slot_idx].first; m != 0; m = m->hash_next)
     {
-      Rng1U64 tls_modid_range  = r1u64(lnx_dmn_state->tls_modid_desc.offset, lnx_dmn_state->tls_modid_desc.offset + lnx_dmn_state->tls_modid_desc.bit_size / 8);
-      Rng1U64 tls_offset_range = r1u64(lnx_dmn_state->tls_offset_desc.offset, lnx_dmn_state->tls_offset_desc.offset + lnx_dmn_state->tls_offset_desc.bit_size / 8);
-      tls_modid_range  = shift_1u64(tls_modid_range, base_vaddr);
-      tls_offset_range = shift_1u64(tls_offset_range, base_vaddr);
-      if(!lnx_dmn_read(memory_fd, tls_modid_range, &tls_index))   { Assert(0 && "failed to read TLS index");  }
-      if(!lnx_dmn_read(memory_fd, tls_offset_range, &tls_offset)) { Assert(0 && "failed to read TLS offset"); }
+      if(m->base_vaddr == base_vaddr)
+      {
+        module = m;
+        break;
+      }
     }
   }
   
-  module = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Module)->module;
-  module->base_vaddr    = base_vaddr;
-  module->name_vaddr    = name_vaddr;
-  module->name_space_id = name_space_id;
-  module->size          = dim_1u64(module_vrange);
-  module->tls_index     = tls_index;
-  module->tls_offset    = tls_offset;
-  module->is_main       = is_main;
-  
-  // add module to the list
-  DLLPushBack(ctx->first_module, ctx->last_module, module);
-  ctx->module_count += 1;
-  
-  // push base address -> module mapping
-  hash_table_push_u64_raw(ctx->arena, ctx->loaded_modules_ht, base_vaddr, module);
-  
-  exit:;
+  //- rjf: load this module if it's not already loaded
+  if(module == 0)
+  {
+    // parse out module's ELF header
+    ELF_Hdr64 module_ehdr = {0};
+    elf_read_ehdr(lnx_dmn_machine_op_mem_read, &memory_fd, base_vaddr, &module_ehdr);
+    
+    // gather info about module
+    U64     module_rebase     = module_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
+    U64     module_phdr_vaddr = module_rebase + module_ehdr.e_phoff;
+    Rng1U64 module_vrange     = lnx_dmn_compute_image_vrange(memory_fd, module_ehdr.e_ident[ELF_Identifier_Class], module_rebase, module_phdr_vaddr, module_ehdr.e_phentsize, module_ehdr.e_phnum);
+    
+    // read TLS index and TLS offset
+    U64 tls_index  = max_U64;
+    U64 tls_offset = max_U64;
+    if(is_main)
+    {
+      tls_index  = 1;
+      tls_offset = 0;
+    }
+    else
+    {
+      if(lnx_dmn_state->is_tls_detected)
+      {
+        Rng1U64 tls_modid_range  = r1u64(lnx_dmn_state->tls_modid_desc.offset, lnx_dmn_state->tls_modid_desc.offset + lnx_dmn_state->tls_modid_desc.bit_size / 8);
+        Rng1U64 tls_offset_range = r1u64(lnx_dmn_state->tls_offset_desc.offset, lnx_dmn_state->tls_offset_desc.offset + lnx_dmn_state->tls_offset_desc.bit_size / 8);
+        tls_modid_range  = shift_1u64(tls_modid_range, base_vaddr);
+        tls_offset_range = shift_1u64(tls_offset_range, base_vaddr);
+        if(!lnx_dmn_read(memory_fd, tls_modid_range, &tls_index))   { Assert(0 && "failed to read TLS index");  }
+        if(!lnx_dmn_read(memory_fd, tls_offset_range, &tls_offset)) { Assert(0 && "failed to read TLS offset"); }
+      }
+    }
+    
+    module = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Module)->module;
+    module->base_vaddr    = base_vaddr;
+    module->name_vaddr    = name_vaddr;
+    module->name_space_id = name_space_id;
+    module->size          = dim_1u64(module_vrange);
+    module->tls_index     = tls_index;
+    module->tls_offset    = tls_offset;
+    module->is_main       = is_main;
+    
+    // add module to the list
+    DLLPushBack_NP(ctx->first_module, ctx->last_module, module, order_next, order_prev);
+    ctx->module_count += 1;
+    
+    // rjf: link into base_vaddr -> module table
+    {
+      DLLPushBack_NP(ctx->module_slots[slot_idx].first, ctx->module_slots[slot_idx].last, module, hash_next, hash_prev);
+    }
+  }
   return module;
 }
 
 internal void
 lnx_dmn_module_release(LNX_DMN_ProcessCtx *ctx, LNX_DMN_Module *module)
 {
-  // remove module from the list
-  Assert(ctx->module_count > 0);
-  DLLRemove(ctx->first_module, ctx->last_module, module);
+  // rjf: unlink module from ordered list
+  DLLRemove_NP(ctx->first_module, ctx->last_module, module, order_next, order_prev);
   ctx->module_count -= 1;
   
-  // purge base addr -> module mapping
-  hash_table_purge_u64(ctx->loaded_modules_ht, module->base_vaddr);
+  // rjf: unlink from module table
+  {
+    U64 hash = u64_hash_from_str8(str8_struct(&module->base_vaddr));
+    U64 slot_idx = hash%ctx->module_slots_count;
+    LNX_DMN_ModuleSlot *slot = &ctx->module_slots[slot_idx];
+    DLLRemove_NP(slot->first, slot->last, module, hash_next, hash_prev);
+  }
   
+  // rjf: release entity record
   lnx_dmn_entity_release((LNX_DMN_Entity *)module);
 }
 
@@ -518,7 +539,8 @@ lnx_dmn_process_ctx_clone(LNX_DMN_Process *new_owner, LNX_DMN_ProcessCtx *ctx)
   result->arch              = ctx->arch;
   result->rdebug_vaddr      = ctx->rdebug_vaddr;
   result->dl_class          = ctx->dl_class;
-  result->loaded_modules_ht = hash_table_init(result->arena, ctx->loaded_modules_ht->cap);
+  result->module_slots_count = ctx->module_slots_count;
+  result->module_slots = push_array(result->arena, LNX_DMN_ModuleSlot, result->module_slots_count);
   result->xcr0              = ctx->xcr0;
   result->xsave_size        = ctx->xsave_size;
   result->xsave_layout      = ctx->xsave_layout;
@@ -556,14 +578,15 @@ lnx_dmn_process_ctx_clone(LNX_DMN_Process *new_owner, LNX_DMN_ProcessCtx *ctx)
   }
   
   // clone modules
-  for EachNode(module, LNX_DMN_Module, ctx->first_module)
+  for(LNX_DMN_Module *module = ctx->first_module; module != 0; module = module->order_next)
   {
     LNX_DMN_Module *dst = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Module)->module;
     MemoryCopyStruct(dst, module);
-    dst->next = dst->prev = 0;
-    hash_table_push_u64_raw(result->arena, result->loaded_modules_ht, dst->base_vaddr, dst);
-    DLLPushBack(result->first_module, result->last_module, dst);
+    DLLPushBack_NP(result->first_module, result->last_module, dst, order_next, order_prev);
     result->module_count += 1;
+    U64 hash = u64_hash_from_str8(str8_struct(&dst->base_vaddr));
+    U64 slot_idx = hash%result->module_slots_count;
+    DLLPushBack_NP(result->module_slots[slot_idx].first, result->module_slots[slot_idx].last, dst, hash_next, hash_prev);
   }
   
   return result;
@@ -1192,7 +1215,19 @@ lnx_dmn_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *t
     if(gnu_read_link_map(lnx_dmn_machine_op_mem_read, &process->fd, map_vaddr, process->ctx->dl_class, &map) != MachineOpResult_Ok) { break; }
     
     // was module already loaded?
-    LNX_DMN_Module *module = hash_table_search_u64_raw(process->ctx->loaded_modules_ht, map.addr_vaddr);
+    LNX_DMN_Module *module = 0;
+    {
+      U64 hash = u64_hash_from_str8(str8_struct(&map.addr_vaddr));
+      U64 slot_idx = hash%process->ctx->module_slots_count;
+      for(LNX_DMN_Module *m = process->ctx->module_slots[slot_idx].first; m != 0; m = m->hash_next)
+      {
+        if(m->base_vaddr == map.addr_vaddr)
+        {
+          module = m;
+          break;
+        }
+      }
+    }
     if(module) { continue; }
     
     // clone process ctx
@@ -1906,27 +1941,35 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                         LNX_DMN_ProcessCtx *ctx = process->ctx;
                         
                         // flag every module as inactive
-                        for EachNode(module, LNX_DMN_Module, ctx->first_module)
+                        for(LNX_DMN_Module *module = ctx->first_module; module != 0; module = module->order_next)
                         {
                           module->is_live = 0;
                         }
                         
                         // mark live modules
-                        B32                is_64bit    = ctx->dl_class == ELF_Class_64;
+                        B32 is_64bit = ctx->dl_class == ELF_Class_64;
                         GNU_RDebugInfoList rdebug_list = gnu_parse_rdebug(scratch.arena, is_64bit, rdebug_vaddr, lnx_dmn_machine_op_mem_read, &process->fd);
                         for EachNode(rdebug_n, GNU_RDebugInfoNode, rdebug_list.first)
                         {
                           GNU_LinkMapList link_map_list = gnu_parse_link_map_list(scratch.arena, is_64bit, rdebug_n->v.r_map, lnx_dmn_machine_op_mem_read, &process->fd);
                           for EachNode(link_map_n, GNU_LinkMapNode, link_map_list.first)
                           {
-                            LNX_DMN_Module *module = hash_table_search_u64_raw(ctx->loaded_modules_ht, link_map_n->v.addr_vaddr);
-                            module->is_live = 1;
+                            U64 hash = u64_hash_from_str8(str8_struct(&link_map_n->v.addr_vaddr));
+                            U64 slot_idx = hash%ctx->module_slots_count;
+                            for(LNX_DMN_Module *m = ctx->module_slots[slot_idx].first; m != 0; m = m->hash_next)
+                            {
+                              if(m->base_vaddr == link_map_n->v.addr_vaddr)
+                              {
+                                m->is_live = 1;
+                                break;
+                              }
+                            }
                           }
                         }
                         
                         // collect unloaded modules
                         LNX_DMN_ModulePtrList to_release = {0};
-                        for EachNode(module, LNX_DMN_Module, ctx->first_module)
+                        for(LNX_DMN_Module *module = ctx->first_module; module != 0; module = module->order_next)
                         {
                           if(!module->is_live)
                           {
@@ -2293,7 +2336,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           // rjf: push module events
           if(thread_done_report_events)
           {
-            for EachNode(module, LNX_DMN_Module, thread_process->ctx->first_module)
+            for(LNX_DMN_Module *module = thread_process->ctx->first_module; module != 0; module = module->order_next)
             {
               lnx_dmn_push_event_unload_module(arena, &events, thread_process, module);
             }
@@ -2900,7 +2943,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           ctx->arch              = arch;
           ctx->rdebug_vaddr      = rdebug_vaddr;
           ctx->dl_class          = dl_class;
-          ctx->loaded_modules_ht = hash_table_init(ctx_arena, 0x1000);
+          ctx->module_slots_count= 4096;
+          ctx->module_slots      = push_array(ctx_arena, LNX_DMN_ModuleSlot, ctx->module_slots_count);
           ctx->probes            = known_probes;
           ctx->xcr0              = xcr0;
           ctx->xsave_size        = Max(xsave_size, sizeof(X64_XSave));
@@ -2910,7 +2954,12 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           LNX_DMN_Module *main_module = lnx_dmn_module_alloc(ctx, new_process->fd, base_vaddr, auxv.execfn, 1, 1);
           
           //- glibc has a shortcut mapping for the main module
-          hash_table_push_u64_raw(ctx->arena, ctx->loaded_modules_ht, 0, main_module);
+          {
+            U64 vaddr = 0;
+            U64 hash = u64_hash_from_str8(str8_struct(&vaddr));
+            U64 slot_idx = hash%ctx->module_slots_count;
+            DLLPushBack_NP(ctx->module_slots[slot_idx].first, ctx->module_slots[slot_idx].last, main_module, hash_next, hash_prev);
+          }
         }
         
         ////////////////////////
@@ -3040,7 +3089,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //
       if(new_process)
       {
-        for EachNode(module, LNX_DMN_Module, new_process->ctx->first_module)
+        for(LNX_DMN_Module *module = new_process->ctx->first_module; module != 0; module = module->order_next)
         {
           lnx_dmn_push_event_load_module(arena, &events, new_process->first_thread, module);
         }
