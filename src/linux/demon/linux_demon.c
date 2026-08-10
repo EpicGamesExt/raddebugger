@@ -1810,6 +1810,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         //- rjf: if signal was unhandled at this point -> kill process
         if(!signal_handled)
         {
+          signal_handled = 1;
           if(LNX_RETRY_ON_EINTR(kill(wait_id, SIGKILL)) >= 0)
           {
             process->state = LNX_DMN_ProcessState_ExecFailedDoExit;
@@ -2313,19 +2314,21 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //////////////////////////
       //- rjf: thread done -> release
       //
-      if(thread_done)
+      if(thread_done && thread)
       {
+        LNX_DMN_Process *thread_process = thread->process;
+        
         // rjf: store main thread's exit code
-        if(thread->tid == thread->process->pid)
+        if(thread->tid == thread_process->pid)
         {
-          thread->process->main_thread_exit_code = thread_done_exit_code;
+          thread_process->main_thread_exit_code = thread_done_exit_code;
         }
         
         // rjf: push exit event
         {
           DMN_Event *e = dmn_event_list_push(arena, &events);
           e->kind    = DMN_EventKind_ExitThread;
-          e->process = lnx_dmn_handle_from_process(thread->process);
+          e->process = lnx_dmn_handle_from_process(thread_process);
           e->thread  = lnx_dmn_handle_from_thread(thread);
           e->code    = (U32)thread_done_exit_code;
         }
@@ -2334,31 +2337,31 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         lnx_dmn_thread_release(thread);
         
         // rjf: last thread in process? -> exit process too
-        if(thread->process->thread_count == 0)
+        if(thread_process->thread_count == 0)
         {
           // rjf: push module events
-          for EachNode(module, LNX_DMN_Module, thread->process->ctx->first_module)
+          for EachNode(module, LNX_DMN_Module, thread_process->ctx->first_module)
           {
-            lnx_dmn_push_event_unload_module(arena, &events, thread->process, module);
+            lnx_dmn_push_event_unload_module(arena, &events, thread_process, module);
           }
           
           // rjf: push process exit event
           {
             DMN_Event *e = dmn_event_list_push(arena, &events);
             e->kind    = DMN_EventKind_ExitProcess;
-            e->process = lnx_dmn_handle_from_process(thread->process);
-            e->code    = thread->process->main_thread_exit_code;
+            e->process = lnx_dmn_handle_from_process(thread_process);
+            e->code    = thread_process->main_thread_exit_code;
           }
           
           // rjf: release process storage
-          lnx_dmn_process_release(thread->process);
+          lnx_dmn_process_release(thread_process);
         }
       }
       
       //////////////////////////
       //- rjf: process done -> release
       //
-      if(process_done)
+      if(process_done && process)
       {
         lnx_dmn_process_release(process);
       }
