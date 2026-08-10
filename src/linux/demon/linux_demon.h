@@ -181,22 +181,6 @@ struct LNX_DMN_Thread
   U64 dtv_base_vaddr;
 };
 
-typedef struct LNX_DMN_ThreadPtrNode LNX_DMN_ThreadPtrNode;
-struct LNX_DMN_ThreadPtrNode
-{
-  LNX_DMN_ThreadPtrNode *next;
-  LNX_DMN_ThreadPtrNode *prev;
-  LNX_DMN_Thread *v;
-};
-
-typedef struct LNX_DMN_ThreadPtrList LNX_DMN_ThreadPtrList;
-struct LNX_DMN_ThreadPtrList
-{
-  LNX_DMN_ThreadPtrNode *first;
-  LNX_DMN_ThreadPtrNode *last;
-  U64 count;
-};
-
 typedef struct LNX_DMN_Module LNX_DMN_Module;
 struct LNX_DMN_Module
 {
@@ -427,9 +411,7 @@ internal void lnx_dmn_entity_release(LNX_DMN_Entity *entity);
 
 //- rjf: specialized allocation / deallocation helpers
 internal LNX_DMN_Process *lnx_dmn_process_alloc(pid_t pid, LNX_DMN_ProcessState state, LNX_DMN_Process *parent_process, B32 debug_subprocess, B32 is_cow);
-internal LNX_DMN_Thread *lnx_dmn_thread_alloc(LNX_DMN_Process *process, LNX_DMN_ThreadState thread_state, pid_t tid);
 internal LNX_DMN_Module *lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64 name_vaddr, U64 name_space_id, B32 is_main);
-internal void lnx_dmn_process_release(LNX_DMN_Process *process);
 internal void lnx_dmn_thread_release(LNX_DMN_Thread *thread);
 internal void lnx_dmn_module_release(LNX_DMN_ProcessCtx *ctx, LNX_DMN_Module *module);
 
@@ -463,10 +445,7 @@ internal U64  lnx_dmn_tls_root_vaddr_from_reg_block(int fd, Arch arch, void *reg
 ////////////////////////////////
 //~ List Helpers
 
-internal void                     lnx_dmn_thread_ptr_list_push_node(LNX_DMN_ThreadPtrList *list, LNX_DMN_ThreadPtrNode *n);
-internal LNX_DMN_ThreadPtrNode *  lnx_dmn_thread_ptr_list_push(Arena *arena, LNX_DMN_ThreadPtrList *list, LNX_DMN_Thread *v);
-internal void                     lnx_dmn_thread_ptr_list_remove(LNX_DMN_ThreadPtrList *list, LNX_DMN_ThreadPtrNode *n);
-internal LNX_DMN_ModulePtrNode *  lnx_dmn_module_ptr_list_push(Arena *arena, LNX_DMN_ModulePtrList *list, LNX_DMN_Module *v);
+internal LNX_DMN_ModulePtrNode *lnx_dmn_module_ptr_list_push(Arena *arena, LNX_DMN_ModulePtrList *list, LNX_DMN_Module *v);
 
 ////////////////////////////////
 //~ Debug Event Pushers

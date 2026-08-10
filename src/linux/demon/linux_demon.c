@@ -432,50 +432,6 @@ lnx_dmn_process_alloc(pid_t pid, LNX_DMN_ProcessState state, LNX_DMN_Process *pa
   return process;
 }
 
-internal LNX_DMN_Thread *
-lnx_dmn_thread_alloc(LNX_DMN_Process *process, LNX_DMN_ThreadState thread_state, pid_t tid)
-{
-  void *reg_block;
-  if(process->ctx->free_reg_blocks.node_count)
-  {
-    String8Node *n = str8_list_pop_front(&process->ctx->free_reg_blocks);
-    reg_block = n->string.str;
-    str8_list_push_node(&process->ctx->free_reg_block_nodes, n);
-  }
-  else
-  {
-    ARCH_Info *arch_info = arch_info_from_arch(process->ctx->arch);
-    U64 reg_block_size = arch_info->reg_block_size;
-    reg_block = push_array(process->ctx->arena, U8, reg_block_size);
-  }
-  
-  LNX_DMN_Thread *thread = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Thread)->thread;
-  thread->tid       = tid;
-  thread->state     = thread_state;
-  thread->process   = process;
-  thread->reg_block = reg_block;
-  thread->dtv_base_vaddr = lnx_dmn_tls_root_vaddr_from_reg_block(process->fd, process->ctx->arch, reg_block);
-  if(thread_state == LNX_DMN_ThreadState_Stopped)
-  {
-    thread->is_reg_block_dirty = !lnx_dmn_thread_read_reg_block(thread);
-  }
-  
-  // add thread to the list
-  DLLPushBack(process->first_thread, process->last_thread, thread);
-  process->thread_count += 1;
-  
-  // push tid -> thread mapping
-  hash_table_push_u64_raw(lnx_dmn_state->arena, lnx_dmn_state->tid_ht, thread->tid, thread);
-  
-  // update global thread counter
-  if(thread_state == LNX_DMN_ThreadState_PendingCreation)
-  {
-    lnx_dmn_state->threads_pending_creation += 1;
-  }
-  
-  return thread;
-}
-
 internal LNX_DMN_Module *
 lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64 name_vaddr, U64 name_space_id, B32 is_main)
 {
@@ -530,42 +486,6 @@ lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64
   
   exit:;
   return module;
-}
-
-internal void
-lnx_dmn_process_release(LNX_DMN_Process *process)
-{
-  // update global state
-  AssertAlways(lnx_dmn_state->process_count > 0);
-  DLLRemove(lnx_dmn_state->first_process, lnx_dmn_state->last_process, process);
-  lnx_dmn_state->process_count -= 1;
-  
-  // update pending process tracker
-  if(process->state != LNX_DMN_ProcessState_Normal)
-  {
-    Assert(lnx_dmn_state->process_pending_creation > 0);
-    lnx_dmn_state->process_pending_creation -= 1;
-  }
-  
-  // close memory handle
-  if(LNX_RETRY_ON_EINTR(close(process->fd)) < 0) { Assert(0 && "failed to close memory descriptor"); }
-  
-  // remove pid mapping
-  hash_table_purge_u64(lnx_dmn_state->pid_ht, process->pid);
-  
-  // release the context
-  if(process->ctx)
-  {
-    process->ctx->ref_count -= 1;
-    if(process->ctx->ref_count == 0)
-    {
-      Arena *arena = process->ctx->arena;
-      lnx_dmn_entity_release((LNX_DMN_Entity *)process->ctx);
-    }
-  }
-  
-  // release process entity
-  lnx_dmn_entity_release((LNX_DMN_Entity *)process);
 }
 
 internal void
@@ -1221,29 +1141,6 @@ lnx_dmn_tls_root_vaddr_from_reg_block(int fd, Arch arch, void *reg_block)
 ////////////////////////////////
 //~ List Helpers
 
-internal void
-lnx_dmn_thread_ptr_list_push_node(LNX_DMN_ThreadPtrList *list, LNX_DMN_ThreadPtrNode *n)
-{
-  DLLPushBack(list->first, list->last, n);
-  list->count += 1;
-}
-
-internal LNX_DMN_ThreadPtrNode *
-lnx_dmn_thread_ptr_list_push(Arena *arena, LNX_DMN_ThreadPtrList *list, LNX_DMN_Thread *v)
-{
-  LNX_DMN_ThreadPtrNode *n = push_array(arena, LNX_DMN_ThreadPtrNode, 1);
-  n->v = v;
-  lnx_dmn_thread_ptr_list_push_node(list, n);
-  return n;
-}
-
-internal void
-lnx_dmn_thread_ptr_list_remove(LNX_DMN_ThreadPtrList *list, LNX_DMN_ThreadPtrNode *n)
-{
-  DLLRemove(list->first, list->last, n);
-  list->count -= 1;
-}
-
 internal LNX_DMN_ModulePtrNode *
 lnx_dmn_module_ptr_list_push(Arena *arena, LNX_DMN_ModulePtrList *list, LNX_DMN_Module *v)
 {
@@ -1605,7 +1502,16 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     ////////////////////////////
     //- rjf: schedule threads to run
     //
-    LNX_DMN_ThreadPtrList running_threads = {0};
+    typedef struct ThreadNode ThreadNode;
+    struct ThreadNode
+    {
+      ThreadNode *next;
+      LNX_DMN_Thread *v;
+    };
+    ThreadNode *first_scheduled_thread = 0;
+    ThreadNode *last_scheduled_thread = 0;
+    U64 scheduled_thread_count = 0;
+    U64 running_thread_count = 0;
     {
       for EachNode(process, LNX_DMN_Process, lnx_dmn_state->first_process)
       {
@@ -1684,9 +1590,13 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             // resume thread
             if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_CONT, thread->tid, 0, sig_code)) >= 0)
             {
-              thread->state              = LNX_DMN_ThreadState_Running;
+              thread->state = LNX_DMN_ThreadState_Running;
               thread->is_reg_block_dirty = 1;
-              lnx_dmn_thread_ptr_list_push(scratch.arena, &running_threads, thread);
+              ThreadNode *n = push_array(scratch.arena, ThreadNode, 1);
+              SLLQueuePush(first_scheduled_thread, last_scheduled_thread, n);
+              n->v = thread;
+              scheduled_thread_count += 1;
+              running_thread_count += 1;
             }
             else
             {
@@ -1711,19 +1621,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
     }
     
     ////////////////////////////
-    //- rjf: hash running threads tids
-    //
-    HashTable *running_threads_ht = hash_table_init(scratch.arena, running_threads.count * 2);
-    for EachNode(n, LNX_DMN_ThreadPtrNode, running_threads.first)
-    {
-      hash_table_push_u64_raw(scratch.arena, running_threads_ht, n->v->tid, n);
-    }
-    
-    ////////////////////////////
     //- rjf: wait the next signal & generate events
     //
     B32 is_halt_done = 0;
-    LNX_DMN_ThreadPtrList stopped_threads = {0};
     for(;;)
     {
       //////////////////////////
@@ -1738,14 +1638,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       }
       
       //////////////////////////
-      //- rjf: unpack wait_id
+      //- rjf: unpack signal
       //
       LNX_DMN_Process *process = lnx_dmn_process_from_pid(wait_id);
       LNX_DMN_Thread *thread = lnx_dmn_thread_from_pid(wait_id);
-      
-      //////////////////////////
-      //- rjf: unpack signal's status
-      //
       int wifexited   = WIFEXITED(status);
       int wifsignaled = WIFSIGNALED(status);
       int wifstopped  = WIFSTOPPED(status);
@@ -1753,15 +1649,33 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       int event_code  = (status >> 16);
       
       //////////////////////////
-      //- rjf: handle signals from initializing processes
+      //- rjf: set up signal handling outputs (top-level handling bit)
       //
       B32 signal_handled = 0;
+      
+      //////////////////////////
+      //- rjf: set up signal handling outputs (process exits / creation)
+      //
       B32 process_done = 0;
       B32 process_new = 0;
       LNX_DMN_CreateProcessFlags process_new_flags = 0;
+      
+      //////////////////////////
+      //- rjf: set up signal handling outputs (thread exits / creation / stops)
+      //
       B32 thread_done = 0;
+      B32 thread_done_report_events = 0;
       U64 thread_done_exit_code = 0;
       B32 thread_new = 0;
+      LNX_DMN_ThreadState thread_new_state = LNX_DMN_ThreadState_Null;
+      B32 thread_new_report_events = 0;
+      LNX_DMN_Process *thread_new_parent = process;
+      B32 thread_stop = 0;
+      B32 thread_initial_stop = 0;
+      
+      //////////////////////////
+      //- rjf: handle signals from initializing processes
+      //
       if(process && process->state != LNX_DMN_ProcessState_Normal)
       {
         //- rjf: advance process initialization state
@@ -1824,23 +1738,15 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       }
       
       //////////////////////////
-      //- rjf: any thread stop -> interrupt all threads
+      //- rjf: any thread stop -> update thread state, halt other threads if needed
       //
       if(!signal_handled && (wifexited || wifsignaled || wifstopped))
       {
-        LNX_DMN_ThreadPtrNode *thread_n = hash_table_search_u64_raw(running_threads_ht, wait_id);
-        if(thread_n)
+        B32 thread_running = (thread && thread->state == LNX_DMN_ThreadState_Running);
+        
+        // rjf: update thread running state
+        if(thread)
         {
-          LNX_DMN_Thread *thread = thread_n->v;
-          
-          // remove mapping
-          hash_table_purge_u64(running_threads_ht, thread->tid);
-          
-          // move thread to the stopped list
-          lnx_dmn_thread_ptr_list_remove(&running_threads, thread_n);
-          lnx_dmn_thread_ptr_list_push_node(&stopped_threads, thread_n);
-          
-          // update thread state
           if(wifstopped && !wifsignaled && !wifexited)
           {
             thread->state = LNX_DMN_ThreadState_Stopped;
@@ -1849,16 +1755,28 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           {
             thread->state = LNX_DMN_ThreadState_Exited;
           }
-          else { InvalidPath; }
-          
-          // stop all other threads
-          if(stopped_threads.count == 1)
+        }
+        
+        // rjf: if this is the first thread to stop out of all we scheduled -> interrupt
+        // all other scheduled threads
+        if(scheduled_thread_count != 0 && running_thread_count == scheduled_thread_count)
+        {
+          for EachNode(n, ThreadNode, first_scheduled_thread)
           {
-            for EachNode(n, LNX_DMN_ThreadPtrNode, running_threads.first)
+            if(n->v != thread && n->v->state == LNX_DMN_ThreadState_Running)
             {
-              if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_INTERRUPT, n->v->tid, 0, 0)) < 0) { Assert(0 && "failed to interrupt process"); }
+              if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_INTERRUPT, n->v->tid, 0, 0)) < 0)
+              {
+                log_infof("ptrace error: Couldn't send PTRACE_INTERRUPT to TID %I64u.", n->v->tid);
+              }
             }
           }
+        }
+        
+        // rjf: decrement running thread count
+        if(thread_running)
+        {
+          running_thread_count -= 1;
         }
       }
       
@@ -1872,6 +1790,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       {
         thread_done = 1;
         thread_done_exit_code = wifexited ? WEXITSTATUS(status) : WTERMSIG(status);
+        thread_done_report_events = 1;
         signal_handled = 1;
       }
       
@@ -1897,6 +1816,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         {
           switch(event_code)
           {
+            default:{}break;
+            
             ////////////////////
             //- rjf: 0 -> general trap path
             //
@@ -2148,19 +2069,22 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             //
             case PTRACE_EVENT_CLONE:
             {
-              // kernel stopped the parent just before scheduling the child to
+              // NOTE: kernel stopped the parent just before scheduling the child to
               // give us a chance to prepare to trace it; next event for the child
               // will be a PTRACE_EVENT_STOP
-              
-              pid_t new_tid;
+              pid_t new_tid = 0;
               if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETEVENTMSG, wait_id, 0, &new_tid)) >= 0)
               {
-                LNX_DMN_Thread *thread = lnx_dmn_thread_from_pid(wait_id);
-                
-                // create a new partially inited thread
-                lnx_dmn_thread_alloc(thread->process, LNX_DMN_ThreadState_PendingCreation, new_tid);
+                thread_new = 1;
+                thread_new_report_events = 0;
+                thread_new_state = LNX_DMN_ThreadState_PendingCreation;
+                thread_new_parent = thread->process;
+                lnx_dmn_state->threads_pending_creation += 1;
               }
-              else { Assert(0 && "failed to get new tid"); }
+              else
+              {
+                log_infof("ptrace error: PTRACE_EVENT_CLONE reported, but ptrace did not successfully report the new TID.");
+              }
             }break;
             
             ////////////////////
@@ -2172,6 +2096,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               if(process->debug_subprocesses)
               {
                 thread_done = 1;
+                thread_done_report_events = 1;
                 thread_done_exit_code = 0;
                 process_new = 1;
                 process_new_flags = LNX_DMN_CreateProcessFlag_DebugSubprocesses;
@@ -2181,6 +2106,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                 if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_DETACH, wait_id, 0, 0)) >= 0)
                 {
                   thread_done = 1;
+                  thread_done_report_events = 1;
                   thread_done_exit_code = 0;
                 }
                 else { Assert(0 && "failed to detach"); }
@@ -2188,35 +2114,27 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             }break;
             
             ////////////////////
-            //- rjf: exit event -> exit tracing not enabled, so we don't really have anything to do here.
-            //
-            case PTRACE_EVENT_EXIT:
-            {
-            }break;
-            
-            ////////////////////
-            //- TODO(rjf): seccomp?
-            //
-            case PTRACE_EVENT_SECCOMP:
-            {
-              NotImplemented;
-            }break;
-            
-            ////////////////////
             //- rjf: thread stops
             //
             case PTRACE_EVENT_STOP:
             {
+              // rjf: stop event for pending threads -> thread is created & stopped
               if(thread->state == LNX_DMN_ThreadState_PendingCreation)
               {
-                LNX_DMN_Process *process = thread->process;
-                lnx_dmn_thread_release(thread);
-                thread = lnx_dmn_thread_alloc(process, LNX_DMN_ThreadState_Stopped, wait_id);
-                lnx_dmn_push_event_create_thread(arena, &events, thread);
-              }
-              else
-              {
-                AssertAlways(thread->state == LNX_DMN_ThreadState_Stopped);
+                thread->state = LNX_DMN_ThreadState_Stopped;
+                lnx_dmn_state->threads_pending_creation -= 1;
+                thread_stop = 1;
+                thread_initial_stop = 1;
+                
+                // rjf: report new thread
+                DMN_Event *e = dmn_event_list_push(arena, &events);
+                e->kind    = DMN_EventKind_CreateThread;
+                e->process = lnx_dmn_handle_from_process(thread->process);
+                e->thread  = lnx_dmn_handle_from_thread(thread);
+                e->arch    = thread->process->ctx->arch;
+                e->code    = thread->tid;
+                // TODO(rjf): e->stack_pointer = ???;
+                e->tls_root_vaddr = thread->dtv_base_vaddr;
               }
             }break;
           }
@@ -2249,7 +2167,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         {
           LNX_DMN_Thread *thread = lnx_dmn_thread_from_pid(wait_id);
           thread->pass_through_signal = 1;
-          thread->pass_through_signo  = wstopsig;
+          thread->pass_through_signo = wstopsig;
           local_persist B8 is_repeatable[] =
           {
             0, // null
@@ -2325,6 +2243,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         }
         
         // rjf: push exit event
+        if(thread_done_report_events)
         {
           DMN_Event *e = dmn_event_list_push(arena, &events);
           e->kind    = DMN_EventKind_ExitThread;
@@ -2340,12 +2259,16 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         if(thread_process->thread_count == 0)
         {
           // rjf: push module events
-          for EachNode(module, LNX_DMN_Module, thread_process->ctx->first_module)
+          if(thread_done_report_events)
           {
-            lnx_dmn_push_event_unload_module(arena, &events, thread_process, module);
+            for EachNode(module, LNX_DMN_Module, thread_process->ctx->first_module)
+            {
+              lnx_dmn_push_event_unload_module(arena, &events, thread_process, module);
+            }
           }
           
           // rjf: push process exit event
+          if(thread_done_report_events)
           {
             DMN_Event *e = dmn_event_list_push(arena, &events);
             e->kind    = DMN_EventKind_ExitProcess;
@@ -2353,8 +2276,9 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             e->code    = thread_process->main_thread_exit_code;
           }
           
-          // rjf: release process storage
-          lnx_dmn_process_release(thread_process);
+          // rjf: turn on process-end path
+          process = thread_process;
+          process_done = 1;
         }
       }
       
@@ -2363,16 +2287,34 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //
       if(process_done && process)
       {
-        lnx_dmn_process_release(process);
+        DLLRemove(lnx_dmn_state->first_process, lnx_dmn_state->last_process, process);
+        lnx_dmn_state->process_count -= 1;
+        if(process->state != LNX_DMN_ProcessState_Normal)
+        {
+          lnx_dmn_state->process_pending_creation -= 1;
+        }
+        LNX_RETRY_ON_EINTR(close(process->fd));
+        hash_table_purge_u64(lnx_dmn_state->pid_ht, process->pid);
+        if(process->ctx)
+        {
+          process->ctx->ref_count -= 1;
+          if(process->ctx->ref_count == 0)
+          {
+            Arena *arena = process->ctx->arena;
+            lnx_dmn_entity_release((LNX_DMN_Entity *)process->ctx);
+          }
+        }
+        lnx_dmn_entity_release((LNX_DMN_Entity *)process);
       }
       
       //////////////////////////
       //- rjf: new process -> create
       //
+      LNX_DMN_Process *new_process = 0;
       if(process_new)
       {
         LNX_DMN_Process *parent_process = 0;
-        LNX_DMN_Process *new_process = lnx_dmn_process_alloc(wait_id, LNX_DMN_ProcessState_Normal, 0, !!(process_new_flags & LNX_DMN_CreateProcessFlag_DebugSubprocesses), !!(process_new_flags & LNX_DMN_CreateProcessFlag_Cow));
+        new_process = lnx_dmn_process_alloc(wait_id, LNX_DMN_ProcessState_Normal, 0, !!(process_new_flags & LNX_DMN_CreateProcessFlag_DebugSubprocesses), !!(process_new_flags & LNX_DMN_CreateProcessFlag_Cow));
         
         ////////////////////////
         //- rjf: get process context - create if this isn't cloning parent process
@@ -2958,12 +2900,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         }
         
         ////////////////////////
-        //- rjf: create main thread
-        //
-        lnx_dmn_thread_alloc(new_process, LNX_DMN_ThreadState_Stopped, wait_id);
-        
-        ////////////////////////
-        //- rjf: push events
+        //- rjf: report process creation
         //
         {
           DMN_Event *e = dmn_event_list_push(arena, &events);
@@ -2972,42 +2909,128 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           e->arch      = new_process->ctx->arch;
           e->code      = new_process->pid;
         }
-        for EachNode(thread, LNX_DMN_Thread, new_process->first_thread)
+        
+        ////////////////////////
+        //- rjf: create main thread
+        //
         {
-          lnx_dmn_push_event_create_thread(arena, &events, thread);
+          thread_new = 1;
+          thread_new_state = LNX_DMN_ThreadState_Stopped;
+          thread_new_parent = new_process;
+          thread_new_report_events = 1;
         }
+      }
+      
+      //////////////////////////
+      //- rjf: new thread -> create
+      //
+      if(thread_new)
+      {
+        // rjf: allocate
+        LNX_DMN_Thread *new_thread = 0;
+        {
+          // rjf: allocate reg block
+          void *reg_block = 0;
+          if(process->ctx->free_reg_blocks.node_count)
+          {
+            String8Node *n = str8_list_pop_front(&process->ctx->free_reg_blocks);
+            reg_block = n->string.str;
+            str8_list_push_node(&process->ctx->free_reg_block_nodes, n);
+          }
+          else
+          {
+            ARCH_Info *arch_info = arch_info_from_arch(process->ctx->arch);
+            U64 reg_block_size = arch_info->reg_block_size;
+            reg_block = push_array(process->ctx->arena, U8, reg_block_size);
+          }
+          
+          // rjf: allocate thread
+          new_thread = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Thread)->thread;
+          new_thread->tid       = wait_id;
+          new_thread->state     = thread_new_state;
+          new_thread->process   = thread_new_parent;
+          new_thread->reg_block = reg_block;
+          
+          // rjf: hook thread to process
+          DLLPushBack(thread_new_parent->first_thread, thread_new_parent->last_thread, new_thread);
+          thread_new_parent->thread_count += 1;
+          
+          // rjf: map tid -> thread mapping
+          hash_table_push_u64_raw(lnx_dmn_state->arena, lnx_dmn_state->tid_ht, new_thread->tid, new_thread);
+        }
+        
+        // rjf: report
+        if(thread_new_report_events)
+        {
+          DMN_Event *e = dmn_event_list_push(arena, &events);
+          e->kind    = DMN_EventKind_CreateThread;
+          e->process = lnx_dmn_handle_from_process(new_thread->process);
+          e->thread  = lnx_dmn_handle_from_thread(new_thread);
+          e->arch    = new_thread->process->ctx->arch;
+          e->code    = new_thread->tid;
+          // TODO(rjf): e->stack_pointer = ???;
+          e->tls_root_vaddr = new_thread->dtv_base_vaddr;
+        }
+        
+        // rjf: if thread is stopped -> turn on initial stop path
+        if(thread_new_state == LNX_DMN_ThreadState_Stopped)
+        {
+          thread = new_thread;
+          thread_stop = 1;
+          thread_initial_stop = 1;
+        }
+      }
+      
+      //////////////////////////
+      //- rjf: thread stop -> read registers. if initial stop, form base addr to DTV (TLS)
+      //
+      if(thread_stop)
+      {
+        thread->is_reg_block_dirty = !lnx_dmn_thread_read_reg_block(thread);
+        if(thread_initial_stop)
+        {
+          thread->dtv_base_vaddr = lnx_dmn_tls_root_vaddr_from_reg_block(thread->process->fd, thread->process->ctx->arch, thread->reg_block);
+        }
+      }
+      
+      //////////////////////////
+      //- rjf: process was created -> report events for module loads
+      //
+      if(new_process)
+      {
         for EachNode(module, LNX_DMN_Module, new_process->ctx->first_module)
         {
           lnx_dmn_push_event_load_module(arena, &events, new_process->first_thread, module);
         }
-        {
-          DMN_Event *e = dmn_event_list_push(arena, &events);
-          e->kind    = DMN_EventKind_HandshakeComplete;
-          e->process = lnx_dmn_handle_from_process(new_process);
-          e->thread  = lnx_dmn_handle_from_thread(new_process->first_thread);
-          e->arch    = new_process->ctx->arch;
-        }
+      }
+      
+      //////////////////////////
+      //- rjf: process was created -> report event for handshake completion
+      //
+      if(new_process)
+      {
+        DMN_Event *e = dmn_event_list_push(arena, &events);
+        e->kind    = DMN_EventKind_HandshakeComplete;
+        e->process = lnx_dmn_handle_from_process(new_process);
+        e->thread  = lnx_dmn_handle_from_thread(new_process->first_thread);
       }
       
       //////////////////////////
       //- rjf: break if all threads are stopped, no pending processes, no pending threads
       //
-      if(running_threads.count == 0 && lnx_dmn_state->process_pending_creation == 0 && lnx_dmn_state->threads_pending_creation == 0)
+      if(running_thread_count == 0 && lnx_dmn_state->process_pending_creation == 0 && lnx_dmn_state->threads_pending_creation == 0)
       {
         break;
       }
     }
     
     ////////////////////////////
-    //- rjf: do halt
+    //- rjf: halted -> push halt event, reset halter state
     //
     if(is_halt_done)
     {
-      // push event
       DMN_Event *e = dmn_event_list_push(arena, &events);
       e->kind = DMN_EventKind_Halt;
-      
-      // reset state
       lnx_dmn_state->halter_tid     = 0;
       lnx_dmn_state->halt_code      = 0;
       lnx_dmn_state->halt_user_data = 0;
