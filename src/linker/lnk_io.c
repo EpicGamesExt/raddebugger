@@ -500,10 +500,12 @@ struct LNK_BackgroundFile
   B32                 is_finished;
   B32                 is_complete;
   B32                 write_failed;
+  B32                 open_failed;
 };
 
 typedef enum
 {
+  LNK_BackgroundFileJobKind_OpenFile,
   LNK_BackgroundFileJobKind_Write,
   LNK_BackgroundFileJobKind_EndFile,
   LNK_BackgroundFileJobKind_EndWriter,
@@ -518,9 +520,47 @@ typedef struct
   String8                   data;
 } LNK_BackgroundFileWriteJob;
 
+// Opening the output file can cost seconds on the caller's thread when it
+// replaces a previous multi-GB artifact (NTFS truncate/dealloc of the old
+// allocation happens inside CreateFile). Jobs on one file are queue-ordered,
+// so deferring the open to the writer thread keeps every write behind it
+// while the caller returns immediately.
+internal void
+lnk_background_file_writer_open_file_on_thread(LNK_BackgroundFile *file)
+{
+  if (file->open_with_rename) {
+    file->file      = lnk_file_open_with_rename_permissions(file->temp_path);
+    file->open_path = file->temp_path;
+  } else {
+    lnk_open_file_write((char *)file->path.str, file->path.size, &file->file, sizeof(file->file));
+    file->open_path = file->path;
+  }
+
+  file->is_open = !file_match(file->file, file_zero());
+  if (!file->is_open) {
+    file->open_failed  = 1;
+    file->write_failed = 1;
+    return;
+  }
+
+  if (file->open_with_rename && !lnk_file_set_delete_on_close(file->file, 1)) {
+    lnk_error(LNK_Error_IO, "failed to update file disposition on %S", file->open_path);
+    lnk_close_file(&file->file);
+    file->is_open      = 0;
+    file->open_failed  = 1;
+    file->write_failed = 1;
+  }
+}
+
 internal void
 lnk_background_file_writer_end_file_on_thread(LNK_BackgroundFile *file, U64 expected_byte_count)
 {
+  if (file->open_failed) {
+    lnk_error(LNK_Error_NoAccess, "don't have access to write to %S", file->path);
+    file->is_complete = 0;
+    return;
+  }
+
   B32 is_complete = !file->write_failed && file->bytes_written == expected_byte_count;
   if (is_complete && file->open_with_rename) {
     if (!lnk_file_set_delete_on_close(file->file, 0)) {
@@ -559,12 +599,16 @@ lnk_background_file_writer_thread(void *raw_writer)
 
     if (job.kind == LNK_BackgroundFileJobKind_EndWriter) { break; }
 
-    if (job.kind == LNK_BackgroundFileJobKind_Write) {
-      U64 write_size = lnk_write_file(&job.file->file, job.file_off, job.data.str, job.data.size);
-      if (write_size != job.data.size) {
-        job.file->write_failed = 1;
+    if (job.kind == LNK_BackgroundFileJobKind_OpenFile) {
+      lnk_background_file_writer_open_file_on_thread(job.file);
+    } else if (job.kind == LNK_BackgroundFileJobKind_Write) {
+      if (job.file->is_open) {
+        U64 write_size = lnk_write_file(&job.file->file, job.file_off, job.data.str, job.data.size);
+        if (write_size != job.data.size) {
+          job.file->write_failed = 1;
+        }
+        job.file->bytes_written += write_size;
       }
-      job.file->bytes_written += write_size;
     } else if (job.kind == LNK_BackgroundFileJobKind_EndFile) {
       lnk_background_file_writer_end_file_on_thread(job.file, job.expected_byte_count);
     }
@@ -603,32 +647,22 @@ lnk_background_file_writer_begin_file(LNK_BackgroundFileWriter *writer, String8 
   file->temp_path        = temp_path;
   file->open_with_rename = (temp_path.size > 0);
 
-  if (file->open_with_rename) {
-    file->file      = lnk_file_open_with_rename_permissions(temp_path);
-    file->open_path = temp_path;
-  } else {
-    lnk_open_file_write((char *)path.str, path.size, &file->file, sizeof(file->file));
-    file->open_path = path;
-  }
-
-  file->is_open = !file_match(file->file, file_zero());
-  if (!file->is_open) {
-    lnk_error(LNK_Error_NoAccess, "don't have access to write to %S", path);
-    goto exit;
-  }
-
-  if (file->open_with_rename && !lnk_file_set_delete_on_close(file->file, 1)) {
-    lnk_error(LNK_Error_IO, "failed to update file disposition on %S", file->open_path);
-    lnk_close_file(&file->file);
-    file->is_open = 0;
-    goto exit;
-  }
-
   SLLQueuePush(writer->file_first, writer->file_last, file);
 
-  exit:;
+  // the open runs on the writer thread (multi-GB truncate of a previous
+  // artifact is seconds of caller-thread stall otherwise); jobs on one file
+  // are queue-ordered, so every write lands behind the open. An open failure
+  // flips write_failed and is reported from the EndFile job.
+  {
+    LNK_BackgroundFileWriteJob job = { .kind = LNK_BackgroundFileJobKind_OpenFile, .file = file };
+    RingGuard guard      = guarded_ring_open(writer->queue);
+    B32       is_written = guarded_ring_write_struct_or_wait(&guard, &job, max_U64);
+    guarded_ring_close(&guard);
+    Assert(is_written);
+  }
+
   ProfEnd();
-  return file->is_open ? file : 0;
+  return file;
 }
 
 internal void
@@ -637,7 +671,7 @@ lnk_background_file_writer_enqueue(LNK_BackgroundFileWriter *writer, LNK_Backgro
   ProfBegin("Background File Writer Enqueue");
 
   Assert(writer->is_running);
-  Assert(file->is_open && !file->is_finished);
+  Assert(!file->is_finished); // is_open is owned by the writer thread (open is a queued job)
 
   if (data.size > 0) {
     LNK_BackgroundFileWriteJob job = {
@@ -661,7 +695,7 @@ lnk_background_file_writer_end_file(LNK_BackgroundFileWriter *writer, LNK_Backgr
   ProfBegin("Background File Writer End File");
 
   Assert(writer->is_running);
-  Assert(file->is_open && !file->is_finished);
+  Assert(!file->is_finished); // is_open is owned by the writer thread (open is a queued job)
   file->is_finished = 1;
 
   LNK_BackgroundFileWriteJob job = {
