@@ -518,6 +518,7 @@ typedef struct
   U64                       file_off;
   U64                       expected_byte_count;
   String8                   data;
+  B32                       decommit_after_write; // hand the buffer's pages back to the OS once written
 } LNK_BackgroundFileWriteJob;
 
 // Opening the output file can cost seconds on the caller's thread when it
@@ -609,6 +610,14 @@ lnk_background_file_writer_thread(void *raw_writer)
         }
         job.file->bytes_written += write_size;
       }
+      if (job.decommit_after_write) {
+        // the buffer is immutable and write-once (a sealed MSF stream run); once it is
+        // on disk its pages are dead weight in the commit charge. Round INWARD to whole
+        // OS pages so neighbors sharing the boundary pages are untouched.
+        U64 lo = AlignPow2((U64)job.data.str, KB(4));
+        U64 hi = ((U64)job.data.str + job.data.size) & ~(U64)(KB(4) - 1);
+        if (lo < hi) { decommit_memory((void *)lo, hi - lo); }
+      }
     } else if (job.kind == LNK_BackgroundFileJobKind_EndFile) {
       lnk_background_file_writer_end_file_on_thread(job.file, job.expected_byte_count);
     }
@@ -666,7 +675,7 @@ lnk_background_file_writer_begin_file(LNK_BackgroundFileWriter *writer, String8 
 }
 
 internal void
-lnk_background_file_writer_enqueue(LNK_BackgroundFileWriter *writer, LNK_BackgroundFile *file, U64 file_off, String8 data)
+lnk_background_file_writer_enqueue(LNK_BackgroundFileWriter *writer, LNK_BackgroundFile *file, U64 file_off, String8 data, B32 decommit_after_write)
 {
   ProfBegin("Background File Writer Enqueue");
 
@@ -675,10 +684,11 @@ lnk_background_file_writer_enqueue(LNK_BackgroundFileWriter *writer, LNK_Backgro
 
   if (data.size > 0) {
     LNK_BackgroundFileWriteJob job = {
-      .kind     = LNK_BackgroundFileJobKind_Write,
-      .file     = file,
-      .file_off = file_off,
-      .data     = data,
+      .kind                 = LNK_BackgroundFileJobKind_Write,
+      .file                 = file,
+      .file_off             = file_off,
+      .data                 = data,
+      .decommit_after_write = decommit_after_write,
     };
     RingGuard guard      = guarded_ring_open(writer->queue);
     B32       is_written = guarded_ring_write_struct_or_wait(&guard, &job, max_U64);

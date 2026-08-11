@@ -181,6 +181,10 @@ typedef struct
   // @type_server
   CV_TypeIndex **obj_ti_maps;
   U64           *hashes[CV_TypeIndexSource_COUNT];
+
+  // standalone backing for the merged leaf bytes v[] points into (one per source);
+  // owned by the caller, released after pdb_build_types on the linker path
+  String8 leaf_buffers[CV_TypeIndexSource_COUNT];
 } LNK_MergedTypes;
 
 typedef struct

@@ -3577,7 +3577,19 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
         acc += lane_size;
       }
       task.leaf_buffer_offsets[tp->worker_count] = acc;
-      task.leaf_buffer = push_array_no_zero(tp_temp->v[0], U8, acc ? acc : 1);
+      // standalone allocation (not an arena push): pdb_build_types copies these bytes
+      // into MSF pages and nothing reads cv_types.v afterwards, so the linker path
+      // releases the buffer right after -- multi-GB on AutoRTFM-scale inputs. An arena
+      // push could not be handed back without poisoning later pushes into the range.
+      if (acc > 0) {
+        task.leaf_buffer = reserve_memory(acc);
+        if (task.leaf_buffer == 0 || !commit_memory(task.leaf_buffer, acc)) {
+          lnk_error(LNK_Error_Boot, "failed to allocate %M for merged type leaves", acc);
+        }
+        task.result.leaf_buffers[ti_source] = str8(task.leaf_buffer, acc);
+      } else {
+        task.leaf_buffer = push_array_no_zero(tp_temp->v[0], U8, 1);
+      }
     }
     tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_materialize_unique_leaves_task, &task, "Materialize + Fixup Leaves");
 
@@ -4547,6 +4559,7 @@ typedef struct
   MSF_StreamNumber         *sealed_streams;
   U64                       sealed_stream_count;
   U64                       sealed_stream_cap;
+  B32                       decommit_flushed; // off when /RAD_DEBUG re-reads the PDB page memory for RDI conversion
 } LNK_PdbOutput;
 
 typedef struct LNK_MsfPageCursor
@@ -4598,7 +4611,7 @@ lnk_pdb_output_enqueue_stream(LNK_PdbOutput *output, MSF_Context *msf, MSF_Strea
       run_size += msf->page_size;
     } else {
       if (run_data != 0) {
-        lnk_background_file_writer_enqueue(output->writer, output->file, (U64)run_first_pn * msf->page_size, str8(run_data, run_size));
+        lnk_background_file_writer_enqueue(output->writer, output->file, (U64)run_first_pn * msf->page_size, str8(run_data, run_size), output->decommit_flushed);
       }
       run_first_pn = run_last_pn = page->pn;
       run_data = page_data;
@@ -4606,7 +4619,7 @@ lnk_pdb_output_enqueue_stream(LNK_PdbOutput *output, MSF_Context *msf, MSF_Strea
     }
   }
   if (run_data != 0) {
-    lnk_background_file_writer_enqueue(output->writer, output->file, (U64)run_first_pn * msf->page_size, str8(run_data, run_size));
+    lnk_background_file_writer_enqueue(output->writer, output->file, (U64)run_first_pn * msf->page_size, str8(run_data, run_size), output->decommit_flushed);
   }
 }
 
@@ -4648,20 +4661,20 @@ lnk_pdb_output_enqueue_remaining(LNK_PdbOutput *output, MSF_Context *msf)
         run_size += page_size;
       } else {
         if (run_data != 0) {
-          lnk_background_file_writer_enqueue(output->writer, output->file, run_first_pn * msf->page_size, str8(run_data, run_size));
+          lnk_background_file_writer_enqueue(output->writer, output->file, run_first_pn * msf->page_size, str8(run_data, run_size), /*decommit*/ 0); // MSF metadata (FPM/header/stream table) is read after this enqueue
         }
         run_first_pn = pn;
         run_data = page_data;
         run_size = page_size;
       }
     } else if (run_data != 0) {
-      lnk_background_file_writer_enqueue(output->writer, output->file, run_first_pn * msf->page_size, str8(run_data, run_size));
+      lnk_background_file_writer_enqueue(output->writer, output->file, run_first_pn * msf->page_size, str8(run_data, run_size), /*decommit*/ 0); // MSF metadata (FPM/header/stream table) is read after this enqueue
       run_data = 0;
       run_size = 0;
     }
   }
   if (run_data != 0) {
-    lnk_background_file_writer_enqueue(output->writer, output->file, run_first_pn * msf->page_size, str8(run_data, run_size));
+    lnk_background_file_writer_enqueue(output->writer, output->file, run_first_pn * msf->page_size, str8(run_data, run_size), /*decommit*/ 0); // MSF metadata (FPM/header/stream table) is read after this enqueue
   }
   scratch_end(scratch);
 }
@@ -5085,6 +5098,7 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   LNK_PdbOutput *output_ptr = 0;
   if (writer.output_path.size > 0) {
     output.writer            = writer.file_writer;
+    output.decommit_flushed  = (config->rad_debug != LNK_SwitchState_Yes);
     output.file              = lnk_background_file_writer_begin_file(output.writer, writer.output_path, writer.temp_output_path);
     if (output.file != 0) {
       output.sealed_stream_cap = cv->obj_count + 128;
@@ -5134,6 +5148,18 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   pdb_strtab_add_cv_string_hash_table(&task.pdb->info->strtab, task.string_ht);
   ProfEnd();
   pdb_build_types(tp, task.pdb, &build_hooks);
+
+  // merged leaf bytes are now in MSF pages (and on their way to disk); no consumer of
+  // cv_types.v remains on this path (RDI converts from the PDB artifact, the RRT export
+  // is a separate boot mode), so hand the multi-GB materialize buffers back to the OS
+  for EachElement(ti_source, cv_types.leaf_buffers) {
+    if (cv_types.leaf_buffers[ti_source].size > 0) {
+      release_memory(cv_types.leaf_buffers[ti_source].str, cv_types.leaf_buffers[ti_source].size);
+      cv_types.leaf_buffers[ti_source] = str8_zero();
+      cv_types.v[ti_source]     = 0; // poison dangling leaf pointers
+      cv_types.count[ti_source] = 0;
+    }
+  }
 
   if (builder_flags & LNK_PDB_BuilderFlag_Modules) {
     ProfScope ("Alloc Modules")

@@ -62,6 +62,6 @@ internal String8 lnk_data_from_file_artifact(Arena *arena, LNK_FileArtifact *art
 
 internal void lnk_background_file_writer_begin      (LNK_BackgroundFileWriter *writer);
 internal LNK_BackgroundFile *lnk_background_file_writer_begin_file(LNK_BackgroundFileWriter *writer, String8 path, String8 temp_path);
-internal void lnk_background_file_writer_enqueue    (LNK_BackgroundFileWriter *writer, LNK_BackgroundFile *file, U64 file_off, String8 data);
+internal void lnk_background_file_writer_enqueue    (LNK_BackgroundFileWriter *writer, LNK_BackgroundFile *file, U64 file_off, String8 data, B32 decommit_after_write);
 internal void lnk_background_file_writer_end_file   (LNK_BackgroundFileWriter *writer, LNK_BackgroundFile *file, U64 expected_byte_count);
 internal void lnk_background_file_writer_end        (LNK_BackgroundFileWriter *writer);
