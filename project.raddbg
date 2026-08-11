@@ -7,6 +7,7 @@ target:
   working_directory: "../raddebugger"
   arguments: "--user:C:/devel/raddebugger/build/raddbg_test.user"
   debug_subprocesses: 0
+  enabled: 1
 }
 target:
 {
@@ -76,5 +77,10 @@ target:
 {
   executable: "build/raddbg"
   working_directory: build
-  enabled: 1
+}
+target:
+{
+  executable: "../scratch/test.exe"
+  working_directory: "../scratch"
+  entry_point: "main::main"
 }

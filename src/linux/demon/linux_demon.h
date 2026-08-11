@@ -214,21 +214,6 @@ struct LNX_DMN_ModuleSlot
   LNX_DMN_Module *last;
 };
 
-typedef struct LNX_DMN_ModulePtrNode LNX_DMN_ModulePtrNode;
-struct LNX_DMN_ModulePtrNode
-{
-  LNX_DMN_ModulePtrNode *next;
-  LNX_DMN_Module *v;
-};
-
-typedef struct LNX_DMN_ModulePtrList LNX_DMN_ModulePtrList;
-struct LNX_DMN_ModulePtrList
-{
-  LNX_DMN_ModulePtrNode *first;
-  LNX_DMN_ModulePtrNode *last;
-  U64 count;
-};
-
 typedef enum LNX_DMN_ProcessState
 {
   LNX_DMN_ProcessState_Null,
@@ -473,19 +458,9 @@ internal B32  lnx_dmn_set_single_step_flag(LNX_DMN_Thread *thread, B32 is_on);
 internal U64  lnx_dmn_tls_root_vaddr_from_reg_block(int fd, Arch arch, void *reg_block);
 
 ////////////////////////////////
-//~ List Helpers
-
-internal LNX_DMN_ModulePtrNode *lnx_dmn_module_ptr_list_push(Arena *arena, LNX_DMN_ModulePtrList *list, LNX_DMN_Module *v);
-
-////////////////////////////////
 //~ Debug Event Pushers
 
 internal void lnx_dmn_push_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, LNX_DMN_Module *module);
 internal void lnx_dmn_push_event_unload_module(Arena *arena, DMN_EventList *events, LNX_DMN_Process *process, LNX_DMN_Module *module);
-
-////////////////////////////////
-//~ Debug Event
-
-internal void lnx_dmn_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 name_space_id, U64 new_link_map_vaddr);
 
 #endif // LINUX_DEMON_H

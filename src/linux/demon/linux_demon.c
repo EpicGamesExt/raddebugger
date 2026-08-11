@@ -1155,19 +1155,6 @@ lnx_dmn_tls_root_vaddr_from_reg_block(int fd, Arch arch, void *reg_block)
 }
 
 ////////////////////////////////
-//~ List Helpers
-
-internal LNX_DMN_ModulePtrNode *
-lnx_dmn_module_ptr_list_push(Arena *arena, LNX_DMN_ModulePtrList *list, LNX_DMN_Module *v)
-{
-  LNX_DMN_ModulePtrNode *n = push_array(arena, LNX_DMN_ModulePtrNode, 1);
-  n->v = v;
-  SLLQueuePush(list->first, list->last, n);
-  list->count += 1;
-  return n;
-}
-
-////////////////////////////////
 //~ Debug Event Pushers
 
 internal void
@@ -1199,50 +1186,6 @@ lnx_dmn_push_event_unload_module(Arena *arena, DMN_EventList *events, LNX_DMN_Pr
   e->kind    = DMN_EventKind_UnloadModule;
   e->process = lnx_dmn_handle_from_process(process);
   e->module  = lnx_dmn_handle_from_module(module);
-}
-
-////////////////////////////////
-//~ Debug Event
-
-internal void
-lnx_dmn_event_load_module(Arena *arena, DMN_EventList *events, LNX_DMN_Thread *thread, U64 name_space_id, U64 new_link_map_vaddr)
-{
-  LNX_DMN_Process *process = thread->process;
-  GNU_LinkMap64 map = {0};
-  for(U64 map_vaddr = new_link_map_vaddr; map_vaddr != 0; map_vaddr = map.next_vaddr)
-  {
-    // read out new link map item
-    if(gnu_read_link_map(lnx_dmn_machine_op_mem_read, &process->fd, map_vaddr, process->ctx->dl_class, &map) != MachineOpResult_Ok) { break; }
-    
-    // was module already loaded?
-    LNX_DMN_Module *module = 0;
-    {
-      U64 hash = u64_hash_from_str8(str8_struct(&map.addr_vaddr));
-      U64 slot_idx = hash%process->ctx->module_slots_count;
-      for(LNX_DMN_Module *m = process->ctx->module_slots[slot_idx].first; m != 0; m = m->hash_next)
-      {
-        if(m->base_vaddr == map.addr_vaddr)
-        {
-          module = m;
-          break;
-        }
-      }
-    }
-    if(module) { continue; }
-    
-    // clone process ctx
-    if(process->is_cow)
-    {
-      process->is_cow = 0;
-      process->ctx    = lnx_dmn_process_ctx_clone(process, process->ctx);
-    }
-    
-    // alloc module
-    module = lnx_dmn_module_alloc(process->ctx, process->fd, map.addr_vaddr, map.name_vaddr, name_space_id, 0);
-    
-    // push load module event
-    lnx_dmn_push_event_load_module(arena, events, thread, module);
-  }
 }
 
 ////////////////////////////////
@@ -1887,42 +1830,67 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                       }
                     }
                     
-                    //- rjf: probe trap: (module) initialization complete
-                    if(probe_kind == LNX_DMN_ProbeKind_InitComplete)
+                    //- rjf: probe trap: (module) initialization / relocation complete
+                    if(probe_kind == LNX_DMN_ProbeKind_InitComplete || probe_kind == LNX_DMN_ProbeKind_RelocComplete)
                     {
-                      B32 is_init_completed = 0;
+                      // rjf: unpack probe arguments
+                      LNX_DMN_Probe *probe = process->ctx->probes[probe_kind];
+                      U64 name_space_id = 0;
+                      U64 addr = 0;
+                      stap_read_arg_u(probe->args.v[0], process->ctx->arch, thread->reg_block, lnx_dmn_stap_memory_read, process, &name_space_id);
+                      stap_read_arg_u(probe->args.v[probe_kind == LNX_DMN_ProbeKind_InitComplete ? 1 : 2], process->ctx->arch, thread->reg_block, lnx_dmn_stap_memory_read, process, &addr);
                       
-                      LNX_DMN_Probe *probe = process->ctx->probes[LNX_DMN_ProbeKind_InitComplete];
-                      U64 name_space_id = 0, rdebug_addr = 0;
-                      if(!stap_read_arg_u(probe->args.v[0], process->ctx->arch, thread->reg_block, lnx_dmn_stap_memory_read, process, &name_space_id)) { goto init_complete_exit; }
-                      if(!stap_read_arg_u(probe->args.v[1], process->ctx->arch, thread->reg_block, lnx_dmn_stap_memory_read, process, &rdebug_addr))   { goto init_complete_exit; }
+                      // rjf: init complete probe -> read rdebug for link map addr
+                      U64 new_link_map_vaddr = addr;
+                      if(probe_kind == LNX_DMN_ProbeKind_InitComplete)
+                      {
+                        GNU_RDebugInfo64 rdebug = {0};
+                        gnu_read_r_debug(lnx_dmn_machine_op_mem_read, &process->fd, addr, process->ctx->arch, &rdebug);
+                        new_link_map_vaddr = rdebug.r_map;
+                      }
                       
-                      GNU_RDebugInfo64 rdebug = {0};
-                      if(gnu_read_r_debug(lnx_dmn_machine_op_mem_read, &process->fd, rdebug_addr, process->ctx->arch, &rdebug) != MachineOpResult_Ok) { goto init_complete_exit; }
-                      if(rdebug.r_version < 1) { goto init_complete_exit; }
-                      
-                      lnx_dmn_event_load_module(arena, &events, thread, name_space_id, rdebug.r_map);
-                      
-                      is_init_completed = 1;
-                      init_complete_exit:;
-                      AssertAlways(is_init_completed);
-                    }
-                    
-                    //- rjf: probe trap: (module) relocation complete
-                    else if(probe_kind == LNX_DMN_ProbeKind_RelocComplete)
-                    {
-                      B32 is_reloc_completed = 0;
-                      
-                      LNX_DMN_Probe *probe = process->ctx->probes[LNX_DMN_ProbeKind_RelocComplete];
-                      U64 name_space_id = 0, new_link_map_addr = 0;
-                      if(!stap_read_arg_u(probe->args.v[0], process->ctx->arch, thread->reg_block, lnx_dmn_stap_memory_read, process, &name_space_id))     { goto reloc_complete_exit; }
-                      if(!stap_read_arg_u(probe->args.v[2], process->ctx->arch, thread->reg_block, lnx_dmn_stap_memory_read, process, &new_link_map_addr)) { goto reloc_complete_exit; }
-                      
-                      lnx_dmn_event_load_module(arena, &events, thread, name_space_id, new_link_map_addr);
-                      
-                      is_reloc_completed = 1;
-                      reloc_complete_exit:;
-                      AssertAlways(is_reloc_completed);
+                      // rjf: new module loaded
+                      {
+                        LNX_DMN_Process *process = thread->process;
+                        GNU_LinkMap64 map = {0};
+                        for(U64 map_vaddr = new_link_map_vaddr; map_vaddr != 0; map_vaddr = map.next_vaddr)
+                        {
+                          // read out new link map item
+                          if(gnu_read_link_map(lnx_dmn_machine_op_mem_read, &process->fd, map_vaddr, process->ctx->dl_class, &map) != MachineOpResult_Ok) { break; }
+                          
+                          // was module already loaded?
+                          LNX_DMN_Module *module = 0;
+                          {
+                            U64 hash = u64_hash_from_str8(str8_struct(&map.addr_vaddr));
+                            U64 slot_idx = hash%process->ctx->module_slots_count;
+                            for(LNX_DMN_Module *m = process->ctx->module_slots[slot_idx].first; m != 0; m = m->hash_next)
+                            {
+                              if(m->base_vaddr == map.addr_vaddr)
+                              {
+                                module = m;
+                                break;
+                              }
+                            }
+                          }
+                          
+                          // rjf: load module
+                          if(module == 0)
+                          {
+                            // clone process ctx
+                            if(process->is_cow)
+                            {
+                              process->is_cow = 0;
+                              process->ctx = lnx_dmn_process_ctx_clone(process, process->ctx);
+                            }
+                            
+                            // alloc module
+                            module = lnx_dmn_module_alloc(process->ctx, process->fd, map.addr_vaddr, map.name_vaddr, name_space_id, 0);
+                            
+                            // rjf: report
+                            lnx_dmn_push_event_load_module(arena, &events, thread, module);
+                          }
+                        }
+                      }
                     }
                     
                     //- rjf: probe trap: (module) unmap complete
@@ -1968,30 +1936,39 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                         }
                         
                         // collect unloaded modules
-                        LNX_DMN_ModulePtrList to_release = {0};
+                        typedef struct ModuleNode ModuleNode;
+                        struct ModuleNode
+                        {
+                          ModuleNode *next;
+                          LNX_DMN_Module *m;
+                        };
+                        ModuleNode *first_module_to_release = 0;
+                        ModuleNode *last_module_to_release = 0;
                         for(LNX_DMN_Module *module = ctx->first_module; module != 0; module = module->order_next)
                         {
                           if(!module->is_live)
                           {
-                            lnx_dmn_module_ptr_list_push(scratch.arena, &to_release, module);
+                            ModuleNode *n = push_array(scratch.arena, ModuleNode, 1);
+                            SLLQueuePush(first_module_to_release, last_module_to_release, n);
+                            n->m = module;
                           }
                         }
                         
                         // clone process context
-                        if(to_release.count > 0)
+                        if(first_module_to_release != 0)
                         {
                           if(process->is_cow)
                           {
                             process->is_cow = 0;
-                            process->ctx    = lnx_dmn_process_ctx_clone(process, process->ctx);
+                            process->ctx = lnx_dmn_process_ctx_clone(process, process->ctx);
                           }
                         }
                         
                         // push events and clean up unloaded modules
-                        for EachNode(module_n, LNX_DMN_ModulePtrNode, to_release.first)
+                        for EachNode(module_n, ModuleNode, first_module_to_release)
                         {
-                          lnx_dmn_push_event_unload_module(arena, &events, process, module_n->v);
-                          lnx_dmn_module_release(process->ctx, module_n->v);
+                          lnx_dmn_push_event_unload_module(arena, &events, process, module_n->m);
+                          lnx_dmn_module_release(process->ctx, module_n->m);
                         }
                         
                         scratch_end(scratch);
