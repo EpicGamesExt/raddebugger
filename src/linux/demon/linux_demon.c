@@ -352,6 +352,20 @@ lnx_dmn_set_trap(Arena *arena, DMN_Trap *trap)
 ////////////////////////////////
 //~ rjf: In-Memory ELF Parsing Helpers
 
+internal ELF_Hdr64
+lnx_dmn_elf_hdr64_from_vaddr(int memory_fd, U64 vaddr)
+{
+  Temp scratch = scratch_begin(0, 0);
+  U8 ident[ELF_Identifier_Max] = {0};
+  lnx_dmn_read(memory_fd, r1u64(vaddr, vaddr+sizeof(ident)), ident);
+  ELF_Class elf_class = ident[ELF_Identifier_Class];
+  U64 hdr_size = elf_hdr_size_from_class(elf_class);
+  String8 data = lnx_dmn_data_from_memory_range(scratch.arena, memory_fd, r1u64(vaddr, vaddr+hdr_size));
+  ELF_Hdr64 hdr64 = elf_hdr64_from_class_data(elf_class, data);
+  scratch_end(scratch);
+  return hdr64;
+}
+
 internal Rng1U64
 lnx_dmn_vaddr_range_from_phdrs(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum)
 { 
@@ -472,45 +486,34 @@ lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64
   {
     Temp scratch = scratch_begin(0, 0);
     
-    // rjf: read module's ELF identifier
-    U8 module_eident[ELF_Identifier_Max] = {0};
-    lnx_dmn_read(memory_fd, r1u64(base_vaddr, base_vaddr + sizeof(module_eident)), module_eident);
-    ELF_Class module_eclass = module_eident[ELF_Identifier_Class];
-    
     // rjf: read module's ELF header
-    ELF_Hdr64 module_ehdr = {0};
-    {
-      U64 ehdr_size = elf_hdr_size_from_class(module_eclass);
-      String8 ehdr_data = lnx_dmn_data_from_memory_range(scratch.arena, memory_fd, r1u64(base_vaddr, base_vaddr+ehdr_size));
-      module_ehdr = elf_hdr64_from_class_data(module_eclass, ehdr_data);
-    }
+    ELF_Hdr64 module_ehdr = lnx_dmn_elf_hdr64_from_vaddr(memory_fd, base_vaddr);
+    ELF_Class module_eclass = module_ehdr.e_ident[ELF_Identifier_Class];
     
-    // gather info about module
+    // rjf: unpack module's vaddr range
     U64 module_rebase = module_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
     U64 module_phdr_vaddr = module_rebase + module_ehdr.e_phoff;
     Rng1U64 module_vrange = lnx_dmn_vaddr_range_from_phdrs(memory_fd, module_ehdr.e_ident[ELF_Identifier_Class], module_rebase, module_phdr_vaddr, module_ehdr.e_phentsize, module_ehdr.e_phnum);
     
-    // read TLS index and TLS offset
-    U64 tls_index  = max_U64;
+    // rjf: read TLS index and TLS offset
+    U64 tls_index = max_U64;
     U64 tls_offset = max_U64;
     if(is_main)
     {
-      tls_index  = 1;
+      tls_index = 1;
       tls_offset = 0;
     }
-    else
+    else if(lnx_dmn_state->is_tls_detected)
     {
-      if(lnx_dmn_state->is_tls_detected)
-      {
-        Rng1U64 tls_modid_range  = r1u64(lnx_dmn_state->tls_modid_desc.offset, lnx_dmn_state->tls_modid_desc.offset + lnx_dmn_state->tls_modid_desc.bit_size / 8);
-        Rng1U64 tls_offset_range = r1u64(lnx_dmn_state->tls_offset_desc.offset, lnx_dmn_state->tls_offset_desc.offset + lnx_dmn_state->tls_offset_desc.bit_size / 8);
-        tls_modid_range  = shift_1u64(tls_modid_range, base_vaddr);
-        tls_offset_range = shift_1u64(tls_offset_range, base_vaddr);
-        if(!lnx_dmn_read(memory_fd, tls_modid_range, &tls_index))   { Assert(0 && "failed to read TLS index");  }
-        if(!lnx_dmn_read(memory_fd, tls_offset_range, &tls_offset)) { Assert(0 && "failed to read TLS offset"); }
-      }
+      Rng1U64 tls_modid_range  = r1u64(lnx_dmn_state->tls_modid_desc.offset, lnx_dmn_state->tls_modid_desc.offset + lnx_dmn_state->tls_modid_desc.bit_size/8);
+      Rng1U64 tls_offset_range = r1u64(lnx_dmn_state->tls_offset_desc.offset, lnx_dmn_state->tls_offset_desc.offset + lnx_dmn_state->tls_offset_desc.bit_size/8);
+      tls_modid_range  = shift_1u64(tls_modid_range, base_vaddr);
+      tls_offset_range = shift_1u64(tls_offset_range, base_vaddr);
+      lnx_dmn_read(memory_fd, tls_modid_range, &tls_index);
+      lnx_dmn_read(memory_fd, tls_offset_range, &tls_offset);
     }
     
+    // rjf: allocate & fill module
     module = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Module)->module;
     module->base_vaddr    = base_vaddr;
     module->name_vaddr    = name_vaddr;
@@ -520,7 +523,7 @@ lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64
     module->tls_offset    = tls_offset;
     module->is_main       = is_main;
     
-    // add module to the list
+    // rjf: link into context's module list
     DLLPushBack_NP(ctx->first_module, ctx->last_module, module, order_next, order_prev);
     ctx->module_count += 1;
     
@@ -623,15 +626,11 @@ internal DMN_Handle
 lnx_dmn_handle_from_entity(LNX_DMN_Entity *entity)
 {
   DMN_Handle handle = {0};
-  U64 index = IntFromPtr(entity - lnx_dmn_state->entities_base);
+  U64 index = (U64)(entity - lnx_dmn_state->entities_base);
   if(index <= max_U32)
   {
     handle.u32[0] = index;
     handle.u32[1] = entity->gen;
-  }
-  else
-  {
-    Assert(0 && "failed to make a handle for the entity");
   }
   return handle;
 }
@@ -939,90 +938,89 @@ lnx_dmn_thread_read_reg_block(LNX_DMN_Thread *thread)
 internal B32
 lnx_dmn_thread_write_reg_block(LNX_DMN_Thread *thread)
 {
-  AssertAlways(thread->state == LNX_DMN_ThreadState_Stopped);
-  
   B32 is_reg_block_written = 0;
-  
-  switch(thread->process->ctx->arch)
+  if(thread->state == LNX_DMN_ThreadState_Stopped)
   {
-    case Arch_Null: {} break;
-    case Arch_x64:
+    switch(thread->process->ctx->arch)
     {
-      LNX_DMN_ProcessCtx *process_ctx = thread->process->ctx;
-      X64_RegBlock   *src         = thread->reg_block;
-      
-      // general purpose registers
+      case Arch_arm64:
+      case Arch_arm32:
+      case Arch_x86:
+      case Arch_COUNT:
+      case Arch_Null:{}break;
+      case Arch_x64:
       {
-        LNX_DMN_GprsX64 dst;
-        dst.r15      = src->r15;
-        dst.r14      = src->r14;
-        dst.r13      = src->r13;
-        dst.r12      = src->r12;
-        dst.rbp      = src->rbp;
-        dst.rbx      = src->rbx;
-        dst.r11      = src->r11;
-        dst.r10      = src->r10;
-        dst.r9       = src->r9;
-        dst.r8       = src->r8;
-        dst.rax      = src->rax;
-        dst.rcx      = src->rcx;
-        dst.rdx      = src->rdx;
-        dst.rsi      = src->rsi;
-        dst.rdi      = src->rdi;
-        dst.orig_rax = thread->orig_rax;
-        dst.rip      = src->rip;
-        dst.cs       = src->cs;
-        dst.rflags   = src->rflags;
-        dst.rsp      = src->rsp;
-        dst.ss       = src->ss;
-        dst.fsbase   = src->fsbase;
-        dst.gsbase   = src->gsbase;
-        dst.ds       = src->ds;
-        dst.es       = src->es;
-        dst.fs       = src->fs;
-        dst.gs       = src->gs;
-        int ptrace_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_SETREGSET, thread->tid, (void *)NT_PRSTATUS, &(struct iovec){ .iov_base = &dst, .iov_len = sizeof(dst) }));
-        if(ptrace_result < 0) { goto exit; }
-      }
-      
-      // xsave
-      {
-        Temp scratch = scratch_begin(0, 0);
+        LNX_DMN_ProcessCtx *process_ctx = thread->process->ctx;
+        X64_RegBlock *src = thread->reg_block;
+        B32 good = 1;
         
-        X64_FXSave dst_fxsave = {0};
+        // rjf: write general purpose registers
         {
-          dst_fxsave.fcw        = src->fcw;
-          dst_fxsave.fsw        = src->fsw;
-          dst_fxsave.ftw        = src->ftw;
-          dst_fxsave.fop        = src->fop;
-          dst_fxsave.fip        = src->fip;
-          dst_fxsave.fdp        = src->fdp;
-          dst_fxsave.mxcsr      = src->mxcsr;
-          dst_fxsave.mxcsr_mask = src->mxcsr_mask;
-          
-          U128 *st_d = (U128 *)dst_fxsave.st_space;
-          U80  *st_s = &src->st0;
-          for EachIndex(n, 8)
+          LNX_DMN_GprsX64 dst;
+          dst.r15      = src->r15;
+          dst.r14      = src->r14;
+          dst.r13      = src->r13;
+          dst.r12      = src->r12;
+          dst.rbp      = src->rbp;
+          dst.rbx      = src->rbx;
+          dst.r11      = src->r11;
+          dst.r10      = src->r10;
+          dst.r9       = src->r9;
+          dst.r8       = src->r8;
+          dst.rax      = src->rax;
+          dst.rcx      = src->rcx;
+          dst.rdx      = src->rdx;
+          dst.rsi      = src->rsi;
+          dst.rdi      = src->rdi;
+          dst.orig_rax = thread->orig_rax;
+          dst.rip      = src->rip;
+          dst.cs       = src->cs;
+          dst.rflags   = src->rflags;
+          dst.rsp      = src->rsp;
+          dst.ss       = src->ss;
+          dst.fsbase   = src->fsbase;
+          dst.gsbase   = src->gsbase;
+          dst.ds       = src->ds;
+          dst.es       = src->es;
+          dst.fs       = src->fs;
+          dst.gs       = src->gs;
+          int ptrace_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_SETREGSET, thread->tid, (void *)NT_PRSTATUS, &(struct iovec){ .iov_base = &dst, .iov_len = sizeof(dst) }));
+          if(ptrace_result < 0)
           {
-            MemoryCopy(&st_d[n], &st_s[n], sizeof(U80));
-          }
-          
-          U128 *xmm_d = (U128 *)dst_fxsave.xmm_space;
-          U512 *xmm_s = &src->zmm0;
-          for EachIndex(n, 16)
-          {
-            MemoryCopy(&xmm_d[n], &xmm_s[n], sizeof(U128));
+            good = 0;
           }
         }
         
-        if(x64_is_xsave_supported())
+        // rjf: write xsave registers
+        if(good && x64_is_xsave_supported())
         {
+          Temp scratch = scratch_begin(0, 0);
           U8 *xsave_raw = push_array_aligned(scratch.arena, U8, process_ctx->xsave_size, 64);
           X64_XSave *dst = (X64_XSave *)xsave_raw;
-          dst->fxsave = dst_fxsave;
+          {
+            dst->fxsave.fcw        = src->fcw;
+            dst->fxsave.fsw        = src->fsw;
+            dst->fxsave.ftw        = src->ftw;
+            dst->fxsave.fop        = src->fop;
+            dst->fxsave.fip        = src->fip;
+            dst->fxsave.fdp        = src->fdp;
+            dst->fxsave.mxcsr      = src->mxcsr;
+            dst->fxsave.mxcsr_mask = src->mxcsr_mask;
+            U128 *st_d = (U128 *)dst->fxsave.st_space;
+            U80  *st_s = &src->st0;
+            for EachIndex(n, 8)
+            {
+              MemoryCopy(&st_d[n], &st_s[n], sizeof(U80));
+            }
+            U128 *xmm_d = (U128 *)dst->fxsave.xmm_space;
+            U512 *xmm_s = &src->zmm0;
+            for EachIndex(n, 16)
+            {
+              MemoryCopy(&xmm_d[n], &xmm_s[n], sizeof(U128));
+            }
+          }
           dst->header.xstate_bv |= X64_XStateComponentFlag_FP;
           dst->header.xstate_bv |= X64_XStateComponentFlag_SSE;
-          
           if(process_ctx->xsave_layout.avx_offset)
           {
             if(process_ctx->xsave_layout.avx_offset + sizeof(U128) * 16 <= process_ctx->xsave_size)
@@ -1036,7 +1034,6 @@ lnx_dmn_thread_write_reg_block(LNX_DMN_Thread *thread)
               dst->header.xstate_bv |= X64_XStateComponentFlag_AVX;
             }
           }
-          
           if(process_ctx->xsave_layout.opmask_offset)
           {
             if(process_ctx->xsave_layout.opmask_offset + sizeof(U64) * 8 <= process_ctx->xsave_size)
@@ -1049,9 +1046,7 @@ lnx_dmn_thread_write_reg_block(LNX_DMN_Thread *thread)
               }
               dst->header.xstate_bv |= X64_XStateComponentFlag_OPMASK;
             }
-            else { Assert(0 && "invalid xsave size"); goto exit; }
           }
-          
           if(process_ctx->xsave_layout.zmm_h_offset)
           {
             if(process_ctx->xsave_layout.zmm_h_offset + sizeof(U256) * 16 <= process_ctx->xsave_size)
@@ -1064,9 +1059,7 @@ lnx_dmn_thread_write_reg_block(LNX_DMN_Thread *thread)
               }
               dst->header.xstate_bv |= X64_XStateComponentFlag_ZMM_H;
             }
-            else { Assert(0 && "invalid xsave size"); goto exit; }
           }
-          
           if(process_ctx->xsave_layout.zmm_offset)
           {
             if(process_ctx->xsave_layout.zmm_offset + sizeof(U512) * 16 <= process_ctx->xsave_size)
@@ -1079,9 +1072,7 @@ lnx_dmn_thread_write_reg_block(LNX_DMN_Thread *thread)
               }
               dst->header.xstate_bv |= X64_XStateComponentFlag_ZMM;
             }
-            else { Assert(0 && "invalid xsave size"); goto exit; }
           }
-          
           if(process_ctx->xsave_layout.cet_u_offset)
           {
             if(process_ctx->xsave_layout.cet_u_offset + sizeof(U64) * 2 <= process_ctx->xsave_size)
@@ -1091,43 +1082,39 @@ lnx_dmn_thread_write_reg_block(LNX_DMN_Thread *thread)
               cet_u[1] = src->cetssp;
               dst->header.xstate_bv |= X64_XStateComponentFlag_CETU;
             }
-            else { Assert(0 && "invalid xsave size"); goto exit; }
           }
-          
-          // xsave
-          Assert(dst->header.xcomp_bv == 0); // must always be zero
+          dst->header.xcomp_bv = 0;
           int ptrace_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_SETREGSET, thread->tid, (void *)NT_X86_XSTATE, &(struct iovec){ .iov_base = dst, .iov_len = process_ctx->xsave_size }));
-          if(ptrace_result < 0) { goto exit; }
+          if(ptrace_result < 0)
+          {
+            log_infof("ptrace error: PTRACE_SETREGSET failed, when trying to write xsave registers.");
+          }
+          scratch_end(scratch);
         }
         
-        scratch_end(scratch);
-      }
-      
-      // debug registers
-      {
-        src->dr7 |= (1 << 10);
-        
-        U64 *dr_s = &src->dr0;
-        for EachIndex(n, 8)
+        // rjf: write debug registers
+        if(good)
         {
-          if(n != 4 && n != 5)
+          src->dr7 |= (1 << 10);
+          U64 *dr_s = &src->dr0;
+          for EachIndex(n, 8)
           {
-            U64 offset = OffsetOf(LNX_DMN_UserX64, u_debugreg[n]);
-            int ptrace_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_POKEUSER, thread->tid, PtrFromInt(offset), (void*)(uintptr_t)dr_s[n]));
-            if(ptrace_result < 0) { goto exit; }
+            if(n != 4 && n != 5)
+            {
+              U64 offset = OffsetOf(LNX_DMN_UserX64, u_debugreg[n]);
+              int ptrace_result = LNX_RETRY_ON_EINTR(ptrace(PTRACE_POKEUSER, thread->tid, PtrFromInt(offset), (void*)(uintptr_t)dr_s[n]));
+              if(ptrace_result < 0)
+              {
+                log_infof("ptrace error: PTRACE_POKEUSER failed, when trying to write debug registers.");
+              }
+            }
           }
         }
-      }
-      
-      is_reg_block_written = 1;
-    } break;
-    case Arch_arm64:
-    case Arch_arm32:
-    case Arch_x86: { NotImplemented; }break;
-    default: { InvalidPath; } break;
+        
+        is_reg_block_written = good;
+      }break;
+    }
   }
-  
-  exit:;
   return is_reg_block_written;
 }
 
@@ -1137,7 +1124,11 @@ lnx_dmn_set_single_step_flag(LNX_DMN_Thread *thread, B32 is_on)
   B32 is_flag_set = 0;
   switch(thread->process->ctx->arch)
   {
-    case Arch_Null: {} break;
+    case Arch_x86:
+    case Arch_arm32:
+    case Arch_arm64:
+    case Arch_COUNT:
+    case Arch_Null:{}break;
     case Arch_x64:
     {
       X64_RegBlock *reg_block = thread->reg_block;
@@ -1145,13 +1136,8 @@ lnx_dmn_set_single_step_flag(LNX_DMN_Thread *thread, B32 is_on)
       else      { reg_block->rflags &= ~X64_RFlag_Trap; }
       thread->is_reg_block_dirty = 1;
       is_flag_set = 1;
-    } break;
-    case Arch_x86:
-    case Arch_arm32:
-    case Arch_arm64: { NotImplemented; }break;
-    default: { InvalidPath; } break;
+    }break;
   }
-  Assert(is_flag_set);
   return is_flag_set;
 }
 
@@ -2408,10 +2394,14 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         }
         else
         {
+          //////////////////////
           //- rjf: allocate ctx
+          //
           ctx = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_ProcessCtx)->process_ctx;
           
-          //- rjf: read main executable ELF header
+          //////////////////////
+          //- rjf: read executable ELF header
+          //
           ELF_Hdr64 exe_ehdr = {0};
           {
             Temp scratch = scratch_begin(&arena, 1);
@@ -2419,35 +2409,18 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             int exe_fd = LNX_RETRY_ON_EINTR(open(exe_path, O_RDONLY));
             if(exe_fd >= 0)
             {
-              U8 e_ident[ELF_Identifier_Max] = {0};
-              lnx_dmn_read(exe_fd, r1u64(0, sizeof(e_ident)), e_ident);
-              if(MemoryMatch(e_ident, elf_magic_string.str, elf_magic_string.size))
-              {
-                switch(e_ident[ELF_Identifier_Class])
-                {
-                  default:{}break;
-                  case ELF_Class_None:{}break;
-                  case ELF_Class_32:
-                  {
-                    ELF_Hdr32 ehdr32 = {0};
-                    lnx_dmn_read(exe_fd, r1u64(0, sizeof(ehdr32)), &ehdr32);
-                    exe_ehdr = elf_hdr64_from_hdr32(ehdr32);
-                  }break;
-                  case ELF_Class_64:
-                  {
-                    lnx_dmn_read(exe_fd, r1u64(0, sizeof(exe_ehdr)), &exe_ehdr);
-                  }break;
-                }
-              }
+              exe_ehdr = lnx_dmn_elf_hdr64_from_vaddr(exe_fd, 0);
             }
             LNX_RETRY_ON_EINTR(close(exe_fd));
             scratch_end(scratch);
           }
           
+          //////////////////////
           //- rjf: read auxv info for pid
+          //
           LNX_DMN_Auxv auxv = {0};
           {
-            Temp scratch = scratch_begin(0, 0);
+            Temp scratch = scratch_begin(&arena, 1);
             
             // rjf: open aux data
             String8 auxv_path = str8f(scratch.arena, "/proc/%d/auxv", wait_id);
@@ -2460,27 +2433,19 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               {
                 // rjf: read next aux
                 ELF_Auxv64 auxv_entry = {0};
-                switch(exe_ehdr.e_ident[ELF_Identifier_Class])
                 {
-                  default:
-                  case ELF_Class_None:{}break;
-                  case ELF_Class_32:
-                  {
-                    ELF_Auxv32 auxv32 = {0};
-                    off += lnx_dmn_read_struct(auxv_fd, off, &auxv32);
-                    auxv_entry = elf_auxv64_from_auxv32(auxv32);
-                  }break;
-                  case ELF_Class_64:
-                  {
-                    off += lnx_dmn_read_struct(auxv_fd, off, &auxv_entry);
-                  }break;
+                  Temp temp = temp_begin(scratch.arena);
+                  U64 auxv_size = elf_auxv_size_from_class(exe_ehdr.e_ident[ELF_Identifier_Class]);
+                  String8 auxv_data = lnx_dmn_data_from_memory_range(temp.arena, auxv_fd, r1u64(off, off+auxv_size));
+                  auxv_entry = elf_auxv64_from_class_data(exe_ehdr.e_ident[ELF_Identifier_Class], auxv_data);
+                  off += auxv_size;
+                  temp_end(temp);
                 }
                 
                 // rjf: fill result
                 switch(auxv_entry.a_type)
                 {
                   default:{}break;
-                  case ELF_AuxType_Null:   goto brkloop; break;
                   case ELF_AuxType_Base:   auxv.base   = auxv_entry.a_val; break;
                   case ELF_AuxType_Phnum:  auxv.phnum  = auxv_entry.a_val; break;
                   case ELF_AuxType_Phent:  auxv.phent  = auxv_entry.a_val; break;
@@ -2488,8 +2453,13 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   case ELF_AuxType_ExecFn: auxv.execfn = auxv_entry.a_val; break;
                   case ELF_AuxType_Pagesz: auxv.pagesz = auxv_entry.a_val; break;
                 }
+                
+                // rjf: terminate on null entries
+                if(auxv_entry.a_type == ELF_AuxType_Null)
+                {
+                  break;
+                }
               }
-              brkloop:;
               LNX_RETRY_ON_EINTR(close(auxv_fd));
             }
             
@@ -2499,40 +2469,17 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           //- rjf: unpack context
           Arch arch = arch_from_elf_machine(exe_ehdr.e_machine);
           U64 base_vaddr = (auxv.phdr & ~(auxv.pagesz-1));
-          U64 rebase = exe_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
+          U64 rebase = (exe_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0);
           Rng1U64 image_vrange = lnx_dmn_vaddr_range_from_phdrs(new_process->fd, exe_ehdr.e_ident[ELF_Identifier_Class], rebase, auxv.phdr, auxv.phent, auxv.phnum);
-          Arena *ctx_arena = arena_alloc();
-          
-          //- rjf: read dynamically loaded ELF identifier
-          U8 dl_eident[ELF_Identifier_Max] = {0};
-          lnx_dmn_read(new_process->fd, r1u64(auxv.base, auxv.base+sizeof(dl_eident)), dl_eident);
-          ELF_Class dl_class = dl_eident[ELF_Identifier_Class];
           
           //- rjf: read dynamically loaded ELF header
-          ELF_Hdr64 dl_ehdr = {0};
-          {
-            U64 ehdr_size = elf_hdr_size_from_class(dl_class);
-            String8 ehdr_data = lnx_dmn_data_from_memory_range(scratch.arena, new_process->fd, r1u64(auxv.base, auxv.base+ehdr_size));
-            dl_ehdr = elf_hdr64_from_class_data(dl_class, ehdr_data);
-          }
+          ELF_Hdr64 dl_ehdr = lnx_dmn_elf_hdr64_from_vaddr(new_process->fd, auxv.base);
+          ELF_Class dl_class = dl_ehdr.e_ident[ELF_Identifier_Class];
           
           //- rjf: compute rdebug vaddr
           U64 rdebug_vaddr = 0;
           {
-            Temp scratch = scratch_begin(0, 0);
-            
-            // rjf: load DL's elf identifier
-            U8 eident[ELF_Identifier_Max] = {0};
-            lnx_dmn_read(new_process->fd, r1u64(auxv.base, auxv.base+sizeof(eident)), eident);
-            ELF_Class elf_class = eident[ELF_Identifier_Class];
-            
-            // rjf: load DL's header
-            ELF_Hdr64 ehdr = {0};
-            {
-              U64 ehdr_size = elf_hdr_size_from_class(elf_class);
-              String8 ehdr_data = lnx_dmn_data_from_memory_range(scratch.arena, new_process->fd, r1u64(auxv.base, auxv.base+ehdr_size));
-              ehdr = elf_hdr64_from_class_data(elf_class, ehdr_data);
-            }
+            Temp scratch = scratch_begin(&arena, 1);
             
             // rjf: unpack header
             U64 rebase = dl_ehdr.e_type == ELF_Type_Dyn ? auxv.base : 0;
@@ -2540,15 +2487,17 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             // rjf: find dynamic program header
             U64 dynamic_vaddr = 0;
             {
-              U64 phdr_vaddr    = auxv.base + dl_ehdr.e_phoff;
-              for(U64 ph_cursor = phdr_vaddr, ph_opl = (phdr_vaddr + ehdr.e_phentsize * ehdr.e_phentsize); ph_cursor < ph_opl; ph_cursor += ehdr.e_phentsize)
+              U64 phdr_vaddr = auxv.base + dl_ehdr.e_phoff;
+              for(U64 ph_cursor = phdr_vaddr, ph_opl = (phdr_vaddr + dl_ehdr.e_phentsize*dl_ehdr.e_phentsize);
+                  ph_cursor < ph_opl;
+                  ph_cursor += dl_ehdr.e_phentsize)
               {
                 ELF_Phdr64 phdr = {0};
                 {
                   Temp scratch = scratch_begin(0, 0);
-                  U64 phdr_size = elf_phdr_size_from_class(elf_class);
+                  U64 phdr_size = elf_phdr_size_from_class(dl_class);
                   String8 phdr_data = lnx_dmn_data_from_memory_range(scratch.arena, new_process->fd, r1u64(ph_cursor, ph_cursor+phdr_size));
-                  phdr = elf_phdr64_from_class_data(elf_class, phdr_data);
+                  phdr = elf_phdr64_from_class_data(dl_class, phdr_data);
                   scratch_end(scratch);
                 }
                 if(phdr.p_type == ELF_PType_Dynamic)
@@ -2559,21 +2508,20 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               }
             }
             
-            // rjf: get dynamic info for this module
-            // extract necessary info out of dynamic program header
+            // rjf: parse dynamic info for this module
             LNX_DMN_DynamicInfo dynamic_info = {0};
             {
               B32 is_rebased = !!(process_new_flags & LNX_DMN_CreateProcessFlag_Rebased);
               U64 dynamic_info_rebase = is_rebased ? 0 : rebase;
-              for(U64 dynamic_cursor = dynamic_vaddr; ; dynamic_cursor += elf_dyn_size_from_class(elf_class))
+              for(U64 dynamic_cursor = dynamic_vaddr;; dynamic_cursor += elf_dyn_size_from_class(dl_class))
               {
                 // rjf: read next dyn entry
                 ELF_Dyn64 dyn = {0};
                 {
                   Temp scratch = scratch_begin(&arena, 1);
-                  U64 dyn_size = elf_dyn_size_from_class(elf_class);
+                  U64 dyn_size = elf_dyn_size_from_class(dl_class);
                   String8 dyn_data = lnx_dmn_data_from_memory_range(scratch.arena, new_process->fd, r1u64(dynamic_cursor, dynamic_cursor+dyn_size));
-                  dyn = elf_dyn64_from_class_data(elf_class, dyn_data);
+                  dyn = elf_dyn64_from_class_data(dl_class, dyn_data);
                   scratch_end(scratch);
                 }
                 
@@ -2594,103 +2542,106 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               }
             }
             
-            // extract symbol table count from available options
+            // rjf: parse symbol table count for this module
             U64 symbol_count = 0;
-            if(dynamic_info.hash_vaddr)
             {
-              U64 hash_entry_size = 4;
-              if(elf_class == ELF_Class_64 && (ehdr.e_machine == ELF_MachineKind_ALPHA || ehdr.e_machine == ELF_MachineKind_S390 || ehdr.e_machine == ELF_MachineKind_S390_OLD))
+              // rjf: base hash implementation
+              if(dynamic_info.hash_vaddr)
               {
-                hash_entry_size = 8;
+                U64 hash_entry_size = 4;
+                if(dl_class == ELF_Class_64 && (dl_ehdr.e_machine == ELF_MachineKind_ALPHA || dl_ehdr.e_machine == ELF_MachineKind_S390 || dl_ehdr.e_machine == ELF_MachineKind_S390_OLD))
+                {
+                  hash_entry_size = 8;
+                }
+                U64 chain_count = 0;
+                if(lnx_dmn_read(new_process->fd, r1u64(dynamic_info.hash_vaddr, dynamic_info.hash_vaddr + hash_entry_size), &chain_count) == hash_entry_size)
+                {
+                  symbol_count = chain_count;
+                }
               }
               
-              U64 chain_count = 0;
-              if(lnx_dmn_read(new_process->fd, r1u64(dynamic_info.hash_vaddr, dynamic_info.hash_vaddr + hash_entry_size), &chain_count) == hash_entry_size)
+              // rjf: GNU hash table implementation
+              else if(dynamic_info.gnu_hash_vaddr)
               {
-                symbol_count = chain_count;
-              }
-              else
-              {
-                Assert(0 && "failed to read hash table's chain count out of HASH");
-              }
-            }
-            else if(dynamic_info.gnu_hash_vaddr)
-            {
-              // GNU_HASH header: u32 nbuckets, u32 symoffset, u32 bloom_size, u32 bloom_shift,
-              // followed by bloom[bloom_size] (word size = 4 on 32-bit ELF, 8 on 64-bit),
-              // buckets[nbuckets] (u32), chains[...] (u32, terminated by entry w/ LSB set).
-              U32 gnu_header[4] = {0};
-              if(lnx_dmn_read(new_process->fd, r1u64(dynamic_info.gnu_hash_vaddr, dynamic_info.gnu_hash_vaddr + sizeof(gnu_header)), gnu_header) == sizeof(gnu_header))
-              {
-                U32 nbuckets    = gnu_header[0];
-                U32 symoffset   = gnu_header[1];
-                U32 bloom_size  = gnu_header[2];
-                U64 bloom_word  = (elf_class == ELF_Class_64) ? 8 : 4;
-                U64 buckets_vaddr = dynamic_info.gnu_hash_vaddr + sizeof(gnu_header) + bloom_size * bloom_word;
-                U64 chain_vaddr   = buckets_vaddr + (U64)nbuckets * sizeof(U32);
-                
-                // find largest symbol index referenced by any bucket
-                U32 max_bucket = 0;
-                for(U32 b = 0; b < nbuckets; b += 1)
+                // GNU_HASH header: u32 nbuckets, u32 symoffset, u32 bloom_size, u32 bloom_shift,
+                // followed by bloom[bloom_size] (word size = 4 on 32-bit ELF, 8 on 64-bit),
+                // buckets[nbuckets] (u32), chains[...] (u32, terminated by entry w/ LSB set).
+                U32 gnu_header[4] = {0};
+                if(lnx_dmn_read(new_process->fd, r1u64(dynamic_info.gnu_hash_vaddr, dynamic_info.gnu_hash_vaddr + sizeof(gnu_header)), gnu_header) == sizeof(gnu_header))
                 {
-                  U32 entry = 0;
-                  if(lnx_dmn_read(new_process->fd, r1u64(buckets_vaddr + b*sizeof(U32), buckets_vaddr + (b+1)*sizeof(U32)), &entry) != sizeof(U32))
+                  // rjf: unpack header
+                  U32 nbuckets    = gnu_header[0];
+                  U32 symoffset   = gnu_header[1];
+                  U32 bloom_size  = gnu_header[2];
+                  U64 bloom_word  = (dl_class == ELF_Class_64) ? 8 : 4;
+                  U64 buckets_vaddr = dynamic_info.gnu_hash_vaddr + sizeof(gnu_header) + bloom_size * bloom_word;
+                  U64 chain_vaddr   = buckets_vaddr + (U64)nbuckets * sizeof(U32);
+                  
+                  // rjf: find largest symbol index referenced by any bucket
+                  U32 max_bucket = 0;
+                  for(U32 b = 0; b < nbuckets; b += 1)
                   {
-                    break;
+                    U32 entry = 0;
+                    if(lnx_dmn_read(new_process->fd, r1u64(buckets_vaddr + b*sizeof(U32), buckets_vaddr + (b+1)*sizeof(U32)), &entry) != sizeof(U32))
+                    {
+                      break;
+                    }
+                    if(entry > max_bucket) { max_bucket = entry; }
                   }
-                  if(entry > max_bucket) { max_bucket = entry; }
-                }
-                
-                if(max_bucket < symoffset)
-                {
-                  // no symbols in hash; total count is symoffset
-                  symbol_count = symoffset;
-                }
-                else
-                {
-                  // walk chain from max_bucket until terminator (entry w/ LSB set)
-                  U64 idx = max_bucket;
-                  for(;;)
+                  
+                  //  rjf: no symbols in hash table - total count is symoffset
+                  if(max_bucket < symoffset)
                   {
-                    U32 chain_entry = 0;
-                    U64 entry_vaddr = chain_vaddr + (idx - symoffset) * sizeof(U32);
-                    if(lnx_dmn_read(new_process->fd, r1u64(entry_vaddr, entry_vaddr + sizeof(U32)), &chain_entry) != sizeof(U32))
+                    symbol_count = symoffset;
+                  }
+                  
+                  // rjf: else -> walk chain from max_bucket until terminator (entry w/ LSB set)
+                  else
+                  {
+                    U64 idx = max_bucket;
+                    for(;;)
                     {
-                      break;
-                    }
-                    if(chain_entry & 1)
-                    {
-                      symbol_count = idx + 1;
-                      break;
-                    }
-                    idx += 1;
-                    if(idx - max_bucket > (1u<<24))
-                    {
-                      // sanity bound: don't loop forever on a corrupt chain
-                      break;
+                      U32 chain_entry = 0;
+                      U64 entry_vaddr = chain_vaddr + (idx - symoffset) * sizeof(U32);
+                      if(lnx_dmn_read(new_process->fd, r1u64(entry_vaddr, entry_vaddr + sizeof(U32)), &chain_entry) != sizeof(U32))
+                      {
+                        break;
+                      }
+                      if(chain_entry & 1)
+                      {
+                        symbol_count = idx + 1;
+                        break;
+                      }
+                      idx += 1;
+                      if(idx - max_bucket > (1u<<24))
+                      {
+                        break;
+                      }
                     }
                   }
                 }
               }
             }
             
-            // scan symbol table for the rendezvous symbol
+            // rjf: scan symbol table for the rendezvous symbol
             if(dynamic_info.symtab_vaddr && dynamic_info.symtab_entry_size && symbol_count)
             {
               for EachIndex(symbol_idx, symbol_count)
               {
+                Temp temp = temp_begin(scratch.arena);
+                
+                // rjf: read next symbol
                 ELF_Sym64 symbol = {0};
                 {
                   Temp temp = temp_begin(scratch.arena);
-                  U64 sym_size = elf_sym_size_from_class(elf_class);
+                  U64 sym_size = elf_sym_size_from_class(dl_class);
                   U64 sym_vaddr = dynamic_info.symtab_vaddr + symbol_idx*dynamic_info.symtab_entry_size;
                   String8 sym_data = lnx_dmn_data_from_memory_range(temp.arena, new_process->fd, r1u64(sym_vaddr, sym_vaddr+sym_size));
-                  symbol = elf_sym64_from_class_data(elf_class, sym_data);
+                  symbol = elf_sym64_from_class_data(dl_class, sym_data);
                   temp_end(temp);
                 }
                 
-                Temp temp = temp_begin(scratch.arena);
-                
+                // rjf: read symbol's name
                 String8 symbol_name = {0};
                 if(symbol.st_name < dynamic_info.strtab_size)
                 {
@@ -2698,24 +2649,30 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   symbol_name = lnx_dmn_read_string_capped(temp.arena, new_process->fd, dynamic_info.strtab_vaddr + symbol.st_name, cap);
                 }
                 
-                if(str8_match(symbol_name, str8_lit("_r_debug"), 0))
+                // rjf: _r_debug -> this symbol defines the rdebug_vaddr
+                B32 got_rdebug = 0;
+                if(str8_match(symbol_name, s("_r_debug"), 0))
                 {
                   ELF_SymType symbol_type = ELF_ST_TYPE(symbol.st_info);
                   if(symbol_type == ELF_SymType_Object && symbol.st_size > 0)
                   {
+                    got_rdebug = 1;
                     rdebug_vaddr = rebase + symbol.st_value;
-                    break;
                   }
                 }
                 
                 temp_end(temp);
+                if(got_rdebug)
+                {
+                  break;
+                }
               }
             }
             
             scratch_end(scratch);
           }
           
-          //- query xsave layout
+          //- rjf: [x64] query xsave layout
           U64 xcr0 = 0;
           U64 xsave_size = 0;
           X64_XSaveLayout xsave_layout = {0};
@@ -2732,11 +2689,12 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             }
             else
             {
-              Assert(0 && "failed to get xstate");
+              log_infof("ptrace error: PTRACE_GETREGSET failed, when trying to determine xsave layout.");
             }
           }
           
-          // gather probes
+          //- rjf: gather probes in this process
+          Arena *ctx_arena = arena_alloc();
           LNX_DMN_Probe **known_probes = push_array(ctx_arena, LNX_DMN_Probe *, LNX_DMN_ProbeKind_COUNT);
           {
             Temp scratch = scratch_begin(0, 0);
@@ -2834,18 +2792,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             {
               U64 offset = 0;
               
-              U8 eident[ELF_Identifier_Max] = {0};
-              lnx_dmn_read(dl_fd, r1u64(offset, offset+sizeof(eident)), eident);
-              ELF_Class eclass = eident[ELF_Identifier_Class];
-              
-              ELF_Hdr64 ehdr = {0};
-              {
-                Temp scratch = scratch_begin(&arena, 1);
-                U64 ehdr_size = elf_hdr_size_from_class(eclass);
-                String8 ehdr_data = lnx_dmn_data_from_memory_range(scratch.arena, dl_fd, r1u64(offset, offset+ehdr_size));
-                ehdr = elf_hdr64_from_class_data(eclass, ehdr_data);
-                scratch_end(scratch);
-              }
+              ELF_Hdr64 ehdr = lnx_dmn_elf_hdr64_from_vaddr(dl_fd, offset);
+              ELF_Class eclass = ehdr.e_ident[ELF_Identifier_Class];
               
               U64 strtab_shdr_offset = offset + ehdr.e_shoff + ehdr.e_shstrndx * ehdr.e_shentsize;
               ELF_Shdr64 strtab_shdr = {0};
@@ -2995,7 +2943,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             scratch_end(scratch);
           }
           
-          //- rjf: build context
+          //- rjf: allocate & fill context
           ctx = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_ProcessCtx)->process_ctx;
           ctx->arena             = ctx_arena;
           ctx->arch              = arch;
@@ -3008,10 +2956,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           ctx->xsave_size        = Max(xsave_size, sizeof(X64_XSave));
           ctx->xsave_layout      = xsave_layout;
           
-          //- create main module
+          //- rjf: create main module
           LNX_DMN_Module *main_module = lnx_dmn_module_alloc(ctx, new_process->fd, base_vaddr, auxv.execfn, 1, 1);
           
-          //- glibc has a shortcut mapping for the main module
+          //- rjf: glibc has a shortcut mapping for the main module; ensure 0 base address goes to it
           {
             U64 vaddr = 0;
             U64 hash = u64_hash_from_str8(str8_struct(&vaddr));

@@ -8,44 +8,6 @@ stap_is_scale_valid(U64 scale)
 }
 
 internal U64
-stap_parse_digit(U8 *begin, U8 *end, U64 *digit_out)
-{
-  U8 *ptr = begin;
-  if (ptr < end && *ptr == '-') {
-    ptr += 1;
-  }
-  for (;ptr < end; ptr += 1) {
-    if (!char_is_digit(*ptr, 10)) { break; }
-  }
-  String8 digit_str = str8(begin, (U64)(ptr - begin));
-  if (digit_out) {
-    *digit_out = u64_from_str8(digit_str, 10);
-  }
-  return digit_str.size;
-}
-
-internal U64
-stap_skip_whitespace(U8 *begin, U8 *end)
-{
-  U8 *ptr = begin;
-  for (; ptr < end && *ptr == ' '; ptr += 1);
-  U64 size = (U64)(ptr - begin);
-  return size;
-}
-
-internal U64
-stap_parse_ident(U8 *begin, U8 *end, String8 *ident_out)
-{
-  U8 *ptr = begin;
-  for (; ptr < end; ptr += 1) {
-    if (!char_is_alpha(*ptr) && !char_is_digit(*ptr, 10)) { break; }
-  }
-  String8 ident = str8(begin, (U64)(ptr - begin));
-  if (ident_out) { *ident_out = ident; }
-  return ident.size;
-}
-
-internal U64
 stap_size_from_arg(String8 string)
 {
   U64 tag_sep      = str8_find_needle(string, 0, str8_lit("@"), 0);

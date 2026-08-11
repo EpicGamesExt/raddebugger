@@ -880,6 +880,7 @@ internal U64 elf_phdr_size_from_class(ELF_Class elf_class);
 internal U64 elf_shdr_size_from_class(ELF_Class elf_class);
 internal U64 elf_dyn_size_from_class(ELF_Class elf_class);
 internal U64 elf_sym_size_from_class(ELF_Class elf_class);
+internal U64 elf_auxv_size_from_class(ELF_Class elf_class);
 
 ////////////////////////////////
 //~ rjf: Optional Class Conversion Readers
@@ -889,5 +890,6 @@ internal ELF_Phdr64 elf_phdr64_from_class_data(ELF_Class elf_class, String8 data
 internal ELF_Shdr64 elf_shdr64_from_class_data(ELF_Class elf_class, String8 data);
 internal ELF_Dyn64 elf_dyn64_from_class_data(ELF_Class elf_class, String8 data);
 internal ELF_Sym64 elf_sym64_from_class_data(ELF_Class elf_class, String8 data);
+internal ELF_Auxv64 elf_auxv64_from_class_data(ELF_Class elf_class, String8 data);
 
 #endif // ELF_H

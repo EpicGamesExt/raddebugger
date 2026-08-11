@@ -9,9 +9,13 @@
 internal DMN_Handle
 w32_dmn_handle_from_entity(W32_DMN_Entity *entity)
 {
-  U32 idx = (U32)(entity - w32_dmn_shared->entities_base);
-  U32 gen = entity->gen;
-  DMN_Handle handle = {idx, gen};
+  DMN_Handle handle = {0};
+  U64 index = (U64)(entity - w32_dmn_shared->entities_base);
+  if(index <= max_U32)
+  {
+    handle.u32[0] = (U32)index;
+    handle.u32[1] = entity->gen;
+  }
   return handle;
 }
 
@@ -1677,7 +1681,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             if(single_step_thread_ctx != 0)
             {
               U64 rflags = single_step_thread_ctx->EFlags|0x2;
-              U64 new_rflags = rflags | 0x100;
+              U64 new_rflags = rflags|X64_RFlag_Trap;
               single_step_thread_ctx->EFlags = new_rflags;
               SetThreadContext(thread->handle, single_step_thread_ctx);
             }
@@ -3100,7 +3104,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             if(single_step_thread_ctx != 0)
             {
               U64 rflags = single_step_thread_ctx->EFlags|0x2;
-              U64 new_rflags = rflags & ~0x100;
+              U64 new_rflags = rflags & ~X64_RFlag_Trap;
               single_step_thread_ctx->EFlags = new_rflags;
               SetThreadContext(thread->handle, single_step_thread_ctx);
             }

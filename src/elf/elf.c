@@ -213,6 +213,20 @@ elf_sym_size_from_class(ELF_Class elf_class)
   return result;
 }
 
+internal U64
+elf_auxv_size_from_class(ELF_Class elf_class)
+{
+  U64 result = 0;
+  switch((ELF_ClassEnum)elf_class)
+  {
+    case ELF_Class_COUNT:
+    case ELF_Class_None:{}break;
+    case ELF_Class_32:{result = sizeof(ELF_Auxv32);}break;
+    case ELF_Class_64:{result = sizeof(ELF_Auxv64);}break;
+  }
+  return result;
+}
+
 ////////////////////////////////
 //~ rjf: Optional Class Conversion Readers
 
@@ -330,6 +344,30 @@ elf_sym64_from_class_data(ELF_Class elf_class, String8 data)
       case ELF_Class_64:
       {
         result = *(ELF_Sym64 *)data.str;
+      }break;
+    }
+  }
+  return result;
+}
+
+internal ELF_Auxv64
+elf_auxv64_from_class_data(ELF_Class elf_class, String8 data)
+{
+  ELF_Auxv64 result = {0};
+  U64 needed_size = elf_auxv_size_from_class(elf_class);
+  if(data.size >= needed_size)
+  {
+    switch(elf_class)
+    {
+      default:{}break;
+      case ELF_Class_32:
+      {
+        ELF_Auxv32 result32 = *(ELF_Auxv32 *)data.str;
+        result = elf_auxv64_from_auxv32(result32);
+      }break;
+      case ELF_Class_64:
+      {
+        result = *(ELF_Auxv64 *)data.str;
       }break;
     }
   }

@@ -67,6 +67,10 @@ typedef STAP_MEMORY_READ(STAP_MemoryRead);
 
 ////////////////////////////////
 
+internal B32 stap_is_scale_valid(U64 scale);
+internal U64 stap_size_from_arg(String8 string);
+internal String8List stap_list_from_string(Arena *arena, String8 string);
+
 internal String8 stap_parse_args_x64(String8 string, STAP_Arg *arg_out);
 internal STAP_ArgArray stap_arg_array_from_string(Arena *arena, Arch arch, String8 string);
 

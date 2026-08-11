@@ -417,6 +417,7 @@ internal LNX_DMN_ActiveTrap *lnx_dmn_set_trap(Arena *arena, DMN_Trap *trap);
 ////////////////////////////////
 //~ rjf: In-Memory ELF Parsing Helpers
 
+internal ELF_Hdr64 lnx_dmn_elf_hdr64_from_vaddr(int memory_fd, U64 vaddr);
 internal Rng1U64 lnx_dmn_vaddr_range_from_phdrs(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum);
 
 ////////////////////////////////
