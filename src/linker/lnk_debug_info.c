@@ -376,11 +376,179 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_t_task)
 {
   ProfBeginFunction();
   LNK_ParseCvTypes *task = raw_task;
-  if (task->raw_types[task_id].count > 0) {
+  if (task->out_types[task_id].offsets != 0) {
+    // giant obj, already parsed by lnk_parse_giant_debug_t
+  } else if (task->raw_types[task_id].count > 0) {
     task->out_types[task_id] = cv_debug_t_from_data(arena, task->raw_types[task_id].v[0], CV_LeafAlign);
   } else {
     MemoryZeroStruct(&task->out_types[task_id]);
   }
+  ProfEnd();
+}
+
+// Giant .debug$T parse: a single SharedPCH-scale .debug$T is a multi-second
+// SERIAL pointer-chase (each leaf's offset depends on the previous leaf's
+// size), and a handful of such objs bound the whole capped parse stage
+// (measured: one 6.5 s obj on the FN editor DLL while the rest of the pool
+// sat parked). Speculative mid-stream resynchronization is unsound for
+// CodeView (arbitrary payload bytes chain "validly", so a wrong guess is not
+// locally detectable), so instead: one cheap serial hop per giant walks the
+// true chain recording a checkpoint offset every LNK_GIANT_DEBUG_T_INTERVAL
+// leaves, then the full pool re-walks the intervals from those true
+// boundaries, storing leaf offsets and classifying kinds. Offsets come from
+// the true chain and per-source counts are reduced in interval order, so the
+// result is bit-identical to the serial parse.
+#define LNK_GIANT_DEBUG_T_SIZE     MB(16)
+#define LNK_GIANT_DEBUG_T_INTERVAL (64*1024)
+
+typedef U64 LNK_GiantSourceCounts[CV_TypeIndexSource_COUNT];
+
+typedef struct
+{
+  U64                    obj_idx;
+  String8                data;
+  U64                    leaf_count;
+  U64                    interval_count;
+  U32                   *checkpoints;      // [interval_count] leaf offset at each interval start
+  LNK_GiantSourceCounts *interval_counts;
+} LNK_GiantDebugT;
+
+typedef struct
+{
+  LNK_ParseCvTypes *parse;
+  LNK_GiantDebugT  *giants;
+  U32              *interval_giant;  // flat interval index -> giant index
+  U32              *interval_local;  // flat interval index -> interval within giant
+} LNK_GiantDebugTTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_giant_debug_t_hop_task)
+{
+  ProfBeginFunction();
+  LNK_GiantDebugTTask *task = raw_task;
+  LNK_GiantDebugT     *g    = &task->giants[task_id];
+  String8              data = g->data;
+
+  // bare chain walk; bounds replicate cv_read_leaf exactly (incl. its
+  // total-size quirks) so the leaf set matches the serial parse bit for bit.
+  // CV_LeafAlign == 1 => stride is sizeof(CV_LeafHeader) + (size - sizeof(CV_LeafKind)).
+  U64 checkpoint_cap = data.size / (sizeof(CV_LeafHeader) * LNK_GIANT_DEBUG_T_INTERVAL) + 2;
+  g->checkpoints = push_array_no_zero(arena, U32, checkpoint_cap);
+
+  U64 leaf_count = 0;
+  if (data.size >= sizeof(CV_LeafHeader)) {
+    for (U64 cursor = 0; cursor < data.size; ) {
+      CV_LeafHeader header = { .v = memory_read32(data.str + cursor) };
+      if (header.size < sizeof(CV_LeafKind))                   { break; }
+      if (sizeof(CV_LeafSize) + (U64)header.size > data.size)  { break; }
+      U64 stride = AlignPow2(sizeof(CV_LeafHeader) + (U64)(header.size - sizeof(CV_LeafKind)), CV_LeafAlign);
+      if (stride > data.size)                                  { break; }
+      if ((leaf_count % LNK_GIANT_DEBUG_T_INTERVAL) == 0) {
+        Assert(leaf_count / LNK_GIANT_DEBUG_T_INTERVAL < checkpoint_cap);
+        g->checkpoints[leaf_count / LNK_GIANT_DEBUG_T_INTERVAL] = (U32)cursor;
+      }
+      leaf_count += 1;
+      cursor     += stride;
+    }
+  }
+
+  g->leaf_count     = leaf_count;
+  g->interval_count = CeilIntegerDiv(leaf_count, LNK_GIANT_DEBUG_T_INTERVAL);
+  g->interval_counts = push_array(arena, LNK_GiantSourceCounts, g->interval_count);
+
+  CV_DebugT *out = &task->parse->out_types[g->obj_idx];
+  MemoryZeroStruct(out);
+  out->data    = data;
+  out->count   = leaf_count;
+  out->offsets = push_array_no_zero(arena, U32, leaf_count);
+  ProfEnd();
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_giant_debug_t_interval_task)
+{
+  ProfBeginFunction();
+  LNK_GiantDebugTTask *task      = raw_task;
+  LNK_GiantDebugT     *g         = &task->giants[task->interval_giant[task_id]];
+  U64                  local_idx = task->interval_local[task_id];
+  String8              data      = g->data;
+  CV_DebugT           *out       = &task->parse->out_types[g->obj_idx];
+
+  U64  leaf_lo = local_idx * LNK_GIANT_DEBUG_T_INTERVAL;
+  U64  leaf_hi = Min(leaf_lo + LNK_GIANT_DEBUG_T_INTERVAL, g->leaf_count);
+  U64  cursor  = g->checkpoints[local_idx];
+  U64 *counts  = g->interval_counts[local_idx];
+
+  for (U64 leaf_idx = leaf_lo; leaf_idx < leaf_hi; leaf_idx += 1) {
+    CV_LeafHeader header = { .v = memory_read32(data.str + cursor) };
+    out->offsets[leaf_idx] = (U32)cursor;
+    counts[cv_type_index_source_from_leaf_kind(header.kind)] += 1;
+    cursor += AlignPow2(sizeof(CV_LeafHeader) + (U64)(header.size - sizeof(CV_LeafKind)), CV_LeafAlign);
+  }
+  ProfEnd();
+}
+
+internal void
+lnk_parse_giant_debug_t(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U64 obj_count, LNK_ParseCvTypes *parse)
+{
+  ProfBeginFunction();
+  Temp scratch = scratch_begin(0,0);
+
+  // gather giants
+  U64              giant_count = 0;
+  LNK_GiantDebugT *giants      = push_array(scratch.arena, LNK_GiantDebugT, obj_count);
+  for EachIndex(obj_idx, obj_count) {
+    if (parse->raw_types[obj_idx].count > 0 && parse->raw_types[obj_idx].v[0].size >= LNK_GIANT_DEBUG_T_SIZE) {
+      giants[giant_count].obj_idx = obj_idx;
+      giants[giant_count].data    = parse->raw_types[obj_idx].v[0];
+      giant_count += 1;
+    }
+  }
+
+  if (giant_count > 0) {
+    LNK_GiantDebugTTask task = { .parse = parse, .giants = giants };
+
+    // phase 1: serial chain hop per giant (capped: the hop is the fault-bound
+    // dependent-load chase, extra lanes only spin)
+    lnk_tp_for_parallel_capped_prof(tp, tp_arena, config->debug_worker_cap, giant_count, lnk_giant_debug_t_hop_task, &task, "Giant .debug$T Hop");
+
+    // flatten intervals
+    U64 interval_total = 0;
+    for EachIndex(i, giant_count) { interval_total += giants[i].interval_count; }
+    task.interval_giant = push_array_no_zero(scratch.arena, U32, interval_total);
+    task.interval_local = push_array_no_zero(scratch.arena, U32, interval_total);
+    for (U64 i = 0, flat = 0; i < giant_count; i += 1) {
+      for EachIndex(k, giants[i].interval_count) {
+        task.interval_giant[flat] = (U32)i;
+        task.interval_local[flat] = (U32)k;
+        flat += 1;
+      }
+    }
+
+    // phase 2: offsets + kind classification from true checkpoints; pages are
+    // hot from the hop, so this is CPU-bound -- full pool width
+    tp_for_parallel_prof(tp, 0, interval_total, lnk_giant_debug_t_interval_task, &task, "Giant .debug$T Intervals");
+
+    // phase 3: deterministic interval-order reduce + the serial-parse tail
+    for EachIndex(i, giant_count) {
+      LNK_GiantDebugT *g   = &giants[i];
+      CV_DebugT       *out = &parse->out_types[g->obj_idx];
+      for EachIndex(k, g->interval_count) {
+        for EachElement(s, out->source_counts) { out->source_counts[s] += g->interval_counts[k][s]; }
+      }
+#if BUILD_DEBUG
+      { U64 total = 0; for EachElement(s, out->source_counts) { total += out->source_counts[s]; } Assert(total == g->leaf_count); }
+#endif
+      for EachElement(s, out->ti_ranges) { out->ti_ranges[s] = r1u64(CV_MinComplexTypeIndex, CV_MinComplexTypeIndex + out->count); }
+      CV_Leaf leaf = cv_debug_t_get_leaf(out, 0);
+      if (leaf.kind == CV_LeafKind_PRECOMP) {
+        CV_PrecompInfo precomp_info = cv_precomp_info_from_leaf(leaf);
+        for EachElement(s, out->ti_ranges) { out->ti_ranges[s].max += precomp_info.leaf_count; }
+      }
+    }
+  }
+
+  scratch_end(scratch);
   ProfEnd();
 }
 
@@ -1850,6 +2018,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
     parse_types.raw_types = raw_debug_t_arr;
     parse_types.out_types = input.debug_t_arr;
     lnk_tp_for_parallel_capped_prof(tp, 0,        config->debug_worker_cap, obj_count, lnk_strip_debug_t_sig_task, &parse_types, "Strip .debug$T");
+    lnk_parse_giant_debug_t(tp, tp_arena, config, obj_count, &parse_types);
     lnk_tp_for_parallel_capped_prof(tp, tp_arena, config->debug_worker_cap, obj_count, lnk_parse_debug_t_task,     &parse_types, "Parse .debug$T");
 
     // parse .debug$H
