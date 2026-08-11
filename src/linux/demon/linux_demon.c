@@ -2871,7 +2871,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   Temp scratch = scratch_begin(&arena, 1);
                   U64 shdr_size = elf_shdr_size_from_class(eclass);
                   String8 shdr_data = lnx_dmn_data_from_memory_range(scratch.arena, dl_fd, r1u64(shdr_off, shdr_off+shdr_size));
-                  strtab_shdr = elf_shdr64_from_class_data(eclass, shdr_data);
+                  shdr = elf_shdr64_from_class_data(eclass, shdr_data);
                   scratch_end(scratch);
                 }
                 
