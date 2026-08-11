@@ -4,17 +4,21 @@
 #ifndef ELF_H
 #define ELF_H
 
+////////////////////////////////
+//~ rjf: Primary ELF File enums/structures
+
 typedef U8 ELF_Class;
-enum
+typedef enum ELF_ClassEnum
 {
   ELF_Class_None  = 0,
   ELF_Class_32    = 1,
   ELF_Class_64    = 2,
-  ELF_Class_Count = 3
-};
+  ELF_Class_COUNT = 3
+}
+ELF_ClassEnum;
 
 typedef U8 ELF_OsAbi;
-enum
+typedef enum ELF_OsAbiEnum
 {
   ELF_OsAbi_None,
   ELF_OsAbi_SYSV,
@@ -28,17 +32,19 @@ enum
   ELF_OsAbi_TRU64,
   ELF_OsAbi_ARM = 97,
   ELF_OsAbi_STANDALONE = 255,
-};
+}
+ELF_OsAbiEnum;
 
 typedef U8 ELF_Version;
-enum
+typedef enum ELF_VersionEnum
 {
   ELF_Version_None,
   ELF_Version_Current,
-};
+}
+ELF_VersionEnum;
 
 typedef U16 ELF_MachineKind;
-enum
+typedef enum ELF_MachineKindEnum
 {
   ELF_MachineKind_None        = 0,
   ELF_MachineKind_M32         = 1,
@@ -96,18 +102,20 @@ enum
   ELF_MachineKind_K1OM        = 181,
   ELF_MachineKind_RISCV       = 243,
   ELF_MachineKind_S390_OLD    = 0xA390,
-};
+}
+ELF_MachineKindEnum;
 
 typedef U8 ELF_Data;
-enum
+typedef enum ELF_DataEnum
 {
   ELF_Data_None = 0,
   ELF_Data_2LSB = 1,
   ELF_Data_2MSB = 2,
-};
+}
+ELF_DataEnum;
 
 typedef U16 ELF_Type;
-enum
+typedef enum ELF_TypeEnum
 {
   ELF_Type_None   = 0,
   ELF_Type_Rel    = 1,
@@ -118,10 +126,11 @@ enum
   ELF_Type_HiOs   = 0xff00,
   ELF_Type_LoProc = 0xff00,
   ELF_Type_HiProc = 0xffff
-};
+}
+ELF_TypeEnum;
 
 typedef U32 ELF_PType;
-enum
+typedef enum ELF_PTypeEnum
 {
   ELF_PType_Null        = 0,
   ELF_PType_Load        = 1,
@@ -141,18 +150,20 @@ enum
   ELF_PType_GnuStack    = ELF_PType_LoOs + 0x474e551, // frame unwind information
   ELF_PType_GnuRelro    = ELF_PType_LoOs + 0x474e552, // stack flags
   ELF_PType_GnuProperty = ELF_PType_LoOs + 0x474e553, // read-only after relocations
-};
+}
+ELF_PTypeEnum;
 
 typedef U32 ELF_PFlag;
-enum
+typedef enum ELF_PFlagEnum
 {
   ELF_PFlag_Exec  = (1 << 0),
   ELF_PFlag_Write = (1 << 1),
   ELF_PFlag_Read  = (1 << 2),
-};
+}
+ELF_PFlagEnum;
 
 typedef U32 ELF_ShType;
-enum
+typedef enum ELF_ShTypeEnum
 {
   ELF_ShType_Null                   = 0,
   ELF_ShType_ProgBits               = 1,
@@ -187,10 +198,11 @@ enum
   ELF_ShType_GNU_versym             = ELF_ShType_SUNW_versym,
   ELF_ShType_Proc,
   ELF_ShType_User,
-};
+}
+ELF_ShTypeEnum;
 
 typedef U32 ELF_SectionIndex;
-enum
+typedef enum ELF_SectionIndexEnum
 {
   
   ELF_SectionIndex_Undef             = 0,      // Symbol with section index is undefined and must be resolved by the link editor
@@ -214,7 +226,8 @@ enum
   
   ELF_SectionIndex_TIC6X_Common      = ELF_SectionIndex_LoReserve,
   ELF_SectionIndex_MIPS_SUndefined   = 0xff04,
-};
+}
+ELF_SectionIndexEnum;
 
 typedef U32 ELF_SectionFlags;
 enum
@@ -240,7 +253,7 @@ enum
 #define ELF_SectionFlag_Extract_MaskOs(f)   (U8)(((f) >> ELF_SectionFlag_MaskOs_Shift)   & ELF_SectionFlag_MaskOs_Mask)
 #define ELF_SectionFlag_Extract_MaskProc(f) (U8)(((f) >> ELF_SectionFlag_MaskProc_shift) & ELF_SectionFlag_MaskProc_Mask)
 typedef U32 ELF_AuxType;
-enum
+typedef enum ELF_AuxTypeEnum
 {
   ELF_AuxType_Null              = 0,
   ELF_AuxType_Phdr              = 3, // program headers
@@ -276,10 +289,11 @@ enum
   ELF_AuxType_L2_CacheGeometry  = 45,
   ELF_AuxType_L3_CacheSize      = 46,
   ELF_AuxType_L3_CacheGeometry  = 47,
-};
+}
+ELF_AuxTypeEnum;
 
 typedef U32 ELF_DynTag;
-enum
+typedef enum ELF_DynTagEnum
 {
   ELF_DynTag_Null            = 0,
   
@@ -358,7 +372,8 @@ enum
   ELF_DynTag_VerSym          = 0x6ffffff0,
   ELF_DynTag_LoProc          = 0x70000000,
   ELF_DynTag_HiProc          = 0x7fffffff,
-};
+}
+ELF_DynTagEnum;
 
 typedef U32 ELF_DynFlag;
 enum
@@ -532,9 +547,6 @@ enum
   ELF_NoteType_STapSdt = 3, // System Tap probes
 };
 
-#define ELF_HdrIs64Bit(e_ident) (e_ident[ELF_Identifier_Class] == ELF_Class_64)
-#define ELF_HdrIs32Bit(e_ident) (e_ident[ELF_Identifier_Class] == ELF_Class_32)
-
 typedef enum ELF_Identifier
 {
   ELF_Identifier_Mag0       = 0,
@@ -547,76 +559,82 @@ typedef enum ELF_Identifier
   ELF_Identifier_OsAbi      = 7,
   ELF_Identfiier_AbiBersion = 8,
   ELF_Identifier_Max        = 16,
-} ELF_Identifier;
+}
+ELF_Identifier;
 
 read_only global U8 elf_magic[] = {0x7f, 'E', 'L', 'F'};
 read_only global String8 elf_magic_string = {elf_magic, sizeof(elf_magic)};
 
-typedef struct ELF_Hdr64
+typedef struct ELF_Hdr64 ELF_Hdr64;
+struct ELF_Hdr64
 {
-  U8              e_ident[ELF_Identifier_Max];
-  ELF_Type        e_type;
+  U8 e_ident[ELF_Identifier_Max];
+  ELF_Type e_type;
   ELF_MachineKind e_machine;
-  U32             e_version;
-  U64             e_entry;
-  U64             e_phoff;
-  U64             e_shoff;
-  U32             e_flags;
-  U16             e_ehsize;
-  U16             e_phentsize;
-  U16             e_phnum;
-  U16             e_shentsize;
-  U16             e_shnum;
-  U16             e_shstrndx;
-} ELF_Hdr64;
+  U32 e_version;
+  U64 e_entry;
+  U64 e_phoff;
+  U64 e_shoff;
+  U32 e_flags;
+  U16 e_ehsize;
+  U16 e_phentsize;
+  U16 e_phnum;
+  U16 e_shentsize;
+  U16 e_shnum;
+  U16 e_shstrndx;
+};
 
-typedef struct ELF_Hdr32
+typedef struct ELF_Hdr32 ELF_Hdr32;
+struct ELF_Hdr32
 {
-  U8              e_ident[ELF_Identifier_Max];
-  ELF_Type        e_type;
+  U8 e_ident[ELF_Identifier_Max];
+  ELF_Type e_type;
   ELF_MachineKind e_machine;
-  U32             e_version;
-  U32             e_entry;
-  U32             e_phoff;
-  U32             e_shoff;
-  U32             e_flags;
-  U16             e_ehsize;
-  U16             e_phentsize;
-  U16             e_phnum;
-  U16             e_shentsize;
-  U16             e_shnum;
-  U16             e_shstrndx;
-} ELF_Hdr32;
+  U32 e_version;
+  U32 e_entry;
+  U32 e_phoff;
+  U32 e_shoff;
+  U32 e_flags;
+  U16 e_ehsize;
+  U16 e_phentsize;
+  U16 e_phnum;
+  U16 e_shentsize;
+  U16 e_shnum;
+  U16 e_shstrndx;
+};
 
-typedef struct ELF_Shdr64
+typedef struct ELF_Shdr64 ELF_Shdr64;
+struct ELF_Shdr64
 {
-  U32        sh_name;
+  U32 sh_name;
   ELF_ShType sh_type;
-  U64        sh_flags;
-  U64        sh_addr;
-  U64        sh_offset;
-  U64        sh_size;
-  U32        sh_link;
-  U32        sh_info;
-  U64        sh_addralign;
-  U64        sh_entsize;
-} ELF_Shdr64;
+  U64 sh_flags;
+  U64 sh_addr;
+  U64 sh_offset;
+  U64 sh_size;
+  U32 sh_link;
+  U32 sh_info;
+  U64 sh_addralign;
+  U64 sh_entsize;
+};
 
-typedef struct ELF_Shdr32
+typedef struct ELF_Shdr32 ELF_Shdr32;
+struct ELF_Shdr32
 {
-  U32        sh_name;
+  U32 sh_name;
   ELF_ShType sh_type;
-  U32        sh_flags;
-  U32        sh_addr;
-  U32        sh_offset;
-  U32        sh_size;
-  U32        sh_link;
-  U32        sh_info;
-  U32        sh_addralign;
-  U32        sh_entsize;
-} ELF_Shdr32;
+  U32 sh_flags;
+  U32 sh_addr;
+  U32 sh_offset;
+  U32 sh_size;
+  U32 sh_link;
+  U32 sh_info;
+  U32 sh_addralign;
+  U32 sh_entsize;
+};
 
-typedef struct ELF_Phdr64
+typedef struct ELF_Phdr64 ELF_Phdr64;
+struct ELF_Phdr64
 {
   U32 p_type;
   U32 p_flags;
@@ -626,9 +644,10 @@ typedef struct ELF_Phdr64
   U64 p_filesz;
   U64 p_memsz;
   U64 p_align;
-} ELF_Phdr64;
+};
 
-typedef struct ELF_Phdr32
+typedef struct ELF_Phdr32 ELF_Phdr32;
+struct ELF_Phdr32
 {
   U32 p_type;
   U32 p_offset;
@@ -638,46 +657,53 @@ typedef struct ELF_Phdr32
   U32 p_memsz;
   U32 p_flags;
   U32 p_align;
-} ELF_Phdr32;
+};
 
 ////////////////////////////////
-// Auxiliary Vectors
-
+//~ Auxiliary Vectors
+//
 // these appear in /proc/<pid>/auxv of a process, they are not in elf files
+//
 
-typedef struct ELF_Auxv32
+typedef struct ELF_Auxv32 ELF_Auxv32;
+struct ELF_Auxv32
 {
   U32 a_type;
   U32 a_val;
-} ELF_Auxv32;
+};
 
-typedef struct ELF_Auxv64
+typedef struct ELF_Auxv64 ELF_Auxv64;
+struct ELF_Auxv64
 {
   U64 a_type;
   U64 a_val;
-} ELF_Auxv64;
+};
 
 ////////////////////////////////
-// Dynamic Structures
-
+//~ Dynamic Structures
+//
 // these appear in the virtual address space of a process, they are not in elf files
+//
 
-typedef struct ELF_Dyn32
+typedef struct ELF_Dyn32 ELF_Dyn32;
+struct ELF_Dyn32
 {
   U32 tag;
   U32 val;
-} ELF_Dyn32;
+};
 
-typedef struct ELF_Dyn64
+typedef struct ELF_Dyn64 ELF_Dyn64;
+struct ELF_Dyn64
 {
   U64 tag;
   U64 val;
-} ELF_Dyn64;
+};
 
 ////////////////////////////////
-// Imports and Exports
+//~ Imports and Exports
 
-typedef struct 
+typedef struct ELF_Sym32 ELF_Sym32;
+struct ELF_Sym32
 {
   U32 st_name;  // Holds index into files string table.
   U32 st_value; // Depending on the context, this may be address, size, etc.
@@ -685,9 +711,10 @@ typedef struct
   U8  st_info;  // Contains symbols type and binding.
   U8  st_other; // Reserved for future use, currenly zero.
   U16 st_shndx; // Section index to which symbol is relevant.
-} ELF_Sym32;
+};
 
-typedef struct 
+typedef struct ELF_Sym64 ELF_Sym64;
+struct ELF_Sym64
 {
   U32 st_name;
   U8  st_info;
@@ -695,38 +722,42 @@ typedef struct
   U16 st_shndx;
   U64 st_value;
   U64 st_size;
-} ELF_Sym64;
+};
 
 #define ELF_ST_INFO(b,t)     (((b) << 4) + ((t) & 0xF))
 #define ELF_ST_BIND(x)       ((x) >> 4)
 #define ELF_ST_TYPE(x)       ((x) & 0xF)
 #define ELF_ST_VISIBILITY(v) ((v) & 0x3)
 
-typedef struct
+typedef struct ELF_Rel32 ELF_Rel32;
+struct ELF_Rel32
 {
   U32 r_offset;
   U32 r_info;
-} ELF_Rel32;
+};
 
-typedef struct
+typedef struct ELF_Rela32 ELF_Rela32;
+struct ELF_Rela32
 {
   U32 r_offset;
   U32 r_info;
   S32 r_addend;
-} ELF_Rela32;
+};
 
-typedef struct
+typedef struct ELF_Rel64 ELF_Rel64;
+struct ELF_Rel64
 {
   U64 r_offset;
   U64 r_info;
-} ELF_Rel64;
+};
 
-typedef struct
+typedef struct ELF_Rela64 ELF_Rela64;
+struct ELF_Rela64
 {
   U64 r_offset;
   U64 r_info;
   S64 r_addend;
-} ELF_Rela64;
+};
 
 #define ELF32_R_SYM(x)  ((x) >> 8)
 #define ELF32_R_TYPE(x) ((x) & 0xFF)
@@ -740,7 +771,8 @@ typedef struct
 #define ELF_EXTERNAL_VERSYM_MASK   0x7FFF
 
 // Appears in .gnu.verdef (SHT_GNU_verdef)
-typedef struct
+typedef struct ELF_ExternalVerdef ELF_ExternalVerdef;
+struct ELF_ExternalVerdef
 {
   U16 vd_version;
   U16 vd_flags;
@@ -749,43 +781,47 @@ typedef struct
   U32 vd_hash;
   U32 vd_aux;
   U32 vd_next;
-} ELF_ExternalVerdef;
+};
 
 // Appears in .gnu.verdef (SHT_GNU_verdef)
-typedef struct
+typedef struct ELF_ExternalVerdaux ELF_ExternalVerdaux;
+struct ELF_ExternalVerdaux
 {
   U32 vda_name;
   U32 vda_next;
-} ELF_ExternalVerdaux;
+};
 
 // Appears in .gnu.verneed (SHT_GNU_verneed)
-typedef struct
+typedef struct ELF_ExternalVerneed ELF_ExternalVerneed;
+struct ELF_ExternalVerneed
 {
   U16 vn_version;
   U16 vn_cnt;
   U32 vn_file;
   U32 vn_aux;
   U32 vn_next;
-} ELF_ExternalVerneed;
+};
 
 // Appears in .gnu.verneed (SHT_GNU_verneed)
-typedef struct
+typedef struct ELF_ExternalVernaux ELF_ExternalVernaux;
+struct ELF_ExternalVernaux
 {
   U32 vna_hash;
   U16 vna_flags;
   U16 vna_other;
   U32 vna_name;
   U32 vna_next;
-} ELF_ExternalVernaux;
+};
 
 // Appears in .gnu.version (SHT_GNU_versym)
-typedef struct
+typedef struct ELF_ExternalVersym ELF_ExternalVersym;
+struct ELF_ExternalVersym
 {
   U16 vs_vers;
-} ELF_ExternalVersym;
+};
 
 ////////////////////////////////
-// Extensions
+//~ Extensions
 
 typedef U8 ELF_CompressType;
 enum ELF_CompressTypeEnum
@@ -801,53 +837,57 @@ enum ELF_CompressTypeEnum
   ELF_CompressType_HiProc = 0x7fffffff,
 };
 
-typedef struct ELF_Chdr32
+typedef struct ELF_Chdr32 ELF_Chdr32;
+struct ELF_Chdr32
 {
   U32 ch_type;
   U32 ch_size;
   U32 ch_addr_align;
-} ELF_Chdr32;
+};
 
-typedef struct ELF_Chdr64
+typedef struct ELF_Chdr64 ELF_Chdr64;
+struct ELF_Chdr64
 {
   U32 ch_type;
   U32 ch_reserved;
   U64 ch_size;
   U64 ch_addr_align;
-} ELF_Chdr64;
+};
 
 ////////////////////////////////
+//~ rjf: 32 => 64 bit conversions
 
 internal ELF_Hdr64  elf_hdr64_from_hdr32(ELF_Hdr32 h32);
 internal ELF_Shdr64 elf_shdr64_from_shdr32(ELF_Shdr32 h32);
 internal ELF_Phdr64 elf_phdr64_from_phdr32(ELF_Phdr32 h32);
-internal ELF_Dyn64  elf_dyn64_from_dyn32  (ELF_Dyn32 h32);
-internal ELF_Sym64  elf_sym64_from_sym32  (ELF_Sym32 sym32);
-internal ELF_Rel64  elf_rel64_from_rel32  (ELF_Rel32 rel32);
+internal ELF_Dyn64  elf_dyn64_from_dyn32(ELF_Dyn32 h32);
+internal ELF_Sym64  elf_sym64_from_sym32(ELF_Sym32 sym32);
+internal ELF_Rel64  elf_rel64_from_rel32(ELF_Rel32 rel32);
 internal ELF_Rela64 elf_rela64_from_rela32(ELF_Rela32 rela32);
 internal ELF_Chdr64 elf_chdr64_from_chdr32(ELF_Chdr32 chdr32);
 internal ELF_Auxv64 elf_auxv64_from_auxv32(ELF_Auxv32 auxv32);
 
 ////////////////////////////////
-
-internal String8 elf_string_from_class(Arena *arena, ELF_Class v);
-
-////////////////////////////////
+//~ rjf: ELF -> Codebase enum Conversions
 
 internal Arch arch_from_elf_machine(ELF_MachineKind machine);
 
 ////////////////////////////////
+//~ rjf: ELF Class -> Structure Size
 
+internal U64 elf_hdr_size_from_class(ELF_Class elf_class);
 internal U64 elf_phdr_size_from_class(ELF_Class elf_class);
+internal U64 elf_shdr_size_from_class(ELF_Class elf_class);
 internal U64 elf_dyn_size_from_class(ELF_Class elf_class);
+internal U64 elf_sym_size_from_class(ELF_Class elf_class);
 
 ////////////////////////////////
-//~ Compat Readers
+//~ rjf: Optional Class Conversion Readers
 
-internal MachineOpResult elf_read_ehdr  (MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Hdr64 *ehdr_out);
-internal MachineOpResult elf_read_phdr  (MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Phdr64 *phdr_out);
-internal MachineOpResult elf_read_shdr  (MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Shdr64 *shdr_out);
-internal MachineOpResult elf_read_dyn   (MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Dyn64  *dyn_out);
-internal MachineOpResult elf_read_symbol(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Sym64  *symbol_out);
+internal ELF_Hdr64 elf_hdr64_from_class_data(ELF_Class elf_class, String8 data);
+internal ELF_Phdr64 elf_phdr64_from_class_data(ELF_Class elf_class, String8 data);
+internal ELF_Shdr64 elf_shdr64_from_class_data(ELF_Class elf_class, String8 data);
+internal ELF_Dyn64 elf_dyn64_from_class_data(ELF_Class elf_class, String8 data);
+internal ELF_Sym64 elf_sym64_from_class_data(ELF_Class elf_class, String8 data);
 
 #endif // ELF_H

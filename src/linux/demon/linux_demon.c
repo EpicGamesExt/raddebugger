@@ -41,6 +41,16 @@ lnx_dmn_write(int memory_fd, Rng1U64 range, void *src)
 }
 
 internal String8
+lnx_dmn_data_from_memory_range(Arena *arena, int memory_fd, Rng1U64 range)
+{
+  String8 result = {0};
+  result.size = dim_1u64(range);
+  result.str = push_array(arena, U8, result.size);
+  lnx_dmn_read(memory_fd, range, result.str);
+  return result;
+}
+
+internal String8
 lnx_dmn_read_string_capped(Arena *arena, int memory_fd, U64 base_vaddr, U64 cap_size)
 {
   String8 result = {0};
@@ -340,21 +350,24 @@ lnx_dmn_set_trap(Arena *arena, DMN_Trap *trap)
 }
 
 ////////////////////////////////
-//~ rjf: ELF/GNU Parsing
+//~ rjf: In-Memory ELF Parsing Helpers
 
 internal Rng1U64
-lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum)
+lnx_dmn_vaddr_range_from_phdrs(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum)
 { 
-  Rng1U64 result = { .min = max_U64 };
-  
-  for(U64 ph_cursor = e_phaddr, ph_opl = (e_phaddr + e_phentsize * e_phnum); ph_cursor < ph_opl; ph_cursor += e_phentsize)
+  Rng1U64 result = {.min = max_U64};
+  for(U64 ph_cursor = e_phaddr, ph_opl = (e_phaddr + e_phentsize * e_phnum);
+      ph_cursor < ph_opl;
+      ph_cursor += e_phentsize)
   {
     ELF_Phdr64 phdr = {0};
-    if(elf_read_phdr(lnx_dmn_machine_op_mem_read, &memory_fd, ph_cursor, elf_class, &phdr) != MachineOpResult_Ok)
     {
-      Assert(0 && "unable to read a program header");
+      Temp scratch = scratch_begin(0, 0);
+      U64 phdr_size = elf_phdr_size_from_class(elf_class);
+      String8 phdr_data = lnx_dmn_data_from_memory_range(scratch.arena, memory_fd, r1u64(ph_cursor, ph_cursor+phdr_size));
+      phdr = elf_phdr64_from_class_data(elf_class, phdr_data);
+      scratch_end(scratch);
     }
-    
     if(phdr.p_type  == ELF_PType_Load)
     {
       U64 min = rebase + phdr.p_vaddr;
@@ -363,7 +376,6 @@ lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64
       result.max = Max(result.max, max);
     }
   }
-  
   return result;
 }
 
@@ -458,14 +470,25 @@ lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64
   //- rjf: load this module if it's not already loaded
   if(module == 0)
   {
-    // parse out module's ELF header
+    Temp scratch = scratch_begin(0, 0);
+    
+    // rjf: read module's ELF identifier
+    U8 module_eident[ELF_Identifier_Max] = {0};
+    lnx_dmn_read(memory_fd, r1u64(base_vaddr, base_vaddr + sizeof(module_eident)), module_eident);
+    ELF_Class module_eclass = module_eident[ELF_Identifier_Class];
+    
+    // rjf: read module's ELF header
     ELF_Hdr64 module_ehdr = {0};
-    elf_read_ehdr(lnx_dmn_machine_op_mem_read, &memory_fd, base_vaddr, &module_ehdr);
+    {
+      U64 ehdr_size = elf_hdr_size_from_class(module_eclass);
+      String8 ehdr_data = lnx_dmn_data_from_memory_range(scratch.arena, memory_fd, r1u64(base_vaddr, base_vaddr+ehdr_size));
+      module_ehdr = elf_hdr64_from_class_data(module_eclass, ehdr_data);
+    }
     
     // gather info about module
-    U64     module_rebase     = module_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
-    U64     module_phdr_vaddr = module_rebase + module_ehdr.e_phoff;
-    Rng1U64 module_vrange     = lnx_dmn_compute_image_vrange(memory_fd, module_ehdr.e_ident[ELF_Identifier_Class], module_rebase, module_phdr_vaddr, module_ehdr.e_phentsize, module_ehdr.e_phnum);
+    U64 module_rebase = module_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
+    U64 module_phdr_vaddr = module_rebase + module_ehdr.e_phoff;
+    Rng1U64 module_vrange = lnx_dmn_vaddr_range_from_phdrs(memory_fd, module_ehdr.e_ident[ELF_Identifier_Class], module_rebase, module_phdr_vaddr, module_ehdr.e_phentsize, module_ehdr.e_phnum);
     
     // read TLS index and TLS offset
     U64 tls_index  = max_U64;
@@ -505,6 +528,8 @@ lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64
     {
       DLLPushBack_NP(ctx->module_slots[slot_idx].first, ctx->module_slots[slot_idx].last, module, hash_next, hash_prev);
     }
+    
+    scratch_end(scratch);
   }
   return module;
 }
@@ -2475,25 +2500,42 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           Arch arch = arch_from_elf_machine(exe_ehdr.e_machine);
           U64 base_vaddr = (auxv.phdr & ~(auxv.pagesz-1));
           U64 rebase = exe_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
-          Rng1U64 image_vrange = lnx_dmn_compute_image_vrange(new_process->fd, exe_ehdr.e_ident[ELF_Identifier_Class], rebase, auxv.phdr, auxv.phent, auxv.phnum);
+          Rng1U64 image_vrange = lnx_dmn_vaddr_range_from_phdrs(new_process->fd, exe_ehdr.e_ident[ELF_Identifier_Class], rebase, auxv.phdr, auxv.phent, auxv.phnum);
           Arena *ctx_arena = arena_alloc();
+          
+          //- rjf: read dynamically loaded ELF identifier
+          U8 dl_eident[ELF_Identifier_Max] = {0};
+          lnx_dmn_read(new_process->fd, r1u64(auxv.base, auxv.base+sizeof(dl_eident)), dl_eident);
+          ELF_Class dl_class = dl_eident[ELF_Identifier_Class];
           
           //- rjf: read dynamically loaded ELF header
           ELF_Hdr64 dl_ehdr = {0};
-          elf_read_ehdr(lnx_dmn_machine_op_mem_read, &new_process->fd, auxv.base, &dl_ehdr);
-          ELF_Class dl_class = dl_ehdr.e_ident[ELF_Identifier_Class];
+          {
+            U64 ehdr_size = elf_hdr_size_from_class(dl_class);
+            String8 ehdr_data = lnx_dmn_data_from_memory_range(scratch.arena, new_process->fd, r1u64(auxv.base, auxv.base+ehdr_size));
+            dl_ehdr = elf_hdr64_from_class_data(dl_class, ehdr_data);
+          }
           
           //- rjf: compute rdebug vaddr
           U64 rdebug_vaddr = 0;
           {
             Temp scratch = scratch_begin(0, 0);
             
-            // load DL's header
-            ELF_Hdr64 ehdr = {0};
-            elf_read_ehdr(lnx_dmn_machine_op_mem_read, &new_process->fd, auxv.base, &ehdr);
+            // rjf: load DL's elf identifier
+            U8 eident[ELF_Identifier_Max] = {0};
+            lnx_dmn_read(new_process->fd, r1u64(auxv.base, auxv.base+sizeof(eident)), eident);
+            ELF_Class elf_class = eident[ELF_Identifier_Class];
             
+            // rjf: load DL's header
+            ELF_Hdr64 ehdr = {0};
+            {
+              U64 ehdr_size = elf_hdr_size_from_class(elf_class);
+              String8 ehdr_data = lnx_dmn_data_from_memory_range(scratch.arena, new_process->fd, r1u64(auxv.base, auxv.base+ehdr_size));
+              ehdr = elf_hdr64_from_class_data(elf_class, ehdr_data);
+            }
+            
+            // rjf: unpack header
             U64 rebase = dl_ehdr.e_type == ELF_Type_Dyn ? auxv.base : 0;
-            ELF_Class elf_class = ehdr.e_ident[ELF_Identifier_Class];
             
             // rjf: find dynamic program header
             U64 dynamic_vaddr = 0;
@@ -2502,7 +2544,13 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               for(U64 ph_cursor = phdr_vaddr, ph_opl = (phdr_vaddr + ehdr.e_phentsize * ehdr.e_phentsize); ph_cursor < ph_opl; ph_cursor += ehdr.e_phentsize)
               {
                 ELF_Phdr64 phdr = {0};
-                elf_read_phdr(lnx_dmn_machine_op_mem_read, &new_process->fd, ph_cursor, elf_class, &phdr);
+                {
+                  Temp scratch = scratch_begin(0, 0);
+                  U64 phdr_size = elf_phdr_size_from_class(elf_class);
+                  String8 phdr_data = lnx_dmn_data_from_memory_range(scratch.arena, new_process->fd, r1u64(ph_cursor, ph_cursor+phdr_size));
+                  phdr = elf_phdr64_from_class_data(elf_class, phdr_data);
+                  scratch_end(scratch);
+                }
                 if(phdr.p_type == ELF_PType_Dynamic)
                 {
                   dynamic_vaddr = rebase + phdr.p_vaddr;
@@ -2521,7 +2569,13 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               {
                 // rjf: read next dyn entry
                 ELF_Dyn64 dyn = {0};
-                if(elf_read_dyn(lnx_dmn_machine_op_mem_read, &new_process->fd, dynamic_cursor, elf_class, &dyn) != MachineOpResult_Ok) { Assert(0 && "unable to read dynamic"); }
+                {
+                  Temp scratch = scratch_begin(&arena, 1);
+                  U64 dyn_size = elf_dyn_size_from_class(elf_class);
+                  String8 dyn_data = lnx_dmn_data_from_memory_range(scratch.arena, new_process->fd, r1u64(dynamic_cursor, dynamic_cursor+dyn_size));
+                  dyn = elf_dyn64_from_class_data(elf_class, dyn_data);
+                  scratch_end(scratch);
+                }
                 
                 // rjf: break on zero
                 if(dyn.tag == ELF_DynTag_Null) { break; }
@@ -2626,10 +2680,13 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               for EachIndex(symbol_idx, symbol_count)
               {
                 ELF_Sym64 symbol = {0};
-                if(elf_read_symbol(lnx_dmn_machine_op_mem_read, &new_process->fd, dynamic_info.symtab_vaddr + symbol_idx * dynamic_info.symtab_entry_size, elf_class, &symbol) != MachineOpResult_Ok)
                 {
-                  Assert(0 && "failed to read symbol table");
-                  break;
+                  Temp temp = temp_begin(scratch.arena);
+                  U64 sym_size = elf_sym_size_from_class(elf_class);
+                  U64 sym_vaddr = dynamic_info.symtab_vaddr + symbol_idx*dynamic_info.symtab_entry_size;
+                  String8 sym_data = lnx_dmn_data_from_memory_range(temp.arena, new_process->fd, r1u64(sym_vaddr, sym_vaddr+sym_size));
+                  symbol = elf_sym64_from_class_data(elf_class, sym_data);
+                  temp_end(temp);
                 }
                 
                 Temp temp = temp_begin(scratch.arena);
@@ -2776,12 +2833,29 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             if(dl_fd >= 0)
             {
               U64 offset = 0;
-              ELF_Hdr64 ehdr = {0};
-              if(elf_read_ehdr(lnx_dmn_machine_op_mem_read, &dl_fd, offset, &ehdr) != MachineOpResult_Ok) { goto exit; }
               
-              U64        strtab_shdr_offset = offset + ehdr.e_shoff + ehdr.e_shstrndx * ehdr.e_shentsize;
-              ELF_Shdr64 strtab_shdr        = {0};
-              if(elf_read_shdr(lnx_dmn_machine_op_mem_read, &dl_fd, strtab_shdr_offset, ehdr.e_ident[ELF_Identifier_Class], &strtab_shdr) != MachineOpResult_Ok) { goto exit; }
+              U8 eident[ELF_Identifier_Max] = {0};
+              lnx_dmn_read(dl_fd, r1u64(offset, offset+sizeof(eident)), eident);
+              ELF_Class eclass = eident[ELF_Identifier_Class];
+              
+              ELF_Hdr64 ehdr = {0};
+              {
+                Temp scratch = scratch_begin(&arena, 1);
+                U64 ehdr_size = elf_hdr_size_from_class(eclass);
+                String8 ehdr_data = lnx_dmn_data_from_memory_range(scratch.arena, dl_fd, r1u64(offset, offset+ehdr_size));
+                ehdr = elf_hdr64_from_class_data(eclass, ehdr_data);
+                scratch_end(scratch);
+              }
+              
+              U64 strtab_shdr_offset = offset + ehdr.e_shoff + ehdr.e_shstrndx * ehdr.e_shentsize;
+              ELF_Shdr64 strtab_shdr = {0};
+              {
+                Temp scratch = scratch_begin(&arena, 1);
+                U64 shdr_size = elf_shdr_size_from_class(eclass);
+                String8 shdr_data = lnx_dmn_data_from_memory_range(scratch.arena, dl_fd, r1u64(strtab_shdr_offset, strtab_shdr_offset+shdr_size));
+                strtab_shdr = elf_shdr64_from_class_data(eclass, shdr_data);
+                scratch_end(scratch);
+              }
               
               B32 found_probes      = 0;
               B32 found_probes_base = 0;
@@ -2790,9 +2864,16 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               ELF_Shdr64 stapsdt_shdr      = {0};
               for(U64 shdr_off = offset + ehdr.e_shoff, shdr_opl = shdr_off + ehdr.e_shentsize * ehdr.e_shnum;
                   shdr_off < shdr_opl;
-                  shdr_off += ehdr.e_shentsize) {
+                  shdr_off += ehdr.e_shentsize)
+              {
                 ELF_Shdr64 shdr = {0};
-                if(elf_read_shdr(lnx_dmn_machine_op_mem_read, &dl_fd, shdr_off, ehdr.e_ident[ELF_Identifier_Class], &shdr) != MachineOpResult_Ok) { goto exit; }
+                {
+                  Temp scratch = scratch_begin(&arena, 1);
+                  U64 shdr_size = elf_shdr_size_from_class(eclass);
+                  String8 shdr_data = lnx_dmn_data_from_memory_range(scratch.arena, dl_fd, r1u64(shdr_off, shdr_off+shdr_size));
+                  strtab_shdr = elf_shdr64_from_class_data(eclass, shdr_data);
+                  scratch_end(scratch);
+                }
                 
                 if(shdr.sh_type == ELF_ShType_Note)
                 {

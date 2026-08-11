@@ -398,6 +398,7 @@ thread_static B32 lnx_dmn_ctrl_thread = 0;
 
 internal U64 lnx_dmn_read(int memory_fd, Rng1U64 range, void *dst);
 internal B32 lnx_dmn_write(int memory_fd, Rng1U64 range, void *src);
+internal String8 lnx_dmn_data_from_memory_range(Arena *arena, int memory_fd, Rng1U64 range);
 internal String8 lnx_dmn_read_string_capped(Arena *arena, int memory_fd, U64 base_vaddr, U64 cap_size);
 internal String8 lnx_dmn_read_string(Arena *arena, int memory_fd, U64 base_vaddr);
 #define lnx_dmn_read_struct(fd, vaddr, ptr)  lnx_dmn_read((fd), r1u64((vaddr), (vaddr)+sizeof(*(ptr))), (ptr))
@@ -414,9 +415,9 @@ internal DMN_ModuleInfo *lnx_dmn_module_info_from_process_module(Arena *arena, p
 internal LNX_DMN_ActiveTrap *lnx_dmn_set_trap(Arena *arena, DMN_Trap *trap);
 
 ////////////////////////////////
-//~ rjf: ELF/GNU Parsing
+//~ rjf: In-Memory ELF Parsing Helpers
 
-internal Rng1U64 lnx_dmn_compute_image_vrange(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum);
+internal Rng1U64 lnx_dmn_vaddr_range_from_phdrs(int memory_fd, ELF_Class elf_class, U64 rebase, U64 e_phaddr, U64 e_phentsize, U64 e_phnum);
 
 ////////////////////////////////
 //~ rjf: Entity Functions

@@ -259,7 +259,7 @@ rb_thread_entry_point(void *p)
                               identifier_maybe[ELF_Identifier_Mag3] == 'F');
           if(is_elf_magic)
           {
-            file_format = ELF_HdrIs64Bit(identifier_maybe) ? RB_FileFormat_ELF64 : RB_FileFormat_ELF32;
+            file_format = (identifier_maybe[ELF_Identifier_Class] == ELF_Class_64) ? RB_FileFormat_ELF64 : RB_FileFormat_ELF32;
           }
         }
         

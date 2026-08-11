@@ -122,46 +122,65 @@ elf_auxv64_from_auxv32(ELF_Auxv32 auxv32)
 }
 
 ////////////////////////////////
-
-internal String8
-elf_string_from_class(Arena *arena, ELF_Class v)
-{
-  switch (v) {
-    case ELF_Class_None: return str8_lit("None");
-    case ELF_Class_32:   return str8_lit("32Bit");
-    case ELF_Class_64:   return str8_lit("64Bit");
-  }
-  return push_str8f(arena, "%#x", v);
-}
-
-////////////////////////////////
+//~ rjf: ELF -> Codebase enum Conversions
 
 internal Arch
 arch_from_elf_machine(ELF_MachineKind e_machine)
 {
   Arch arch = Arch_Null;
-  switch (e_machine) {
-    case ELF_MachineKind_None:    arch = Arch_Null;  break;
-    case ELF_MachineKind_AARCH64: arch = Arch_arm32; break;
-    case ELF_MachineKind_ARM:     arch = Arch_arm32; break;
-    case ELF_MachineKind_386:     arch = Arch_x86;   break;
-    case ELF_MachineKind_X86_64:  arch = Arch_x64;   break;
-    default: NotImplemented; break;
+  switch((ELF_MachineKindEnum)e_machine)
+  {
+    default:{}break;
+    case ELF_MachineKind_None:    {arch = Arch_Null;}break;
+    case ELF_MachineKind_AARCH64: {arch = Arch_arm32;}break;
+    case ELF_MachineKind_ARM:     {arch = Arch_arm32;}break;
+    case ELF_MachineKind_386:     {arch = Arch_x86;}break;
+    case ELF_MachineKind_X86_64:  {arch = Arch_x64;}break;
   }
   return arch;
 }
 
 ////////////////////////////////
+//~ rjf: ELF Class -> Structure Size
+
+internal U64
+elf_hdr_size_from_class(ELF_Class elf_class)
+{
+  U64 result = 0;
+  switch((ELF_ClassEnum)elf_class)
+  {
+    case ELF_Class_COUNT:
+    case ELF_Class_None:{}break;
+    case ELF_Class_32:{result = sizeof(ELF_Hdr32);} break;
+    case ELF_Class_64:{result = sizeof(ELF_Hdr64);} break;
+  }
+  return result;
+}
 
 internal U64
 elf_phdr_size_from_class(ELF_Class elf_class)
 {
   U64 result = 0;
-  switch (elf_class) {
-    case ELF_Class_None: break;
-    case ELF_Class_32: { result = sizeof(ELF_Phdr32); } break;
-    case ELF_Class_64: { result = sizeof(ELF_Phdr64); } break;
-    default: { NotImplemented; } break;
+  switch((ELF_ClassEnum)elf_class)
+  {
+    case ELF_Class_COUNT:
+    case ELF_Class_None:{}break;
+    case ELF_Class_32:{result = sizeof(ELF_Phdr32);} break;
+    case ELF_Class_64:{result = sizeof(ELF_Phdr64);} break;
+  }
+  return result;
+}
+
+internal U64
+elf_shdr_size_from_class(ELF_Class elf_class)
+{
+  U64 result = 0;
+  switch((ELF_ClassEnum)elf_class)
+  {
+    case ELF_Class_COUNT:
+    case ELF_Class_None:{}break;
+    case ELF_Class_32:{result = sizeof(ELF_Shdr32);} break;
+    case ELF_Class_64:{result = sizeof(ELF_Shdr64);} break;
   }
   return result;
 }
@@ -170,124 +189,149 @@ internal U64
 elf_dyn_size_from_class(ELF_Class elf_class)
 {
   U64 result = 0;
-  switch (elf_class) {
-    case ELF_Class_None: break;
-    case ELF_Class_32: { result = sizeof(ELF_Dyn32); } break;
-    case ELF_Class_64: { result = sizeof(ELF_Dyn64); } break;
-    default: { NotImplemented; } break;
+  switch((ELF_ClassEnum)elf_class)
+  {
+    case ELF_Class_COUNT:
+    case ELF_Class_None:{}break;
+    case ELF_Class_32:{result = sizeof(ELF_Dyn32);}break;
+    case ELF_Class_64:{result = sizeof(ELF_Dyn64);}break;
+  }
+  return result;
+}
+
+internal U64
+elf_sym_size_from_class(ELF_Class elf_class)
+{
+  U64 result = 0;
+  switch((ELF_ClassEnum)elf_class)
+  {
+    case ELF_Class_COUNT:
+    case ELF_Class_None:{}break;
+    case ELF_Class_32:{result = sizeof(ELF_Sym32);}break;
+    case ELF_Class_64:{result = sizeof(ELF_Sym64);}break;
   }
   return result;
 }
 
 ////////////////////////////////
+//~ rjf: Optional Class Conversion Readers
 
-internal MachineOpResult
-elf_read_ehdr(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Hdr64 *ehdr_out)
+internal ELF_Hdr64
+elf_hdr64_from_class_data(ELF_Class elf_class, String8 data)
 {
-  U8 e_ident[ELF_Identifier_Max] = {0};
-  MachineOpResult result = mem_read(addr, &e_ident, sizeof(e_ident), mem_read_ud);
-  if (result == MachineOpResult_Ok) {
-    if (str8_match(str8_prefix(str8_array_fixed(e_ident), elf_magic_string.size), elf_magic_string, 0)) {
-      switch (e_ident[ELF_Identifier_Class]) {
-        default: { InvalidPath; }break;
-        case ELF_Class_None: { }break;
-        case ELF_Class_32: {
-          ELF_Hdr32 ehdr32 = {0};
-          result = mem_read(addr, &ehdr32, sizeof(ehdr32), mem_read_ud);
-          if (result == MachineOpResult_Ok) {
-            *ehdr_out = elf_hdr64_from_hdr32(ehdr32);
-          }
-        } break;
-        case ELF_Class_64: {
-          result = mem_read(addr, ehdr_out, sizeof(*ehdr_out), mem_read_ud);
-        } break;
-      }
+  ELF_Hdr64 result = {0};
+  U64 needed_size = elf_hdr_size_from_class(elf_class);
+  if(data.size >= needed_size)
+  {
+    switch(elf_class)
+    {
+      default:{}break;
+      case ELF_Class_32:
+      {
+        ELF_Hdr32 result32 = *(ELF_Hdr32 *)data.str;
+        result = elf_hdr64_from_hdr32(result32);
+      }break;
+      case ELF_Class_64:
+      {
+        result = *(ELF_Hdr64 *)data.str;
+      }break;
     }
   }
   return result;
 }
 
-internal MachineOpResult
-elf_read_phdr(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Phdr64 *phdr_out)
+internal ELF_Phdr64
+elf_phdr64_from_class_data(ELF_Class elf_class, String8 data)
 {
-  MachineOpResult result = MachineOpResult_Fail;
-  switch (elf_class) {
-    case ELF_Class_None: break;
-    case ELF_Class_32: {
-      ELF_Phdr32 phdr32 = {0};
-      result = mem_read(addr, &phdr32, sizeof(phdr32), mem_read_ud);
-      if (result == MachineOpResult_Ok) {
-        *phdr_out = elf_phdr64_from_phdr32(phdr32);
-      }
-    } break;
-    case ELF_Class_64: {
-      result = mem_read(addr, phdr_out, sizeof(*phdr_out), mem_read_ud);
-    } break;
-    default: { NotImplemented; } break;
+  ELF_Phdr64 result = {0};
+  U64 needed_size = elf_phdr_size_from_class(elf_class);
+  if(data.size >= needed_size)
+  {
+    switch(elf_class)
+    {
+      default:{}break;
+      case ELF_Class_32:
+      {
+        ELF_Phdr32 result32 = *(ELF_Phdr32 *)data.str;
+        result = elf_phdr64_from_phdr32(result32);
+      }break;
+      case ELF_Class_64:
+      {
+        result = *(ELF_Phdr64 *)data.str;
+      }break;
+    }
   }
   return result;
 }
 
-internal MachineOpResult
-elf_read_shdr(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Shdr64 *shdr_out)
+internal ELF_Shdr64
+elf_shdr64_from_class_data(ELF_Class elf_class, String8 data)
 {
-  MachineOpResult result = MachineOpResult_Fail;
-  switch (elf_class) {
-    case ELF_Class_None: break;
-    case ELF_Class_32: {
-      ELF_Shdr32 shdr32 = {0};
-      result = mem_read(addr, &shdr32, sizeof(shdr32), mem_read_ud);
-      if (result == MachineOpResult_Ok) {
-        *shdr_out = elf_shdr64_from_shdr32(shdr32);
-      }
-    } break;
-    case ELF_Class_64: {
-      result = mem_read(addr, shdr_out, sizeof(*shdr_out), mem_read_ud);
-    } break;
-    default: { NotImplemented; } break;
+  ELF_Shdr64 result = {0};
+  U64 needed_size = elf_shdr_size_from_class(elf_class);
+  if(data.size >= needed_size)
+  {
+    switch(elf_class)
+    {
+      default:{}break;
+      case ELF_Class_32:
+      {
+        ELF_Shdr32 result32 = *(ELF_Shdr32 *)data.str;
+        result = elf_shdr64_from_shdr32(result32);
+      }break;
+      case ELF_Class_64:
+      {
+        result = *(ELF_Shdr64 *)data.str;
+      }break;
+    }
   }
   return result;
 }
 
-internal MachineOpResult
-elf_read_dyn(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Dyn64 *dyn_out)
+internal ELF_Dyn64
+elf_dyn64_from_class_data(ELF_Class elf_class, String8 data)
 {
-  MachineOpResult result = MachineOpResult_Fail;
-  switch (elf_class) {
-    case ELF_Class_None: {} break;
-    case ELF_Class_32: {
-      ELF_Dyn32 dyn32 = {0};
-      result = mem_read(addr, &dyn32, sizeof(dyn32), mem_read_ud);
-      if (result == MachineOpResult_Fail) {
-        *dyn_out = elf_dyn64_from_dyn32(dyn32);
-      }
-    } break;
-    case ELF_Class_64: {
-      result = mem_read(addr, dyn_out, sizeof(*dyn_out), mem_read_ud);
-    } break;
-    default: { NotImplemented; } break;
+  ELF_Dyn64 result = {0};
+  U64 needed_size = elf_dyn_size_from_class(elf_class);
+  if(data.size >= needed_size)
+  {
+    switch(elf_class)
+    {
+      default:{}break;
+      case ELF_Class_32:
+      {
+        ELF_Dyn32 result32 = *(ELF_Dyn32 *)data.str;
+        result = elf_dyn64_from_dyn32(result32);
+      }break;
+      case ELF_Class_64:
+      {
+        result = *(ELF_Dyn64 *)data.str;
+      }break;
+    }
   }
   return result;
 }
 
-internal MachineOpResult
-elf_read_symbol(MachineOp_MemRead *mem_read, void *mem_read_ud, U64 addr, ELF_Class elf_class, ELF_Sym64 *symbol_out)
+internal ELF_Sym64
+elf_sym64_from_class_data(ELF_Class elf_class, String8 data)
 {
-  MachineOpResult result = MachineOpResult_Fail;
-  switch (elf_class) {
-    case ELF_Class_None: {} break;
-    case ELF_Class_32: {
-      ELF_Sym32 symbol32 = {0};
-      result = mem_read(addr, &symbol32, sizeof(symbol32), mem_read_ud);
-      if (result == MachineOpResult_Ok) {
-        *symbol_out = elf_sym64_from_sym32(symbol32);
-      }
-    }break;
-    case ELF_Class_64: {
-      result = mem_read(addr, symbol_out, sizeof(*symbol_out), mem_read_ud);
-    }break;
-    default: { NotImplemented; } break;
+  ELF_Sym64 result = {0};
+  U64 needed_size = elf_sym_size_from_class(elf_class);
+  if(data.size >= needed_size)
+  {
+    switch(elf_class)
+    {
+      default:{}break;
+      case ELF_Class_32:
+      {
+        ELF_Sym32 result32 = *(ELF_Sym32 *)data.str;
+        result = elf_sym64_from_sym32(result32);
+      }break;
+      case ELF_Class_64:
+      {
+        result = *(ELF_Sym64 *)data.str;
+      }break;
+    }
   }
   return result;
 }
-

@@ -172,8 +172,8 @@ internal ELF_NoteList
 elf_parse_note(Arena *arena, String8 raw_note, ELF_Class elf_class, ELF_MachineKind e_machine)
 {
   ELF_NoteList result = {0};
-  
-  for (U64 cursor = 0; cursor < raw_note.size; ) {
+  for(U64 cursor = 0; cursor < raw_note.size; )
+  {
     U32 owner_size;
     U64 owner_size_size = str8_deserial_read_struct(raw_note, cursor, &owner_size);
     if (owner_size_size == 0) { goto exit; }
@@ -206,9 +206,6 @@ elf_parse_note(Arena *arena, String8 raw_note, ELF_Class elf_class, ELF_MachineK
     SLLQueuePush(result.first, result.last, n);
     result.count += 1;
   }
-  
   exit:;
   return result;
 }
-
-

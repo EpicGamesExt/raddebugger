@@ -52,11 +52,11 @@ dw_raw_from_elf_bin(Arena *arena, String8 data, ELF_Bin *bin)
       // rjf: read compressed-section header
       ELF_Chdr64 chdr64 = {0};
       U64 chdr_size = 0;
-      if(ELF_HdrIs64Bit(bin->hdr.e_ident))
+      if(bin->hdr.e_ident[ELF_Identifier_Class] == ELF_Class_64)
       {
         chdr_size = str8_deserial_read_struct(section_data__maybe_compressed, 0, &chdr64);
       }
-      else if(ELF_HdrIs32Bit(bin->hdr.e_ident))
+      else if(bin->hdr.e_ident[ELF_Identifier_Class] == ELF_Class_32)
       {
         ELF_Chdr32 chdr32 = {0};
         chdr_size = str8_deserial_read_struct(section_data__maybe_compressed, 0, &chdr32);
