@@ -138,6 +138,7 @@ typedef enum
   LNK_CmdSwitch_Rad_SortImports,
   LNK_CmdSwitch_Rad_TimeStamp,
   LNK_CmdSwitch_Rad_DebugTypeHash,
+  LNK_CmdSwitch_Rad_DebugWorkers,
   LNK_CmdSwitch_Rad_UnresolvedSymbolLimit,
   LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,
   LNK_CmdSwitch_Rad_Version,
@@ -347,6 +348,7 @@ typedef struct LNK_Config
   U64                         pdb_page_size;
   U64                         worker_count;
   U64                         max_worker_count;
+  U64                         debug_worker_cap;
   String8                     shared_thread_pool_name;
   LNK_SwitchState             do_function_pad_min;
   B32                         infer_function_pad_min;

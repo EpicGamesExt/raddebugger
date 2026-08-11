@@ -99,8 +99,47 @@ THREAD_POOL_TASK_FUNC(lnk_prefetch_task)
 }
 #endif
 
+// Run a per-item parallel-for on at most `cap` workers. The debug-input stages
+// this wraps are page-fault-bound: the kernel working-set-insert path tops out
+// near ~3M pages/s regardless of thread count, so lanes past ~12 only convert
+// free cores into spin inside the fault handler (measured on the FN editor
+// DLL: 12 lanes beat 64 on wall AND cut stage kernel CPU 357s -> 41s). Items
+// are pulled from a shared cursor, so per-item outputs land in the same
+// item-indexed slots as the uncapped path -- output is byte-identical.
+typedef struct
+{
+  TP_TaskFunc *func;
+  void        *data;
+  U64          item_count;
+  U64          cursor;
+} LNK_CappedForTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_capped_for_task)
+{
+  LNK_CappedForTask *wrap = raw_task;
+  for (;;) {
+    U64 item_idx = ins_atomic_u64_inc_eval(&wrap->cursor) - 1;
+    if (item_idx >= wrap->item_count) { break; }
+    wrap->func(arena, worker_id, item_idx, wrap->data, tp);
+  }
+}
+
 internal void
-lnk_prefetch_ranges(TP_Context *tp, U64 range_count, Rng1U64 *ranges)
+lnk_tp_for_parallel_capped(TP_Context *tp, TP_Arena *task_arena, U64 cap, U64 item_count, TP_TaskFunc *func, void *data)
+{
+  if (cap == 0 || cap >= item_count) {
+    tp_for_parallel(tp, task_arena, item_count, func, data);
+  } else {
+    LNK_CappedForTask wrap = { .func = func, .data = data, .item_count = item_count };
+    tp_for_parallel(tp, task_arena, cap, lnk_capped_for_task, &wrap);
+  }
+}
+
+#define lnk_tp_for_parallel_capped_prof(pool, arena, cap, item_count, task_func, task_data, zone_name) ProfBegin(zone_name); lnk_tp_for_parallel_capped(pool, arena, cap, item_count, task_func, task_data); ProfEnd();
+
+internal void
+lnk_prefetch_ranges(TP_Context *tp, U64 worker_cap, U64 range_count, Rng1U64 *ranges)
 {
 #if OS_WINDOWS
   // resolve once (Win8+; on older OS fall through silently). Only called from
@@ -154,7 +193,7 @@ lnk_prefetch_ranges(TP_Context *tp, U64 range_count, Rng1U64 *ranges)
   LNK_PrefetchTask task        = { .proc = prefetch_proc, .entry_count = entry_count, .entries = entries };
   U64              batch_count = CeilIntegerDiv(entry_count, LNK_PREFETCH_BATCH_SIZE);
   if (tp != 0 && batch_count > 1) {
-    tp_for_parallel(tp, 0, batch_count, lnk_prefetch_task, &task);
+    lnk_tp_for_parallel_capped(tp, 0, worker_cap, batch_count, lnk_prefetch_task, &task);
   } else {
     for EachIndex(batch_idx, batch_count) { lnk_prefetch_task(0, 0, batch_idx, &task, 0); }
   }
@@ -1719,7 +1758,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
     U64 prefetch_begin_us = now_time_us();
     U64 prefetch_bytes    = 0;
     for EachIndex(range_idx, range_count) { prefetch_bytes += dim_1u64(ranges[range_idx]); }
-    lnk_prefetch_ranges(tp, range_count, ranges);
+    lnk_prefetch_ranges(tp, config->debug_worker_cap, range_count, ranges);
     lnk_log(LNK_Log_Timers, "[mcvi] prefetched %llu debug section ranges (%llu MiB) in %.2f ms",
             range_count, prefetch_bytes / MB(1), (F64)(now_time_us() - prefetch_begin_us) / 1000.0);
 
@@ -1776,7 +1815,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
   {
     // parse .debug$S
     input.debug_s_arr = push_array(tp_arena->v[0], CV_DebugS, input.obj_count);
-    tp_for_parallel_prof(tp, tp_arena, obj_count, lnk_parse_debug_s_task, &input, "Parse .debug$S");
+    lnk_tp_for_parallel_capped_prof(tp, tp_arena, config->debug_worker_cap, obj_count, lnk_parse_debug_s_task, &input, "Parse .debug$S");
 
     // collect .debug$P and .debug$T
     String8Array *raw_debug_p_arr = push_array(scratch.arena, String8Array, obj_count);
@@ -1803,20 +1842,20 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
     debug_p_arr = push_array(tp_arena->v[0], CV_DebugT, obj_count);
     parse_types.raw_types = raw_debug_p_arr;
     parse_types.out_types = debug_p_arr;
-    tp_for_parallel_prof(tp, 0,        obj_count, lnk_strip_debug_t_sig_task, &parse_types, "Strip .debug$P");
-    tp_for_parallel_prof(tp, tp_arena, obj_count, lnk_parse_debug_t_task,     &parse_types, "Parse .debug$P");
+    lnk_tp_for_parallel_capped_prof(tp, 0,        config->debug_worker_cap, obj_count, lnk_strip_debug_t_sig_task, &parse_types, "Strip .debug$P");
+    lnk_tp_for_parallel_capped_prof(tp, tp_arena, config->debug_worker_cap, obj_count, lnk_parse_debug_t_task,     &parse_types, "Parse .debug$P");
 
     // parse .debug$T
     input.debug_t_arr     = push_array(tp_arena->v[0], CV_DebugT, obj_count);
     parse_types.raw_types = raw_debug_t_arr;
     parse_types.out_types = input.debug_t_arr;
-    tp_for_parallel_prof(tp, 0,        obj_count, lnk_strip_debug_t_sig_task, &parse_types, "Strip .debug$T");
-    tp_for_parallel_prof(tp, tp_arena, obj_count, lnk_parse_debug_t_task,     &parse_types, "Parse .debug$T");
+    lnk_tp_for_parallel_capped_prof(tp, 0,        config->debug_worker_cap, obj_count, lnk_strip_debug_t_sig_task, &parse_types, "Strip .debug$T");
+    lnk_tp_for_parallel_capped_prof(tp, tp_arena, config->debug_worker_cap, obj_count, lnk_parse_debug_t_task,     &parse_types, "Parse .debug$T");
 
     // parse .debug$H
     input.debug_h_arr = push_array(tp_arena->v[0], CV_DebugH, input.obj_count);
     if (config->ghash) {
-      tp_for_parallel_prof(tp, tp_arena, obj_count, lnk_parse_debug_h_task, &input, "Parse .debug$H");
+      lnk_tp_for_parallel_capped_prof(tp, tp_arena, config->debug_worker_cap, obj_count, lnk_parse_debug_h_task, &input, "Parse .debug$H");
     }
   }
   ProfEnd();
@@ -3063,7 +3102,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
       U64 prefetch_begin_us = now_time_us();
       U64 prefetch_bytes    = 0;
       for EachIndex(range_idx, range_count) { prefetch_bytes += dim_1u64(ranges[range_idx]); }
-      lnk_prefetch_ranges(tp, range_count, ranges);
+      lnk_prefetch_ranges(tp, input->config->debug_worker_cap, range_count, ranges);
       lnk_log(LNK_Log_Timers, "[merge] prefetched %llu type data ranges (%llu MiB) in %.2f ms",
               range_count, prefetch_bytes / MB(1), (F64)(now_time_us() - prefetch_begin_us) / 1000.0);
 
