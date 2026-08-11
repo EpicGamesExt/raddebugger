@@ -1867,7 +1867,7 @@ d_unwind_from_thread(Arena *arena, D_Handle thread, U64 endt_us)
       U64 start_sp = arch_sp_from_reg_block(arch_info, regs_block);
       
       //- rjf: cancel on zero rip (except the top frame)
-      if(start_ip == 0 && frame_node_count > 0)
+      if(start_ip == 0 && frame_node_count > 1)
       {
         break;
       }
