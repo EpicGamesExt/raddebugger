@@ -1993,10 +1993,12 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
       input.ts_obj_range = r1u64(prev.count, input.count);
 
       // alloc dummy objs with for each loaded type server
+      // (one obj per type server; this used to push a ts_arr.count-sized array
+      //  per iteration and use only its first element -- O(T^2) arena growth)
+      LNK_Obj *ts_objs = push_array(tp_arena->v[0], LNK_Obj, ts_arr.count);
       for EachIndex(i, ts_arr.count) {
-        LNK_Obj *ts_obj = push_array(tp_arena->v[0], LNK_Obj, ts_arr.count);
-        ts_obj->path = ts_arr.v[i].ts_path;
-        input.obj_arr[prev.count + i] = ts_obj;
+        ts_objs[i].path = ts_arr.v[i].ts_path;
+        input.obj_arr[prev.count + i] = &ts_objs[i];
       }
 
       // make type server indices
