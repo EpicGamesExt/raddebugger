@@ -800,6 +800,7 @@ msf_stream_alloc_ex(MSF_Context *msf, MSF_UInt size)
 {
   MSF_StreamNode *node = msf_stream_alloc_(msf->arena, &msf->sectab);
   MSF_Stream *stream = &node->data;
+  msf->stream_from_sn[stream->sn] = node;
   msf_stream_resize_ex(msf, stream, size);
   return stream->sn;
 }
@@ -854,6 +855,7 @@ msf_stream_free(MSF_Context *msf, MSF_StreamNumber sn)
   B32 is_free_ok = 0;
   MSF_StreamNode *stream_node = msf_find_stream_node(msf, sn);
   if (stream_node) {
+    msf->stream_from_sn[sn] = 0;
     msf_stream_list_remove(&msf->sectab, stream_node);
     msf_stream_resize_ex(msf, &stream_node->data, 0);
     stream_node->data.size = MSF_DELETED_STREAM_STAMP;
@@ -1406,6 +1408,7 @@ msf_alloc__(Arena *arena, MSF_UInt page_size, MSF_PageNumber active_fpm)
   msf->arena = arena;
   msf->page_size = page_size;
   msf->active_fpm = active_fpm;
+  msf->stream_from_sn = push_array(arena, MSF_StreamNode *, MSF_STREAM_NUMBER_MAX);
   
   ProfEnd();
   return msf;
@@ -1438,13 +1441,10 @@ msf_alloc(MSF_UInt page_size, MSF_UInt active_fpm)
 internal MSF_StreamNode * 
 msf_find_stream_node(MSF_Context *msf, MSF_StreamNumber sn)
 {
-  MSF_StreamNode *node;
-  for (node = msf->sectab.first; node != 0; node = node->next) {
-    if (node->data.sn == sn) {
-      break;
-    }
+  if (sn < MSF_STREAM_NUMBER_MAX) {
+    return msf->stream_from_sn[sn];
   }
-  return node;
+  return 0;
 }
 
 internal MSF_Stream *
