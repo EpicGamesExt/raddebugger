@@ -378,7 +378,7 @@ internal LNK_Input * lnk_inputer_push_lib_thin(LNK_Inputer *inputer, LNK_Config 
 
 internal B32               lnk_inputer_has_items(LNK_Inputer *inputer);
 internal LNK_InputPtrArray lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Flags io_flags, LNK_InputList *all_inputs, LNK_InputList *new_inputs);
-internal void               lnk_inputer_release_file_maps(TP_Context *tp, LNK_Inputer *inputer);
+internal void               lnk_inputer_release_file_maps(TP_Context *tp, U64 worker_cap, LNK_Inputer *inputer);
 
 // --- Link Context ------------------------------------------------------------
 
