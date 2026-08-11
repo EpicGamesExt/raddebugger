@@ -549,7 +549,7 @@ entry_point(CmdLine *cmdline)
             c_path = push_str8f(mg_arena, "%S/%S", layer_generated_folder, str8_skip_last_slash(layer->c_name_override));
           }
           {
-            FILE *h = fopen((char *)h_path.str, "wb");
+            FILE *h = fopen((char *)h_path.str, "w");
             fprintf(h, "// Copyright (c) Epic Games Tools\n");
             fprintf(h, "// Licensed under the MIT license (https://opensource.org/license/mit/)\n\n");
             if(layer->h_header.first == 0)
@@ -605,7 +605,7 @@ entry_point(CmdLine *cmdline)
             fclose(h);
           }
           {
-            FILE *c = fopen((char *)c_path.str, "wb");
+            FILE *c = fopen((char *)c_path.str, "w");
             fprintf(c, "// Copyright (c) Epic Games Tools\n");
             fprintf(c, "// Licensed under the MIT license (https://opensource.org/license/mit/)\n\n");
             if(layer->c_header.first == 0)
