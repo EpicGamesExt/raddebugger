@@ -19,6 +19,20 @@ struct D2R_TagHashNode
 ////////////////////////////////
 //~ rjf: Unique Tag Tree Deduplication Types
 
+typedef struct D2R_TreeHash D2R_TreeHash;
+struct D2R_TreeHash
+{
+  U64 info_off;
+  U64 hash;
+};
+
+typedef struct D2R_TreeHashNode D2R_TreeHashNode;
+struct D2R_TreeHashNode
+{
+  D2R_TreeHashNode *next;
+  D2R_TreeHash v;
+};
+
 typedef enum D2R_UniqueTagKind
 {
   D2R_UniqueTagKind_Type,
@@ -75,6 +89,7 @@ struct D2R_ConvertParams
 ////////////////////////////////
 //~ rjf: Helpers
 
+internal int d2r_tree_hash_is_less_than(D2R_TreeHash *a, D2R_TreeHash *b);
 internal int d2r_unique_tag_node_is_less_than(D2R_UniqueTagNode **l, D2R_UniqueTagNode **r);
 
 ////////////////////////////////

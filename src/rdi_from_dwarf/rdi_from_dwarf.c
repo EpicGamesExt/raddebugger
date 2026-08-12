@@ -5,6 +5,13 @@
 //~ rjf: Helpers
 
 internal int
+d2r_tree_hash_is_less_than(D2R_TreeHash *a, D2R_TreeHash *b)
+{
+  int is_less_than = (a->hash < b->hash);
+  return is_less_than;
+}
+
+internal int
 d2r_unique_tag_node_is_less_than(D2R_UniqueTagNode **l, D2R_UniqueTagNode **r)
 {
   int is_less_than = (l[0]->hash < r[0]->hash);
@@ -1167,7 +1174,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         struct D2R_ParentTagNode
         {
           D2R_ParentTagNode *next;
-          U64 container_ancestor_info_off;
           U64 hash_seed;
         };
         D2R_ParentTagNode *top_parent = 0;
@@ -1301,18 +1307,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
               n_hash_seed = hash;
             }
             
-            // rjf: determine container ancestor info off
-            U64 container_ancestor_info_off = top_parent ? top_parent->container_ancestor_info_off : 0;
-            if(tag.kind == DW_TagKind_StructureType ||
-               tag.kind == DW_TagKind_UnionType ||
-               tag.kind == DW_TagKind_ClassType ||
-               tag.kind == DW_TagKind_SubProgram ||
-               tag.kind == DW_TagKind_LexicalBlock ||
-               tag.kind == DW_TagKind_Namespace)
-            {
-              container_ancestor_info_off = start_off;
-            }
-            
             // rjf: push node for this parent
             D2R_ParentTagNode *n = free_parent;
             if(n != 0)
@@ -1326,7 +1320,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             MemoryZeroStruct(n);
             SLLStackPush(top_parent, n);
             n->hash_seed = n_hash_seed;
-            n->container_ancestor_info_off = container_ancestor_info_off;
           }
           
           // rjf: pop parents
@@ -1429,9 +1422,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           struct D2R_ParentTagNode
           {
             D2R_ParentTagNode *next;
-            DW_TagKind tag_kind;
-            U64 info_off;
-            U64 hash_seed;
             B32 disable_dedup;
           };
           D2R_ParentTagNode *top_parent = 0;
@@ -1521,21 +1511,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
               tags_to_dedup_count += 1;
             }
             
-            // rjf: compute hash seed for this tag
-            U64 hash_seed = (top_parent ? top_parent->hash_seed : 0);
-            if(tag.kind == DW_TagKind_SubProgram ||
-               tag.kind == DW_TagKind_StructureType ||
-               tag.kind == DW_TagKind_UnionType ||
-               tag.kind == DW_TagKind_ClassType ||
-               tag.kind == DW_TagKind_Namespace)
-            {
-              DW2_Attrib *name_attrib = dw2_attrib_from_kind(&tag, DW_AttribKind_Name);
-              if(name_attrib != &dw2_attrib_nil)
-              {
-                hash_seed = u64_hash_from_str8(name_attrib->val.string);
-              }
-            }
-            
             // rjf: if we have a sibling offset encoded, and if we do not need to dedup children,
             // then skip
             if(!children_should_be_deduped && sibling_encoded && sibling_off >= off)
@@ -1559,9 +1534,6 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                   n = push_array(work_scratch.arena, D2R_ParentTagNode, 1);
                 }
                 SLLStackPush(top_parent, n);
-                n->tag_kind = tag.kind;
-                n->info_off = start_off;
-                n->hash_seed = hash_seed;
                 n->disable_dedup = !children_should_be_deduped;
               }
               if(tag.kind == DW_TagKind_Null)
@@ -1585,11 +1557,11 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           }
         }
         
-        //- rjf: produce tree hash for all tags we need to deduplicate & gather
+        //- rjf: produce tree + reference hash for all tags we need to deduplicate & gather
         //
-        // the tree hash is formed by combining the tag hashes for all dependency tags
+        // the tree hash is formed by combining the tag hashes under a single tag
+        // the tree+ref hash is formed by combining the tree hashes across a graph of references
         //
-        U64 total_tag_count_this_work = 0;
         for(D2R_TagNode *tag_n = first_tag_to_dedup; tag_n != 0; tag_n = tag_n->next)
         {
           Temp dedup_root_scratch = scratch_begin(&scratch.arena, 1);
@@ -1597,11 +1569,144 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           //- rjf: unpack tag node
           U64 start_off = tag_n->info_off;
           
+          //- rjf: gather the set of tree hashes in the type graph pointed into by `tag_n`
+#if 0
+          D2R_TreeHashNode *first_tree_hash = 0;
+          D2R_TreeHashNode *last_tree_hash = 0;
+          U64 tree_hash_count = 0;
+          {
+            typedef struct Task Task;
+            struct Task
+            {
+              Task *next;
+              U64 unit_idx;
+              U64 start_off;
+            };
+            Task start_task = {0, origin_unit_idx, start_off};
+            Task *first_task = &start_task;
+            Task *last_task = 0;
+            Task *free_task = 0;
+            for(;first_task != 0;)
+            {
+              // rjf: unpack this task's unit info
+              U64 unit_idx = first_task->unit_idx;
+              Rng1U64 unit_info_tag_range = unit_info_tag_ranges[unit_idx];
+              DW2_ParseCtx *unit_parse_ctx = &unit_parse_ctxs[unit_idx];
+              
+              // rjf: combine all tag hashes in this tag tree
+              S64 depth = 0;
+              U64 tree_hash = 0;
+              for(U64 off = first_task->start_off; contains_1u64(unit_info_tag_range, off) && (depth > 0 || off == first_task->start_off);)
+              {
+                U64 start_off = off;
+                Temp tag_scratch = scratch_begin(&dedup_root_scratch.arena, 1);
+                
+                // rjf: look up this tag hash
+                U64 tag_hash = 0;
+                {
+                  U64 off_hash = u64_hash_from_str8(str8_struct(&start_off));
+                  U64 slot_idx = off_hash%tag_hash_slots_count;
+                  for(D2R_TagHashNode *n = tag_hash_slots[slot_idx]; n != 0; n = n->next)
+                  {
+                    if(n->info_off == start_off)
+                    {
+                      tag_hash = n->hash;
+                      break;
+                    }
+                  }
+                }
+                
+                // rjf: combine this tag hash into the tree hash
+                tree_hash = u64_hash_from_seed_str8(tree_hash, str8_struct(&tag_hash));
+                
+                // rjf: read the next tag
+                DW2_Tag tag = {0};
+                off += dw2_read_tag(tag_scratch.arena, raw, unit_parse_ctx, raw->sec[DW_SectionKind_Info].data, off, &tag);
+                
+                // rjf: find type reference in this tag, use to generate additional tasks
+                DW2_Attrib *type_attrib = dw2_attrib_from_kind(&tag, DW_AttribKind_Type);
+                if(type_attrib != &dw2_attrib_nil)
+                {
+                  U64 type_ref_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &type_attrib->val);
+                  U64 type_ref_unit_idx = unit_idx;
+                  if(!contains_1u64(unit_info_tag_range, type_ref_info_off))
+                  {
+                    U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, type_ref_info_off);
+                    if(0 < new_unit_num && new_unit_num <= unit_count)
+                    {
+                      type_ref_unit_idx = new_unit_num-1;
+                    }
+                  }
+                  Task *t = free_task;
+                  if(t)
+                  {
+                    SLLStackPop(free_task);
+                  }
+                  else
+                  {
+                    t = push_array(dedup_root_scratch.arena, Task, 1);
+                  }
+                  SLLQueuePush(first_task, last_task, t);
+                  t->unit_idx = type_ref_unit_idx;
+                  t->start_off = type_ref_info_off;
+                }
+                
+                scratch_end(tag_scratch);
+                if(off == start_off)
+                {
+                  break;
+                }
+              }
+              
+              // rjf: push this tree hash
+              D2R_TreeHashNode *n = push_array(dedup_root_scratch.arena, D2R_TreeHashNode, 1);
+              SLLQueuePush(first_tree_hash, last_tree_hash, n);
+              n->v.info_off = start_off;
+              n->v.hash = tree_hash;
+              tree_hash_count += 1;
+              
+              // rjf: pop this task off the queue
+              Task *popped = first_task;
+              first_task = first_task->next;
+              SLLStackPush(free_task, popped);
+            }
+          }
+          
+          //- rjf: flatten & sort the hash pieces deterministically
+          D2R_TreeHash *tree_hashes_sorted = 0;
+          {
+            D2R_TreeHash *unsorted = push_array(scratch.arena, D2R_TreeHash, tree_hash_count);
+            U64 idx = 0;
+            for EachNode(n, D2R_TreeHashNode, first_tree_hash)
+            {
+              unsorted[idx] = n->v;
+              idx += 1;
+            }
+            radsort(unsorted, tree_hash_count, d2r_tree_hash_is_less_than);
+            tree_hashes_sorted = unsorted;
+          }
+          
+          //- rjf: form combined hash of all pieces in deterministic order
+          U64 combined_hash = 0;
+          for EachIndex(tree_hash_idx, tree_hash_count)
+          {
+            combined_hash = u64_hash_from_seed_str8(combined_hash, str8_struct(&tree_hashes_sorted[tree_hash_idx].hash));
+          }
+          
+          //- rjf: walk the sorted hash pieces - for each piece, it's full hash is
+          // the combined hash, + an identifier of which node it came from.
+          for EachIndex(tree_hash_idx, tree_hash_count)
+          {
+            U64 tree_and_ref_hash = u64_hash_from_seed_str8(combined_hash, str8_struct(&tree_hash_idx));
+            // TODO(rjf): cache mapping of `tree_hashes_sorted[tree_hash_idx].info_off -> tree_and_ref_hash`
+          }
+#endif
+          
           //- rjf: compute tree hash
           U64 hash = 0;
           D2R_UniqueTagKind unique_tag_kind = D2R_UniqueTagKind_Type;
-          U64 container_ancestor_info_off = 0;
           U64 dependency_count = 0;
+          U64 container_ancestor_info_off = 0;
           {
             typedef struct TagTask TagTask;
             struct TagTask
@@ -1731,11 +1836,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                 // rjf: unpack type reference in this tag
                 DW2_Attrib *type_attrib = &dw2_attrib_nil;
                 U64 type_info_off = 0;
-                if(include_tag_in_hash &&
-                   tag.kind != DW_TagKind_PointerType &&
-                   tag.kind != DW_TagKind_ReferenceType &&
-                   tag.kind != DW_TagKind_RValueReferenceType &&
-                   tag.kind != DW_TagKind_PtrToMemberType)
+                if(include_tag_in_hash)
                 {
                   type_attrib = dw2_attrib_from_kind(&tag, DW_AttribKind_Type);
                   type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &type_attrib->val);
@@ -2427,6 +2528,10 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             dst_type->kind        = rdi_type_kind;
             dst_type->direct_type = direct_type;
             dst_type->byte_size   = arch_addr_size;
+            if(direct_type == 0)
+            {
+              int x = 0;
+            }
           }break;
           case DW_TagKind_RestrictType:
           {
