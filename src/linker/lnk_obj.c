@@ -361,7 +361,9 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
           Temp temp = temp_begin(scratch.arena);
           String8   debug_s_data = str8_substr(input->data, rng_1u64(sect_header->foff, sect_header->foff+sect_header->fsize));
           CV_DebugS debug_s      = cv_debug_s_from_data(temp.arena, debug_s_data);
-          for EachNode(symbols_n, String8Node, debug_s.data_list[CV_C13SubSectionIdxKind_Symbols].first) {
+          cv_debug_s_tag_prov_sect(&debug_s, (U32)sect_idx);
+          String8List symbols_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
+          for EachNode(symbols_n, String8Node, symbols_list.first) {
             for (U64 cursor = 0, count = 0; cursor < symbols_n->string.size && count < 2; count += 1) {
               CV_SymbolHeader symbol_header;
               TryReadBreak(str8_deserial_read_struct(symbols_n->string, cursor, &symbol_header), cursor);
@@ -875,6 +877,17 @@ THREAD_POOL_TASK_FUNC(lnk_collect_obj_chunks_task)
   LNK_SectionCollector *task = raw_task;
   LNK_Obj              *obj  = task->objs[task_id];
 
+  // Optional 0-based section-index sidecar, kept in the same order as out_lists.
+  if (task->out_sect_indices != 0) {
+    U64 match_count = 0;
+    for LNK_EachCoffSection(count_it, obj) {
+      if (*count_it.v.flags & COFF_SectionFlag_LnkRemove && !task->collect_discarded) { continue; }
+      if (str8_match(lnk_obj_section_name_from_section_number(obj, count_it.v.section_number), task->name, 0)) { match_count += 1; }
+    }
+    task->out_sect_indices[task_id].count = 0;
+    task->out_sect_indices[task_id].v = push_array_no_zero(arena, U32, match_count ? match_count : 1);
+  }
+
   for LNK_EachCoffSection(it, obj) {
     LNK_ObjSection section = it.v;
 
@@ -886,19 +899,29 @@ THREAD_POOL_TASK_FUNC(lnk_collect_obj_chunks_task)
     if (str8_match(section_name, task->name, 0)) {
       String8 section_data = lnk_obj_section_data_from_number(obj, section.section_number);
       str8_list_push(arena, &task->out_lists[task_id], section_data);
+      if (task->out_sect_indices != 0) {
+        U32Array *indices = &task->out_sect_indices[task_id];
+        indices->v[indices->count++] = safe_cast_u32(section.section_number - 1);
+      }
     }
   }
 }
 
 internal String8List *
-lnk_collect_obj_sections(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded)
+lnk_collect_obj_sections(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded, U32Array **sect_indices_out)
 {
   LNK_SectionCollector task = {0};
   task.objs              = objs;
   task.name              = name;
   task.collect_discarded = collect_discarded;
   task.out_lists         = push_array(arena->v[0], String8List, objs_count);
+  if (sect_indices_out != 0) {
+    task.out_sect_indices = push_array(arena->v[0], U32Array, objs_count);
+  }
   tp_for_parallel(tp, arena, objs_count, lnk_collect_obj_chunks_task, &task);
+  if (sect_indices_out != 0) {
+    *sect_indices_out = task.out_sect_indices;
+  }
   return task.out_lists;
 }
 
@@ -1063,42 +1086,34 @@ lnk_symbol_from_section_offset(LNK_ObjSymbolMap *map, U32 section_number, U32 of
 internal CV_DebugS
 lnk_debug_s_from_obj(Arena *arena, LNK_Obj *obj)
 {
-  Temp scratch = scratch_begin(&arena, 1);
-
-  String8List raw_debug_s = {0};
-  {
-    for LNK_EachCoffSection(it, obj) {
-      LNK_ObjSection section      = it.v;
-      String8        section_name = lnk_obj_section_name_from_section_number(obj, section.section_number);
-      if (str8_match(section_name, str8_lit(".debug$S"), 0)) {
-        String8 debug_s = lnk_obj_section_data_from_number(obj, section.section_number);
-        str8_list_push(scratch.arena, &raw_debug_s, debug_s);
-      }
-    }
-  }
-
+  // (single loop so each parse can tag provenance with its section index; the old
+  // collect-then-parse split had no side effects between the loops)
   CV_DebugS debug_s = {0};
-  {
-    for (String8Node *node = raw_debug_s.first; node != 0; node = node->next) {
-      // parse & merge sub sections
-      CV_DebugS ds = cv_debug_s_from_data(arena, node->string);
-      cv_debug_s_concat_in_place(&debug_s, &ds);
+  for LNK_EachCoffSection(it, obj) {
+    LNK_ObjSection section      = it.v;
+    String8        section_name = lnk_obj_section_name_from_section_number(obj, section.section_number);
+    if (!str8_match(section_name, str8_lit(".debug$S"), 0)) { continue; }
 
-      // make sure there is one string table
-      String8List string_data_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable);
-      if (string_data_list.node_count > 1) {
-        break;
-      }
+    // parse & merge sub sections
+    String8   raw_debug_s = lnk_obj_section_data_from_number(obj, section.section_number);
+    CV_DebugS ds          = cv_debug_s_from_data(arena, raw_debug_s);
+    cv_debug_s_tag_prov_sect(&ds, safe_cast_u32(section.section_number - 1));
+    cv_debug_s_concat_in_place(&debug_s, &ds);
 
-      // make sure there is one file checksum table
-      String8List checksum_data_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
-      if (checksum_data_list.node_count > 1) {
-        continue;
-      }
+    // make sure there is one string table
+    String8List string_data_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable);
+    if (string_data_list.node_count > 1) {
+      break;
+    }
+
+    // make sure there is one file checksum table
+    String8List checksum_data_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
+    if (checksum_data_list.node_count > 1) {
+      continue;
     }
   }
 
-  scratch_end(scratch);
+  cv_debug_s_validate_prov(&debug_s);
   return debug_s;
 }
 

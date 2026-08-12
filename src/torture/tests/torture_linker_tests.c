@@ -199,7 +199,7 @@ TEST(expect_pdb_indexes_linker_output)
                                       cv_make_data32(arena, (CV_SymData32){.off = 1, .sec = 1}, str8_lit("indexed_data")));
   CV_Symbol symbol = cv_symbol_from_ptr(raw_symbol.str);
   CV_DebugS debug_s = {0};
-  str8_list_push(arena, &debug_s.data_list[CV_C13SubSectionIdxKind_Symbols], cv_data_from_symbol(arena, &symbol, CV_SymbolAlign));
+  str8_list_push(arena, cv_sub_section_ptr_from_debug_s(&debug_s, CV_C13SubSectionKind_Symbols), cv_data_from_symbol(arena, &symbol, CV_SymbolAlign));
   String8List debug_s_data = cv_data_from_debug_s_c13(arena, &debug_s, 1);
   T_Ok(t_write_def_obj("indexed.obj", (T_COFF_DefObj){
       .machine = T_COFF_DefSetMachine(X64),
@@ -250,7 +250,7 @@ TEST(pdbstripped_coff_artifact_parity)
   CV_DebugS debug_s = {0};
   for EachElement(i, raw_symbols) {
     CV_Symbol symbol = cv_symbol_from_ptr(raw_symbols[i].str);
-    str8_list_push(arena, &debug_s.data_list[CV_C13SubSectionIdxKind_Symbols], cv_data_from_symbol(arena, &symbol, CV_SymbolAlign));
+    str8_list_push(arena, cv_sub_section_ptr_from_debug_s(&debug_s, CV_C13SubSectionKind_Symbols), cv_data_from_symbol(arena, &symbol, CV_SymbolAlign));
   }
   String8List raw_debug_s_list = cv_data_from_debug_s_c13(arena, &debug_s, 1);
   String8 raw_debug_s = str8_list_join(arena, &raw_debug_s_list, 0);

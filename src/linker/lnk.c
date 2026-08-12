@@ -4123,6 +4123,7 @@ lnk_icf_src_key_from_fn(Arena *scratch, LNK_Obj *obj, U32 fn_sn, String8 chksms)
   if (child_sn == 0 || chksms.size == 0) { return key; }
   String8        raw  = lnk_obj_section_data_from_number(obj, child_sn);
   CV_DebugS      ds   = cv_debug_s_from_data(scratch, raw);
+  cv_debug_s_tag_prov_sect(&ds, child_sn-1);
   String8List    lines = cv_sub_section_from_debug_s(ds, CV_C13SubSectionKind_Lines);
   if (lines.node_count == 0) { return key; }
   String8 frag = lines.first->string;
@@ -4145,6 +4146,7 @@ lnk_icf_debug_s_has_locals(Arena *scratch, LNK_Obj *obj, U32 child_sn)
 {
   String8        raw  = lnk_obj_section_data_from_number(obj, child_sn);
   CV_DebugS      ds   = cv_debug_s_from_data(scratch, raw);
+  cv_debug_s_tag_prov_sect(&ds, child_sn-1);
   String8List    syms = cv_sub_section_from_debug_s(ds, CV_C13SubSectionKind_Symbols);
   for EachNode(n, String8Node, syms.first) {
     String8 s = n->string;
@@ -7622,8 +7624,7 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
 
         CV_DebugS   *debug_s_dst = &debug_s_arr[obj_idx];
         CV_DebugS   *debug_s_src = &cv.debug_s_arr[obj_idx];
-        String8List *dst         = &debug_s_dst->data_list[CV_C13SubSectionIdxKind_Symbols];
-        String8List *src         = &debug_s_src->data_list[CV_C13SubSectionIdxKind_Symbols];
+        String8List *src         = cv_sub_section_ptr_from_debug_s(debug_s_src, CV_C13SubSectionKind_Symbols);
 
         U64 proc_count = 0;
         U64 proc_size  = 0;
@@ -7667,7 +7668,8 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
           }
           Assert(buffer_cursor == buffer_size);
 
-          str8_list_push(scratch.arena, dst, str8(buffer, buffer_size));
+          // synthesized bytes (TI-stripped copies): provenance marked synthetic
+          cv_debug_s_push_synthetic_sub_section(scratch.arena, debug_s_dst, CV_C13SubSectionKind_Symbols, str8(buffer, buffer_size));
         }
       }
 

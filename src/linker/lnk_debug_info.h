@@ -92,6 +92,7 @@ typedef struct
   U64          *obj_to_ts;
 
   String8List *debug_s_list_arr;
+  U32Array    *debug_s_sect_idx_arr; // per obj: 0-based sect_idx of each debug_s_list_arr node (provenance tagging)
 
   U32Array int_obj_indices;
   U32Array ext_obj_indices;

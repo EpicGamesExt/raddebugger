@@ -208,13 +208,15 @@ lnk_discard_cv_debug_info(LNK_CodeViewInput *input, U64 obj_idx)
   // discard types
   MemoryZeroStruct(&input->debug_t_arr[obj_idx]);
 
-  // discard symbols
+  // discard symbols (provenance zeroed in lockstep with the data list)
   String8List *symbols_ptr = cv_sub_section_ptr_from_debug_s(&input->debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
   MemoryZeroStruct(symbols_ptr);
+  MemoryZeroStruct(cv_sub_section_prov_ptr_from_debug_s(&input->debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols));
 
   // discard inline sites
   String8List *inlineelines_ptr = cv_sub_section_ptr_from_debug_s(&input->debug_s_arr[obj_idx], CV_C13SubSectionKind_InlineeLines);
   MemoryZeroStruct(inlineelines_ptr);
+  MemoryZeroStruct(cv_sub_section_prov_ptr_from_debug_s(&input->debug_s_arr[obj_idx], CV_C13SubSectionKind_InlineeLines));
 }
 
 internal
@@ -226,9 +228,14 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
   String8List sect_list = task->debug_s_list_arr[obj_idx];
   CV_DebugS  *debug_s   = &task->debug_s_arr    [obj_idx];
 
-  for EachNode(n, String8Node, sect_list.first) {
+  U32Array sect_indices = task->debug_s_sect_idx_arr[obj_idx];
+  Assert(sect_indices.count == sect_list.node_count);
+
+  U64 input_ordinal = 0;
+  for (String8Node *n = sect_list.first; n != 0; n = n->next, input_ordinal += 1) {
     // parse & merge sub sections
     CV_DebugS ds = cv_debug_s_from_data(arena, n->string);
+    cv_debug_s_tag_prov_sect(&ds, sect_indices.v[input_ordinal]);
     cv_debug_s_concat_in_place(debug_s, &ds);
 
     // make sure there is one string table
@@ -260,16 +267,17 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
         if (!obj->icf_lines_only[section_number]) { continue; }
         String8        raw_data = lnk_obj_section_data_from_number(obj, section_number);
         CV_DebugS      ds       = cv_debug_s_from_data(arena, raw_data);
+        cv_debug_s_tag_prov_sect(&ds, section_number - 1); // merged from a different child section
         if (obj->icf_lines_only[section_number] == 2) {
           cv_debug_s_concat_in_place(debug_s, &ds);
         } else {
-          String8List  lines = cv_sub_section_from_debug_s(ds, CV_C13SubSectionKind_Lines);
-          String8List *dst   = cv_sub_section_ptr_from_debug_s(debug_s, CV_C13SubSectionKind_Lines);
-          str8_list_concat_in_place(dst, &lines);
+          cv_debug_s_concat_sub_section_in_place(debug_s, &ds, CV_C13SubSectionKind_Lines);
         }
       }
     }
   }
+
+  cv_debug_s_validate_prov(debug_s);
 }
 
 internal int
@@ -1889,7 +1897,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
   ProfEnd();
   
   ProfBegin("Collect CodeView");
-  input.debug_s_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$S"), 0);
+  input.debug_s_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$S"), 0, &input.debug_s_sect_idx_arr);
   ProfEnd();
 
   // batch-populate the mapped .debug$S/$T/$P/$H input ranges before the parse
@@ -5329,9 +5337,7 @@ ProfScope("Write Modules")
       // subsection of the obj (symbols + lines + checksums + ...)
       U64 *weights = push_array_no_zero(scratch.arena, U64, cv->obj_count);
       for EachIndex(obj_idx, cv->obj_count) {
-        U64 total = 0;
-        for EachIndex(k, CV_C13SubSectionIdxKind_COUNT) { total += cv->debug_s_arr[obj_idx].data_list[k].total_size; }
-        weights[obj_idx] = total;
+        weights[obj_idx] = cv_total_sub_section_size_from_debug_s(&cv->debug_s_arr[obj_idx]);
       }
       lnk_build_pdb_distribute_obj_indices(scratch.arena, &task, cv->obj_count, C, weights);
       tp_for_parallel_reserve(tp, 0, C, lnk_write_pdb_modules, &task); // BARRIER pass (path B): barrier_wait/tp_broadcast
