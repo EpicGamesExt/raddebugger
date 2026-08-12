@@ -76,6 +76,32 @@ typedef struct LNK_SymbolInputTask
   U64     weight;
 } LNK_SymbolInputTask;
 
+// Streaming-ring P2 slice A: deferred .debug$S TI/kind fixup journal. Built inside
+// lnk_merge_types while the merge state it needs is still alive (assigned-TI hash tables on
+// merge scratch, materialized IPI leaf copies released after pdb_build_types); replayed per
+// obj at the START of the module-write visit (lnk_write_pdb_modules sizing loop), before any
+// consumer reads the obj's $S bytes. Entries alias the obj's own $S backing (patched copies /
+// raw maps); replay applies entries in build order, so the byte end-state is identical to the
+// old in-place lnk_cv_patcher_symbols / lnk_cv_patcher_inlines / lnk_fixup_symbols passes.
+// Entries are 8B, keyed per NODE run: the target is a byte offset relative to the run's
+// subsection-node base (symbols: the LNK_SymbolInput node; inlinees: each InlineeLines
+// data_list node in list order), so no pointer is stored. off:31 | width:1 (set = 32-bit
+// type-index write, clear = 16-bit kind rewrite). A node >= 2GiB cannot encode -> that run
+// falls back to 16B wide entries (per-run is_wide flag), decided up front from the node size.
+typedef struct LNK_DebugSPatch     { U32 off_w; U32 value; }           LNK_DebugSPatch;
+typedef struct LNK_DebugSPatchWide { U64 off; U32 value; U32 size; }   LNK_DebugSPatchWide;
+typedef struct LNK_DebugSPatchArray
+{
+  void *v; // LNK_DebugSPatch[] or LNK_DebugSPatchWide[] (is_wide)
+  U64   count;
+  B32   is_wide;
+} LNK_DebugSPatchArray;
+typedef struct LNK_DebugSInlineJournal
+{
+  LNK_DebugSPatchArray patches;     // all InlineeLines entries of the obj, node runs in data_list order
+  U32                 *node_counts; // [InlineeLines node_count] entries per node run
+} LNK_DebugSInlineJournal;
+
 typedef struct
 {
   LNK_Config  *config;
@@ -113,6 +139,18 @@ typedef struct
   // time). Barrier passes may run at a pinned cohort C < this; they must walk lanes
   // [task_id, symbol_input_range_count) strided by the cohort, NOT index by task_id alone.
   U64              symbol_input_range_count;
+
+  // deferred $S TI/kind fixup journal (see LNK_DebugSPatch). Null / flag == 0 when the merge
+  // ran with LNK_MergeTypeFlag_SkipSymbolTypeFixup, or after the journal was consumed
+  // (lnk_release_debug_s_fixup_journal: eager path, or end of the module-write pass).
+  // All journal storage (entry arrays + the three tables below) lives inside dedicated
+  // per-worker DEBUG_S_FIXUP_JOURNAL arenas, handed to the background reaper at consume
+  // time -- GB-class at FN scale, dead after the last per-obj replay.
+  B32                      has_debug_s_fixup_journal;
+  TP_Arena                *debug_s_fixup_journal_arenas;
+  LNK_DebugSPatchArray    *debug_s_sym_fixups;        // [symbol_input_count] one node run per symbol input
+  LNK_DebugSInlineJournal *debug_s_inline_fixups;     // [count]
+  U64                     *debug_s_sym_fixup_offsets; // [count+1] obj -> symbol_inputs range (inputs are obj-contiguous)
 
   // IFC (header-unit debug-record) resolution:
   // redirects a consuming obj's local LF_IFC_RECORD placeholder TI to a leaf in
@@ -233,6 +271,10 @@ typedef struct
   U64 *leaf_buffer_offsets; // [worker_count+1] per-lane byte offsets into leaf_buffer
   U8  *leaf_buffer;
 
+  // $S fixup journal build: per-worker arenas the LNK_DebugSPatch entry arrays land on
+  // (must outlive the merge -- replay happens at module write)
+  TP_Arena *journal_arena;
+
   LNK_MergedTypes result;
 } LNK_MergeTypes;
 
@@ -316,6 +358,9 @@ internal U64             lnk_hash_cv_leaf                    (LNK_CodeViewInput 
 internal void            lnk_hash_cv_leaf_deep               (Arena *arena, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TiOffsets ti_offs);
 internal CV_TypeIndex    lnk_assigned_ti_hash_search          (LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
 internal LNK_MergedTypes lnk_merge_types                     (TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK_MergeTypeFlags merge_flags);
+internal void            lnk_apply_debug_s_fixups_for_obj    (LNK_CodeViewInput *cv, U64 obj_idx);
+internal void            lnk_apply_debug_s_fixups_eager      (TP_Context *tp, LNK_CodeViewInput *cv);
+internal void            lnk_release_debug_s_fixup_journal   (LNK_CodeViewInput *cv);
 internal void            lnk_replace_type_names_with_hashes  (TP_Context *tp, TP_Arena *arena, U64 leaf_count, U8 **leaf_arr, LNK_TypeNameHashMode mode, U64 hash_length, String8 map_name);
 
 ////////////////////////////////

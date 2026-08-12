@@ -52,6 +52,32 @@ lnk_arena_release_thread(void *raw_arena)
   ProfEnd();
 }
 
+// Reaper entry point for a per-worker arena array (TP_Arena). Same ownership rule as
+// lnk_arena_release_thread: caller hands over EXCLUSIVE ownership. The TP_Arena header and its
+// v[] array live inside v[0] (tp_arena_alloc layout), which tp_arena_release frees last, so the
+// walk below and the release order are safe.
+internal void
+lnk_tp_arena_release_thread(void *raw_arena)
+{
+  ProfBeginFunction();
+  U64       begin_us = now_time_us();
+  TP_Arena *tp_arena = raw_arena;
+
+  U64 committed_size = 0;
+  for EachIndex(i, tp_arena->count) {
+    for (Arena *n = tp_arena->v[i]->current; n != 0; n = n->prev)   { committed_size += n->cmt; }
+#if ARENA_FREE_LIST
+    for (Arena *n = tp_arena->v[i]->free_last; n != 0; n = n->prev) { committed_size += n->cmt; }
+#endif
+  }
+
+  tp_arena_release(&tp_arena);
+
+  lnk_log(LNK_Log_Timers, "[teardown] background release of %llu MiB worker arenas took %.2f ms (off main thread)",
+          committed_size / MB(1), (F64)(now_time_us() - begin_us) / 1000.0);
+  ProfEnd();
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 //~ Fault-storm mitigation: batched PrefetchVirtualMemory over mapped input
 //  ranges. The .debug$S/$T parse and type-merge loops first-touch tens of GB of
@@ -3023,39 +3049,326 @@ lnk_fixup_cv_type_indices(LNK_MergeTypes *ctx, U32 obj_idx, String8 data, CV_TiO
   }
 }
 
+// Streaming-ring P2 slice A: upper-bound count of journal entries the ti_offs walk emits.
+// Exact for the TI-fixup part -- an entry is emitted iff the raw TI is >= the source's min
+// (the "skip basic types" test), which needs no merge-state lookups.
+internal U64
+lnk_count_cv_type_index_fixups(LNK_MergeTypes *ctx, String8 data, CV_TiOffsets ti_offs)
+{
+  U64 count = 0;
+  for (U64 ti_idx = 0, ti_count = cv_ti_offsets_count(&ti_offs); ti_idx < ti_count; ti_idx += 1) {
+    CV_TiOff      n      = cv_ti_offset_at(&ti_offs, ti_idx);
+    CV_TypeIndex *ti_ptr = str8_deserial_get_raw_ptr(data, n.offset, sizeof(*ti_ptr));
+    if (memory_read32(ti_ptr) >= ctx->input->min_type_indices[n.source]) { count += 1; }
+  }
+  return count;
+}
+
+// 8B/16B entry emit + decode helpers. `off` is relative to the run's node base; narrow runs
+// are chosen up front (node size < 2GiB guarantees every off fits off:31), so the narrow
+// branch never truncates.
+force_inline void
+lnk_debug_s_patch_emit(LNK_DebugSPatchArray *journal, U64 off, U32 value, U32 size)
+{
+  if (journal->is_wide) {
+    ((LNK_DebugSPatchWide *)journal->v)[journal->count++] = (LNK_DebugSPatchWide){ .off = off, .value = value, .size = size };
+  } else {
+    Assert(off < (1ull << 31));
+    ((LNK_DebugSPatch *)journal->v)[journal->count++] = (LNK_DebugSPatch){ .off_w = (U32)((off << 1) | (size == 4 ? 1 : 0)), .value = value };
+  }
+}
+
+force_inline U64
+lnk_debug_s_patch_off_at(LNK_DebugSPatchArray *journal, U64 k)
+{
+  return journal->is_wide ? ((LNK_DebugSPatchWide *)journal->v)[k].off
+                          : (U64)(((LNK_DebugSPatch *)journal->v)[k].off_w >> 1);
+}
+
+force_inline U32
+lnk_debug_s_patch_value_at(LNK_DebugSPatchArray *journal, U64 k)
+{
+  return journal->is_wide ? ((LNK_DebugSPatchWide *)journal->v)[k].value
+                          : ((LNK_DebugSPatch *)journal->v)[k].value;
+}
+
+// journal-emitting twin of lnk_fixup_cv_type_indices: identical TI resolution (assigned-TI
+// hash search over the merge result), but the write is RECORDED instead of applied -- the $S
+// bytes stay pre-fixup until the per-obj replay at module write. `base` = the run's node base
+// (entries store node-relative offsets).
+internal void
+lnk_journal_cv_type_index_fixups(LNK_MergeTypes *ctx, U32 obj_idx, String8 data, CV_TiOffsets ti_offs, LNK_DebugSPatchArray *journal, U8 *base)
+{
+  for (U64 ti_idx = 0, ti_count = cv_ti_offsets_count(&ti_offs); ti_idx < ti_count; ti_idx += 1) {
+    CV_TiOff      n      = cv_ti_offset_at(&ti_offs, ti_idx);
+    CV_TypeIndex *ti_ptr = str8_deserial_get_raw_ptr(data, n.offset, sizeof(*ti_ptr));
+    CV_TypeIndex  ti     = memory_read32(ti_ptr);
+
+    // skip basic types
+    if (ti < ctx->input->min_type_indices[n.source]) { continue; }
+
+    LNK_LeafRef  leaf_ref = lnk_leaf_ref_from_ti(ctx->input, obj_idx, n.source, ti);
+    CV_TypeIndex final_ti = lnk_assigned_ti_hash_search(&ctx->assigned_ti_arr[n.source], ctx->input, leaf_ref);
+    lnk_debug_s_patch_emit(journal, (U64)((U8 *)ti_ptr - base), final_ti, 4);
+
+#if LNK_PARANOID
+    if (final_ti == 0) {
+      lnk_error_obj(LNK_Error_InvalidTypeIndex, ctx->input->obj_arr[obj_idx], "no itype 0x%x", ti);
+    }
+#endif
+  }
+}
+
+// Fuses the old lnk_cv_patcher_symbols_task (symbol-record TI fixup) and lnk_fixup_symbols_task
+// (*_ID kind rewrite + itype -> FUNC_ID/MFUNC_ID itype resolve) into one journal-building walk
+// per symbol input. Runs AFTER the materialize pass so the itype resolve reads the fixed-up
+// merged IPI leaf copies -- exactly what the old standalone pass consumed. The old second pass
+// read proc32->itype back from memory AFTER the first pass patched it; here that value is the
+// resolved TI recorded for the record's itype slot (raw bytes when the slot wasn't journaled:
+// basic types, MIPS/IA64 kinds cv_symbol_ti_offsets has no entry for). Emitting BOTH itype
+// entries in order (resolved IPI TI, then the FUNC_ID itype) makes the sequential replay land
+// on the same end-state bytes for every branch, including the early-out edge cases.
 internal
-THREAD_POOL_TASK_FUNC(lnk_cv_patcher_symbols_task)
+THREAD_POOL_TASK_FUNC(lnk_journal_symbol_fixups_task)
 {
   ProfBeginFunction();
   LNK_MergeTypes *task = raw_task;
+
+  Arena        *journal_arena  = task->journal_arena->v[worker_id];
+  U64           leaf_count_ipi = task->result.count    [CV_TypeIndexSource_IPI];
+  U8          **leaf_arr_ipi   = task->result.v        [CV_TypeIndexSource_IPI];
+  CV_TypeIndex  min_ti_ipi     = task->min_type_indices[CV_TypeIndexSource_IPI];
+
   Rng1U64 range = task->input->symbol_patch_task[task_id].input_range;
   for EachInRange(i, range) {
     LNK_SymbolInput symbols = task->input->symbol_inputs[i];
+
+    // upper-bound pass: TI entries (exact) + kind rewrite / itype slots for *_ID records
+    U64 cap = 0;
+    for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
+      CV_Symbol symbol = {0};
+      TryReadBreak(cv_read_symbol(symbols.raw_symbols, cursor, CV_SymbolAlign, &symbol), cursor);
+      cap += lnk_count_cv_type_index_fixups(task, symbol.data, cv_symbol_ti_offsets(symbol.kind, symbol.data));
+      switch (symbol.kind) {
+      case CV_SymKind_PROC_ID_END:    cap += 1; break;
+      case CV_SymKind_LPROC32_ID:
+      case CV_SymKind_GPROC32_ID:
+      case CV_SymKind_LPROC32_DPC_ID:
+      case CV_SymKind_LPROCMIPS_ID:
+      case CV_SymKind_GPROCMIPS_ID:
+      case CV_SymKind_LPROCIA64_ID:
+      case CV_SymKind_GPROCIA64_ID:   cap += 2; break;
+      default: break;
+      }
+    }
+
+    U8 *base = symbols.raw_symbols.str;
+
+    LNK_DebugSPatchArray *journal = &task->input->debug_s_sym_fixups[i];
+    journal->is_wide = (symbols.raw_symbols.size >> 31) != 0; // narrow off:31 covers the whole node otherwise
+    journal->v       = journal->is_wide ? (void *)push_array_no_zero(journal_arena, LNK_DebugSPatchWide, cap)
+                                        : (void *)push_array_no_zero(journal_arena, LNK_DebugSPatch,     cap);
+    journal->count   = 0;
+
     for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
       CV_Symbol symbol = {0};
       TryReadBreak(cv_read_symbol(symbols.raw_symbols, cursor, CV_SymbolAlign, &symbol), cursor);
 
-      CV_TiOffsets ti_offs = cv_symbol_ti_offsets(symbol.kind, symbol.data);
-      lnk_fixup_cv_type_indices(task, symbols.obj_idx, symbol.data, ti_offs);
+      CV_TiOffsets ti_offs           = cv_symbol_ti_offsets(symbol.kind, symbol.data);
+      U64          rec_journal_start = journal->count;
+      lnk_journal_cv_type_index_fixups(task, symbols.obj_idx, symbol.data, ti_offs, journal, base);
+
+      // convert symbol to final type
+      CV_SymKind *sym_kind_ptr = cv_kind_ptr_from_symbol(symbol);
+      CV_SymKind  new_kind     = CV_SymKind_END;
+      switch (symbol.kind) {
+      case CV_SymKind_PROC_ID_END: {
+        lnk_debug_s_patch_emit(journal, (U64)((U8 *)sym_kind_ptr - base), CV_SymKind_END, 2);
+      } break;
+
+      case CV_SymKind_LPROC32_ID:     new_kind = CV_SymKind_LPROC32;     goto fixup_id;
+      case CV_SymKind_GPROC32_ID:     new_kind = CV_SymKind_GPROC32;     goto fixup_id;
+      case CV_SymKind_LPROC32_DPC_ID: new_kind = CV_SymKind_LPROC32_DPC; goto fixup_id;
+      case CV_SymKind_LPROCMIPS_ID:   new_kind = CV_SymKind_LPROCMIPS;   goto fixup_id;
+      case CV_SymKind_GPROCMIPS_ID:   new_kind = CV_SymKind_GPROCMIPS;   goto fixup_id;
+      case CV_SymKind_LPROCIA64_ID:   new_kind = CV_SymKind_LPROCIA64;   goto fixup_id;
+      case CV_SymKind_GPROCIA64_ID:   new_kind = CV_SymKind_GPROCIA64;   goto fixup_id;
+      fixup_id:; {
+        lnk_debug_s_patch_emit(journal, (U64)((U8 *)sym_kind_ptr - base), new_kind, 2);
+
+        CV_SymProc32 *proc32 = str8_deserial_get_raw_ptr(symbol.data, 0, sizeof(*proc32));
+
+        // effective post-TI-fixup itype (what the old pass read back from patched memory)
+        U64          itype_off = (U64)((U8 *)&proc32->itype - base);
+        CV_TypeIndex itype     = proc32->itype;
+        for (U64 k = rec_journal_start; k < journal->count; k += 1) {
+          if (lnk_debug_s_patch_off_at(journal, k) == itype_off) { itype = lnk_debug_s_patch_value_at(journal, k); break; }
+        }
+
+        if (itype < min_ti_ipi) {
+          // TODO: in some cases destructors don't have a type, need a repro
+          break;
+        }
+
+        if ((itype - min_ti_ipi) > leaf_count_ipi) {
+          Assert(0 && "TODO: error handle corrupted type index");
+          break;
+        }
+
+        U64     leaf_idx  = itype - min_ti_ipi;
+        String8 leaf_data = str8(leaf_arr_ipi[leaf_idx], max_U64);
+
+        CV_Leaf leaf;
+        if (cv_read_leaf(leaf_data, 0, 1, &leaf) == 0) { InvalidPath; }
+
+        U64 min_leaf_size = cv_header_struct_size_from_leaf_kind(leaf.kind);
+        if (min_leaf_size > leaf.data.size) { Assert(!"TODO: error handle corrupt leaf"); break; }
+
+        if (leaf.kind == CV_LeafKind_FUNC_ID) {
+          CV_LeafFuncId *func_id = str8_deserial_get_raw_ptr(leaf.data, 0, sizeof(*func_id));
+          lnk_debug_s_patch_emit(journal, itype_off, func_id->itype, 4);
+        } else if (leaf.kind == CV_LeafKind_MFUNC_ID) {
+          CV_LeafMFuncId *mfunc_id = str8_deserial_get_raw_ptr(leaf.data, 0, sizeof(*mfunc_id));
+          lnk_debug_s_patch_emit(journal, itype_off, mfunc_id->itype, 4);
+        } else {
+          Assert(!"TODO: erorr handle unexpected leaf type");
+          break;
+        }
+      } break;
+
+      default: break;
+      }
     }
+    Assert(journal->count <= cap);
   }
   ProfEnd();
 }
 
+// journal-building replacement for the old lnk_cv_patcher_inlines_task (per obj)
 internal
-THREAD_POOL_TASK_FUNC(lnk_cv_patcher_inlines_task)
+THREAD_POOL_TASK_FUNC(lnk_journal_inline_fixups_task)
 {
   ProfBeginFunction();
   LNK_MergeTypes *task          = raw_task;
   U64             obj_idx       = task_id;
   String8List     inlinee_lines = cv_sub_section_from_debug_s(task->input->debug_s_arr[obj_idx], CV_C13SubSectionKind_InlineeLines);
   Arena          *fixed_arena   = task->fixed_arenas[worker_id];
+  Arena          *journal_arena = task->journal_arena->v[worker_id];
+
+  // exact count; a node >= 2GiB forces the obj's whole run set to wide entries
+  U64 cap     = 0;
+  B32 is_wide = 0;
   for EachNode(inline_data_n, String8Node, inlinee_lines.first) {
     Temp temp = temp_begin(fixed_arena);
     CV_TiOffsets ti_offs = cv_inlinee_ti_offsets(temp.arena, inline_data_n->string);
-    lnk_fixup_cv_type_indices(task, obj_idx, inline_data_n->string, ti_offs);
+    cap += lnk_count_cv_type_index_fixups(task, inline_data_n->string, ti_offs);
+    is_wide |= (inline_data_n->string.size >> 31) != 0;
     temp_end(temp);
   }
+
+  LNK_DebugSInlineJournal *journal = &task->input->debug_s_inline_fixups[obj_idx];
+  journal->patches.is_wide = is_wide;
+  journal->patches.v       = is_wide ? (void *)push_array_no_zero(journal_arena, LNK_DebugSPatchWide, cap)
+                                     : (void *)push_array_no_zero(journal_arena, LNK_DebugSPatch,     cap);
+  journal->patches.count   = 0;
+  journal->node_counts     = push_array_no_zero(journal_arena, U32, inlinee_lines.node_count ? inlinee_lines.node_count : 1);
+
+  U64 node_idx = 0;
+  for EachNode(inline_data_n, String8Node, inlinee_lines.first) {
+    Temp temp = temp_begin(fixed_arena);
+    U64 run_start = journal->patches.count;
+    CV_TiOffsets ti_offs = cv_inlinee_ti_offsets(temp.arena, inline_data_n->string);
+    lnk_journal_cv_type_index_fixups(task, obj_idx, inline_data_n->string, ti_offs, &journal->patches, inline_data_n->string.str);
+    journal->node_counts[node_idx++] = (U32)(journal->patches.count - run_start);
+    temp_end(temp);
+  }
+  Assert(journal->patches.count == cap);
+  ProfEnd();
+}
+
+internal void
+lnk_apply_debug_s_patch_run(U8 *base, LNK_DebugSPatchArray *arr, U64 lo, U64 opl)
+{
+  if (arr->is_wide) {
+    LNK_DebugSPatchWide *v = arr->v;
+    for (U64 k = lo; k < opl; k += 1) {
+      if (v[k].size == 4) { memory_write32(base + v[k].off, v[k].value); }
+      else                { memory_write16(base + v[k].off, (U16)v[k].value); }
+    }
+  } else {
+    LNK_DebugSPatch *v = arr->v;
+    for (U64 k = lo; k < opl; k += 1) {
+      U8 *ptr = base + (v[k].off_w >> 1);
+      if (v[k].off_w & 1) { memory_write32(ptr, v[k].value); }
+      else                { memory_write16(ptr, (U16)v[k].value); }
+    }
+  }
+}
+
+// Replays the obj's deferred $S TI/kind fixups (journaled in lnk_merge_types). Entries write
+// only into the obj's own $S backing bytes (its patched section copies / raw-mapped sections;
+// $S is never shared across objs, unlike $T PCH refs), so this is safe inside any per-obj
+// parallel loop and produces the same bytes regardless of schedule. Write order == journal
+// emission order: symbol inputs in index order (= Symbols data_list node order), then the
+// InlineeLines node runs in data_list order.
+internal void
+lnk_apply_debug_s_fixups_for_obj(LNK_CodeViewInput *cv, U64 obj_idx)
+{
+  if (!cv->has_debug_s_fixup_journal) { return; }
+
+  for (U64 i = cv->debug_s_sym_fixup_offsets[obj_idx], opl = cv->debug_s_sym_fixup_offsets[obj_idx+1]; i < opl; i += 1) {
+    Assert(cv->symbol_inputs[i].obj_idx == obj_idx);
+    lnk_apply_debug_s_patch_run(cv->symbol_inputs[i].raw_symbols.str, &cv->debug_s_sym_fixups[i], 0, cv->debug_s_sym_fixups[i].count);
+  }
+
+  LNK_DebugSInlineJournal *inline_journal = &cv->debug_s_inline_fixups[obj_idx];
+  if (inline_journal->patches.count > 0) {
+    String8List inlinee_lines = cv_sub_section_from_debug_s(cv->debug_s_arr[obj_idx], CV_C13SubSectionKind_InlineeLines);
+    U64 node_idx = 0, cursor = 0;
+    for EachNode(inline_data_n, String8Node, inlinee_lines.first) {
+      U64 run = inline_journal->node_counts[node_idx++];
+      lnk_apply_debug_s_patch_run(inline_data_n->string.str, &inline_journal->patches, cursor, cursor + run);
+      cursor += run;
+    }
+    Assert(cursor == inline_journal->patches.count);
+  }
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_apply_debug_s_fixups_task)
+{
+  LNK_CodeViewInput *cv = raw_task;
+  lnk_apply_debug_s_fixups_for_obj(cv, task_id);
+}
+
+// Eager whole-input replay for configs that consume fixed-up $S bytes before (or without)
+// the module-write pass: /OPT:GCTYPES reads + rewrites $S type indices right after the merge,
+// and a /PDBSTRIPPED-only build re-walks $S without ever writing modules. Consumes the
+// journal -- the module-write replay is skipped afterwards.
+// Consumes + releases the journal: drops every reference (entry arrays, per-input/per-obj
+// headers, offsets table all live inside the DEBUG_S_FIXUP_JOURNAL arenas), then hands the
+// arena set to the background reaper. Idempotent; no-op when the journal was never built
+// (SkipSymbolTypeFixup / stripped cv) or already consumed.
+internal void
+lnk_release_debug_s_fixup_journal(LNK_CodeViewInput *cv)
+{
+  if (cv->debug_s_fixup_journal_arenas == 0) { return; }
+  cv->debug_s_sym_fixups        = 0;
+  cv->debug_s_inline_fixups     = 0;
+  cv->debug_s_sym_fixup_offsets = 0;
+  cv->has_debug_s_fixup_journal = 0;
+  if (g_arena_reaper_thread.u64[0] != 0) { thread_join(g_arena_reaper_thread, max_U64); }
+  g_arena_reaper_thread = thread_launch(lnk_tp_arena_release_thread, cv->debug_s_fixup_journal_arenas);
+  cv->debug_s_fixup_journal_arenas = 0;
+}
+
+internal void
+lnk_apply_debug_s_fixups_eager(TP_Context *tp, LNK_CodeViewInput *cv)
+{
+  if (!cv->has_debug_s_fixup_journal) { return; }
+  ProfBegin("Apply $S Fixups (eager)");
+  tp_for_parallel(tp, 0, cv->obj_count, lnk_apply_debug_s_fixups_task, cv);
+  lnk_release_debug_s_fixup_journal(cv); // consumed -- module write skips replay AND release
   ProfEnd();
 }
 
@@ -3122,68 +3435,6 @@ THREAD_POOL_TASK_FUNC(lnk_unbucket_hashes_task)
     CV_DebugT   *debug_t  = &task->input->debug_t_arr[obj_idx];
     String8      raw_leaf = cv_debug_t_get_raw_leaf(debug_t, leaf_idx);
     task->result.hashes[task->ti_source][i] = task->input->debug_h_arr[obj_idx].v[leaf_idx];
-  }
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_fixup_symbols_task)
-{
-  LNK_MergeTypes *task = raw_task;
-
-  LNK_SymbolInput   symbols        = task->input->symbol_inputs[task_id];
-  U64               leaf_count_ipi = task->result.count    [CV_TypeIndexSource_IPI];
-  U8              **leaf_arr_ipi   = task->result.v        [CV_TypeIndexSource_IPI];
-  CV_TypeIndex      min_ti_ipi     = task->min_type_indices[CV_TypeIndexSource_IPI];
-
-  for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
-    CV_Symbol symbol = {0};
-    TryReadBreak(cv_read_symbol(symbols.raw_symbols, cursor, CV_SymbolAlign, &symbol), cursor);
-
-    // convert symbol to final type
-    CV_SymKind *sym_kind_ptr = cv_kind_ptr_from_symbol(symbol);
-    switch (*sym_kind_ptr) {
-    case CV_SymKind_PROC_ID_END: *sym_kind_ptr = CV_SymKind_END; break;
-
-    case CV_SymKind_LPROC32_ID:     *sym_kind_ptr = CV_SymKind_LPROC32;     goto fixup_id;
-    case CV_SymKind_GPROC32_ID:     *sym_kind_ptr = CV_SymKind_GPROC32;     goto fixup_id;
-    case CV_SymKind_LPROC32_DPC_ID: *sym_kind_ptr = CV_SymKind_LPROC32_DPC; goto fixup_id;
-    case CV_SymKind_LPROCMIPS_ID:   *sym_kind_ptr = CV_SymKind_LPROCMIPS;   goto fixup_id;
-    case CV_SymKind_GPROCMIPS_ID:   *sym_kind_ptr = CV_SymKind_GPROCMIPS;   goto fixup_id;
-    case CV_SymKind_LPROCIA64_ID:   *sym_kind_ptr = CV_SymKind_LPROCIA64;   goto fixup_id;
-    case CV_SymKind_GPROCIA64_ID:   *sym_kind_ptr = CV_SymKind_GPROCIA64;   goto fixup_id;
-    fixup_id:; {
-      CV_SymProc32 *proc32 = str8_deserial_get_raw_ptr(symbol.data, 0, sizeof(*proc32));
-      if (proc32->itype < min_ti_ipi) {
-        // TODO: in some cases destructors don't have a type, need a repro
-        break;
-      }
-
-      if ((proc32->itype - min_ti_ipi) > leaf_count_ipi) {
-        Assert(0 && "TODO: error handle corrupted type index");
-        break;
-      }
-
-      U64     leaf_idx  = proc32->itype - min_ti_ipi;
-      String8 leaf_data = str8(leaf_arr_ipi[leaf_idx], max_U64);
-
-      CV_Leaf leaf;
-      if (cv_read_leaf(leaf_data, 0, 1, &leaf) == 0) { InvalidPath; }
-
-      U64 min_leaf_size = cv_header_struct_size_from_leaf_kind(leaf.kind);
-      if (min_leaf_size > leaf.data.size) { Assert(!"TODO: error handle corrupt leaf"); break; }
-
-      if (leaf.kind == CV_LeafKind_FUNC_ID) {
-        CV_LeafFuncId *func_id = str8_deserial_get_raw_ptr(leaf.data, 0, sizeof(*func_id));
-        proc32->itype = func_id->itype;
-      } else if (leaf.kind == CV_LeafKind_MFUNC_ID) {
-        CV_LeafMFuncId *mfunc_id = str8_deserial_get_raw_ptr(leaf.data, 0, sizeof(*mfunc_id));
-        proc32->itype = mfunc_id->itype;
-      } else {
-        Assert(!"TODO: erorr handle unexpected leaf type");
-        break;
-      }
-    } break;
-    }
   }
 }
 
@@ -3536,13 +3787,8 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     }
     ProfEnd();
 
-    if (~merge_flags & LNK_MergeTypeFlag_SkipSymbolTypeFixup) {
-      tp_for_parallel_prof(tp, 0, input->symbol_patch_task_count, lnk_cv_patcher_symbols_task, &task, "Fixup Symbol Type Indices");
-
-      task.ranges      = 0;
-      task.debug_s_arr = input->debug_s_arr;
-      tp_for_parallel_prof(tp, 0, input->count, lnk_cv_patcher_inlines_task, &task, "Fixup Inlines Type Indices");
-    }
+    // NOTE: the $S symbol/inlinee TI fixups are journaled below (after the materialize pass);
+    // the bytes are patched per obj at the start of the module-write visit.
 
     // NOTE: the leaf TI-fixup is fused into the unbucket/materialize pass below -- it copies each
     // unique leaf into a private buffer and patches the copy, instead of patching the mapped input
@@ -3607,8 +3853,71 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     }
   }
 
+  // Streaming-ring P2 slice A: the $S TI/kind fixups no longer patch bytes here. While the
+  // merge state they consume is still alive -- the assigned-TI hash tables (merge scratch,
+  // dead at temp_end below) and the materialized IPI leaf copies (released after
+  // pdb_build_types, i.e. BEFORE the module-write pass) -- record every write into per-input /
+  // per-obj journals. lnk_write_pdb_modules replays an obj's journal at the start of its
+  // module-write visit; configs that read fixed-up $S earlier (or never write modules) run
+  // lnk_apply_debug_s_fixups_eager instead (see lnk.c).
   if (~merge_flags & LNK_MergeTypeFlag_SkipSymbolTypeFixup) {
-    tp_for_parallel_prof(tp, 0, input->symbol_input_count, lnk_fixup_symbols_task, &task, "Fixup ID Symbols");
+    ProfBegin("Journal $S Fixups");
+    // The journal is dead after the last per-obj replay (module write / eager apply) but is
+    // GB-class at FN scale -- park it on dedicated per-worker arenas (TYPE_MERGE_SCRATCH
+    // pattern: TP_Arena header + v[] live inside v[0], released last by tp_arena_release) so
+    // lnk_release_debug_s_fixup_journal can hand the whole set to the background reaper
+    // instead of the commit riding the link-lifetime TP arena to process exit.
+    {
+      Temp temp = temp_begin(scratch.arena);
+      Arena **arr = push_array(temp.arena, Arena *, tp->worker_count);
+      for EachIndex(i, tp->worker_count) { arr[i] = arena_alloc(.commit_size = MB(2), .name = "DEBUG_S_FIXUP_JOURNAL"); }
+      TP_Arena *journal_arenas = push_array(arr[0], TP_Arena, 1);
+      journal_arenas->count    = tp->worker_count;
+      journal_arenas->v        = push_array(arr[0], Arena *, tp->worker_count);
+      MemoryCopyTyped(journal_arenas->v, arr, tp->worker_count);
+      input->debug_s_fixup_journal_arenas = journal_arenas;
+      temp_end(temp);
+    }
+
+    // NOTE: all per-obj journal arrays span input->count, NOT input->obj_count -- injected
+    // type-server / .ifc blob pseudo objs live at indices [obj_count, count) in the parallel
+    // arrays (their $S is empty, so their journals stay empty, but the inline task dispatches
+    // over input->count and must have a slot to write).
+    task.journal_arena               = input->debug_s_fixup_journal_arenas;
+    task.debug_s_arr                 = input->debug_s_arr;
+    input->debug_s_sym_fixups        = push_array(task.journal_arena->v[0], LNK_DebugSPatchArray, input->symbol_input_count ? input->symbol_input_count : 1);
+    input->debug_s_inline_fixups     = push_array(task.journal_arena->v[0], LNK_DebugSInlineJournal, input->count ? input->count : 1);
+    input->debug_s_sym_fixup_offsets = push_array(task.journal_arena->v[0], U64, input->count + 1);
+    {
+      // symbol_inputs are filled per obj at prefix-sum offsets => obj-contiguous, ascending
+      U64 *counts = push_array(scratch.arena, U64, input->count ? input->count : 1);
+      for EachIndex(i, input->symbol_input_count) { counts[input->symbol_inputs[i].obj_idx] += 1; }
+      U64 acc = 0;
+      for EachIndex(obj_idx, input->count) { input->debug_s_sym_fixup_offsets[obj_idx] = acc; acc += counts[obj_idx]; }
+      input->debug_s_sym_fixup_offsets[input->count] = acc;
+      Assert(acc == input->symbol_input_count);
+    }
+    tp_for_parallel_prof(tp, 0, input->symbol_patch_task_count, lnk_journal_symbol_fixups_task, &task, "Journal Symbol Fixups");
+    tp_for_parallel_prof(tp, 0, input->count,                   lnk_journal_inline_fixups_task, &task, "Journal Inline Fixups");
+    input->has_debug_s_fixup_journal = 1;
+
+    if (lnk_get_log_status(LNK_Log_Debug)) {
+      U64 entry_count = 0, entry_bytes = 0, wide_runs = 0;
+      for EachIndex(i, input->symbol_input_count) {
+        LNK_DebugSPatchArray *a = &input->debug_s_sym_fixups[i];
+        entry_count += a->count; entry_bytes += a->count * (a->is_wide ? sizeof(LNK_DebugSPatchWide) : sizeof(LNK_DebugSPatch)); wide_runs += !!a->is_wide;
+      }
+      for EachIndex(i, input->count) {
+        LNK_DebugSPatchArray *a = &input->debug_s_inline_fixups[i].patches;
+        entry_count += a->count; entry_bytes += a->count * (a->is_wide ? sizeof(LNK_DebugSPatchWide) : sizeof(LNK_DebugSPatch)); wide_runs += !!a->is_wide;
+      }
+      U64 assigned_bytes = 0;
+      for EachIndex(s, CV_TypeIndexSource_COUNT) { assigned_bytes += task.assigned_ti_arr[s].cap * (sizeof(CV_TypeIndex) + sizeof(U64)); }
+      U64 leaf_buffer_bytes = task.result.leaf_buffers[CV_TypeIndexSource_TPI].size + task.result.leaf_buffers[CV_TypeIndexSource_IPI].size;
+      lnk_log(LNK_Log_Debug, "$S fixup journal: %llu entries / %llu bytes (%llu wide runs) (state it decouples from module write: assigned-TI tables %llu bytes, merged leaf buffers %llu bytes)",
+              entry_count, entry_bytes, wide_runs, assigned_bytes, leaf_buffer_bytes);
+    }
+    ProfEnd();
   }
 
   MemoryCopyTyped(task.result.min_type_indices, input->min_type_indices, CV_TypeIndexSource_COUNT);
@@ -4501,6 +4810,15 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
   // compute sizes for module streams
   for EachIndex(i, obj_indices.count) {
     U64 obj_idx = obj_indices.v[i];
+    // Streaming-ring P2 slice A: replay the obj's deferred $S TI/kind fixups (journaled at
+    // merge time) before ANY consumer touches these bytes -- the sizing walk here, the write
+    // pass below, the globals collect after this barrier pass, and the /PDBSTRIPPED re-walk
+    // after lnk_build_pdb returns. The sizing loop visits every obj in the lane partition --
+    // including objs that end up with mod->sn == MSF_INVALID_STREAM_NUMBER, whose $S is still
+    // consumed by globals -- so no obj misses its fixups. The parity walk below is fixup-
+    // agnostic (node bytes and resolver alias the same backing), but replaying first keeps
+    // both sides post-fixup.
+    lnk_apply_debug_s_fixups_for_obj(task->cv, obj_idx);
     lnk_assert_debug_s_prov_parity(task->cv->obj_arr[obj_idx], &task->cv->debug_s_arr[obj_idx]); // debug-only P1.2 parity
     lnk_write_debug_s_to_pdb_module(task->mod_arr[obj_idx], task->cv->debug_s_arr[obj_idx], 0, 0);
   }
@@ -5404,6 +5722,14 @@ ProfScope("Write Modules")
       lnk_log(LNK_Log_Timers, "[pdb] write modules in %.2f ms (cohort %u)", (F64)(now_time_us() - phase_begin_us) / 1000.0, C);
       lnk_summary_phase_end(LNK_SummaryPhase_PdbMod);
     }
+
+    // the sizing loop above ran the last per-obj $S fixup replay; every later consumer
+    // (globals collect, /PDBSTRIPPED re-walk) reads the already-patched backing bytes, not
+    // the journal -- hand the GB-class journal arenas to the background reaper now, before
+    // the GSI/PSI commit peak. No-op when the eager path already consumed it (or for the
+    // stripped/SkipSymbolTypeFixup cv, which never built one).
+    lnk_release_debug_s_fixup_journal(cv);
+
     // module streams were enqueued per-obj inside lnk_write_pdb_modules
 ProfScope("Move Global Symbols")
     {

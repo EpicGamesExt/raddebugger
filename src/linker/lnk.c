@@ -7546,6 +7546,19 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     LNK_MergedTypes   cv_types  = lnk_merge_types(tp, arena, &cv, 0);
     lnk_summary_phase_end(LNK_SummaryPhase_DbgMerge);
 
+    // Streaming-ring P2 slice A: $S TI/kind fixups are journaled in lnk_merge_types and
+    // normally replayed per obj at the start of the module-write visit (lnk_write_pdb_modules).
+    // Two configs consume fixed-up $S bytes before/without that pass and need the journal
+    // applied eagerly instead:
+    // - /OPT:GCTYPES reads final type indices out of $S (mark roots) and rewrites them
+    //   (compaction remap) right below;
+    // - a /PDBSTRIPPED-only build (no full PDB / RDI) re-walks $S Symbols without ever
+    //   running the module-write pass.
+    if (config->opt_gc_types == LNK_SwitchState_Yes ||
+        !(config->debug_mode == LNK_DebugMode_Full || config->rad_debug == LNK_SwitchState_Yes)) {
+      lnk_apply_debug_s_fixups_eager(tp, &cv);
+    }
+
     // prune merged types not reachable from any surviving symbol (PDB-size win). OFF by default:
     // it removes types that a debugger can still legitimately cast to in the watch window
     // (reachable-from-symbols is a subset of castable-types). Opt in with /OPT:GCTYPES.
