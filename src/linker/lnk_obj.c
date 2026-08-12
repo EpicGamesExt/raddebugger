@@ -871,6 +871,23 @@ lnk_obj_drop_section_data_copies(LNK_Obj *obj)
   }
 }
 
+// Resolve a .debug$S subsection provenance record (streaming-ring P1) back to its bytes.
+// Returns exactly what the parse consumed: lnk_obj_section_data_from_number prefers the reloc-patched
+// private copy when one exists (the parsed node slices point into that same copy), otherwise
+// the raw mapped input. Synthetic provenance (linker-made bytes, is_synthetic) and untagged
+// records (sect_idx == CV_DebugSProvSect_Nil) have no backing section to resolve through:
+// returns str8_zero and the caller must fall back to the node's String8.
+internal String8
+lnk_resolve_debug_s_node(LNK_Obj *obj, CV_DebugSProvNode *prov)
+{
+  if (prov == 0 || prov->is_synthetic || prov->sect_idx == CV_DebugSProvSect_Nil) {
+    return str8_zero();
+  }
+  U64     section_number = (U64)prov->sect_idx + 1;
+  String8 sect_data      = lnk_obj_section_data_from_number(obj, section_number);
+  return str8_substr(sect_data, rng_1u64(prov->off, prov->off + prov->size));
+}
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_collect_obj_chunks_task)
 {

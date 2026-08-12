@@ -287,6 +287,7 @@ internal String8              lnk_obj_section_data_from_number(LNK_Obj *obj, U64
 internal U64                  lnk_obj_foff_from_section_data_ptr(LNK_Obj *obj, void *ptr);
 internal String8              lnk_obj_section_name_from_section_number(LNK_Obj *obj, U64 section_number);
 internal void                 lnk_obj_drop_section_data_copies(LNK_Obj *obj);
+internal String8              lnk_resolve_debug_s_node(LNK_Obj *obj, CV_DebugSProvNode *prov);
 internal LNK_ObjSection       lnk_obj_section_from_section_number(LNK_Obj *obj, U64 section_number);
 internal COFF_RelocArray      lnk_coff_relocs_from_section_header(LNK_Obj *obj, COFF_SectionHeader *section_header);
 internal String8              lnk_coff_string_table_from_obj(LNK_Obj *obj);

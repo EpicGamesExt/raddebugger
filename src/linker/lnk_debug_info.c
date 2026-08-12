@@ -3833,6 +3833,35 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
   ProfBegin("Global Symbols");
   {
+#if BUILD_DEBUG
+    // Streaming-ring P1.2 parity (debug builds only): each symbol input's raw_symbols is a
+    // slice of one Symbols subsection node of its obj; find that node by pointer identity,
+    // resolve its provenance through lnk_resolve_debug_s_node, and assert the CONTENT still
+    // matches at the very start of the globals collect walk. This runs BEFORE the sect-data
+    // copies release below (barrier at "Release Sect Data Copies"), so the resolver still
+    // returns exactly what the parse consumed. Untracked lists and synthetic nodes skip.
+    for (U64 lane = task_id; lane < task->cv->symbol_input_range_count; lane += tp->worker_count) {
+      for EachInRange(i, task->cv->symbol_input_ranges[lane]) {
+        LNK_SymbolInput   *in        = &task->cv->symbol_inputs[i];
+        LNK_Obj           *obj       = task->cv->obj_arr[in->obj_idx];
+        CV_DebugS         *debug_s   = &task->cv->debug_s_arr[in->obj_idx];
+        String8List       *data_list = cv_sub_section_ptr_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
+        CV_DebugSProvList *prov_list = cv_sub_section_prov_ptr_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
+        if (prov_list->count == 0) { continue; } // untracked construction
+        Assert(prov_list->count == data_list->node_count);
+        CV_DebugSProvNode *prov   = prov_list->first;
+        String8Node       *data_n = data_list->first;
+        for (; data_n != 0; data_n = data_n->next, prov = prov->next) {
+          if (data_n->string.str == in->raw_symbols.str && data_n->string.size == in->raw_symbols.size) { break; }
+        }
+        Assert(data_n != 0); // every symbol input must originate from a Symbols node
+        if (prov->is_synthetic) { continue; }
+        String8 resolved = lnk_resolve_debug_s_node(obj, prov);
+        Assert(resolved.size == in->raw_symbols.size);
+        Assert(str8_match(resolved, in->raw_symbols, 0));
+      }
+    }
+#endif
     // FAIR-SHARE: symbol_input_ranges is a FIXED [symbol_input_range_count] partition built at
     // full pool width, but this barrier pass runs at the pinned cohort C == tp->worker_count
     // (C <= fixed). Walk the fixed lanes strided by the cohort so every fixed lane is processed
@@ -4341,6 +4370,34 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 }
 
 
+// Streaming-ring P1.2 parity walk (debug builds only -- it doubles the reads): prove the
+// dormant provenance recorded at parse time is authoritative by re-resolving every tracked
+// subsection node through lnk_resolve_debug_s_node and comparing CONTENT against the node's
+// String8. For reloc-PATCHED sections both the node slice and the resolver point into the
+// same sect_data_copies bytes (pointers may even be equal), so the assert is on content,
+// which also holds across the in-place $S TI/kind fixups (they mutate the shared bytes).
+// Skips untracked lists (prov count == 0: wholesale synthetic constructions) and synthetic
+// nodes (no backing section). Valid only while lnk_obj_section_data_from_number still returns what the
+// parse consumed, i.e. before the sect-data copies release in lnk_move_global_symbols_to_gsi.
+internal void
+lnk_assert_debug_s_prov_parity(LNK_Obj *obj, CV_DebugS *debug_s)
+{
+#if BUILD_DEBUG
+  for EachElement(k, debug_s->data_list) {
+    if (debug_s->prov_list[k].count == 0) { continue; } // untracked construction
+    Assert(debug_s->prov_list[k].count == debug_s->data_list[k].node_count);
+    CV_DebugSProvNode *prov = debug_s->prov_list[k].first;
+    for (String8Node *data_n = debug_s->data_list[k].first; data_n != 0; data_n = data_n->next, prov = prov->next) {
+      String8 resolved = lnk_resolve_debug_s_node(obj, prov);
+      if (prov->is_synthetic) { Assert(resolved.size == 0); continue; }
+      Assert(resolved.size == data_n->string.size);
+      Assert(str8_match(resolved, data_n->string, 0));
+    }
+    Assert(prov == 0);
+  }
+#endif
+}
+
 internal U64
 lnk_write_debug_s_to_pdb_module(PDB_DbiModule *mod, CV_DebugS debug_s, String8Node *buf, U64 *buf_pos)
 {
@@ -4444,6 +4501,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
   // compute sizes for module streams
   for EachIndex(i, obj_indices.count) {
     U64 obj_idx = obj_indices.v[i];
+    lnk_assert_debug_s_prov_parity(task->cv->obj_arr[obj_idx], &task->cv->debug_s_arr[obj_idx]); // debug-only P1.2 parity
     lnk_write_debug_s_to_pdb_module(task->mod_arr[obj_idx], task->cv->debug_s_arr[obj_idx], 0, 0);
   }
   barrier_wait(tp->barrier);
@@ -4473,6 +4531,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     String8List    mod_data = msf_data_from_sn(temp.arena, task->pdb->msf, mod->sn);
 
     if (mod_data.node_count) {
+      lnk_assert_debug_s_prov_parity(task->cv->obj_arr[obj_idx], &task->cv->debug_s_arr[obj_idx]); // debug-only P1.2 parity
       String8Node buf = *mod_data.first;
       U64         pos = 0;
       lnk_write_debug_s_to_pdb_module(mod, debug_s, &buf, &pos);
