@@ -2148,7 +2148,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
             case PTRACE_EVENT_STOP:
             {
               // rjf: stop event for pending threads -> thread is created & stopped
-              if(thread->state == LNX_DMN_ThreadState_PendingCreation)
+              if(thread != 0 && thread->state == LNX_DMN_ThreadState_PendingCreation)
               {
                 thread->state = LNX_DMN_ThreadState_Stopped;
                 lnx_dmn_state->threads_pending_creation -= 1;
