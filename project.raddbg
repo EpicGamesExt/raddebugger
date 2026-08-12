@@ -4,17 +4,14 @@ name: "The RAD Debugger"
 target:
 {
   executable: "build/raddbg.exe"
-  working_directory: "../raddebugger"
-  arguments: "--user:C:/devel/raddebugger/build/raddbg_test.user"
+  working_directory: build
+  arguments: "--user:raddbg_test.user"
   debug_subprocesses: 0
-  enabled: 1
 }
 target:
 {
-  executable: "build/raddbg.exe"
-  working_directory: "../raddebugger"
-  arguments: "--user:test123"
-  debug_subprocesses: 0
+  executable: "build/metagen.exe"
+  working_directory: build
 }
 target:
 {
@@ -26,41 +23,7 @@ target:
 {
   executable: "build/torture.exe"
   working_directory: build
-  arguments: "eval2/*"
-}
-target:
-{
-  executable: "build/metagen.exe"
-  working_directory: build
-}
-target:
-{
-  executable: "build/radbin.exe"
-  working_directory: build
-  arguments: "--rdi raddbg"
-}
-target:
-{
-  executable: "build/release_version/raddbg.exe"
-  working_directory: "build/release_version"
-}
-target:
-{
-  executable: "build/radbin.exe"
-  working_directory: build
-  arguments: "--rdi fat.so --capture"
-}
-target:
-{
-  executable: "build/radbin.exe"
-  working_directory: build
-  arguments: "--rdi fat.debug --capture"
-}
-target:
-{
-  executable: "build/radbin.exe"
-  working_directory: build
-  arguments: "--rdi raddbg"
+  arguments: *
 }
 watch_pin: expression: tag_hash_slots
 target:
@@ -70,17 +33,8 @@ target:
 }
 target:
 {
-  executable: "../../Program Files/SuperTux/bin/supertux2.exe"
-  working_directory: "../../Program Files/SuperTux/bin"
-}
-target:
-{
-  executable: "build/raddbg"
-  working_directory: build
-}
-target:
-{
-  executable: "../scratch/test.exe"
-  working_directory: "../scratch"
-  entry_point: "main::main"
+  executable: "build/radbin.exe"
+  working_directory: "build/"
+  enabled: 1
+  arguments: "--rdi raddbg"
 }
