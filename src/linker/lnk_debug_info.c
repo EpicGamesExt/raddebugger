@@ -3954,25 +3954,31 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     }
     barrier_wait(tp->barrier);
 
+    // size buckets up front so each one reallocs at most once for this wave (arena pushes are
+    // single-threaded on task 0; sizing has no determinism impact)
+    if (task_id == 0) {
+      U64 *bucket_adds = push_array(scratch.arena, U64, gsi->bucket_count);
+      for EachIndex(i, symbol_count) { bucket_adds[symbol_hashes[i] % gsi->bucket_count] += 1; }
+      for EachIndex(bucket_idx, gsi->bucket_count) {
+        if (bucket_adds[bucket_idx]) { gsi_reserve(gsi, bucket_idx, bucket_adds[bucket_idx]); }
+      }
+    }
+    barrier_wait(tp->barrier);
+
     // push global symbols, sharded by bucket range: worker i owns buckets [i*B/W, (i+1)*B/W) and
     // walks the FULL symbol sequence in global order, inserting only symbols whose bucket lands in
     // its range. each bucket has a single owner and receives its inserts in global sequence order,
-    // so per-chain order (which is serialized into the PDB) is byte-identical to a serial loop, for
-    // any worker count -- no locks, no atomics.
-    CV_SymbolNode *global_nodes = 0;
-    if (task_id == 0) {
-      global_nodes = push_array_no_zero(gsi->arena, CV_SymbolNode, symbol_count);
-    }
-    tp_broadcast(&global_nodes);
+    // so per-bucket order (which is serialized into the PDB) is byte-identical to a serial loop,
+    // for any worker count -- no locks, no atomics.
     {
       U64 shard_min = (task_id * gsi->bucket_count) / tp->worker_count;
       U64 shard_max = ((task_id + 1) * gsi->bucket_count) / tp->worker_count;
       for EachIndex(i, symbol_count) {
         U64 bucket_idx = symbol_hashes[i] % gsi->bucket_count;
         if (bucket_idx < shard_min || bucket_idx >= shard_max) { continue; }
-        CV_SymbolNode *n = &global_nodes[i];
-        n->prev = n->next = 0;
-        n->data = cv_symbol_from_ptr(symbol_arr[i]);
+        PDB_GsiSymbolBucket *bucket = &gsi->bucket_arr[bucket_idx];
+        CV_Symbol     *dst    = &bucket->v[bucket->count];
+        *dst = cv_symbol_from_ptr(symbol_arr[i]);
         // deterministic same-name tie-break for the per-bucket sort in gsi_serialize_symbols_task
         // (gsi_symbol_is_before compares name -> offset -> kind -> data bytes): key on the content
         // hash of the full raw record instead of the compacted deduper slot index. Slot order is
@@ -3982,8 +3988,8 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
         // symrec bytes run-to-run. The hash is schedule-independent; on collision the comparator's
         // kind/data-bytes fallback stays content-deterministic, and byte-identical records cannot
         // reach the sort (the deduper folds them), so the pointer tiebreaker stays unreachable.
-        n->data.offset = u64_hash_from_str8(cv_raw_from_symbol(symbol_arr[i]));
-        cv_symbol_list_push_node(&gsi->bucket_arr[bucket_idx], n);
+        dst->offset = u64_hash_from_str8(cv_raw_from_symbol(symbol_arr[i]));
+        bucket->count += 1;
       }
     }
     barrier_wait(tp->barrier);
@@ -4031,17 +4037,17 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     U64            *proc_ref_hashes  = 0;
     U64            *proc_ref_indices = 0;
     Arena         **proc_ref_arenas  = 0;
-    CV_SymbolNode  *proc_ref_nodes   = 0;
+    CV_Symbol      *proc_ref_symbols = 0;
     if (task_id == 0) {
       proc_ref_hashes  = push_array(scratch.arena, U64, total_proc_ref_count);
       proc_ref_indices = offsets_from_counts_array_u64(scratch.arena, proc_ref_counts, tp->worker_count);
       proc_ref_arenas  = alloc_arena_many(gsi->arena, tp->worker_count, proc_ref_sizes);
-      proc_ref_nodes   = push_array(gsi->arena, CV_SymbolNode, total_proc_ref_count);
+      proc_ref_symbols = push_array(scratch.arena, CV_Symbol, total_proc_ref_count);
     }
     tp_broadcast(&proc_ref_hashes);
     tp_broadcast(&proc_ref_indices);
     tp_broadcast(&proc_ref_arenas);
-    tp_broadcast(&proc_ref_nodes);
+    tp_broadcast(&proc_ref_symbols);
 
     Arena *proc_ref_arena = proc_ref_arenas[task_id];
     U64    proc_ref_idx   = proc_ref_indices[task_id];
@@ -4067,9 +4073,9 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
           if (symbol.kind == CV_SymKind_GPROC32 || symbol.kind == CV_SymKind_LPROC32) {
             String8 name = cv_name_from_symbol(symbol.kind, symbol.data);
-            proc_ref_nodes [proc_ref_idx].data = cv_make_proc_ref(proc_ref_arena, imod, symbol_cursor, name, cv_is_lproc(symbol));
-            proc_ref_nodes [proc_ref_idx].data.offset = symbol_cursor;
-            proc_ref_hashes[proc_ref_idx] = gsi_hash(gsi, name);
+            proc_ref_symbols[proc_ref_idx] = cv_make_proc_ref(proc_ref_arena, imod, symbol_cursor, name, cv_is_lproc(symbol));
+            proc_ref_symbols[proc_ref_idx].offset = symbol_cursor;
+            proc_ref_hashes [proc_ref_idx] = gsi_hash(gsi, name);
             proc_ref_idx += 1;
           }
 
@@ -4079,15 +4085,28 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     }
     barrier_wait(tp->barrier);
 
-    // push proc refs, sharded by bucket range (single owner per bucket, inserts in global node
-    // order -> per-chain order identical to a serial loop for any worker count)
+    // size buckets up front so each one reallocs at most once for this wave (arena pushes are
+    // single-threaded on task 0; sizing has no determinism impact)
+    if (task_id == 0) {
+      U64 *bucket_adds = push_array(scratch.arena, U64, gsi->bucket_count);
+      for EachIndex(i, total_proc_ref_count) { bucket_adds[(U32)proc_ref_hashes[i] % gsi->bucket_count] += 1; }
+      for EachIndex(bucket_idx, gsi->bucket_count) {
+        if (bucket_adds[bucket_idx]) { gsi_reserve(gsi, bucket_idx, bucket_adds[bucket_idx]); }
+      }
+    }
+    barrier_wait(tp->barrier);
+
+    // push proc refs, sharded by bucket range (single owner per bucket, inserts in global
+    // order -> per-bucket order identical to a serial loop for any worker count)
     {
       U64 shard_min = (task_id * gsi->bucket_count) / tp->worker_count;
       U64 shard_max = ((task_id + 1) * gsi->bucket_count) / tp->worker_count;
       for EachIndex(i, total_proc_ref_count) {
         U64 bucket_idx = (U32)proc_ref_hashes[i] % gsi->bucket_count;
         if (bucket_idx < shard_min || bucket_idx >= shard_max) { continue; }
-        cv_symbol_list_push_node(&gsi->bucket_arr[bucket_idx], &proc_ref_nodes[i]);
+        PDB_GsiSymbolBucket *bucket = &gsi->bucket_arr[bucket_idx];
+        bucket->v[bucket->count] = proc_ref_symbols[i];
+        bucket->count += 1;
       }
     }
     barrier_wait(tp->barrier);
@@ -4140,27 +4159,28 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     barrier_wait(tp->barrier);
 
     Arena         **public_symbol_arenas      = 0;
-    Arena         **public_symbol_node_arenas = 0;
-    CV_SymbolList  *public_symbols            = 0; // [fixed_lane_count]
-    U32           **public_symbol_hashes      = 0; // [fixed_lane_count][public_symbol.count]
+    CV_Symbol     **public_symbol_vals        = 0; // [fixed_lane_count][public_symbol_lane_counts[lane]]
+    U64            *public_symbol_lane_counts = 0; // [fixed_lane_count]
+    U32           **public_symbol_hashes      = 0; // [fixed_lane_count][public_symbol_lane_counts[lane]]
     if (task_id == 0) {
-      U64 public_symbol_total_count  = sum_array_u64(fixed_lane_count, public_symbol_node_counts);
       public_symbol_arenas      = alloc_arena_many(psi->gsi->arena, fixed_lane_count, public_symbol_sizes);
-      public_symbol_node_arenas = alloc_arena_array(psi->gsi->arena, fixed_lane_count, public_symbol_node_counts, CV_SymbolNode);
-      public_symbols            = push_array(scratch.arena, CV_SymbolList, fixed_lane_count);
+      public_symbol_vals        = push_array(scratch.arena, CV_Symbol *, fixed_lane_count);
+      public_symbol_lane_counts = push_array(scratch.arena, U64, fixed_lane_count);
       public_symbol_hashes      = push_array(scratch.arena, U32 *, fixed_lane_count);
     }
     tp_broadcast(&public_symbol_arenas);
-    tp_broadcast(&public_symbol_node_arenas);
-    tp_broadcast(&public_symbols);
+    tp_broadcast(&public_symbol_vals);
+    tp_broadcast(&public_symbol_lane_counts);
     tp_broadcast(&public_symbol_hashes);
 
-    // make CV public symbols
+    // make CV public symbols (per-lane CV_Symbol value arrays on scratch; payload bytes stay on
+    // public_symbol_arenas). lane arrays live on the owning worker's scratch and are only read by
+    // the same lane->worker striding below, then copied into the flat array.
     for (U64 lane = task_id; lane < fixed_lane_count; lane += tp->worker_count) {
-      LNK_SymbolHashTrieChunkList symbol_chunks           = task->symtab->chunks[lane];
-      Arena                      *public_symbol_arena      = public_symbol_arenas     [lane];
-      Arena                      *public_symbol_node_arena = public_symbol_node_arenas[lane];
-      CV_SymbolList              *public_symbol_list       = &public_symbols          [lane];
+      LNK_SymbolHashTrieChunkList symbol_chunks       = task->symtab->chunks[lane];
+      Arena                      *public_symbol_arena = public_symbol_arenas[lane];
+      CV_Symbol                  *vals                = push_array_no_zero(scratch.arena, CV_Symbol, public_symbol_node_counts[lane]);
+      U64                         val_count           = 0;
       for EachNode(chunk, LNK_SymbolHashTrieChunk, symbol_chunks.first) {
         for EachIndex(i, chunk->count) {
           LNK_Symbol        *symbol        = chunk->v[i].symbol;
@@ -4172,59 +4192,73 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
           COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
           if (symbol_interp != COFF_SymbolValueInterp_Regular) { continue; }
 
-          CV_Pub32Flags flags      = COFF_SymbolType_IsFunc(symbol_parsed.type) ? CV_Pub32Flag_Function : 0;
-          ISectOff      sc         = lnk_sc_from_symbol(symbol);
-          CV_Symbol     pub_symbol = cv_make_pub32(public_symbol_arena, flags, safe_cast_u32(sc.off), safe_cast_u16(sc.isect), symbol->name);
-          cv_symbol_list_push(public_symbol_node_arena, public_symbol_list, pub_symbol);
+          CV_Pub32Flags flags = COFF_SymbolType_IsFunc(symbol_parsed.type) ? CV_Pub32Flag_Function : 0;
+          ISectOff      sc    = lnk_sc_from_symbol(symbol);
+          Assert(val_count < public_symbol_node_counts[lane]);
+          vals[val_count++] = cv_make_pub32(public_symbol_arena, flags, safe_cast_u32(sc.off), safe_cast_u16(sc.isect), symbol->name);
         }
       }
+      public_symbol_vals       [lane] = vals;
+      public_symbol_lane_counts[lane] = val_count;
     }
     barrier_wait(tp->barrier);
 
     // hash public symbols
     for (U64 lane = task_id; lane < fixed_lane_count; lane += tp->worker_count) {
-      U64  hash_idx = 0;
-      U32 *hashes   = push_array(scratch.arena, U32, public_symbols[lane].count);
-      for EachNode(n, CV_SymbolNode, public_symbols[lane].first) {
-        String8 name = cv_name_from_symbol(n->data.kind, n->data.data);
-        hashes[hash_idx++] = gsi_hash(gsi, name);
+      U64        lane_count = public_symbol_lane_counts[lane];
+      CV_Symbol *vals       = public_symbol_vals[lane];
+      U32       *hashes     = push_array(scratch.arena, U32, lane_count);
+      for EachIndex(k, lane_count) {
+        String8 name = cv_name_from_symbol(vals[k].kind, vals[k].data);
+        hashes[k] = gsi_hash(gsi, name);
       }
       public_symbol_hashes[lane] = hashes;
     }
     barrier_wait(tp->barrier);
 
-    // flatten the per-worker symbol lists (in worker order, matching the old serial walk) into one
-    // global-order node/hash array, so the sharded insert below can walk it without racing on the
-    // list links
-    U64             public_symbol_total_count = 0;
-    U64            *public_symbol_offsets     = 0; // [fixed_lane_count]
-    CV_SymbolNode **public_symbol_flat_nodes  = 0; // [public_symbol_total_count]
-    U32            *public_symbol_flat_hashes = 0; // [public_symbol_total_count]
+    // flatten the per-worker symbol arrays (in worker order, matching the old serial walk) into
+    // one global-order value/hash array, so the sharded insert below can walk it
+    U64        public_symbol_total_count = 0;
+    U64       *public_symbol_offsets     = 0; // [fixed_lane_count]
+    CV_Symbol *public_symbol_flat_vals   = 0; // [public_symbol_total_count]
+    U32       *public_symbol_flat_hashes = 0; // [public_symbol_total_count]
     if (task_id == 0) {
       U64 *list_counts = push_array_no_zero(scratch.arena, U64, fixed_lane_count);
-      for EachIndex(i, fixed_lane_count) { list_counts[i] = public_symbols[i].count; }
+      for EachIndex(i, fixed_lane_count) { list_counts[i] = public_symbol_lane_counts[i]; }
       public_symbol_offsets     = offsets_from_counts_array_u64(scratch.arena, list_counts, fixed_lane_count);
       public_symbol_total_count = sum_array_u64(fixed_lane_count, list_counts);
-      public_symbol_flat_nodes  = push_array_no_zero(scratch.arena, CV_SymbolNode *, public_symbol_total_count);
+      public_symbol_flat_vals   = push_array_no_zero(scratch.arena, CV_Symbol, public_symbol_total_count);
       public_symbol_flat_hashes = push_array_no_zero(scratch.arena, U32, public_symbol_total_count);
     }
     tp_broadcast(&public_symbol_total_count);
     tp_broadcast(&public_symbol_offsets);
-    tp_broadcast(&public_symbol_flat_nodes);
+    tp_broadcast(&public_symbol_flat_vals);
     tp_broadcast(&public_symbol_flat_hashes);
     for (U64 lane = task_id; lane < fixed_lane_count; lane += tp->worker_count) {
       U64 cursor = public_symbol_offsets[lane];
-      U64 k      = 0;
-      for (CV_SymbolNode *curr = public_symbols[lane].first; curr != 0; curr = curr->next, k += 1) {
-        public_symbol_flat_nodes [cursor] = curr;
+      U64 lane_count = public_symbol_lane_counts[lane];
+      for EachIndex(k, lane_count) {
+        public_symbol_flat_vals  [cursor] = public_symbol_vals  [lane][k];
         public_symbol_flat_hashes[cursor] = public_symbol_hashes[lane][k];
         cursor += 1;
       }
     }
     barrier_wait(tp->barrier);
 
+    // size buckets up front so each one reallocs at most once for this wave (arena pushes are
+    // single-threaded on task 0; sizing has no determinism impact)
+    if (task_id == 0) {
+      PDB_GsiContext *pub_gsi     = psi->gsi;
+      U64            *bucket_adds = push_array(scratch.arena, U64, pub_gsi->bucket_count);
+      for EachIndex(i, public_symbol_total_count) { bucket_adds[public_symbol_flat_hashes[i] % pub_gsi->bucket_count] += 1; }
+      for EachIndex(bucket_idx, pub_gsi->bucket_count) {
+        if (bucket_adds[bucket_idx]) { gsi_reserve(pub_gsi, bucket_idx, bucket_adds[bucket_idx]); }
+      }
+    }
+    barrier_wait(tp->barrier);
+
     // insert public symbols into PSI, sharded by bucket range (single owner per bucket, inserts in
-    // global order -> per-chain order identical to a serial loop for any worker count)
+    // global order -> per-bucket order identical to a serial loop for any worker count)
     {
       PDB_GsiContext *pub_gsi   = psi->gsi;
       U64             shard_min = (task_id * pub_gsi->bucket_count) / tp->worker_count;
@@ -4232,7 +4266,9 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
       for EachIndex(i, public_symbol_total_count) {
         U64 bucket_idx = public_symbol_flat_hashes[i] % pub_gsi->bucket_count;
         if (bucket_idx < shard_min || bucket_idx >= shard_max) { continue; }
-        cv_symbol_list_push_node(&pub_gsi->bucket_arr[bucket_idx], public_symbol_flat_nodes[i]);
+        PDB_GsiSymbolBucket *bucket = &pub_gsi->bucket_arr[bucket_idx];
+        bucket->v[bucket->count] = public_symbol_flat_vals[i];
+        bucket->count += 1;
       }
     }
     barrier_wait(tp->barrier);

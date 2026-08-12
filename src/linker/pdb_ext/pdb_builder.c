@@ -1694,7 +1694,7 @@ gsi_alloc(void)
   gsi->word_size    = PDB_GSI_V70_WORD_SIZE;
   gsi->symbol_align = PDB_GSI_V70_SYMBOL_ALIGN;
   gsi->bucket_count = PDB_GSI_V70_BUCKET_COUNT;
-  gsi->bucket_arr   = push_array(arena, CV_SymbolList, gsi->bucket_count);
+  gsi->bucket_arr   = push_array(arena, PDB_GsiSymbolBucket, gsi->bucket_count);
   ProfEnd();
   return gsi;
 }
@@ -2074,9 +2074,9 @@ THREAD_POOL_TASK_FUNC(gsi_size_buckets_task)
 {
   PDB_GsiSerializeSymbolsTask *task = raw_task;
   U64 bucket_idx = task->bucket_base + task_id;
-  CV_SymbolList               *bucket_list = &task->bucket_arr[bucket_idx];
-  for (CV_SymbolNode *node = bucket_list->first; node != 0; node = node->next) {
-    task->bucket_size_arr[bucket_idx] += cv_size_from_symbol(&node->data, task->symbol_align);
+  PDB_GsiSymbolBucket               *bucket = &task->bucket_arr[bucket_idx];
+  for EachIndex(i, bucket->count) {
+    task->bucket_size_arr[bucket_idx] += cv_size_from_symbol(&bucket->v[i], task->symbol_align);
   }
 }
 
@@ -2148,11 +2148,10 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_pub32)
   PDB_GsiSerializeSymbolsTask *task = raw_task;
   U64 bucket_idx = task->bucket_base + task_id;
 
-  CV_SymbolList bucket = task->bucket_arr[bucket_idx];
+  PDB_GsiSymbolBucket bucket = task->bucket_arr[bucket_idx];
 
-  CV_Symbol **symbol_arr = push_array(scratch.arena, CV_Symbol *, bucket.count); 
-  U64 symbol_arr_count = 0;
-  for EachNode(n, CV_SymbolNode, bucket.first) { symbol_arr[symbol_arr_count++] = &n->data; }
+  CV_Symbol **symbol_arr = push_array(scratch.arena, CV_Symbol *, bucket.count);
+  for EachIndex(i, bucket.count) { symbol_arr[i] = &bucket.v[i]; }
 
   // sort symbols within bucket
   radsort(symbol_arr, bucket.count, gsi_pub_symbol_is_before);
@@ -2198,13 +2197,10 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_symbols_task)
 
   PDB_GsiSerializeSymbolsTask *task = raw_task;
   U64 bucket_idx = task->bucket_base + task_id;
-  CV_SymbolList                bucket = task->bucket_arr[bucket_idx];
+  PDB_GsiSymbolBucket                bucket = task->bucket_arr[bucket_idx];
 
-  CV_Symbol **symbol_arr = push_array(scratch.arena, CV_Symbol *, bucket.count); 
-  {
-    U64 i = 0;
-    for EachNode(n, CV_SymbolNode, bucket.first) { symbol_arr[i++] = &n->data; }
-  }
+  CV_Symbol **symbol_arr = push_array(scratch.arena, CV_Symbol *, bucket.count);
+  for EachIndex(i, bucket.count) { symbol_arr[i] = &bucket.v[i]; }
 
   // sort symbols within bucket
   radsort(symbol_arr, bucket.count, gsi_symbol_is_before);
@@ -2309,7 +2305,7 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, MSF_Context *msf
   ProfBegin("Write Bitmap & Record Offsets");
   for (U64 bucket_idx = 0, hash_idx = 0; bucket_idx < gsi->bucket_count; bucket_idx += 1) {
     // set bit for each occupied bucket
-    CV_SymbolList bucket_list = gsi->bucket_arr[bucket_idx];
+    PDB_GsiSymbolBucket bucket_list = gsi->bucket_arr[bucket_idx];
     if (bucket_list.count) {
       U64 word_idx = bucket_idx / gsi->word_size;
       Assert(word_idx < bitmap_count);
@@ -2375,28 +2371,40 @@ gsi_hash(PDB_GsiContext *gsi, String8 input)
 }
 
 internal void
-gsi_push_(PDB_GsiContext *gsi, U32 hash, CV_SymbolNode *node)
+gsi_reserve(PDB_GsiContext *gsi, U64 bucket_idx, U64 additional)
 {
-  U64 bucket_idx = hash % gsi->bucket_count;
-  CV_SymbolList *list = &gsi->bucket_arr[bucket_idx];
-  cv_symbol_list_push_node(list, node);
-  gsi->symbol_count += 1;
+  PDB_GsiSymbolBucket *bucket = &gsi->bucket_arr[bucket_idx];
+  if (bucket->count + additional > bucket->cap) {
+    U64        new_cap = bucket->count + additional;
+    CV_Symbol *new_v   = push_array_no_zero(gsi->arena, CV_Symbol, new_cap);
+    MemoryCopy(new_v, bucket->v, sizeof(bucket->v[0]) * bucket->count);
+    bucket->v   = new_v;
+    bucket->cap = new_cap;
+  }
 }
 
-internal CV_SymbolNode *
+internal CV_Symbol *
+gsi_push_(PDB_GsiContext *gsi, U32 hash, CV_Symbol *symbol)
+{
+  U64            bucket_idx = hash % gsi->bucket_count;
+  PDB_GsiSymbolBucket *bucket     = &gsi->bucket_arr[bucket_idx];
+  if (bucket->count == bucket->cap) {
+    // rare path: bulk inserters reserve up front via gsi_reserve
+    gsi_reserve(gsi, bucket_idx, Max(bucket->cap, 8));
+  }
+  CV_Symbol *dst = &bucket->v[bucket->count];
+  *dst = *symbol;
+  bucket->count    += 1;
+  gsi->symbol_count += 1;
+  return dst;
+}
+
+internal CV_Symbol *
 gsi_push(PDB_GsiContext *gsi, CV_Symbol *symbol)
 {
   String8 name = cv_name_from_symbol(symbol->kind, symbol->data);
   U32     hash = gsi_hash(gsi, name);
-
-  CV_SymbolNode *node = push_array_no_zero(gsi->arena, CV_SymbolNode, 1);
-  node->next = 0;
-  node->prev = 0;
-  node->data = *symbol;
-
-  gsi_push_(gsi, hash, node);
-
-  return node;
+  return gsi_push_(gsi, hash, symbol);
 }
 
 internal
@@ -2429,7 +2437,7 @@ gsi_push_many_arr(TP_Context *tp, PDB_GsiContext *gsi, U64 count, CV_SymbolNode 
   ProfEnd();
 
   for (U64 i = 0; i < count; ++i) {
-    gsi_push_(gsi, task.hashes[i], symbols[i]);
+    gsi_push_(gsi, task.hashes[i], &symbols[i]->data);
   }
 
   scratch_end(scratch);
@@ -2444,28 +2452,24 @@ gsi_push_many_list(PDB_GsiContext *gsi, U64 count, U32 *hash_arr, CV_SymbolList 
   U64 hash_idx = 0;
   for (CV_SymbolNode *curr = list->first, *next = 0; curr != 0; curr = next, ++hash_idx) {
     next = curr->next;
-
-    curr->prev = 0;
-    curr->next = 0;
-
-    gsi_push_(gsi, hash_arr[hash_idx], curr);
+    gsi_push_(gsi, hash_arr[hash_idx], &curr->data);
   }
 
   MemoryZeroStruct(list);
 }
 
-internal CV_SymbolNode *
+internal CV_Symbol *
 gsi_search(PDB_GsiContext *gsi, CV_Symbol *symbol)
 {
   String8 name    = cv_name_from_symbol(symbol->kind, symbol->data);
   U32     hash    = gsi_hash(gsi, name);
   U64     ibucket = hash % gsi->bucket_count;
 
-  CV_SymbolList bucket_list = gsi->bucket_arr[ibucket];
-  for (CV_SymbolNode *node = bucket_list.first; node != 0; node = node->next) {
-    String8 that_name = cv_name_from_symbol(node->data.kind, node->data.data);
+  PDB_GsiSymbolBucket *bucket = &gsi->bucket_arr[ibucket];
+  for EachIndex(i, bucket->count) {
+    String8 that_name = cv_name_from_symbol(bucket->v[i].kind, bucket->v[i].data);
     if (str8_match(name, that_name, 0)) {
-      return node;
+      return &bucket->v[i];
     }
   }
 
@@ -2532,12 +2536,12 @@ psi_release(PDB_PsiContext *psi)
   ProfEnd();
 }
 
-internal CV_SymbolNode *
+internal CV_Symbol *
 psi_push(PDB_PsiContext *psi, CV_Pub32Flags flags, U32 offset, U16 isect, String8 name)
 {
   CV_Symbol pub = cv_make_pub32(psi->arena, flags, offset, isect, name);
-  CV_SymbolNode *node = gsi_push(psi->gsi, &pub);
-  return node;
+  CV_Symbol *symbol = gsi_push(psi->gsi, &pub);
+  return symbol;
 }
 
 ////////////////////////////////
