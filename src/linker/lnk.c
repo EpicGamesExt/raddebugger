@@ -4091,7 +4091,7 @@ lnk_icf_obj_file_chksms_scan(LNK_Obj *obj)
 
 // Memoized per obj: leaders are shared across many follower objs, so without the memo the
 // scan reruns once per (follower obj x leader switch). The result slices the immutable
-// obj->data mapping, so the racy fill is idempotent (every worker writes identical bytes);
+// obj->coff.data mapping, so the racy fill is idempotent (every worker writes identical bytes);
 // the init flag is published last.
 internal String8
 lnk_icf_obj_file_chksms(LNK_Obj *obj)
@@ -5004,7 +5004,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
         obj->section_data_copies = push_array(arena, String8, obj->coff.sections.count_no_null + 1);
       }
       String8 src  = str8_substr(obj->coff.data, section_frange);
-      U8     *copy = push_array_no_zero(arena, U8, src.size);
+      U8     *copy = push_array_no_zero(g_sect_copy_arenas[worker_id], U8, src.size);
       MemoryCopy(copy, src.str, src.size);
       obj->section_data_copies[it.v.section_number] = str8(copy, src.size);
       section_data = obj->section_data_copies[it.v.section_number];
@@ -6541,8 +6541,16 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
     // patch relocs
     {
+      // dedicated per-worker arenas for the patched debug-section copies: free-list
+      // block reuse keeps the pages warm (a raw reserve+commit per copy paid ~11.6GB of
+      // fresh zero-page faults per link at FN scale), and lnk_build_pdb hands the whole
+      // set back with arena_release after the last $S reader
+      g_sect_copy_arena_count = tp->worker_count;
+      g_sect_copy_arenas      = push_array(arena->v[0], Arena *, g_sect_copy_arena_count);
+      for EachIndex(i, g_sect_copy_arena_count) { g_sect_copy_arenas[i] = arena_alloc(.name = "SECT_DATA_COPIES"); }
+
       LNK_ObjRelocPatcher task = { .image_data = image_data, .objs = objs, .image_base = pe.image_base, .image_section_table = image_section_table };
-      tp_for_parallel_prof(tp, arena, objs_count, lnk_obj_reloc_patcher, &task, "Patch Relocs");
+      tp_for_parallel_prof(tp, arena, objs_count, lnk_obj_reloc_patcher, &task, "Patch Relocs"); // arena: the per-obj section_data_copies String8 tables
     }
 
     // patch load config

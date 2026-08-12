@@ -854,6 +854,21 @@ lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx)
   return result;
 }
 
+// Drop the obj's patched debug-section copies: zero each entry so
+// lnk_obj_section_data_from_number
+// falls back to the (still-mapped) input view. The copy BYTES live on the shared
+// per-worker SECT_DATA_COPIES arenas (see lnk_obj_reloc_patcher) and are handed back
+// wholesale via arena_release at the caller; only call once every reader of the patched
+// bytes is done. Idempotent.
+internal void
+lnk_obj_drop_section_data_copies(LNK_Obj *obj)
+{
+  if (obj->section_data_copies == 0) { return; }
+  for (U32 section_number = 1; section_number <= obj->coff.sections.count_no_null; section_number += 1) {
+    obj->section_data_copies[section_number] = str8_zero();
+  }
+}
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_collect_obj_chunks_task)
 {

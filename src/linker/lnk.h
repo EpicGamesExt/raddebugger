@@ -233,6 +233,13 @@ typedef struct
   COFF_SectionHeader **image_section_table;
 } LNK_ObjRelocPatcher;
 
+// Per-worker arenas backing the patched debug-section copies (lnk_obj_reloc_patcher
+// pushes on g_sect_copy_arenas[worker_id]; arena_alloc recycles free-list blocks so the
+// pages are warm). Released wholesale in lnk_build_pdb after the last $S reader
+// (module write + global-record materialize), gated off when /PDBSTRIPPED follows.
+global Arena **g_sect_copy_arenas     = 0;
+global U64     g_sect_copy_arena_count = 0;
+
 typedef struct
 {
   U64 page_size;

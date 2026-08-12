@@ -3954,6 +3954,34 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     }
     barrier_wait(tp->barrier);
 
+    // size per-lane payload arenas for materializing the global records (mirrors the
+    // proc-ref pattern below): bucket CV_Symbol values must not point into the objs'
+    // patched debug-section copies -- those are dropped right after this pass in
+    // lnk_build_pdb, and GSI serialization reads the record bytes after that. Each lane owns the
+    // bucket shard [shard_min, shard_max) and copies exactly the records it inserts.
+    U64    *global_payload_sizes  = 0; // [worker_count]
+    Arena **global_payload_arenas = 0; // [worker_count]
+    if (task_id == 0) {
+      global_payload_sizes = push_array(scratch.arena, U64, tp->worker_count);
+    }
+    tp_broadcast(&global_payload_sizes);
+    {
+      U64 shard_min    = (task_id * gsi->bucket_count) / tp->worker_count;
+      U64 shard_max    = ((task_id + 1) * gsi->bucket_count) / tp->worker_count;
+      U64 payload_size = 0;
+      for EachIndex(i, symbol_count) {
+        U64 bucket_idx = symbol_hashes[i] % gsi->bucket_count;
+        if (bucket_idx < shard_min || bucket_idx >= shard_max) { continue; }
+        payload_size += AlignPow2(cv_raw_from_symbol(symbol_arr[i]).size, sizeof(void *));
+      }
+      global_payload_sizes[task_id] = payload_size;
+    }
+    barrier_wait(tp->barrier);
+    if (task_id == 0) {
+      global_payload_arenas = alloc_arena_many(gsi->arena, tp->worker_count, global_payload_sizes);
+    }
+    tp_broadcast(&global_payload_arenas);
+
     // size buckets up front so each one reallocs at most once for this wave (arena pushes are
     // single-threaded on task 0; sizing has no determinism impact)
     if (task_id == 0) {
@@ -3971,14 +3999,21 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     // so per-bucket order (which is serialized into the PDB) is byte-identical to a serial loop,
     // for any worker count -- no locks, no atomics.
     {
-      U64 shard_min = (task_id * gsi->bucket_count) / tp->worker_count;
-      U64 shard_max = ((task_id + 1) * gsi->bucket_count) / tp->worker_count;
+      U64    shard_min     = (task_id * gsi->bucket_count) / tp->worker_count;
+      U64    shard_max     = ((task_id + 1) * gsi->bucket_count) / tp->worker_count;
+      Arena *payload_arena = global_payload_arenas[task_id];
       for EachIndex(i, symbol_count) {
         U64 bucket_idx = symbol_hashes[i] % gsi->bucket_count;
         if (bucket_idx < shard_min || bucket_idx >= shard_max) { continue; }
         PDB_GsiSymbolBucket *bucket = &gsi->bucket_arr[bucket_idx];
         CV_Symbol     *dst    = &bucket->v[bucket->count];
-        *dst = cv_symbol_from_ptr(symbol_arr[i]);
+        // materialize: copy the raw record out of the obj's debug-section copy so the
+        // bucket value survives the copy release right after this pass in lnk_build_pdb
+        // (byte-identical copy; insert order and all sort keys unchanged)
+        String8 raw  = cv_raw_from_symbol(symbol_arr[i]);
+        U8     *copy = push_array_no_zero(payload_arena, U8, raw.size);
+        MemoryCopy(copy, raw.str, raw.size);
+        *dst = cv_symbol_from_ptr(copy);
         // deterministic same-name tie-break for the per-bucket sort in gsi_serialize_symbols_task
         // (gsi_symbol_is_before compares name -> offset -> kind -> data bytes): key on the content
         // hash of the full raw record instead of the compacted deduper slot index. Slot order is
@@ -4113,6 +4148,24 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     if (task_id == 0) { gsi->symbol_count += total_proc_ref_count; }
   }
   ProfEnd();
+
+  // the proc-ref build above was the LAST $S reader (publics come from the symbol
+  // table, GSI/PSI serialize reads the materialized payload copies): drop the patched
+  // debug-section copies here, before the publics/GSI staging stacks on top of them --
+  // releasing after the whole phase kept ~11.6GB overlapping this window on the FN
+  // editor DLL. Same /PDBSTRIPPED gate as elsewhere (its second build re-reads $S).
+  barrier_wait(tp->barrier);
+  if (task_id == 0 && task->free_sect_copies) {
+    ProfScope("Release Sect Data Copies") {
+      for EachIndex(obj_idx, task->cv->obj_count) {
+        lnk_obj_drop_section_data_copies(task->cv->obj_arr[obj_idx]);
+      }
+      for EachIndex(i, g_sect_copy_arena_count) {
+        if (g_sect_copy_arenas[i] != 0) { arena_release(g_sect_copy_arenas[i]); g_sect_copy_arenas[i] = 0; }
+      }
+    }
+  }
+  barrier_wait(tp->barrier);
 
   ProfBegin("Public Symbols");
   {
@@ -4278,6 +4331,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
   scratch_end(scratch);
 }
+
 
 internal U64
 lnk_write_debug_s_to_pdb_module(PDB_DbiModule *mod, CV_DebugS debug_s, String8Node *buf, U64 *buf_pos)
@@ -4514,6 +4568,18 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
 
       // collect mod source files
       String8List source_file_list = str8_split_by_string_chars(string_arenas[task_id], string_table, str8_lit("\0"), 0);
+      if (task->free_sect_copies) {
+        // the split nodes alias the string table inside the obj's debug-section copy
+        // (str8_split does not copy) and DBI file-info hashes these bytes after this
+        // pass releases the copies. Every piece is present in string_ht -- the dedup
+        // task split the very same table -- and its bucket bytes were rehomed to a
+        // surviving blob before the strtab add, so repoint at the bucket's copy.
+        for EachNode(n, String8Node, source_file_list.first) {
+          CV_StringBucket *bucket = cv_string_hash_table_lookup(task->string_ht, n->string);
+          Assert(bucket != 0);
+          if (bucket != 0) { n->string = bucket->string; }
+        }
+      }
       str8_list_concat_in_place(&mod->source_file_list, &source_file_list);
 
       temp_end(temp);
@@ -5162,6 +5228,13 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
 
   task.output = output_ptr;
 
+  // patched debug-section copies (obj->section_data_copies, GB-class at FN scale) can be
+  // handed back per-obj during the module-write pass -- UNLESS a /PDBSTRIPPED build
+  // follows: its pre-build stripping loop re-walks cv->debug_s_arr Symbols (which alias
+  // the copies) after this build returns. The RDI converter is safe (it reads the PDB
+  // artifact pages, not obj debug sections).
+  task.free_sect_copies = (config->pdb_stripped_name.size == 0);
+
   PDB_BuildHooks build_hooks = {0};
   if (output_ptr != 0) {
     build_hooks.stream_finalize = lnk_pdb_output_finalize_stream;
@@ -5195,6 +5268,28 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   ProfBegin("Merge String Tables");
   task.string_ht = cv_dedup_string_tables(tp_arena, tp, cv->obj_count, cv->debug_s_arr);
   cv_string_hash_table_assign_buffer_offsets(tp, task.string_ht);
+
+  // the deduped buckets alias the objs' patched debug-section copies (the dedup task
+  // splits each raw string table in place), and both /names (pdb_strtab_build memcpys
+  // bucket bytes at serialize time in pdb_build_dbi_info) and DBI file-info hash these
+  // bytes AFTER the module-write pass releases the copies -- rehome the winning buckets
+  // into their own blob first (total = the deduped /names payload, tiny next to the
+  // copies being released). Offsets are already assigned; bytes are identical, so the
+  // /names stream and every recorded offset are unchanged.
+  if (task.free_sect_copies && task.string_ht.total_string_size > 0) {
+    ProfBegin("Materialize String Table Bytes");
+    U8 *blob   = push_array_no_zero(tp_arena->v[0], U8, task.string_ht.total_string_size);
+    U64 cursor = 0;
+    for EachIndex(bucket_idx, task.string_ht.bucket_cap) {
+      CV_StringBucket *bucket = task.string_ht.buckets[bucket_idx];
+      if (bucket == 0) { continue; }
+      Assert(cursor + bucket->string.size <= task.string_ht.total_string_size);
+      MemoryCopy(blob + cursor, bucket->string.str, bucket->string.size);
+      bucket->string.str = blob + cursor;
+      cursor += bucket->string.size;
+    }
+    ProfEnd();
+  }
   ProfEnd();
   lnk_summary_phase_end(LNK_SummaryPhase_PdbStr);
 
@@ -5258,6 +5353,7 @@ ProfScope("Move Global Symbols")
       tp_barrier_end(tp);
       lnk_log(LNK_Log_Timers, "[pdb] move global symbols in %.2f ms (cohort %u)", (F64)(now_time_us() - phase_begin_us) / 1000.0, C);
     }
+
 ProfScope("Build GSI and PSI") pdb_build_gsi_psi(tp, task.pdb);
     if (output_ptr != 0) {
       lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->publics_sn);
