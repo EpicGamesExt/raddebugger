@@ -1725,10 +1725,6 @@ gsi_write_build_result(TP_Context         *tp,
   msf_stream_reserve(msf, gsi_sn, gsi_size);
   ProfEnd();
 
-  ProfBeginV("Reserve %M for symbols", build.symbol_data.size);
-  msf_stream_reserve(msf, symbols_sn, build.symbol_data.size);
-  ProfEnd();
-
   ProfBegin("Write GSI header");
   msf_stream_write_struct(msf, gsi_sn, &build.header);
   ProfEnd();
@@ -1745,9 +1741,8 @@ gsi_write_build_result(TP_Context         *tp,
   msf_stream_write(msf, gsi_sn, &build.compressed_bucket_arr[0], compressed_bucket_arr_size);
   ProfEnd();
   
-  ProfBegin("Write symbols [%M]", build.symbol_data.size);
-  msf_stream_write_string_parallel(tp, msf, symbols_sn, build.symbol_data);
-  ProfEnd();
+  // NOTE: the symbol payload itself was streamed into symbols_sn inside
+  // gsi_build_ex, window by window
 
   ProfEnd();
 }
@@ -2077,8 +2072,8 @@ psi_addr_map_from_gsi_records(TP_Context *tp, Arena *arena, PDB_GsiSortRecord *g
 internal
 THREAD_POOL_TASK_FUNC(gsi_size_buckets_task)
 {
-  U64                          bucket_idx  = task_id;
-  PDB_GsiSerializeSymbolsTask *task        = raw_task;
+  PDB_GsiSerializeSymbolsTask *task = raw_task;
+  U64 bucket_idx = task->bucket_base + task_id;
   CV_SymbolList               *bucket_list = &task->bucket_arr[bucket_idx];
   for (CV_SymbolNode *node = bucket_list->first; node != 0; node = node->next) {
     task->bucket_size_arr[bucket_idx] += cv_size_from_symbol(&node->data, task->symbol_align);
@@ -2150,8 +2145,8 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_pub32)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  U64                          bucket_idx = task_id;
-  PDB_GsiSerializeSymbolsTask *task       = raw_task;
+  PDB_GsiSerializeSymbolsTask *task = raw_task;
+  U64 bucket_idx = task->bucket_base + task_id;
 
   CV_SymbolList bucket = task->bucket_arr[bucket_idx];
 
@@ -2165,7 +2160,7 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_pub32)
   PDB_GsiSortRecord *sort_record_arr = task->sort_record_arr_arr[bucket_idx];
   U64                buffer_size     = task->bucket_size_arr[bucket_idx];
   U64                buffer_base     = task->bucket_off_arr[bucket_idx];
-  U8                *buffer          = task->buffer + buffer_base;
+  U8                *buffer          = task->buffer + (buffer_base - task->window_base);
 
   U64 sort_idx      = 0;
   U64 buffer_cursor = 0;
@@ -2201,8 +2196,8 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_symbols_task)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  U64                          bucket_idx  = task_id;
-  PDB_GsiSerializeSymbolsTask *task        = raw_task;
+  PDB_GsiSerializeSymbolsTask *task = raw_task;
+  U64 bucket_idx = task->bucket_base + task_id;
   CV_SymbolList                bucket = task->bucket_arr[bucket_idx];
 
   CV_Symbol **symbol_arr = push_array(scratch.arena, CV_Symbol *, bucket.count); 
@@ -2219,7 +2214,7 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_symbols_task)
     PDB_GsiSortRecord   *sort_record_arr = task->sort_record_arr_arr[bucket_idx];
     U64                  buffer_size     = task->bucket_size_arr[bucket_idx];
     U64                  buffer_base     = task->bucket_off_arr[bucket_idx];
-    U8                  *buffer          = task->buffer + buffer_base;
+    U8                  *buffer          = task->buffer + (buffer_base - task->window_base);
 
     U64 sort_idx      = 0;
     U64 buffer_cursor = 0;
@@ -2243,7 +2238,7 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_symbols_task)
 }
 
 internal PDB_GsiBuildResult
-gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_base, B32 is_pub32, U64 msf_page_size)
+gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, MSF_Context *msf, MSF_StreamNumber symbols_sn, U64 symbol_data_base, B32 is_pub32, U64 msf_page_size)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena,1);
@@ -2259,9 +2254,17 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
   // estimate each bucket size
   tp_for_parallel(tp, 0, gsi->bucket_count, gsi_size_buckets_task, &serial_task);
 
-  // prepare serial buffer
+  // prepare serial buffer -- a REUSED WINDOW, not a full staging copy: the
+  // whole symbol payload is GB-class at FN scale and used to sit committed
+  // alongside the payload copies it was serialized from (the link's commit
+  // peak). Buckets are serialized in groups that fit the window and streamed
+  // into the symbols stream immediately; absolute offsets are unchanged, so
+  // the emitted bytes are identical to the single-buffer path.
   U64 buffer_size = sum_array_u64(gsi->bucket_count, serial_task.bucket_size_arr);
-  serial_task.buffer         = push_array_no_zero(arena, U8, buffer_size);
+  U64 max_bucket_size = 0;
+  for EachIndex(bucket_idx, gsi->bucket_count) { max_bucket_size = Max(max_bucket_size, serial_task.bucket_size_arr[bucket_idx]); }
+  U64 window_cap = Max(MB(256), max_bucket_size);
+  serial_task.buffer         = push_array_no_zero(scratch.arena, U8, Min(window_cap, buffer_size ? buffer_size : 1));
   serial_task.bucket_off_arr = push_array_copy_u64(scratch.arena, serial_task.bucket_size_arr, gsi->bucket_count);
   u64_array_counts_to_offsets(gsi->bucket_count, serial_task.bucket_off_arr);
 
@@ -2273,9 +2276,26 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
     cursor += gsi->bucket_arr[bucket_idx].count;
   }
 
-  // fill out sort records & serialize symbols
+  // fill out sort records & serialize symbols, window by window
+  msf_stream_reserve(msf, symbols_sn, buffer_size);
   TP_TaskFunc *serial_func = is_pub32 ? gsi_serialize_pub32 : gsi_serialize_symbols_task;
-  tp_for_parallel(tp, 0, gsi->bucket_count, serial_func, &serial_task);
+  for (U64 window_lo = 0; window_lo < gsi->bucket_count;) {
+    U64 window_base = serial_task.bucket_off_arr[window_lo];
+    U64 window_hi   = window_lo;
+    while (window_hi < gsi->bucket_count &&
+           (serial_task.bucket_off_arr[window_hi] + serial_task.bucket_size_arr[window_hi]) - window_base <= window_cap) {
+      window_hi += 1;
+    }
+    Assert(window_hi > window_lo); // window_cap >= max_bucket_size guarantees progress
+    serial_task.bucket_base = window_lo;
+    serial_task.window_base = window_base;
+    tp_for_parallel(tp, 0, window_hi - window_lo, serial_func, &serial_task);
+    U64 window_end = (window_hi < gsi->bucket_count) ? serial_task.bucket_off_arr[window_hi] : buffer_size;
+    if (window_end > window_base) {
+      msf_stream_write_parallel(tp, msf, symbols_sn, serial_task.buffer, window_end - window_base);
+    }
+    window_lo = window_hi;
+  }
 
   ProfEnd();
 
@@ -2326,7 +2346,7 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
   result.compressed_bucket_count = compressed_offset_count;
   result.compressed_bucket_arr   = compressed_offset_arr;
   result.total_hash_size         = sizeof(header) + header.hash_record_arr_size + header.bucket_data_size;
-  result.symbol_data             = str8(serial_task.buffer, buffer_size);
+  result.symbol_data             = str8(0, buffer_size); // already streamed into symbols_sn window by window; size kept for logging
   
   scratch_end(scratch);
   ProfEnd();
@@ -2340,7 +2360,7 @@ gsi_build(TP_Context *tp, PDB_GsiContext *gsi, MSF_Context *msf, MSF_StreamNumbe
   Temp scratch = scratch_begin(0,0);
 
   U64 symbol_data_base = msf_stream_get_pos(msf, symbols_sn);
-  PDB_GsiBuildResult build = gsi_build_ex(tp, scratch.arena, gsi, symbol_data_base, /* is_pub32: */ 0, msf->page_size);
+  PDB_GsiBuildResult build = gsi_build_ex(tp, scratch.arena, gsi, msf, symbols_sn, symbol_data_base, /* is_pub32: */ 0, msf->page_size);
   gsi_write_build_result(tp, build, msf, sn, symbols_sn);
 
   scratch_end(scratch);
@@ -2473,7 +2493,7 @@ psi_build(TP_Context *tp, PDB_PsiContext *psi, MSF_Context *msf, MSF_StreamNumbe
   Temp scratch = scratch_begin(0,0);
   
   U64 symbol_data_base = msf_stream_get_pos(msf, symbols_sn);
-  PDB_GsiBuildResult gsi_build = gsi_build_ex(tp, scratch.arena, psi->gsi, symbol_data_base, /* is_pub32: */ 1, msf->page_size);
+  PDB_GsiBuildResult gsi_build = gsi_build_ex(tp, scratch.arena, psi->gsi, msf, symbols_sn, symbol_data_base, /* is_pub32: */ 1, msf->page_size);
   
   ProfBegin("Address Map");
 

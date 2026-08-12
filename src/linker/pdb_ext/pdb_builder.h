@@ -213,8 +213,10 @@ typedef struct PDB_GsiSerializeSymbolsTask
   U64                  symbol_align;
   CV_SymbolList       *bucket_arr;
   U64                 *bucket_size_arr;
-  U64                 *bucket_off_arr;
-  U8                  *buffer;
+  U64                 *bucket_off_arr; // absolute offsets within the full symbol payload
+  U8                  *buffer;         // window backing: holds buckets [bucket_base, bucket_base+N)
+  U64                  bucket_base;    // first bucket of the current window
+  U64                  window_base;    // absolute offset the window starts at
   PDB_GsiSortRecord  **sort_record_arr_arr;
   PDB_GsiSortRecord   *sort_record_arr;
 } PDB_GsiSerializeSymbolsTask;
@@ -365,7 +367,7 @@ internal PDB_GsiContext *   gsi_alloc(void);
 internal void               gsi_build(TP_Context *tp, PDB_GsiContext *gsi, MSF_Context *msf, MSF_StreamNumber gsi_sn, MSF_StreamNumber symbols_sn);
 internal void               gsi_release(PDB_GsiContext *gsi);
 internal void               gsi_write_build_result(TP_Context *tp, PDB_GsiBuildResult build, MSF_Context *msf, MSF_StreamNumber sn, MSF_StreamNumber symbols_sn);
-internal PDB_GsiBuildResult gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_base, B32 export_symbol_ptr_arr, U64 msf_page_size);
+internal PDB_GsiBuildResult gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, MSF_Context *msf, MSF_StreamNumber symbols_sn, U64 symbol_data_base, B32 is_pub32, U64 msf_page_size);
 internal U32                gsi_hash(PDB_GsiContext *gsi, String8 input);
 internal CV_SymbolNode *    gsi_push(PDB_GsiContext *gsi, CV_Symbol *symbol);
 internal void               gsi_push_many_arr(TP_Context *tp, PDB_GsiContext *gsi, U64 count, CV_SymbolNode **symbol_arr);

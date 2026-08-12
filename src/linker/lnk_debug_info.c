@@ -4332,6 +4332,9 @@ lnk_write_debug_s_to_pdb_module(PDB_DbiModule *mod, CV_DebugS debug_s, String8No
   return mod_cursor;
 }
 
+typedef struct LNK_PdbOutput LNK_PdbOutput;
+internal void lnk_pdb_output_enqueue_stream(LNK_PdbOutput *output, MSF_Context *msf, MSF_StreamNumber sn);
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
 {
@@ -4478,6 +4481,15 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
       str8_list_concat_in_place(&mod->source_file_list, &source_file_list);
 
       temp_end(temp);
+
+      // the module stream is final (symbols + C13 written, checksum name
+      // offsets patched): hand it to the background writer NOW so its pages
+      // flush + decommit while the remaining modules are still being written
+      // -- enqueueing all modules after the pass kept the entire module
+      // payload (GB-class) committed through the globals phase
+      if (task->output != 0) {
+        lnk_pdb_output_enqueue_stream(task->output, task->pdb->msf, mod->sn);
+      }
     }
     barrier_wait(tp->barrier);
   }
@@ -4552,7 +4564,7 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   }
 }
 
-typedef struct
+struct LNK_PdbOutput
 {
   LNK_BackgroundFileWriter *writer;
   LNK_BackgroundFile       *file;
@@ -4560,7 +4572,7 @@ typedef struct
   U64                       sealed_stream_count;
   U64                       sealed_stream_cap;
   B32                       decommit_flushed; // off when /RAD_DEBUG re-reads the PDB page memory for RDI conversion
-} LNK_PdbOutput;
+};
 
 typedef struct LNK_MsfPageCursor
 {
@@ -4589,8 +4601,13 @@ internal void
 lnk_pdb_output_enqueue_stream(LNK_PdbOutput *output, MSF_Context *msf, MSF_StreamNumber sn)
 {
   if (sn == MSF_INVALID_STREAM_NUMBER) { return; }
-  Assert(output->sealed_stream_count < output->sealed_stream_cap);
-  output->sealed_streams[output->sealed_stream_count++] = sn;
+  // atomic slot: module streams enqueue from pool workers as each module
+  // finishes; order in sealed_streams is irrelevant (set semantics for the
+  // remaining-pages bitmap), file writes are positional, so output bytes are
+  // unaffected by completion order
+  U64 slot = ins_atomic_u64_add_eval(&output->sealed_stream_count, 1) - 1;
+  Assert(slot < output->sealed_stream_cap);
+  output->sealed_streams[slot] = sn;
 
   MSF_Stream *stream = msf_find_stream(msf, sn);
   Assert(stream != 0);
@@ -5107,6 +5124,8 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
     }
   }
 
+  task.output = output_ptr;
+
   PDB_BuildHooks build_hooks = {0};
   if (output_ptr != 0) {
     build_hooks.stream_finalize = lnk_pdb_output_finalize_stream;
@@ -5167,7 +5186,7 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
         task.mod_arr[obj_idx] = dbi_push_module(task.pdb->dbi, cv->obj_arr[obj_idx]->path, lnk_obj_get_lib_path(cv->obj_arr[obj_idx]));
       }
 
-    ProfScope("Write Modules")
+ProfScope("Write Modules")
     {
       lnk_summary_phase_begin(LNK_SummaryPhase_PdbGsi);
       U64 phase_begin_us = now_time_us();
@@ -5189,12 +5208,8 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
       lnk_log(LNK_Log_Timers, "[pdb] write modules in %.2f ms (cohort %u)", (F64)(now_time_us() - phase_begin_us) / 1000.0, C);
       lnk_summary_phase_end(LNK_SummaryPhase_PdbMod);
     }
-    if (output_ptr != 0) {
-      for EachIndex(obj_idx, cv->obj_count) {
-        lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.mod_arr[obj_idx]->sn);
-      }
-    }
-    ProfScope("Move Global Symbols")
+    // module streams were enqueued per-obj inside lnk_write_pdb_modules
+ProfScope("Move Global Symbols")
     {
       U64 phase_begin_us = now_time_us();
       U32 C = tp_barrier_begin(tp);
@@ -5207,7 +5222,7 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
       tp_barrier_end(tp);
       lnk_log(LNK_Log_Timers, "[pdb] move global symbols in %.2f ms (cohort %u)", (F64)(now_time_us() - phase_begin_us) / 1000.0, C);
     }
-    ProfScope("Build GSI and PSI") pdb_build_gsi_psi(tp, task.pdb);
+ProfScope("Build GSI and PSI") pdb_build_gsi_psi(tp, task.pdb);
     if (output_ptr != 0) {
       lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->publics_sn);
       lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->globals_sn);

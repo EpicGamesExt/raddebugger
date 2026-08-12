@@ -269,6 +269,7 @@ typedef struct
   Rng1U64Array         image_section_file_ranges;
   U64                 *image_section_file_section_numbers;
   PDB_DbiSCArray      *sc_arrays; // [obj_count]
+  struct LNK_PdbOutput *output; // when non-null, module streams enqueue to the background writer as they complete
 } LNK_BuildPdb;
 
 typedef struct
