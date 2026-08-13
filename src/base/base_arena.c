@@ -227,8 +227,8 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
     
     if(new_block == 0)
     {
-      U64 res_size = current->res_size;
-      U64 cmt_size = current->cmt_size;
+      U64 res_size = arena->res_size;
+      U64 cmt_size = arena->cmt_size;
       if(size + ARENA_HEADER_SIZE > res_size)
       {
         res_size = AlignPow2(size + ARENA_HEADER_SIZE, align);
@@ -236,9 +236,9 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
       }
       new_block = arena_alloc(.reserve_size = res_size,
                               .commit_size  = cmt_size,
-                              .flags        = current->flags,
-                              .allocation_site_file = current->allocation_site_file,
-                              .allocation_site_line = current->allocation_site_line);
+                              .flags        = arena->flags,
+                              .allocation_site_file = arena->allocation_site_file,
+                              .allocation_site_line = arena->allocation_site_line);
       
       size_to_zero = 0;
     }
