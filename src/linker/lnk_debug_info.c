@@ -4897,33 +4897,19 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
   // compute sizes for module streams
   for EachIndex(i, obj_indices.count) {
     U64 obj_idx = obj_indices.v[i];
-    // Streaming-ring P2 slice A: replay the obj's deferred $S TI/kind fixups (journaled at
-    // merge time) before ANY consumer touches these bytes -- the sizing walk here, the write
-    // pass below, the globals collect after this barrier pass, and the /PDBSTRIPPED re-walk
-    // after lnk_build_pdb returns. The sizing loop visits every obj in the lane partition --
-    // including objs that end up with mod->sn == MSF_INVALID_STREAM_NUMBER, whose $S is still
-    // consumed by globals -- so no obj misses its fixups. The parity walk below is fixup-
-    // agnostic (node bytes and resolver alias the same backing), but replaying first keeps
-    // both sides post-fixup.
-    if (g_debug_s_window) {
-      // P3.3: consume through the per-worker window -- raw view bytes re-read + reloc-patched
-      // + journal-replayed into a temp that dies with this iteration (the arena keeps its
-      // high-water pages committed, so the window is reused across objs). The backing views
-      // are never written; the persistent patched-copy set never exists on this config.
-      Temp wtemp = temp_begin(scratch.arena);
-      CV_DebugS win = lnk_obj_window_debug_s(wtemp.arena, task->cv, obj_idx, task->pe.image_base, task->image_section_table, 0);
-      lnk_assert_debug_s_prov_parity(task->cv->obj_arr[obj_idx], &task->cv->debug_s_arr[obj_idx]); // debug-only P1.2 parity (raw-view provenance)
-      // P2b: fuse the globals-candidate + proc-ref extraction into this visit (post-fixup bytes,
-      // same as the old post-modules walks) -- the globals pass then does no $S decode walks
-      lnk_extract_gsi_inputs_for_obj(task, obj_idx, task_id, &win);
-      lnk_write_debug_s_to_pdb_module(task->mod_arr[obj_idx], win, 0, 0);
-      temp_end(wtemp);
-    } else {
-      lnk_apply_debug_s_fixups_for_obj(task->cv, obj_idx);
-      lnk_assert_debug_s_prov_parity(task->cv->obj_arr[obj_idx], &task->cv->debug_s_arr[obj_idx]); // debug-only P1.2 parity
-      lnk_extract_gsi_inputs_for_obj(task, obj_idx, task_id, &task->cv->debug_s_arr[obj_idx]);
-      lnk_write_debug_s_to_pdb_module(task->mod_arr[obj_idx], task->cv->debug_s_arr[obj_idx], 0, 0);
-    }
+    // P3.4: sizing needs NO window fill. Every term of the module stream size is either pure
+    // subsection metadata (C13 layout kinds come from the data_list INDEX, sizes/alignment
+    // from node sizes) or -- for sym_data_size -- a read-only walk of the Symbols records'
+    // size prefixes + kinds. Both are invariant under the window transforms: relocs and TI
+    // fixups never touch record size/kind fields, and the journal's kind REWRITES are
+    // classification-invariant for every predicate the sizing walk uses
+    // (cv_is_scope_symbol treats GPROC32_ID/LPROC32_ID like their non-ID rewrites,
+    // cv_is_end_symbol treats PROC_ID_END like END, and no rewrite produces or removes a
+    // global/typedef/SKIP/0x1176 kind). So size straight off the raw mapped view under
+    // g_debug_s_window (the patched backing otherwise) -- the write pass below asserts the
+    // re-accumulated sizes match. Fixup replay, parity, and the GSI extraction all move to
+    // the write pass's single fill.
+    lnk_write_debug_s_to_pdb_module(task->mod_arr[obj_idx], task->cv->debug_s_arr[obj_idx], 0, 0);
   }
   barrier_wait(tp->barrier);
 
@@ -4946,20 +4932,46 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     U64            obj_idx  = obj_indices.v[i];
     PDB_DbiModule *mod      = task->mod_arr[obj_idx];
 
-    if (mod->sn == MSF_INVALID_STREAM_NUMBER) { continue; }
+    if (mod->sn == MSF_INVALID_STREAM_NUMBER) {
+#if BUILD_DEBUG
+      // an obj skipped here must have NO Symbols payload -- otherwise sym_data_size >= sig
+      // would have allocated a stream -- so skipping the extraction below loses nothing
+      Assert(cv_sub_section_from_debug_s(task->cv->debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols).total_size == 0);
+#endif
+      temp_end(temp);
+      continue;
+    }
 
-    // P3.3: re-fill the window for the stream write (second read of the obj's $S bytes --
-    // deterministic re-fill: raw + relocs + journal replays to the exact sizing-pass bytes)
-    CV_DebugS      debug_s  = g_debug_s_window
-                            ? lnk_obj_window_debug_s(temp.arena, task->cv, obj_idx, task->pe.image_base, task->image_section_table, 0)
-                            : task->cv->debug_s_arr[obj_idx];
-    String8List    mod_data = msf_data_from_sn(temp.arena, task->pdb->msf, mod->sn);
+    // P3.4: THE single window fill per obj in module write (sizing above reads raw metadata/
+    // headers only). Copy mode ( /OPT:GCTYPES ) consumes the patched backing; its journal was
+    // consumed eagerly, so the replay call is a structural no-op.
+    CV_DebugS debug_s;
+    if (g_debug_s_window) {
+      debug_s = lnk_obj_window_debug_s(temp.arena, task->cv, obj_idx, task->pe.image_base, task->image_section_table, 0);
+    } else {
+      lnk_apply_debug_s_fixups_for_obj(task->cv, obj_idx);
+      debug_s = task->cv->debug_s_arr[obj_idx];
+    }
+    lnk_assert_debug_s_prov_parity(task->cv->obj_arr[obj_idx], &task->cv->debug_s_arr[obj_idx]); // debug-only P1.2 parity
+    // P2b: globals-candidate + proc-ref extraction fused into this (now only) fill
+    lnk_extract_gsi_inputs_for_obj(task, obj_idx, task_id, &debug_s);
+
+    String8List mod_data = msf_data_from_sn(temp.arena, task->pdb->msf, mod->sn);
 
     if (mod_data.node_count) {
-      lnk_assert_debug_s_prov_parity(task->cv->obj_arr[obj_idx], &task->cv->debug_s_arr[obj_idx]); // debug-only P1.2 parity
+#if BUILD_DEBUG
+      // raw-header sizing vs post-transform write must agree byte-for-byte
+      U64 size_check[4] = { mod->sym_data_size, mod->c11_data_size, mod->c13_data_size, mod->globrefs_size };
+#endif
       String8Node buf = *mod_data.first;
       U64         pos = 0;
       lnk_write_debug_s_to_pdb_module(mod, debug_s, &buf, &pos);
+#if BUILD_DEBUG
+      Assert(mod->sym_data_size == size_check[0]);
+      Assert(mod->c11_data_size == size_check[1]);
+      Assert(mod->c13_data_size == size_check[2]);
+      Assert(mod->globrefs_size == size_check[3]);
+#endif
 
       // sub range symbol data pages and patch symbol tree offsets
       if (mod->sym_data_size) {
