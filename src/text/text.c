@@ -3936,7 +3936,11 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
             default:{}break;
             case TXT_TokenKind_String:
             {
-              if(herestring_marker.size == 0 && byte == '"')
+              if(byte == 'R' && next_byte == '"')
+              {
+                active_token_end_off = off+2;
+              }
+              else if(herestring_marker.size == 0 && byte == '"')
               {
                 active_token_end_off = off+1;
               }

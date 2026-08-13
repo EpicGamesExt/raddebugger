@@ -1615,6 +1615,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       //
       LNX_DMN_Process *process = lnx_dmn_process_from_pid(wait_id);
       LNX_DMN_Thread *thread = lnx_dmn_thread_from_pid(wait_id);
+      if(process == 0 && thread != 0)
+      {
+        process = thread->process;
+      }
       int wifexited   = WIFEXITED(status);
       int wifsignaled = WIFSIGNALED(status);
       int wifstopped  = WIFSTOPPED(status);
@@ -1640,6 +1644,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
       B32 thread_done_report_events = 0;
       U64 thread_done_exit_code = 0;
       B32 thread_new = 0;
+      pid_t thread_new_pid = 0;
       LNX_DMN_ThreadState thread_new_state = LNX_DMN_ThreadState_Null;
       B32 thread_new_report_events = 0;
       LNX_DMN_Process *thread_new_parent = process;
@@ -1718,7 +1723,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
         B32 thread_running = (thread && thread->state == LNX_DMN_ThreadState_Running);
         
         // rjf: update thread running state
-        if(thread)
+        if(thread_running)
         {
           if(wifstopped && !wifsignaled && !wifexited)
           {
@@ -2105,6 +2110,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               if(LNX_RETRY_ON_EINTR(ptrace(PTRACE_GETEVENTMSG, wait_id, 0, &new_tid)) >= 0)
               {
                 thread_new = 1;
+                thread_new_pid = new_tid;
                 thread_new_report_events = 0;
                 thread_new_state = LNX_DMN_ThreadState_PendingCreation;
                 thread_new_parent = thread->process;
@@ -2697,7 +2703,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           Arena *ctx_arena = arena_alloc();
           LNX_DMN_Probe **known_probes = push_array(ctx_arena, LNX_DMN_Probe *, LNX_DMN_ProbeKind_COUNT);
           {
-            Temp scratch = scratch_begin(0, 0);
+            Temp scratch = scratch_begin(&arena, 1);
             
             // rjf: get dl path for this pid
             String8 dl_path = {0};
@@ -2771,7 +2777,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   if(lo_vaddr == auxv.base)
                   {
                     dl_path = parts.node_count == 5 ? str8_zero() : parts.last->string;
-                    dl_path = push_str8_copy(arena, dl_path);
+                    dl_path = push_str8_copy(scratch.arena, dl_path);
                     break;
                   }
                 }
@@ -2859,7 +2865,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
               U64 probes_base = stapsdt_base_shdr.sh_addr;
               
               Rng1U64  note_range     = shift_1u64(r1u64(stapsdt_shdr.sh_offset, stapsdt_shdr.sh_offset + stapsdt_shdr.sh_size), offset);
-              void    *raw_note       = push_array(arena, U8, stapsdt_shdr.sh_size);
+              void    *raw_note       = push_array(ctx_arena, U8, stapsdt_shdr.sh_size);
               U64      note_read_size = lnx_dmn_read(dl_fd, note_range, raw_note);
               if(note_read_size != dim_1u64(note_range)) { goto exit; }
               
@@ -2908,12 +2914,12 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   
                   probe.provider  = provider;
                   probe.name      = name;
-                  probe.args      = stap_arg_array_from_string(arena, arch, args);
+                  probe.args      = stap_arg_array_from_string(ctx_arena, arch, args);
                   probe.pc        = pc + probe_rebase;
                   probe.semaphore = semaphore ? semaphore + probe_rebase : 0;
                 }
                 
-                LNX_DMN_ProbeNode *n = push_array(arena, LNX_DMN_ProbeNode, 1);
+                LNX_DMN_ProbeNode *n = push_array(ctx_arena, LNX_DMN_ProbeNode, 1);
                 n->v = probe;
                 SLLQueuePush(probes.first, probes.last, n);
                 probes.count += 1;
@@ -3010,6 +3016,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           thread_new_state = LNX_DMN_ThreadState_Stopped;
           thread_new_parent = new_process;
           thread_new_report_events = 1;
+          thread_new_pid = wait_id;
         }
       }
       
@@ -3038,7 +3045,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           
           // rjf: allocate thread
           new_thread = &lnx_dmn_entity_alloc(LNX_DMN_EntityKind_Thread)->thread;
-          new_thread->tid       = wait_id;
+          new_thread->tid       = thread_new_pid;
           new_thread->state     = thread_new_state;
           new_thread->process   = thread_new_parent;
           new_thread->reg_block = reg_block;
@@ -3049,7 +3056,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           
           // rjf: map id -> thread
           {
-            U64 key = (U64)wait_id;
+            U64 key = (U64)thread_new_pid;
             U64 hash = u64_hash_from_str8(str8_struct(&key));
             U64 slot_idx = hash%lnx_dmn_state->thread_from_tid_slots_count;
             DLLPushBack_NP(lnx_dmn_state->thread_from_tid_slots[slot_idx].first, lnx_dmn_state->thread_from_tid_slots[slot_idx].last, new_thread, tid_next, tid_prev);
@@ -3188,7 +3195,8 @@ dmn_halt(U64 code, U64 user_data)
       lnx_dmn_state->halt_user_data = user_data;
       for EachNode(process, LNX_DMN_Process, lnx_dmn_state->first_process)
       {
-        if(LNX_RETRY_ON_EINTR(kill(process->pid, SIGSTOP)) < 0) { Assert(0 && "failed to send SIGSTOP"); }
+        int kill_result = LNX_RETRY_ON_EINTR(kill(process->pid, SIGSTOP));
+        int x = 0;
       }
     }
   }
