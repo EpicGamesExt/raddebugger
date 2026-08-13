@@ -5339,14 +5339,13 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     PDB_GsiContext *gsi = task->pdb->gsi;
 
     // positional flatten in ascending obj-index order (deterministic for any cohort
-    // width/schedule) -- {hash, flat} sort entries + parallel position arrays
+    // width/schedule). Keep only {hash, flat} sort entries here: the per-obj candidate
+    // arrays remain live through this phase and are already indexed by flat-base + local,
+    // so copying their hash/offset/node/size columns into scratch would duplicate 24 bytes
+    // per candidate at the link's peak-memory phase.
     U64             global_symbol_count = 0;
     U64            *cand_offsets        = 0; // [obj_count+1] prefix sums in obj-index order
     LNK_GsiSortEnt *sort_ents           = 0; // [N] (hash, flat) -- sorted below
-    U64            *flat_hashes         = 0; // [N]
-    U64            *flat_offs           = 0; // [N]
-    U32            *flat_nodes          = 0; // [N]
-    U32            *flat_sizes          = 0; // [N]
     U32            *grp_of_flat         = 0; // [N] group id | LNK_GSI_LEADER_BIT
     if (task_id == 0) {
       cand_offsets = push_array_no_zero(scratch.arena, U64, task->cv->obj_count + 1);
@@ -5359,29 +5358,17 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
       global_symbol_count = acc;
       U64 n = global_symbol_count ? global_symbol_count : 1;
       sort_ents   = push_array_no_zero(scratch.arena, LNK_GsiSortEnt, n);
-      flat_hashes = push_array_no_zero(scratch.arena, U64, n);
-      flat_offs   = push_array_no_zero(scratch.arena, U64, n);
-      flat_nodes  = push_array_no_zero(scratch.arena, U32, n);
-      flat_sizes  = push_array_no_zero(scratch.arena, U32, n);
       grp_of_flat = push_array_no_zero(scratch.arena, U32, n);
     }
     tp_broadcast(&global_symbol_count);
     tp_broadcast(&cand_offsets);
     tp_broadcast(&sort_ents);
-    tp_broadcast(&flat_hashes);
-    tp_broadcast(&flat_offs);
-    tp_broadcast(&flat_nodes);
-    tp_broadcast(&flat_sizes);
     tp_broadcast(&grp_of_flat);
 
     for (U64 obj_idx = task_id; obj_idx < task->cv->obj_count; obj_idx += tp->worker_count) {
       LNK_GsiPreExtractObj *pre = &task->preext[obj_idx];
       if (pre->cand_count == 0) { continue; }
       U64 base = cand_offsets[obj_idx];
-      MemoryCopyTyped(&flat_hashes[base], pre->cand_hashes, pre->cand_count);
-      MemoryCopyTyped(&flat_offs  [base], pre->cand_offs,   pre->cand_count);
-      MemoryCopyTyped(&flat_nodes [base], pre->cand_nodes,  pre->cand_count);
-      MemoryCopyTyped(&flat_sizes [base], pre->cand_sizes,  pre->cand_count);
       for EachIndex(k, pre->cand_count) {
         sort_ents[base + k].hash     = pre->cand_hashes[k];
         sort_ents[base + k].flat_idx = base + k;
@@ -5509,8 +5496,10 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     tp_broadcast(&winner_ptrs);
 
     for (U64 obj_idx = task_id; obj_idx < task->cv->obj_count; obj_idx += tp->worker_count) {
-      for (U64 k = cand_offsets[obj_idx], opl = cand_offsets[obj_idx+1]; k < opl; k += 1) {
-        if (grp_of_flat[k] & LNK_GSI_LEADER_BIT) { mat_sizes[task_id] += AlignPow2(flat_sizes[k], sizeof(void *)); }
+      LNK_GsiPreExtractObj *pre = &task->preext[obj_idx];
+      U64 lo = cand_offsets[obj_idx], opl = cand_offsets[obj_idx+1];
+      for (U64 k = lo; k < opl; k += 1) {
+        if (grp_of_flat[k] & LNK_GSI_LEADER_BIT) { mat_sizes[task_id] += AlignPow2(pre->cand_sizes[k - lo], sizeof(void *)); }
       }
     }
     barrier_wait(tp->barrier);
@@ -5521,6 +5510,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
 
     for (U64 obj_idx = task_id; obj_idx < task->cv->obj_count; obj_idx += tp->worker_count) {
       U64 lo = cand_offsets[obj_idx], opl = cand_offsets[obj_idx+1];
+      LNK_GsiPreExtractObj *pre = &task->preext[obj_idx];
 
       B32 any_leader = 0;
       for (U64 k = lo; k < opl; k += 1) { if (grp_of_flat[k] & LNK_GSI_LEADER_BIT) { any_leader = 1; break; } }
@@ -5537,12 +5527,14 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
       Arena *dst_arena = mat_arenas[task_id];
       for (U64 k = lo; k < opl; k += 1) {
         if (!(grp_of_flat[k] & LNK_GSI_LEADER_BIT)) { continue; }
-        U8 *src  = node_base[flat_nodes[k]] + flat_offs[k];
-        U8 *copy = push_array_no_zero(dst_arena, U8, flat_sizes[k]);
-        MemoryCopy(copy, src, flat_sizes[k]);
+        U64 local_idx = k - lo;
+        U32 size = pre->cand_sizes[local_idx];
+        U8 *src  = node_base[pre->cand_nodes[local_idx]] + pre->cand_offs[local_idx];
+        U8 *copy = push_array_no_zero(dst_arena, U8, size);
+        MemoryCopy(copy, src, size);
 #if BUILD_DEBUG
         // re-read fidelity: the fresh window fill must reproduce the visit-time bytes exactly
-        Assert(flat_hashes[k] == u64_hash_from_str8(str8(copy, flat_sizes[k])));
+        Assert(pre->cand_hashes[local_idx] == u64_hash_from_str8(str8(copy, size)));
 #endif
         winner_ptrs[grp_of_flat[k] & ~LNK_GSI_LEADER_BIT] = copy;
       }
@@ -5564,6 +5556,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
 
     for (U64 obj_idx = task_id; obj_idx < task->cv->obj_count; obj_idx += tp->worker_count) {
       U64 lo = cand_offsets[obj_idx], opl = cand_offsets[obj_idx+1];
+      LNK_GsiPreExtractObj *pre = &task->preext[obj_idx];
 
       B32 any_member = 0;
       for (U64 k = lo; k < opl; k += 1) { if (!(grp_of_flat[k] & LNK_GSI_LEADER_BIT)) { any_member = 1; break; } }
@@ -5579,20 +5572,22 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
 
       for (U64 k = lo; k < opl; k += 1) {
         if (grp_of_flat[k] & LNK_GSI_LEADER_BIT) { continue; }
+        U64     local_idx = k - lo;
         U64     grp    = grp_of_flat[k];
-        U8     *src    = node_base[flat_nodes[k]] + flat_offs[k];
+        U32     size   = pre->cand_sizes[local_idx];
+        U8     *src    = node_base[pre->cand_nodes[local_idx]] + pre->cand_offs[local_idx];
         String8 leader = cv_raw_from_symbol(winner_ptrs[grp]);
 #if BUILD_DEBUG
-        Assert(flat_hashes[k] == u64_hash_from_str8(str8(src, flat_sizes[k])));
+        Assert(pre->cand_hashes[local_idx] == u64_hash_from_str8(str8(src, size)));
 #endif
-        if (leader.size == flat_sizes[k] && MemoryMatch(leader.str, src, flat_sizes[k])) { continue; }
+        if (leader.size == size && MemoryMatch(leader.str, src, size)) { continue; }
         // genuine hash collision: keep the bytes (transient cand arena, dies with the phase)
         LNK_GsiMismatch *m = push_array_no_zero(task->cand_arenas[task_id], LNK_GsiMismatch, 1);
-        U8 *bytes_copy = push_array_no_zero(task->cand_arenas[task_id], U8, flat_sizes[k]);
-        MemoryCopy(bytes_copy, src, flat_sizes[k]);
+        U8 *bytes_copy = push_array_no_zero(task->cand_arenas[task_id], U8, size);
+        MemoryCopy(bytes_copy, src, size);
         m->grp      = grp;
         m->flat_idx = k;
-        m->bytes    = str8(bytes_copy, flat_sizes[k]);
+        m->bytes    = str8(bytes_copy, size);
         m->next     = mismatch_lists[task_id];
         mismatch_lists[task_id]   = m;
         mismatch_counts[task_id] += 1;
