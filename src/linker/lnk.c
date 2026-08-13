@@ -4943,40 +4943,15 @@ lnk_compute_win32_image_header_size(LNK_Config *config, U64 sect_count)
   return image_header_size;
 }
 
-// reloc patch ordering: sort each section's relocs by apply_off so the RMW
-// write stream into the image is monotone-forward (HW-prefetchable) instead of
-// scattered in on-disk table order. apply_off is the primary key; orig_idx is a
-// tiebreak so the total order is deterministic and the final bytes are identical
-// to the unsorted patch order (each reloc writes its own disjoint field; only a
-// pathological same-apply_off overlap could depend on order, and the orig_idx
-// tiebreak preserves the original sequence there too).
-typedef struct LNK_RelocSortKey
-{
-  COFF_Reloc reloc;
-  U32        orig_idx;
-} LNK_RelocSortKey;
-
-internal int
-lnk_reloc_sort_key_is_before(void *raw_a, void *raw_b)
-{
-  LNK_RelocSortKey *a = raw_a, *b = raw_b;
-  if (a->reloc.apply_off != b->reloc.apply_off) {
-    return a->reloc.apply_off < b->reloc.apply_off;
-  }
-  return a->orig_idx < b->orig_idx;
-}
-
 internal
 THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(0, 0);
 
   LNK_ObjRelocPatcher *task = raw_task;
   LNK_Obj             *obj  = task->objs[task_id];
 
-  COFF_FileHeaderInfo  obj_header    = obj->coff.header;
-  String8              string_table  = lnk_coff_string_table_from_obj(obj);
+  String8 string_table = lnk_coff_string_table_from_obj(obj);
 
   for LNK_EachCoffSection(it, obj) {
     COFF_SectionHeader *section_header = it.v.header;
@@ -5002,6 +4977,10 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
       // A relocation-free debug section can stay on the clean input view.
       if (relocs.count == 0) { continue; }
 
+      // With the default streaming window, .debug$S is reconstructed on demand during
+      // module writing, so no persistent patched copy is needed.
+      if (g_debug_s_window && str8_match(coff_name_from_section_header(string_table, section_header), str8_lit(".debug$S"), 0)) { continue; }
+
       if (obj->section_data_copies == 0) {
         obj->section_data_copies = push_array(arena, String8, obj->coff.sections.count_no_null + 1);
       }
@@ -5014,92 +4993,10 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
       section_data = str8_substr(task->image_data, section_frange);
     }
 
-    // apply relocs (sorted by apply_off for monotone-forward image writes)
-    Temp reloc_temp = temp_begin(scratch.arena);
-    LNK_RelocSortKey *sorted_relocs = push_array_no_zero(reloc_temp.arena, LNK_RelocSortKey, relocs.count);
-    for EachIndex(reloc_idx, relocs.count) {
-      sorted_relocs[reloc_idx].reloc    = relocs.v[reloc_idx];
-      sorted_relocs[reloc_idx].orig_idx = (U32)reloc_idx;
-    }
-    radsort(sorted_relocs, relocs.count, lnk_reloc_sort_key_is_before);
-    for EachIndex(reloc_idx, relocs.count) {
-      COFF_Reloc *reloc = &sorted_relocs[reloc_idx].reloc;
-
-      // error check relocation
-      if (obj->coff.header.machine == COFF_MachineType_X64) {
-        if (reloc->type > COFF_Reloc_X64_Last) {
-          lnk_error_obj(LNK_Error_IllegalRelocation, obj, "unknown relocation type 0x%x", reloc->type);
-        }
-      } else if (obj->coff.header.machine != COFF_MachineType_Unknown) {
-        lnk_not_implemented("relocation patching is not implemented for %S", coff_string_from_machine_type(obj->coff.header.machine));
-        continue;
-      }
-
-      // compute virtual offsets
-      U64 reloc_voff = section_header->voff + reloc->apply_off;
-
-      // compute symbol location values
-      U32 symbol_secnum = 0;
-      U32 symbol_secoff = 0;
-      S64 symbol_voff   = 0;
-      {
-        COFF_ParsedSymbol          symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, reloc->isymbol);
-        COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
-        if (interp == COFF_SymbolValueInterp_Regular) {
-          if (symbol.section_number == lnk_obj_get_removed_section_number(obj)) {
-            if (~section_flags & LNK_SECTION_FLAG_DEBUG) {
-              String8 sect_name   = coff_name_from_section_header(string_table, section_header);
-              String8 symbol_name = lnk_symbol_name_from_coff_symbol_idx(obj, reloc->isymbol);
-              lnk_error_obj(LNK_Error_RelocationAgainstRemovedSection, obj, "relocating against symbol that is in a removed section (symbol: %S, reloc-section: %S 0x%llx, reloc-index: 0x%llx)", symbol_name, sect_name, it.v.section_number, reloc_idx);
-            }
-            continue;
-          }
-          symbol_secnum = symbol.section_number;
-          symbol_secoff = symbol.value;
-          symbol_voff   = safe_cast_u32((U64)task->image_section_table[symbol.section_number]->voff + (U64)symbol_secoff);
-        } else if (interp == COFF_SymbolValueInterp_Abs) {
-          // There aren't enough bits in COFF symbol to store full image base address,
-          // so we special case __ImageBase. A better solution would be to add
-          // a 64-bit symbol format to COFF.
-          if (str8_match(lnk_symbol_name_from_coff_symbol_idx(obj, reloc->isymbol), str8_lit("__ImageBase"), 0)) {
-            symbol.value = task->image_base;
-          }
-          symbol_secnum = 0;
-          symbol_secoff = 0;
-          symbol_voff   = (S64)symbol.value - (S64)task->image_base;
-        } else if (interp == COFF_SymbolValueInterp_Weak) {
-          // unresolved weak
-        } else if (interp == COFF_SymbolValueInterp_Undefined) {
-          // unresolved undefined
-        } else {
-          InvalidPath;
-        }
-      }
-
-      // pick reloc value
-      COFF_RelocValue reloc_value = {0};
-      switch (obj_header.machine) {
-      case COFF_MachineType_Unknown: {} break;
-      case COFF_MachineType_X64: { reloc_value = coff_pick_reloc_value_x64(reloc->type, task->image_base, reloc_voff, symbol_secnum, symbol_secoff, symbol_voff); } break;
-      default: { NotImplemented; } break;
-      }
-
-      // read addend
-      Assert(reloc_value.size <= section_data.size);
-      U64 raw_addend = 0;
-      str8_deserial_read(section_data, reloc->apply_off, &raw_addend, reloc_value.size, 1);
-
-      // compute new reloc value
-      S64 addend       = extend_sign64(raw_addend, reloc_value.size);
-      U64 reloc_result = reloc_value.value + addend;
-
-      // commit new reloc value
-      MemoryCopy(section_data.str + reloc->apply_off, &reloc_result, reloc_value.size);
-    }
-    temp_end(reloc_temp);
+    // apply relocs (factored: shared with the P3.3 module-write window fill)
+    lnk_obj_apply_relocs_to_buffer(obj, it.v.section_number, section_header, section_data, task->image_base, task->image_section_table);
   }
 
-  scratch_end(scratch);
   ProfEnd();
 }
 
@@ -6543,6 +6440,13 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
     // patch relocs
     {
+      // Streaming-ring P3.3: default to windowed $S consumption (patcher skips $S copies;
+      // the module-write visit re-reads + patches into a reused per-worker window).
+      // /OPT:GCTYPES needs the persistent patched+fixed-up $S backing (it reads and rewrites
+      // type indices in place between the merge and the PDB build) -- keep the old copy-based
+      // path wholesale there.
+      g_debug_s_window = (config->opt_gc_types != LNK_SwitchState_Yes);
+
       // dedicated per-worker arenas for the patched debug-section copies: free-list
       // block reuse keeps the pages warm (a raw reserve+commit per copy paid ~11.6GB of
       // fresh zero-page faults per link at FN scale), and lnk_build_pdb hands the whole
@@ -7547,15 +7451,14 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     lnk_summary_phase_end(LNK_SummaryPhase_DbgMerge);
 
     // Streaming-ring P2 slice A: $S TI/kind fixups are journaled in lnk_merge_types and
-    // normally replayed per obj at the start of the module-write visit (lnk_write_pdb_modules).
-    // Two configs consume fixed-up $S bytes before/without that pass and need the journal
-    // applied eagerly instead:
-    // - /OPT:GCTYPES reads final type indices out of $S (mark roots) and rewrites them
-    //   (compaction remap) right below;
-    // - a /PDBSTRIPPED-only build (no full PDB / RDI) re-walks $S Symbols without ever
-    //   running the module-write pass.
-    if (config->opt_gc_types == LNK_SwitchState_Yes ||
-        !(config->debug_mode == LNK_DebugMode_Full || config->rad_debug == LNK_SwitchState_Yes)) {
+    // normally replayed per obj into the window at the module-write visit
+    // (lnk_write_pdb_modules). /OPT:GCTYPES consumes fixed-up $S bytes in place right below
+    // (mark roots + compaction rewrite) and runs with the window disabled (persistent patched
+    // copies), so it still needs the eager whole-input replay. P3.3: a /PDBSTRIPPED-only
+    // build no longer takes this path -- its pre-build stripping loop re-reads each Symbols
+    // node through lnk_obj_window_debug_s, which applies relocs AND replays the journal per
+    // node, so nothing is written into the raw mapped views.
+    if (config->opt_gc_types == LNK_SwitchState_Yes) {
       lnk_apply_debug_s_fixups_eager(tp, &cv);
     }
 
@@ -7632,12 +7535,36 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     // stripped PDB
     //
     if (config->pdb_stripped_name.size != 0) {
+      // P3.3 fold: with the $S window enabled there are no patched copies and no persisted
+      // fixup replay -- the raw mapped Symbols bytes are pre-reloc and pre-TI-fixup. Re-read
+      // each obj's Symbols nodes through lnk_obj_window_debug_s (raw view -> window copy +
+      // relocs + journal replay: exactly the bytes the module-write pass consumed); the
+      // journal was kept alive across lnk_build_pdb for this (released below). The strip
+      // loop already copies every surviving record out, so the window is transient per obj.
+      // With the window disabled (/OPT:GCTYPES) the old flow is intact: free_sect_copies==0
+      // kept the patched+eagerly-fixed copies alive and the nodes are read in place.
+      PE_BinInfo           stripped_pe            = {0};
+      COFF_SectionHeader **stripped_image_sectab  = 0;
+      Temp                 wscratch               = scratch_begin(&scratch.arena, 1);
+      if (g_debug_s_window) {
+        stripped_pe           = pe_bin_info_from_data(scratch.arena, image_ctx.image_data);
+        stripped_image_sectab = coff_section_table_from_data(scratch.arena, image_ctx.image_data, stripped_pe.section_table_range);
+      }
+
       CV_DebugS *debug_s_arr = push_array(scratch.arena, CV_DebugS, cv.obj_count);
       for EachIndex(obj_idx, cv.obj_count) {
 
+        Temp wtemp = temp_begin(wscratch.arena);
+
         CV_DebugS   *debug_s_dst = &debug_s_arr[obj_idx];
-        CV_DebugS   *debug_s_src = &cv.debug_s_arr[obj_idx];
-        String8List *src         = cv_sub_section_ptr_from_debug_s(debug_s_src, CV_C13SubSectionKind_Symbols);
+        CV_DebugS    debug_s_win = {0};
+        String8List *src;
+        if (g_debug_s_window) {
+          debug_s_win = lnk_obj_window_debug_s(wtemp.arena, &cv, obj_idx, stripped_pe.image_base, stripped_image_sectab, 1 /* symbols_only */);
+          src         = cv_sub_section_ptr_from_debug_s(&debug_s_win, CV_C13SubSectionKind_Symbols);
+        } else {
+          src         = cv_sub_section_ptr_from_debug_s(&cv.debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
+        }
 
         U64 proc_count = 0;
         U64 proc_size  = 0;
@@ -7684,7 +7611,14 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
           // synthesized bytes (TI-stripped copies): provenance marked synthetic
           cv_debug_s_push_synthetic_sub_section(scratch.arena, debug_s_dst, CV_C13SubSectionKind_Symbols, str8(buffer, buffer_size));
         }
+
+        temp_end(wtemp); // window bytes are consumed (records copied into `buffer`)
       }
+      scratch_end(wscratch);
+
+      // last $S-journal reader on the stripped path is done (lnk_build_pdb kept the journal
+      // alive when a /PDBSTRIPPED build follows); no-op when already consumed/never built
+      lnk_release_debug_s_fixup_journal(&cv);
 
       LNK_CodeViewInput stripped_cv = {0};
       stripped_cv.config              = config;

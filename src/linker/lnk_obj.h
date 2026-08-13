@@ -288,6 +288,16 @@ internal U64                  lnk_obj_foff_from_section_data_ptr(LNK_Obj *obj, v
 internal String8              lnk_obj_section_name_from_section_number(LNK_Obj *obj, U64 section_number);
 internal void                 lnk_obj_drop_section_data_copies(LNK_Obj *obj);
 internal String8              lnk_resolve_debug_s_node(LNK_Obj *obj, CV_DebugSProvNode *prov);
+internal void                 lnk_obj_apply_relocs_to_buffer(LNK_Obj *obj, U64 section_number, COFF_SectionHeader *section_header, String8 section_data, U64 image_base, COFF_SectionHeader **image_section_table);
+
+// Streaming-ring P3.3: when set (default), .debug$S sections are NOT copied+patched at
+// image-build time (lnk_obj_reloc_patcher skips them); the PDB module-write visit re-reads
+// each obj's raw mapped bytes into a small per-worker window and applies relocs + the
+// journaled TI/kind fixups there (lnk_obj_window_debug_s), so the GB-class patched-copy set
+// never exists. Cleared under /OPT:GCTYPES, which reads AND rewrites $S type indices in
+// place after an eager journal apply and therefore needs the persistent patched copies
+// (the old path, kept intact).
+global B32 g_debug_s_window = 1;
 internal LNK_ObjSection       lnk_obj_section_from_section_number(LNK_Obj *obj, U64 section_number);
 internal COFF_RelocArray      lnk_coff_relocs_from_section_header(LNK_Obj *obj, COFF_SectionHeader *section_header);
 internal String8              lnk_coff_string_table_from_obj(LNK_Obj *obj);

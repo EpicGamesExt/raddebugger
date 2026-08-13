@@ -888,6 +888,130 @@ lnk_resolve_debug_s_node(LNK_Obj *obj, CV_DebugSProvNode *prov)
   return str8_substr(sect_data, rng_1u64(prov->off, prov->off + prov->size));
 }
 
+// reloc patch ordering: sort each section's relocs by apply_off so the RMW write stream into
+// the destination buffer is monotone-forward (HW-prefetchable) instead of scattered in on-disk
+// table order. apply_off is the primary key; orig_idx is a tiebreak so the total order is
+// deterministic and the final bytes are identical to the unsorted patch order (each reloc
+// writes its own disjoint field; only a pathological same-apply_off overlap could depend on
+// order, and the orig_idx tiebreak preserves the original sequence there too).
+typedef struct LNK_RelocSortKey
+{
+  COFF_Reloc reloc;
+  U32        orig_idx;
+} LNK_RelocSortKey;
+
+internal int
+lnk_reloc_sort_key_is_before(void *raw_a, void *raw_b)
+{
+  LNK_RelocSortKey *a = raw_a, *b = raw_b;
+  if (a->reloc.apply_off != b->reloc.apply_off) {
+    return a->reloc.apply_off < b->reloc.apply_off;
+  }
+  return a->orig_idx < b->orig_idx;
+}
+
+// Applies one section's relocations into `section_data` -- a writable buffer holding that
+// section's bytes (the section's slice of the image at image-build time, a private patched
+// copy for non-$S debug sections, or the streaming-ring window copy at module-write time).
+// Factored out of lnk_obj_reloc_patcher so the image patch pass and the P3.3 window fill
+// share one definition: same reloc order, same symbol resolution, same skip semantics
+// (debug-section relocs against removed sections are silently dropped), byte-identical
+// application at either call time (relocs + symbol tables + image section table are all
+// immutable after the image build).
+internal void
+lnk_obj_apply_relocs_to_buffer(LNK_Obj *obj, U64 section_number, COFF_SectionHeader *section_header, String8 section_data, U64 image_base, COFF_SectionHeader **image_section_table)
+{
+  Assert(1 <= section_number && section_number <= obj->coff.sections.count_no_null);
+  COFF_RelocArray relocs = lnk_coff_relocs_from_section_header(obj, section_header);
+  if (relocs.count == 0) { return; }
+
+  Temp scratch = scratch_begin(0, 0);
+  COFF_SectionFlags section_flags = obj->coff.sections.headers[section_number].flags;
+
+  // apply relocs (sorted by apply_off for monotone-forward writes)
+  LNK_RelocSortKey *sorted_relocs = push_array_no_zero(scratch.arena, LNK_RelocSortKey, relocs.count);
+  for EachIndex(reloc_idx, relocs.count) {
+    sorted_relocs[reloc_idx].reloc    = relocs.v[reloc_idx];
+    sorted_relocs[reloc_idx].orig_idx = (U32)reloc_idx;
+  }
+  radsort(sorted_relocs, relocs.count, lnk_reloc_sort_key_is_before);
+  for EachIndex(reloc_idx, relocs.count) {
+    COFF_Reloc *reloc = &sorted_relocs[reloc_idx].reloc;
+
+    // error check relocation
+    if (obj->coff.header.machine == COFF_MachineType_X64) {
+      if (reloc->type > COFF_Reloc_X64_Last) {
+        lnk_error_obj(LNK_Error_IllegalRelocation, obj, "unknown relocation type 0x%x", reloc->type);
+      }
+    } else if (obj->coff.header.machine != COFF_MachineType_Unknown) {
+      lnk_not_implemented("relocation patching is not implemented for %S", coff_string_from_machine_type(obj->coff.header.machine));
+      continue;
+    }
+
+    // compute virtual offsets
+    U64 reloc_voff = section_header->voff + reloc->apply_off;
+
+    // compute symbol location values
+    U32 symbol_secnum = 0;
+    U32 symbol_secoff = 0;
+    S64 symbol_voff   = 0;
+    {
+      COFF_ParsedSymbol          symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, reloc->isymbol);
+      COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
+      if (interp == COFF_SymbolValueInterp_Regular) {
+        if (symbol.section_number == lnk_obj_get_removed_section_number(obj)) {
+          if (~section_flags & LNK_SECTION_FLAG_DEBUG) {
+            String8 sect_name   = lnk_obj_section_name_from_section_number(obj, section_number);
+            String8 symbol_name = lnk_symbol_name_from_coff_symbol_idx(obj, reloc->isymbol);
+            lnk_error_obj(LNK_Error_RelocationAgainstRemovedSection, obj, "relocating against symbol that is in a removed section (symbol: %S, reloc-section: %S 0x%llx, reloc-index: 0x%llx)", symbol_name, sect_name, section_number, reloc_idx);
+          }
+          continue;
+        }
+        symbol_secnum = symbol.section_number;
+        symbol_secoff = symbol.value;
+        symbol_voff   = safe_cast_u32((U64)image_section_table[symbol.section_number]->voff + (U64)symbol_secoff);
+      } else if (interp == COFF_SymbolValueInterp_Abs) {
+        // There aren't enough bits in COFF symbol to store full image base address,
+        // so we special case __ImageBase. A better solution would be to add
+        // a 64-bit symbol format to COFF.
+        if (str8_match(lnk_symbol_name_from_coff_symbol_idx(obj, reloc->isymbol), str8_lit("__ImageBase"), 0)) {
+          symbol.value = image_base;
+        }
+        symbol_secnum = 0;
+        symbol_secoff = 0;
+        symbol_voff   = (S64)symbol.value - (S64)image_base;
+      } else if (interp == COFF_SymbolValueInterp_Weak) {
+        // unresolved weak
+      } else if (interp == COFF_SymbolValueInterp_Undefined) {
+        // unresolved undefined
+      } else {
+        InvalidPath;
+      }
+    }
+
+    // pick reloc value
+    COFF_RelocValue reloc_value = {0};
+    switch (obj->coff.header.machine) {
+    case COFF_MachineType_Unknown: {} break;
+    case COFF_MachineType_X64: { reloc_value = coff_pick_reloc_value_x64(reloc->type, image_base, reloc_voff, symbol_secnum, symbol_secoff, symbol_voff); } break;
+    default: { NotImplemented; } break;
+    }
+
+    // read addend
+    Assert(reloc_value.size <= section_data.size);
+    U64 raw_addend = 0;
+    str8_deserial_read(section_data, reloc->apply_off, &raw_addend, reloc_value.size, 1);
+
+    // compute new reloc value
+    S64 addend       = extend_sign64(raw_addend, reloc_value.size);
+    U64 reloc_result = reloc_value.value + addend;
+
+    // commit new reloc value
+    MemoryCopy(section_data.str + reloc->apply_off, &reloc_result, reloc_value.size);
+  }
+  scratch_end(scratch);
+}
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_collect_obj_chunks_task)
 {

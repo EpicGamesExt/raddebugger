@@ -291,14 +291,17 @@ typedef enum
   LNK_PDB_BuilderFlag_NATVIS      = (1<<5),
 } LNK_PDB_BuilderFlags;
 
-// Streaming-ring P2b: per-obj global-symbol candidate REFS + proc-refs, extracted inside the
-// module-write per-obj visit (fused with the sizing walk, right after the obj's $S fixup
-// replay). Candidates are {pointer into the live $S backing, content hash} -- 16B/record, NO
-// payload copies (copying every pre-dedup candidate stacked ~6GB on top of the still-alive
-// section copies in the module window at FN scale). P3.2: dedup byte-compares resolve through
-// the refs into the live backing, so the whole dedup pipeline (insert + compact + winner
-// materialize) runs as the EPILOGUE of the module-write phase while every obj's backing is
-// resident; the copies AND the candidate ref tables release at the end of that phase.
+// Streaming-ring P2b/P3.3: per-obj global-symbol candidate REFS + proc-refs, extracted inside
+// the module-write per-obj visit (fused with the sizing walk, over the obj's post-fixup $S
+// bytes -- the window copy when g_debug_s_window, the patched backing otherwise). P3.3
+// candidates are POSITION records, not pointers: {content hash, Symbols node ordinal, offset
+// within node, record size} -- 24B/record, NO payload copies and NO live-backing aliasing, so
+// they survive the window being reused for the next obj. The module-write epilogue dedups by
+// hash grouping (sort by (hash, flat idx)), then RE-READS just the bytes it needs through the
+// same window fill: group leaders to materialize the winner payload, other members to
+// byte-confirm equality against their leader (a same-hash different-bytes member is a genuine
+// 64-bit collision -- expected ~never -- and materializes as its own winner, preserving the
+// old deduper's exact content set).
 // Proc-ref payloads AND the per-obj procref value/hash arrays live on the surviving
 // procref_payload_arenas (consumed post-release by lnk_move_global_symbols_to_gsi, which
 // flattens per-obj segments in ascending obj-index order -- deterministic and
@@ -306,8 +309,10 @@ typedef enum
 typedef struct
 {
   U64        cand_count;     // global records (cv_is_global_symbol + top-level typedefs)
-  void     **cand_ptrs;      // [cand_count] record starts INSIDE the obj's $S backing (dies at end of Write Modules)
-  U64       *cand_hashes;    // [cand_count] u64_hash_from_str8(raw) computed at extraction
+  U64       *cand_hashes;    // [cand_count] u64_hash_from_str8(raw) computed at extraction (post-reloc post-fixup bytes)
+  U64       *cand_offs;      // [cand_count] record start offset within its Symbols data_list node
+  U32       *cand_nodes;     // [cand_count] Symbols data_list node ordinal
+  U32       *cand_sizes;     // [cand_count] full record size (kind + length prefix + data)
   U64        procref_count;  // GPROC32/LPROC32 records
   CV_Symbol *procref_syms;   // [procref_count] cv_make_proc_ref results (arrays + payload on survive arenas)
   U64       *procref_hashes; // [procref_count] gsi_hash(name)
@@ -400,6 +405,7 @@ internal CV_TypeIndex    lnk_assigned_ti_hash_search          (LNK_AssignedTiHas
 internal LNK_MergedTypes lnk_merge_types                     (TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK_MergeTypeFlags merge_flags);
 internal void            lnk_apply_debug_s_fixups_for_obj    (LNK_CodeViewInput *cv, U64 obj_idx);
 internal void            lnk_apply_debug_s_fixups_eager      (TP_Context *tp, LNK_CodeViewInput *cv);
+internal CV_DebugS       lnk_obj_window_debug_s              (Arena *arena, LNK_CodeViewInput *cv, U64 obj_idx, U64 image_base, COFF_SectionHeader **image_section_table, B32 symbols_only);
 internal void            lnk_release_debug_s_fixup_journal   (LNK_CodeViewInput *cv);
 internal void            lnk_replace_type_names_with_hashes  (TP_Context *tp, TP_Arena *arena, U64 leaf_count, U8 **leaf_arr, LNK_TypeNameHashMode mode, U64 hash_length, String8 map_name);
 
