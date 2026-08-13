@@ -87,9 +87,10 @@ lnk_tp_arena_release_thread(void *raw_arena)
 //  in mcvi alone). PrefetchVirtualMemory populates the ranges in bulk (large MM
 //  batches, no per-page trap), so issue it over each phase's input ranges right
 //  before the parse walk. Purely a paging hint: no output byte depends on it,
-//  failure is silently ignored (pre-Win8 OS / memory pressure), and prefetching
-//  an already-resident page is a cheap no-op -- so no residency tracking,
-//  blanket prefetch per phase.
+//  and failure is silently ignored (pre-Win8 OS / memory pressure). A lone
+//  link skips the hint because walking its already-cached 80+ GiB input set is
+//  measurable overhead; concurrent shared-pool links retain it to reduce the
+//  machine-wide fault storm.
 
 #if OS_WINDOWS
 // declared locally so we do not depend on the SDK's _WIN32_WINNT gate for
@@ -226,6 +227,20 @@ lnk_prefetch_ranges(TP_Context *tp, U64 worker_cap, U64 range_count, Rng1U64 *ra
 
   scratch_end(scratch);
 #endif
+}
+
+// PrefetchVirtualMemory was added to reduce the machine-wide page-fault storm
+// when many shared-pool linker processes run concurrently. For a lone link it
+// only populates pages that the parsing walks immediately touch again, adding a
+// full extra pass over tens of GiB. The shared-pool process counter is advisory,
+// which is exactly the precision this paging hint needs.
+internal B32
+lnk_should_prefetch_mapped_input(void)
+{
+  U32 attached_process_count = 0;
+  U32 max_process_count      = 0;
+  tp_procs_snapshot(&attached_process_count, &max_process_count);
+  return attached_process_count > 1;
 }
 
 internal void
@@ -1951,7 +1966,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
 
   // batch-populate the mapped .debug$S/$T/$P/$H input ranges before the parse
   // loops below first-touch them page by page (see lnk_prefetch_ranges)
-  ProfScope("Prefetch CodeView")
+  if (lnk_should_prefetch_mapped_input()) ProfScope("Prefetch CodeView")
   {
     Temp temp = temp_begin(scratch.arena);
 
@@ -3858,7 +3873,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     // batch-populate the .debug$T/$P leaf data the hashers below walk leaf by
     // leaf; under farm-wide memory pressure these mapped pages were trimmed
     // since the parse phase touched them (see lnk_prefetch_ranges)
-    ProfScope("Prefetch Type Data")
+    if (lnk_should_prefetch_mapped_input()) ProfScope("Prefetch Type Data")
     {
       Temp temp = temp_begin(scratch.arena);
 
