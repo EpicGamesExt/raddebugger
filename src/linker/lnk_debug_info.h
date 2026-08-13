@@ -326,7 +326,7 @@ typedef enum
 // the module-write per-obj visit (fused with the sizing walk, over the obj's post-fixup $S
 // bytes -- the window copy when g_debug_s_window, the patched backing otherwise). P3.3
 // candidates are POSITION records, not pointers: {content hash, Symbols node ordinal, offset
-// within node, record size} -- 20B/record, NO payload copies and NO live-backing aliasing, so
+// within node, record size} -- 18B/record, NO payload copies and NO live-backing aliasing, so
 // they survive the window being reused for the next obj. The module-write epilogue dedups by
 // hash grouping (sort by (hash, flat idx)), then RE-READS just the bytes it needs through the
 // same window fill: group leaders to materialize the winner payload, other members to
@@ -343,10 +343,10 @@ typedef struct
   U64       *cand_hashes;    // [cand_count] u64_hash_from_str8(raw) computed at extraction (post-reloc post-fixup bytes)
   U32       *cand_offs;      // [cand_count] record start offset within its Symbols data_list node (COFF section-sized)
   U32       *cand_nodes;     // [cand_count] Symbols data_list node ordinal
-  U32       *cand_sizes;     // [cand_count] full record size (kind + length prefix + data)
+  U16       *cand_lens;      // [cand_count] native CV_SymSize; full record size adds sizeof(CV_SymSize)
   U64        procref_count;  // GPROC32/LPROC32 records
   CV_Symbol *procref_syms;   // [procref_count] cv_make_proc_ref results (arrays + payload on survive arenas)
-  U64       *procref_hashes; // [procref_count] gsi_hash(name)
+  U32       *procref_hashes; // [procref_count] gsi_hash(name)
 } LNK_GsiPreExtractObj;
 
 typedef struct
@@ -382,7 +382,7 @@ typedef struct
   B32 free_sect_copies;
 
   // P2b pre-extraction state (see LNK_GsiPreExtractObj). cand_arenas hold ONLY the per-obj
-  // candidate ref/hash arrays (16B-per-record class, no payloads) and release with the
+  // candidate position/hash arrays (18B per record, no payloads) and release with the
   // section copies at the end of Write Modules. procref_payload_arenas hold the procref
   // value/hash arrays + cv_make_proc_ref payloads and must survive until GSI serialization
   // (like the old proc_ref_arenas, they live to process exit).

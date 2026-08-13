@@ -4588,7 +4588,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     // strictly more deterministic.) Zero $S reads.
     U64        total_proc_ref_count = 0;
     U64       *procref_offsets      = 0; // [obj_count+1] prefix sums in obj-index order
-    U64       *proc_ref_hashes      = 0; // [total_proc_ref_count]
+    U32       *proc_ref_hashes      = 0; // [total_proc_ref_count]
     CV_Symbol *proc_ref_symbols     = 0; // [total_proc_ref_count]
     if (task_id == 0) {
       procref_offsets = push_array_no_zero(scratch.arena, U64, task->cv->obj_count + 1);
@@ -4599,7 +4599,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
       }
       procref_offsets[task->cv->obj_count] = acc;
       total_proc_ref_count = acc;
-      proc_ref_hashes  = push_array_no_zero(scratch.arena, U64,       total_proc_ref_count ? total_proc_ref_count : 1);
+      proc_ref_hashes  = push_array_no_zero(scratch.arena, U32,       total_proc_ref_count ? total_proc_ref_count : 1);
       proc_ref_symbols = push_array_no_zero(scratch.arena, CV_Symbol, total_proc_ref_count ? total_proc_ref_count : 1);
     }
     tp_broadcast(&total_proc_ref_count);
@@ -4619,7 +4619,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     // single-threaded on task 0; sizing has no determinism impact)
     if (task_id == 0) {
       U64 *bucket_adds = push_array(scratch.arena, U64, gsi->bucket_count);
-      for EachIndex(i, total_proc_ref_count) { bucket_adds[(U32)proc_ref_hashes[i] % gsi->bucket_count] += 1; }
+      for EachIndex(i, total_proc_ref_count) { bucket_adds[proc_ref_hashes[i] % gsi->bucket_count] += 1; }
       for EachIndex(bucket_idx, gsi->bucket_count) {
         if (bucket_adds[bucket_idx]) { gsi_reserve(gsi, bucket_idx, bucket_adds[bucket_idx]); }
       }
@@ -4632,7 +4632,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
       U64 shard_min = (task_id * gsi->bucket_count) / tp->worker_count;
       U64 shard_max = ((task_id + 1) * gsi->bucket_count) / tp->worker_count;
       for EachIndex(i, total_proc_ref_count) {
-        U64 bucket_idx = (U32)proc_ref_hashes[i] % gsi->bucket_count;
+        U64 bucket_idx = proc_ref_hashes[i] % gsi->bucket_count;
         if (bucket_idx < shard_min || bucket_idx >= shard_max) { continue; }
         PDB_GsiSymbolBucket *bucket = &gsi->bucket_arr[bucket_idx];
         bucket->v[bucket->count] = proc_ref_symbols[i];
@@ -4995,7 +4995,7 @@ lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id, CV_
     pre->cand_hashes = push_array_no_zero(cand_arena, U64, cand_count);
     pre->cand_offs   = push_array_no_zero(cand_arena, U32, cand_count);
     pre->cand_nodes  = push_array_no_zero(cand_arena, U32, cand_count);
-    pre->cand_sizes  = push_array_no_zero(cand_arena, U32, cand_count);
+    pre->cand_lens   = push_array_no_zero(cand_arena, U16, cand_count);
     U64 k = 0;
     U64 node_idx = 0;
     for (String8Node *n = symbols.first; n != 0; n = n->next, node_idx += 1) {
@@ -5009,7 +5009,7 @@ lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id, CV_
           pre->cand_hashes[k] = u64_hash_from_str8(raw);
           pre->cand_offs  [k] = safe_cast_u32(ptr - n->string.str);
           pre->cand_nodes [k] = (U32)node_idx;
-          pre->cand_sizes [k] = (U32)raw.size;
+          pre->cand_lens  [k] = ((CV_SymbolHeader *)ptr)->size;
           k += 1;
         }
 
@@ -5043,7 +5043,7 @@ lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id, CV_
   if (procref_count) {
     Arena *payload_arena = task->procref_payload_arenas[task_id];
     pre->procref_syms   = push_array_no_zero(payload_arena, CV_Symbol, procref_count);
-    pre->procref_hashes = push_array_no_zero(payload_arena, U64,       procref_count);
+    pre->procref_hashes = push_array_no_zero(payload_arena, U32,       procref_count);
 
     CV_ModIndex imod          = task->mod_arr[obj_idx]->imod;
     U64         symbol_cursor = sizeof(CV_Signature);
@@ -5488,7 +5488,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
       LNK_GsiPreExtractObj *pre = &task->preext[obj_idx];
       U64 lo = cand_offsets[obj_idx], opl = cand_offsets[obj_idx+1];
       for (U64 k = lo; k < opl; k += 1) {
-        if (grp_of_flat[k] & LNK_GSI_LEADER_BIT) { mat_sizes[task_id] += AlignPow2(pre->cand_sizes[k - lo], sizeof(void *)); }
+        if (grp_of_flat[k] & LNK_GSI_LEADER_BIT) { mat_sizes[task_id] += AlignPow2(pre->cand_lens[k - lo] + sizeof(CV_SymSize), sizeof(void *)); }
       }
     }
     barrier_wait(tp->barrier);
@@ -5517,7 +5517,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
       for (U64 k = lo; k < opl; k += 1) {
         if (!(grp_of_flat[k] & LNK_GSI_LEADER_BIT)) { continue; }
         U64 local_idx = k - lo;
-        U32 size = pre->cand_sizes[local_idx];
+        U32 size = pre->cand_lens[local_idx] + sizeof(CV_SymSize);
         U8 *src  = node_base[pre->cand_nodes[local_idx]] + pre->cand_offs[local_idx];
         U8 *copy = push_array_no_zero(dst_arena, U8, size);
         MemoryCopy(copy, src, size);
@@ -5563,7 +5563,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
         if (grp_of_flat[k] & LNK_GSI_LEADER_BIT) { continue; }
         U64     local_idx = k - lo;
         U64     grp    = grp_of_flat[k];
-        U32     size   = pre->cand_sizes[local_idx];
+        U32     size   = pre->cand_lens[local_idx] + sizeof(CV_SymSize);
         U8     *src    = node_base[pre->cand_nodes[local_idx]] + pre->cand_offs[local_idx];
         String8 leader = cv_raw_from_symbol(winner_ptrs[grp]);
 #if BUILD_DEBUG
@@ -5674,7 +5674,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
           task->preext[obj_idx].cand_hashes = 0; // poison dangling refs (incl. the pass-B mismatch bytes on cand_arenas)
           task->preext[obj_idx].cand_offs   = 0;
           task->preext[obj_idx].cand_nodes  = 0;
-          task->preext[obj_idx].cand_sizes  = 0;
+          task->preext[obj_idx].cand_lens   = 0;
         }
       }
     }
