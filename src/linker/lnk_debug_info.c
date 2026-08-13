@@ -5834,6 +5834,17 @@ lnk_pdb_output_finalize_stream(void *user_data, MSF_Context *msf, MSF_StreamNumb
   lnk_pdb_output_enqueue_stream(user_data, msf, sn);
 }
 
+// Timers telemetry: cumulative enqueued/completed bytes at a named point in the build
+internal void
+lnk_pdb_output_log_mark(LNK_PdbOutput *output, char *tag)
+{
+  if (output == 0) { return; }
+  lnk_log(LNK_Log_Timers, "[pdbw] t=%.3fs %s: enq=%.2f GiB done=%.2f GiB",
+          (F64)(now_time_us() - output->writer->begin_time_us) / 1e6, tag,
+          (F64)ins_atomic_u64_eval(&output->writer->bytes_enqueued) / GB(1),
+          (F64)ins_atomic_u64_eval(&output->writer->bytes_completed) / GB(1));
+}
+
 internal void
 lnk_pdb_output_enqueue_remaining(LNK_PdbOutput *output, MSF_Context *msf)
 {
@@ -6391,6 +6402,7 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   pdb_strtab_add_cv_string_hash_table(&task.pdb->info->strtab, task.string_ht);
   ProfEnd();
   pdb_build_types(tp, task.pdb, &build_hooks);
+  lnk_pdb_output_log_mark(output_ptr, "after pdb_build_types (TPI/IPI sealed)");
 
   // merged leaf bytes are now in MSF pages (and on their way to disk); no consumer of
   // cv_types.v remains on this path (RDI converts from the PDB artifact, the RRT export
@@ -6452,6 +6464,7 @@ ProfScope("Write Modules")
       tp_for_parallel_reserve(tp, 0, C, lnk_write_pdb_modules, &task); // BARRIER pass (path B): barrier_wait/tp_broadcast
       tp_barrier_end(tp);
       lnk_log(LNK_Log_Timers, "[pdb] write modules in %.2f ms (cohort %u)", (F64)(now_time_us() - phase_begin_us) / 1000.0, C);
+      lnk_pdb_output_log_mark(output_ptr, "after write modules");
       if (g_debug_s_window && lnk_get_log_status(LNK_Log_Debug)) {
         // bounds the per-worker window arena growth: worst case commit = cohort x this value
         lnk_log(LNK_Log_Debug, "[pdb] $S window high-water: %llu bytes (largest single obj window)", g_debug_s_window_hwm);
@@ -6487,6 +6500,7 @@ ProfScope("Build GSI and PSI") pdb_build_gsi_psi(tp, task.pdb);
       lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->publics_sn);
       lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->globals_sn);
       lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->symbols_sn);
+      lnk_pdb_output_log_mark(output_ptr, "after GSI/PSI streams sealed");
     }
   }
   
@@ -6602,7 +6616,9 @@ ProfScope("Build GSI and PSI") pdb_build_gsi_psi(tp, task.pdb);
   }
 
   lnk_summary_phase_begin(LNK_SummaryPhase_PdbMsf);
+  lnk_pdb_output_log_mark(output_ptr, "before pdb_build_dbi_info");
   pdb_build_dbi_info(tp, task.pdb, task.string_ht, 0, cv->is_stripped, &build_hooks);
+  lnk_pdb_output_log_mark(output_ptr, "after pdb_build_dbi_info");
 
   MSF_Error msf_err = msf_build(task.pdb->msf);
   if (msf_err != MSF_Error_OK) {
@@ -6610,7 +6626,9 @@ ProfScope("Build GSI and PSI") pdb_build_gsi_psi(tp, task.pdb);
   }
 
   if (output_ptr != 0) {
+    lnk_pdb_output_log_mark(output_ptr, "after msf_build");
     lnk_pdb_output_enqueue_remaining(output_ptr, task.pdb->msf);
+    lnk_pdb_output_log_mark(output_ptr, "after enqueue_remaining");
   }
 
   ProfBegin("Get Page Nodes");

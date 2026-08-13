@@ -34,6 +34,12 @@ typedef struct
   LNK_BackgroundFile *file_first;
   LNK_BackgroundFile *file_last;
   B32                 is_running;
+  U64                 begin_time_us;   // Timers telemetry anchor
+  U64                 bytes_enqueued;  // atomic; producer side
+  U64                 bytes_completed; // atomic; writer thread
+  U64                 jobs_enqueued;   // atomic; producer side
+  U64                 jobs_completed;  // writer thread
+  U64                 writes_issued;   // writer thread; post-coalesce WriteFile count
 } LNK_BackgroundFileWriter;
 
 // --- Shared File API ---------------------------------------------------------
