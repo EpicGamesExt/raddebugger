@@ -5339,13 +5339,12 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     PDB_GsiContext *gsi = task->pdb->gsi;
 
     // positional flatten in ascending obj-index order (deterministic for any cohort
-    // width/schedule). Keep only {hash, flat} sort entries here: the per-obj candidate
-    // arrays remain live through this phase and are already indexed by flat-base + local,
-    // so copying their hash/offset/node/size columns into scratch would duplicate 24 bytes
-    // per candidate at the link's peak-memory phase.
+    // width/schedule). The per-obj candidate arrays remain live through this phase and are
+    // already indexed by flat-base + local. Count radix buckets directly from those arrays,
+    // then scatter {hash, flat} into the single sorted array below; a separate flat-order
+    // sort-entry array would duplicate another 16 bytes per candidate at peak memory.
     U64             global_symbol_count = 0;
     U64            *cand_offsets        = 0; // [obj_count+1] prefix sums in obj-index order
-    LNK_GsiSortEnt *sort_ents           = 0; // [N] (hash, flat) -- sorted below
     U32            *grp_of_flat         = 0; // [N] group id | LNK_GSI_LEADER_BIT
     if (task_id == 0) {
       cand_offsets = push_array_no_zero(scratch.arena, U64, task->cv->obj_count + 1);
@@ -5357,27 +5356,14 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
       cand_offsets[task->cv->obj_count] = acc;
       global_symbol_count = acc;
       U64 n = global_symbol_count ? global_symbol_count : 1;
-      sort_ents   = push_array_no_zero(scratch.arena, LNK_GsiSortEnt, n);
       grp_of_flat = push_array_no_zero(scratch.arena, U32, n);
     }
     tp_broadcast(&global_symbol_count);
     tp_broadcast(&cand_offsets);
-    tp_broadcast(&sort_ents);
     tp_broadcast(&grp_of_flat);
 
-    for (U64 obj_idx = task_id; obj_idx < task->cv->obj_count; obj_idx += tp->worker_count) {
-      LNK_GsiPreExtractObj *pre = &task->preext[obj_idx];
-      if (pre->cand_count == 0) { continue; }
-      U64 base = cand_offsets[obj_idx];
-      for EachIndex(k, pre->cand_count) {
-        sort_ents[base + k].hash     = pre->cand_hashes[k];
-        sort_ents[base + k].flat_idx = base + k;
-      }
-    }
-    barrier_wait(tp->barrier);
-
     // sort by (hash, flat idx): 256-way MSB scatter (deterministic positional layout: bucket
-    // base + per-(bucket,worker) prefix over ascending flat slices), then a full per-bucket
+    // base + per-(bucket,worker) prefix), then a full per-bucket
     // sort -- the final array is a pure function of the candidate set for any cohort
     ProfBegin("Group Global Symbols");
     U64             bucket_count   = 256;
@@ -5385,22 +5371,22 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     U64            *scatter_cursor = 0; // [C][256]
     U64            *bucket_base    = 0; // [256+1]
     LNK_GsiSortEnt *sorted         = 0; // [N]
-    Rng1U64        *flat_ranges    = 0; // [C] even split of [0,N)
     if (task_id == 0) {
       scatter_counts = push_array(scratch.arena, U64, tp->worker_count * bucket_count);
       scatter_cursor = push_array(scratch.arena, U64, tp->worker_count * bucket_count);
       bucket_base    = push_array(scratch.arena, U64, bucket_count + 1);
       sorted         = push_array_no_zero(scratch.arena, LNK_GsiSortEnt, global_symbol_count ? global_symbol_count : 1);
-      flat_ranges    = tp_divide_work(scratch.arena, global_symbol_count, tp->worker_count);
     }
     tp_broadcast(&scatter_counts);
     tp_broadcast(&scatter_cursor);
     tp_broadcast(&bucket_base);
     tp_broadcast(&sorted);
-    tp_broadcast(&flat_ranges);
 
-    for EachInRange(i, flat_ranges[task_id]) {
-      scatter_counts[task_id * bucket_count + (sort_ents[i].hash >> 56)] += 1;
+    for EachIndex(i, obj_indices.count) {
+      LNK_GsiPreExtractObj *pre = &task->preext[obj_indices.v[i]];
+      for EachIndex(k, pre->cand_count) {
+        scatter_counts[task_id * bucket_count + (pre->cand_hashes[k] >> 56)] += 1;
+      }
     }
     barrier_wait(tp->barrier);
 
@@ -5418,9 +5404,15 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     }
     barrier_wait(tp->barrier);
 
-    for EachInRange(i, flat_ranges[task_id]) {
-      U64 b = sort_ents[i].hash >> 56;
-      sorted[scatter_cursor[task_id * bucket_count + b]++] = sort_ents[i];
+    for EachIndex(i, obj_indices.count) {
+      U64 obj_idx = obj_indices.v[i];
+      LNK_GsiPreExtractObj *pre = &task->preext[obj_idx];
+      U64 flat_base = cand_offsets[obj_idx];
+      for EachIndex(k, pre->cand_count) {
+        U64 hash = pre->cand_hashes[k];
+        U64 b = hash >> 56;
+        sorted[scatter_cursor[task_id * bucket_count + b]++] = (LNK_GsiSortEnt){hash, flat_base + k};
+      }
     }
     barrier_wait(tp->barrier);
 
