@@ -326,7 +326,7 @@ typedef enum
 // the module-write per-obj visit (fused with the sizing walk, over the obj's post-fixup $S
 // bytes -- the window copy when g_debug_s_window, the patched backing otherwise). P3.3
 // candidates are POSITION records, not pointers: {content hash, Symbols node ordinal, offset
-// within node, record size} -- 24B/record, NO payload copies and NO live-backing aliasing, so
+// within node, record size} -- 20B/record, NO payload copies and NO live-backing aliasing, so
 // they survive the window being reused for the next obj. The module-write epilogue dedups by
 // hash grouping (sort by (hash, flat idx)), then RE-READS just the bytes it needs through the
 // same window fill: group leaders to materialize the winner payload, other members to
@@ -341,7 +341,7 @@ typedef struct
 {
   U64        cand_count;     // global records (cv_is_global_symbol + top-level typedefs)
   U64       *cand_hashes;    // [cand_count] u64_hash_from_str8(raw) computed at extraction (post-reloc post-fixup bytes)
-  U64       *cand_offs;      // [cand_count] record start offset within its Symbols data_list node
+  U32       *cand_offs;      // [cand_count] record start offset within its Symbols data_list node (COFF section-sized)
   U32       *cand_nodes;     // [cand_count] Symbols data_list node ordinal
   U32       *cand_sizes;     // [cand_count] full record size (kind + length prefix + data)
   U64        procref_count;  // GPROC32/LPROC32 records

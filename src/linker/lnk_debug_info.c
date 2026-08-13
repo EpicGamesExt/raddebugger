@@ -4993,7 +4993,7 @@ lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id, CV_
   // re-reads only the bytes it needs through a fresh window fill (deterministic re-fill).
   if (cand_count) {
     pre->cand_hashes = push_array_no_zero(cand_arena, U64, cand_count);
-    pre->cand_offs   = push_array_no_zero(cand_arena, U64, cand_count);
+    pre->cand_offs   = push_array_no_zero(cand_arena, U32, cand_count);
     pre->cand_nodes  = push_array_no_zero(cand_arena, U32, cand_count);
     pre->cand_sizes  = push_array_no_zero(cand_arena, U32, cand_count);
     U64 k = 0;
@@ -5007,7 +5007,7 @@ lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id, CV_
           U8     *ptr = cv_ptr_from_symbol(symbol);
           String8 raw = cv_raw_from_symbol(ptr);
           pre->cand_hashes[k] = u64_hash_from_str8(raw);
-          pre->cand_offs  [k] = (U64)(ptr - n->string.str);
+          pre->cand_offs  [k] = safe_cast_u32(ptr - n->string.str);
           pre->cand_nodes [k] = (U32)node_idx;
           pre->cand_sizes [k] = (U32)raw.size;
           k += 1;
