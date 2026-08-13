@@ -6270,7 +6270,7 @@ lnk_build_pdb_distribute_obj_indices(Arena *arena, LNK_BuildPdb *task, U64 obj_c
 }
 
 internal LNK_FileArtifact
-lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags)
+lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags, struct LNK_Inputer *inputer)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(tp_arena->v, tp_arena->count);
@@ -6534,6 +6534,38 @@ ProfScope("Build GSI and PSI") pdb_build_gsi_psi(tp, task.pdb);
     }
     ProfEnd();
     lnk_summary_phase_end(LNK_SummaryPhase_PdbSc);
+  }
+
+  // Streaming-ring P5: the SC pass above was the LAST reader of the memory-mapped input
+  // views on this path (audited: pass B of the module-write epilogue = last .debug$S read,
+  // publics in "Move Global Symbols" = last COFF symbol-table + string-table read [long
+  // public names alias the view's COFF string table, symbol records fall back to the view
+  // when no symbol_table_copy exists], SC = last section-header/name read; NatVis below
+  // reads its own files, /names serializes the P3.1 rehomed blob, DBI file-info hashes the
+  // repointed bucket copies, MSF build/serialize reads PDB pages only). Release the views
+  // NOW with the exit path's own capped parallel sweep, relocated: the pool is idle between
+  // the SC pass and the serial NatVis/DBI/MSF tail, so the sweep lands at parallel-unmap
+  // wall (~1s FN-scale; a single background thread here serialized ~60s of unmap CPU and
+  // showed up as +6.5s FN wall) and mapped input residency is gone before the tail + PDB
+  // write drain instead of held to the end of the link. The sweep zeroes data/owns_file_map
+  // per input, so the exit-time calls (lnk_inputer_release_file_maps,
+  // lnk_release_input_views) turn into no-ops -- idempotent. Gated OFF when a /PDBSTRIPPED
+  // build follows (its pre-build strip loop re-walks Symbols through lnk_obj_window_debug_s
+  // = raw view reads after this function returns; the caller also passes inputer==0 for the
+  // stripped build itself) and under /OPT:GCTYPES (copy mode: reloc-free $S slices in
+  // debug_s_arr alias the raw views in place -- keep the exit-time release). Only for the
+  // CoW read-only mapping mode, mirroring lnk_release_input_views (read-write-shared unmap
+  // flushes dirty pages back to the input files).
+  if (inputer != 0 &&
+      config->pdb_stripped_name.size == 0 &&
+      config->opt_gc_types != LNK_SwitchState_Yes &&
+      (config->io_flags & LNK_IO_Flags_MemoryMapFilesReadOnly) &&
+      !(config->io_flags & LNK_IO_Flags_MemoryMapFilesReadWrite)) {
+    ProfBegin("Release Input Views Early");
+    U64 unmap_begin_us = now_time_us();
+    lnk_inputer_release_file_maps(tp, config->debug_worker_cap, inputer);
+    lnk_log(LNK_Log_Timers, "[pdb] early input-view release in %.2f ms", (F64)(now_time_us() - unmap_begin_us) / 1000.0);
+    ProfEnd();
   }
 
   if (builder_flags & LNK_PDB_BuilderFlag_NATVIS) {

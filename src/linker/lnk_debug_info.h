@@ -449,4 +449,4 @@ internal void            lnk_replace_type_names_with_hashes  (TP_Context *tp, TP
 // PDB
 
 internal void             lnk_gc_types (TP_Context *tp, Arena *arena, LNK_CodeViewInput *cv, LNK_MergedTypes *types);
-internal LNK_FileArtifact lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags);
+internal LNK_FileArtifact lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags, struct LNK_Inputer *inputer);

@@ -7512,7 +7512,7 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
         pdb_writer.output_path      = config->debug_mode == LNK_DebugMode_Full ? config->pdb_name      : str8_zero();
         pdb_writer.temp_output_path = config->debug_mode == LNK_DebugMode_Full ? config->temp_pdb_name : str8_zero();
         lnk_summary_phase_begin(LNK_SummaryPhase_PdbWr);
-        pdb_artifact                = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &cv, cv_types, pdb_writer, LNK_PDB_BuilderFlag_All);
+        pdb_artifact                = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &cv, cv_types, pdb_writer, LNK_PDB_BuilderFlag_All, inputer);
         lnk_summary_phase_end(LNK_SummaryPhase_PdbWr);
 
         lnk_timer_end(LNK_Timer_Pdb);
@@ -7629,7 +7629,9 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
       stripped_cv.debug_s_arr         = debug_s_arr;
       stripped_cv.symbol_input_ranges = push_array(scratch.arena, Rng1U64, tp->worker_count);
 
-      LNK_FileArtifact pdb_artifact = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &stripped_cv, (LNK_MergedTypes){0}, (LNK_PdbWriter){0}, LNK_PDB_BuilderFlag_All);
+      // inputer==0: never early-release from the stripped build (and the first build was
+      // already gated off by pdb_stripped_name) -- its window fills read the raw views
+      LNK_FileArtifact pdb_artifact = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &stripped_cv, (LNK_MergedTypes){0}, (LNK_PdbWriter){0}, LNK_PDB_BuilderFlag_All, 0);
       lnk_summary_phase_begin(LNK_SummaryPhase_PdbWr);
       lnk_write_data_list_to_file_path(config->pdb_stripped_name, str8f(scratch.arena, "%S.tmp", config->pdb_stripped_name), pdb_artifact.data);
       lnk_summary_phase_end(LNK_SummaryPhase_PdbWr);
