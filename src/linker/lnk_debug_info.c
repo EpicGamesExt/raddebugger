@@ -4141,118 +4141,28 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
   ProfBegin("Global Symbols");
   {
-    // P2b: candidate refs were pre-extracted per obj inside the module-write visit -- this
-    // pass does no $S decode walks; its only $S touches are byte reads through the refs
-    // (dedup compare + winner materialize at bucket fill), so the patched section copies stay
-    // alive until the release below. Flatten the per-obj segments in ascending OBJ-INDEX order:
-    // deterministic and cohort-independent. The old order was the symbol-input lane partition;
-    // the order change is output-invariant because (a) the deduper is content-CAS (any arrival
-    // order folds to the same content set), (b) compaction is bucket-slot order feeding a
-    // content-hash tie-break (dst->offset below), and (c) every GSI bucket chain is
-    // content-sorted at serialization (gsi_symbol_is_before: name -> offset -> kind -> data
-    // bytes -- a total order over distinct records; byte-identical records were folded by the
-    // deduper). Nothing downstream is arrival-order-dependent.
-    U64    global_symbol_count = 0;
-    U64   *cand_offsets        = 0; // [obj_count+1] prefix sums in obj-index order
-    void **flat_symbols        = 0; // [global_symbol_count]
-    U64   *flat_hashes         = 0; // [global_symbol_count] precomputed at copy time
-    U64    bucket_cap          = 0;
-    void **buckets             = 0;
+    // P3.2: dedup + compaction + winner materialize ran inside the module-write phase
+    // (lnk_write_pdb_modules epilogue) while the patched $S backing was alive -- the backing
+    // and the candidate ref tables are already RELEASED by the time this pass runs. Consume
+    // only the materialized winner records (task->gsi_winner_ptrs, compacted-slot order,
+    // payload on gsi->arena): hash names, size buckets, sharded fill. Zero $S touches
+    // anywhere in this pass. Determinism unchanged: the winner array is compacted-slot order
+    // (cohort-invariant), the fill below walks it in global order per bucket shard, and every
+    // GSI bucket chain is content-sorted at serialization (gsi_symbol_is_before).
+    U64    symbol_count = task->gsi_winner_count;
+    void **symbol_arr   = task->gsi_winner_ptrs; // [symbol_count] materialized copies
+
+    Rng1U64 *symbol_ranges = 0; // [worker_count]
+    U32     *symbol_hashes = 0; // [symbol_count]
     if (task_id == 0) {
-      cand_offsets = push_array_no_zero(scratch.arena, U64, task->cv->obj_count + 1);
-      U64 acc = 0;
-      for EachIndex(obj_idx, task->cv->obj_count) {
-        cand_offsets[obj_idx] = acc;
-        acc += task->preext[obj_idx].cand_count;
-      }
-      cand_offsets[task->cv->obj_count] = acc;
-      global_symbol_count = acc;
-      flat_symbols = push_array_no_zero(scratch.arena, void *, global_symbol_count ? global_symbol_count : 1);
-      flat_hashes  = push_array_no_zero(scratch.arena, U64,    global_symbol_count ? global_symbol_count : 1);
-      bucket_cap   = global_symbol_count * 13 / 10;
-      buckets      = push_array(scratch.arena, void *, bucket_cap);
-    }
-    tp_broadcast(&global_symbol_count);
-    tp_broadcast(&cand_offsets);
-    tp_broadcast(&flat_symbols);
-    tp_broadcast(&flat_hashes);
-    tp_broadcast(&bucket_cap);
-    tp_broadcast(&buckets);
-
-    ProfBegin("Insert Global Symbols");
-    // positional flatten: each obj's segment lands at its prefix-sum offset, so the flat order
-    // is obj-index order for ANY cohort width or schedule
-    for (U64 obj_idx = task_id; obj_idx < task->cv->obj_count; obj_idx += tp->worker_count) {
-      LNK_GsiPreExtractObj *pre = &task->preext[obj_idx];
-      if (pre->cand_count == 0) { continue; }
-      MemoryCopyTyped(&flat_symbols[cand_offsets[obj_idx]], pre->cand_ptrs,   pre->cand_count);
-      MemoryCopyTyped(&flat_hashes [cand_offsets[obj_idx]], pre->cand_hashes, pre->cand_count);
-    }
-    barrier_wait(tp->barrier);
-
-    // insert symbols into hash table (even split of the flattened array). The deduper
-    // content-compares (cv_symbol_match) -- the key is the record BYTES, never the address --
-    // and the hash was precomputed at extraction with the same expression the old code used
-    // here (u64_hash_from_str8 over cv_raw_from_symbol on the same $S bytes): literally the
-    // old data flow, only the collect location changed.
-    {
-      U64 ins_lo = (task_id * global_symbol_count) / tp->worker_count;
-      U64 ins_hi = ((task_id + 1) * global_symbol_count) / tp->worker_count;
-      for (U64 i = ins_lo; i < ins_hi; i += 1) {
-#if BUILD_DEBUG
-        Assert(flat_hashes[i] == u64_hash_from_str8(cv_raw_from_symbol(flat_symbols[i])));
-#endif
-        cv_symbol_deduper_insert_or_update(buckets, bucket_cap, flat_hashes[i], flat_symbols[i]);
-      }
-    }
-    barrier_wait(tp->barrier);
-    ProfEnd();
-
-    // compact buckets in parallel: each worker owns a contiguous slot range, counts its
-    // occupied slots, then copies them to its prefix-sum offset. Concatenated ranges preserve
-    // ascending slot order, so symbol_arr is byte-identical to the old task-0-serial compaction
-    // (which stalled the other workers at the next barrier for the whole bucket_cap sweep).
-    U64       symbol_count   = 0;
-    void    **symbol_arr     = 0; // [symbol_count]
-    Rng1U64  *symbol_ranges  = 0; // [worker_count]
-    U32      *symbol_hashes  = 0; // [symbol_count]
-    U64      *compact_counts = 0; // [worker_count]
-    if (task_id == 0) {
-      compact_counts = push_array(scratch.arena, U64, tp->worker_count);
-    }
-    tp_broadcast(&compact_counts);
-
-    ProfBeginV("Compact Buckets [bucket_cap %llu]", bucket_cap);
-    U64 slot_lo = (task_id * bucket_cap) / tp->worker_count;
-    U64 slot_hi = ((task_id + 1) * bucket_cap) / tp->worker_count;
-    {
-      U64 c = 0;
-      for (U64 slot = slot_lo; slot < slot_hi; slot += 1) { c += buckets[slot] != 0; }
-      compact_counts[task_id] = c;
-    }
-    barrier_wait(tp->barrier);
-
-    for EachIndex(w, tp->worker_count) { symbol_count += compact_counts[w]; } // same value on every worker
-    if (task_id == 0) {
-      symbol_arr    = push_array_no_zero(scratch.arena, void *, symbol_count ? symbol_count : 1);
       symbol_ranges = tp_divide_work(scratch.arena, symbol_count, tp->worker_count);
-      symbol_hashes = push_array_no_zero(scratch.arena, U32, symbol_count);
+      symbol_hashes = push_array_no_zero(scratch.arena, U32, symbol_count ? symbol_count : 1);
     }
-    tp_broadcast(&symbol_arr);
     tp_broadcast(&symbol_ranges);
     tp_broadcast(&symbol_hashes);
 
-    {
-      U64 dst = 0;
-      for (U64 w = 0; w < task_id; w += 1) { dst += compact_counts[w]; }
-      for (U64 slot = slot_lo; slot < slot_hi; slot += 1) {
-        if (buckets[slot]) { symbol_arr[dst++] = buckets[slot]; }
-      }
-    }
-    barrier_wait(tp->barrier);
-    ProfEnd();
-
-    // hash symbols
+    // hash symbols (reads the materialized winner bytes -- byte-identical to the $S records
+    // they were copied from, so every hash value matches the pre-P3.2 flow)
     Rng1U64 symbol_range = symbol_ranges[task_id];
     for EachInRange(i, symbol_range) {
       CV_Symbol symbol = cv_symbol_from_ptr(symbol_arr[i]);
@@ -4260,34 +4170,6 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
       symbol_hashes[i] = gsi_hash(gsi, name);
     }
     barrier_wait(tp->barrier);
-
-    // size per-lane payload arenas for materializing the global records (mirrors the
-    // proc-ref pattern below): bucket CV_Symbol values must not point into the objs'
-    // patched debug-section copies -- those are dropped right after this pass in
-    // lnk_build_pdb, and GSI serialization reads the record bytes after that. Each lane owns the
-    // bucket shard [shard_min, shard_max) and copies exactly the records it inserts.
-    U64    *global_payload_sizes  = 0; // [worker_count]
-    Arena **global_payload_arenas = 0; // [worker_count]
-    if (task_id == 0) {
-      global_payload_sizes = push_array(scratch.arena, U64, tp->worker_count);
-    }
-    tp_broadcast(&global_payload_sizes);
-    {
-      U64 shard_min    = (task_id * gsi->bucket_count) / tp->worker_count;
-      U64 shard_max    = ((task_id + 1) * gsi->bucket_count) / tp->worker_count;
-      U64 payload_size = 0;
-      for EachIndex(i, symbol_count) {
-        U64 bucket_idx = symbol_hashes[i] % gsi->bucket_count;
-        if (bucket_idx < shard_min || bucket_idx >= shard_max) { continue; }
-        payload_size += AlignPow2(cv_raw_from_symbol(symbol_arr[i]).size, sizeof(void *));
-      }
-      global_payload_sizes[task_id] = payload_size;
-    }
-    barrier_wait(tp->barrier);
-    if (task_id == 0) {
-      global_payload_arenas = alloc_arena_many(gsi->arena, tp->worker_count, global_payload_sizes);
-    }
-    tp_broadcast(&global_payload_arenas);
 
     // size buckets up front so each one reallocs at most once for this wave (arena pushes are
     // single-threaded on task 0; sizing has no determinism impact)
@@ -4306,21 +4188,17 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     // so per-bucket order (which is serialized into the PDB) is byte-identical to a serial loop,
     // for any worker count -- no locks, no atomics.
     {
-      U64    shard_min     = (task_id * gsi->bucket_count) / tp->worker_count;
-      U64    shard_max     = ((task_id + 1) * gsi->bucket_count) / tp->worker_count;
-      Arena *payload_arena = global_payload_arenas[task_id];
+      U64 shard_min = (task_id * gsi->bucket_count) / tp->worker_count;
+      U64 shard_max = ((task_id + 1) * gsi->bucket_count) / tp->worker_count;
       for EachIndex(i, symbol_count) {
         U64 bucket_idx = symbol_hashes[i] % gsi->bucket_count;
         if (bucket_idx < shard_min || bucket_idx >= shard_max) { continue; }
         PDB_GsiSymbolBucket *bucket = &gsi->bucket_arr[bucket_idx];
-        CV_Symbol     *dst    = &bucket->v[bucket->count];
-        // materialize: copy the raw record out of the obj's debug-section copy so the
-        // bucket value survives the copy release right after this pass in lnk_build_pdb
-        // (byte-identical copy; insert order and all sort keys unchanged)
-        String8 raw  = cv_raw_from_symbol(symbol_arr[i]);
-        U8     *copy = push_array_no_zero(payload_arena, U8, raw.size);
-        MemoryCopy(copy, raw.str, raw.size);
-        *dst = cv_symbol_from_ptr(copy);
+        CV_Symbol *dst = &bucket->v[bucket->count];
+        // the bucket value points at the winner's MATERIALIZED copy (made at the end of Write
+        // Modules, byte-identical to the original record, alive through GSI serialization) --
+        // no copy and no $S read here
+        *dst = cv_symbol_from_ptr(symbol_arr[i]);
         // deterministic same-name tie-break for the per-bucket sort in gsi_serialize_symbols_task
         // (gsi_symbol_is_before compares name -> offset -> kind -> data bytes): key on the content
         // hash of the full raw record instead of the compacted deduper slot index. Slot order is
@@ -4330,6 +4208,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
         // symrec bytes run-to-run. The hash is schedule-independent; on collision the comparator's
         // kind/data-bytes fallback stays content-deterministic, and byte-identical records cannot
         // reach the sort (the deduper folds them), so the pointer tiebreaker stays unreachable.
+        // Hashing the materialized copy yields the exact pre-P3.2 value (bytes identical).
         dst->offset = u64_hash_from_str8(cv_raw_from_symbol(symbol_arr[i]));
         bucket->count += 1;
       }
@@ -4405,33 +4284,10 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
   }
   ProfEnd();
 
-  // the bucket fill above was the LAST $S reader (it materialized the dedup winners' bytes out
-  // of the patched copies through the candidate refs; publics come from the symbol table,
-  // GSI/PSI serialize reads the materialized payloads): drop the patched debug-section copies
-  // here, before the publics/GSI staging stacks on top of them -- releasing after the whole
-  // phase kept ~11.6GB overlapping this window on the FN editor DLL. Same /PDBSTRIPPED gate as
-  // elsewhere (its second build re-reads $S). The P2b candidate/segment ref arenas die with the
-  // copies (UNCONDITIONALLY -- they are ours): both flattens and the fill consumed them above.
-  barrier_wait(tp->barrier);
-  if (task_id == 0) {
-    if (task->free_sect_copies) {
-      ProfScope("Release Sect Data Copies") {
-        for EachIndex(obj_idx, task->cv->obj_count) {
-          lnk_obj_drop_section_data_copies(task->cv->obj_arr[obj_idx]);
-        }
-        for EachIndex(i, g_sect_copy_arena_count) {
-          if (g_sect_copy_arenas[i] != 0) { arena_release(g_sect_copy_arenas[i]); g_sect_copy_arenas[i] = 0; }
-        }
-      }
-    }
-    ProfScope("Release GSI Candidate Arenas") {
-      for EachIndex(i, task->preext_arena_count) {
-        if (task->cand_arenas[i] != 0) { arena_release(task->cand_arenas[i]); task->cand_arenas[i] = 0; }
-      }
-      MemoryZeroTyped(task->preext, task->cv->obj_count); // poison dangling ref/segment pointers
-    }
-  }
-  barrier_wait(tp->barrier);
+  // P3.2: the patched debug-section copies + candidate ref arenas were released at the END of
+  // the module-write phase (lnk_write_pdb_modules epilogue) -- nothing here reads $S. The
+  // procref value/hash arrays + payloads consumed above live on the surviving
+  // procref_payload_arenas (through GSI serialization).
 
   ProfBegin("Public Symbols");
   {
@@ -4732,10 +4588,11 @@ internal void lnk_pdb_output_enqueue_stream(LNK_PdbOutput *output, MSF_Context *
 // - proc-ref walk: obj-continuous scope depth + module-stream cursor (starts at
 //   sizeof(CV_Signature); records the module write drops -- SKIP, globals, top-level typedefs,
 //   0x1176 -- do not advance it).
-// Per-obj ref/hash + segment arrays land on the transient per-worker cand_arenas that release
-// with the section copies mid-globals. Proc-ref payloads go on the surviving
-// procref_payload_arenas (referenced until GSI serialization), same lifetime as the old
-// proc_ref_arenas.
+// Per-obj candidate ref/hash arrays land on the transient per-worker cand_arenas that release
+// with the section copies at the END of the module-write phase (P3.2). Proc-ref value/hash
+// arrays AND payloads go on the surviving procref_payload_arenas (referenced until GSI
+// serialization -- the globals pass flattens them AFTER the copies are gone), same lifetime
+// as the old proc_ref_arenas.
 internal void
 lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id)
 {
@@ -4771,8 +4628,9 @@ lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id)
   // collect walk pushed -- cv_ptr_from_symbol) + the dedup hash precomputed over those bytes
   // (same expression the old insert used: u64_hash_from_str8 over cv_raw_from_symbol). NO
   // payload copy -- pre-dedup candidate payloads at FN scale (~6GB) stacked on top of the
-  // still-alive section copies in the module window. The refs stay valid until the copies
-  // release mid-globals; the GSI bucket fill materializes only the dedup winners' bytes.
+  // still-alive section copies in the module window. The refs are consumed by the fused
+  // dedup + winner materialize at the END of this module-write phase (P3.2) and die there
+  // with the copies; only the materialized winner bytes survive.
   if (cand_count) {
     pre->cand_ptrs   = push_array_no_zero(cand_arena, void *, cand_count);
     pre->cand_hashes = push_array_no_zero(cand_arena, U64,    cand_count);
@@ -4813,11 +4671,13 @@ lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id)
     }
   }
 
-  // proc-ref fill pass (mirrors the old build walk: identical layout math + skip set)
+  // proc-ref fill pass (mirrors the old build walk: identical layout math + skip set).
+  // P3.2: the value/hash arrays live on the SURVIVING payload arena (not cand_arena) -- the
+  // globals pass flattens them after cand_arenas die with the section copies.
   if (procref_count) {
     Arena *payload_arena = task->procref_payload_arenas[task_id];
-    pre->procref_syms   = push_array_no_zero(cand_arena, CV_Symbol, procref_count);
-    pre->procref_hashes = push_array_no_zero(cand_arena, U64,       procref_count);
+    pre->procref_syms   = push_array_no_zero(payload_arena, CV_Symbol, procref_count);
+    pre->procref_hashes = push_array_no_zero(payload_arena, U64,       procref_count);
 
     CV_ModIndex imod          = task->mod_arr[obj_idx]->imod;
     U64         symbol_cursor = sizeof(CV_Signature);
@@ -5009,12 +4869,14 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
 
       // collect mod source files
       String8List source_file_list = str8_split_by_string_chars(string_arenas[task_id], string_table, str8_lit("\0"), 0);
-      if (task->free_sect_copies) {
-        // the split nodes alias the string table inside the obj's debug-section copy
-        // (str8_split does not copy) and DBI file-info hashes these bytes after this
-        // pass releases the copies. Every piece is present in string_ht -- the dedup
-        // task split the very same table -- and its bucket bytes were rehomed to a
-        // surviving blob before the strtab add, so repoint at the bucket's copy.
+      {
+        // the split nodes alias the string table inside the obj's $S backing (str8_split
+        // does not copy) and DBI file-info hashes these bytes after the backing dies --
+        // whether that backing is a debug-section COPY (released at the end of this phase)
+        // or a reloc-free RAW-MAPPED view (alive today, dies in P5). P3.1: repoint
+        // UNCONDITIONALLY. Every piece is present in string_ht -- the dedup task split the
+        // very same table -- and its bucket bytes were rehomed to a surviving blob before
+        // the strtab add, so repoint at the bucket's copy (byte-identical).
         for EachNode(n, String8Node, source_file_list.first) {
           CV_StringBucket *bucket = cv_string_hash_table_lookup(task->string_ht, n->string);
           Assert(bucket != 0);
@@ -5037,9 +4899,195 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     barrier_wait(tp->barrier);
   }
 
-  // NOTE (P2b): the section copies do NOT release here -- the candidate refs extracted above
-  // point into them, and the GSI bucket fill still materializes the dedup winners' bytes out
-  // of them. Release stays at its pre-P2b position (mid-globals, after the proc-ref insert).
+  // ===== Streaming-ring P3.2: fused global-symbol dedup + winner materialize =====
+  // The candidate refs extracted above point into the objs' patched $S backing, and dedup must
+  // byte-compare records through them (cv_symbol_match runs on every hash hit -- each duplicate
+  // fold is a confirm compare of BOTH sides, tens of millions of resolutions at FN's dup
+  // factor) -- so dedup cannot run after the backing dies. Run the whole pipeline here, as the
+  // epilogue of the module-write phase, while every obj's backing is still resident; then
+  // materialize the winner set into surviving arenas; THEN release the copies.
+  // lnk_move_global_symbols_to_gsi consumes only the materialized records: P2b's
+  // refs-held-through-globals window is gone, and the copies stop overlapping the
+  // globals/publics staging entirely.
+  ProfBegin("Dedup Global Symbols");
+  {
+    PDB_GsiContext *gsi = task->pdb->gsi;
+
+    // positional flatten in ascending obj-index order (identical to the P2b flatten that
+    // lived in lnk_move_global_symbols_to_gsi: deterministic for any cohort width/schedule)
+    U64    global_symbol_count = 0;
+    U64   *cand_offsets        = 0; // [obj_count+1] prefix sums in obj-index order
+    void **flat_symbols        = 0; // [global_symbol_count]
+    U64   *flat_hashes         = 0; // [global_symbol_count] precomputed at extraction
+    U64    bucket_cap          = 0;
+    void **buckets             = 0;
+    if (task_id == 0) {
+      cand_offsets = push_array_no_zero(scratch.arena, U64, task->cv->obj_count + 1);
+      U64 acc = 0;
+      for EachIndex(obj_idx, task->cv->obj_count) {
+        cand_offsets[obj_idx] = acc;
+        acc += task->preext[obj_idx].cand_count;
+      }
+      cand_offsets[task->cv->obj_count] = acc;
+      global_symbol_count = acc;
+      flat_symbols = push_array_no_zero(scratch.arena, void *, global_symbol_count ? global_symbol_count : 1);
+      flat_hashes  = push_array_no_zero(scratch.arena, U64,    global_symbol_count ? global_symbol_count : 1);
+      bucket_cap   = global_symbol_count * 13 / 10;
+      buckets      = push_array(scratch.arena, void *, bucket_cap ? bucket_cap : 1);
+    }
+    tp_broadcast(&global_symbol_count);
+    tp_broadcast(&cand_offsets);
+    tp_broadcast(&flat_symbols);
+    tp_broadcast(&flat_hashes);
+    tp_broadcast(&bucket_cap);
+    tp_broadcast(&buckets);
+
+    for (U64 obj_idx = task_id; obj_idx < task->cv->obj_count; obj_idx += tp->worker_count) {
+      LNK_GsiPreExtractObj *pre = &task->preext[obj_idx];
+      if (pre->cand_count == 0) { continue; }
+      MemoryCopyTyped(&flat_symbols[cand_offsets[obj_idx]], pre->cand_ptrs,   pre->cand_count);
+      MemoryCopyTyped(&flat_hashes [cand_offsets[obj_idx]], pre->cand_hashes, pre->cand_count);
+    }
+    barrier_wait(tp->barrier);
+
+    // insert into the content-CAS deduper (even split of the flattened array). The deduper
+    // content-compares (cv_symbol_match) through the refs into the LIVE backing -- the key is
+    // the record BYTES, never the address -- and any arrival order folds to the same content
+    // set; the winner among byte-identical duplicates is byte-invisible.
+    ProfBegin("Insert Global Symbols");
+    {
+      U64 ins_lo = (task_id * global_symbol_count) / tp->worker_count;
+      U64 ins_hi = ((task_id + 1) * global_symbol_count) / tp->worker_count;
+      for (U64 i = ins_lo; i < ins_hi; i += 1) {
+#if BUILD_DEBUG
+        // hash-reverify (P3.2: moved here from the globals insert -- the last point where the
+        // $S backing behind the ref is guaranteed live)
+        Assert(flat_hashes[i] == u64_hash_from_str8(cv_raw_from_symbol(flat_symbols[i])));
+#endif
+        cv_symbol_deduper_insert_or_update(buckets, bucket_cap, flat_hashes[i], flat_symbols[i]);
+      }
+    }
+    barrier_wait(tp->barrier);
+    ProfEnd();
+
+    // compact buckets in parallel: each worker owns a contiguous slot range, counts its
+    // occupied slots, then copies them to its prefix-sum offset. Concatenated ranges preserve
+    // ascending slot order, so symbol_arr is byte-identical to a serial compaction for any
+    // worker count.
+    U64    symbol_count   = 0;
+    void **symbol_arr     = 0; // [symbol_count] compacted-slot order
+    U64   *compact_counts = 0; // [worker_count]
+    if (task_id == 0) {
+      compact_counts = push_array(scratch.arena, U64, tp->worker_count);
+    }
+    tp_broadcast(&compact_counts);
+
+    ProfBeginV("Compact Buckets [bucket_cap %llu]", bucket_cap);
+    U64 slot_lo = (task_id * bucket_cap) / tp->worker_count;
+    U64 slot_hi = ((task_id + 1) * bucket_cap) / tp->worker_count;
+    {
+      U64 c = 0;
+      for (U64 slot = slot_lo; slot < slot_hi; slot += 1) { c += buckets[slot] != 0; }
+      compact_counts[task_id] = c;
+    }
+    barrier_wait(tp->barrier);
+
+    for EachIndex(w, tp->worker_count) { symbol_count += compact_counts[w]; } // same value on every worker
+    if (task_id == 0) {
+      symbol_arr = push_array_no_zero(scratch.arena, void *, symbol_count ? symbol_count : 1);
+    }
+    tp_broadcast(&symbol_arr);
+
+    {
+      U64 dst = 0;
+      for (U64 w = 0; w < task_id; w += 1) { dst += compact_counts[w]; }
+      for (U64 slot = slot_lo; slot < slot_hi; slot += 1) {
+        if (buckets[slot]) { symbol_arr[dst++] = buckets[slot]; }
+      }
+    }
+    barrier_wait(tp->barrier);
+    ProfEnd();
+
+    // winner materialize: copy each winner's raw record out of the still-live backing into
+    // per-lane payload arenas on gsi->arena (alive through GSI serialization), in compacted
+    // slot order. The ptr ARRAY order is slot order for any worker count -- only the arena a
+    // copy lands in varies with the cohort, and every consumer reads through the ordered
+    // array, never the arenas -- so downstream bytes are cohort-invariant.
+    ProfBegin("Materialize Global Winners");
+    Rng1U64 *mat_ranges  = 0; // [worker_count]
+    U64     *mat_sizes   = 0; // [worker_count]
+    Arena  **mat_arenas  = 0; // [worker_count]
+    void   **winner_ptrs = 0; // [symbol_count] on gsi->arena
+    if (task_id == 0) {
+      mat_ranges  = tp_divide_work(scratch.arena, symbol_count, tp->worker_count);
+      mat_sizes   = push_array(scratch.arena, U64, tp->worker_count);
+      winner_ptrs = push_array_no_zero(gsi->arena, void *, symbol_count ? symbol_count : 1);
+    }
+    tp_broadcast(&mat_ranges);
+    tp_broadcast(&mat_sizes);
+    tp_broadcast(&winner_ptrs);
+
+    {
+      Rng1U64 mat_range = mat_ranges[task_id];
+      for EachInRange(i, mat_range) {
+        mat_sizes[task_id] += AlignPow2(cv_raw_from_symbol(symbol_arr[i]).size, sizeof(void *));
+      }
+    }
+    barrier_wait(tp->barrier);
+    if (task_id == 0) {
+      mat_arenas = alloc_arena_many(gsi->arena, tp->worker_count, mat_sizes);
+    }
+    tp_broadcast(&mat_arenas);
+    {
+      Rng1U64 mat_range = mat_ranges[task_id];
+      Arena  *dst_arena = mat_arenas[task_id];
+      for EachInRange(i, mat_range) {
+        String8 raw  = cv_raw_from_symbol(symbol_arr[i]);
+        U8     *copy = push_array_no_zero(dst_arena, U8, raw.size);
+        MemoryCopy(copy, raw.str, raw.size);
+        winner_ptrs[i] = copy;
+      }
+    }
+    barrier_wait(tp->barrier);
+    if (task_id == 0) {
+      task->gsi_winner_count = symbol_count;
+      task->gsi_winner_ptrs  = winner_ptrs;
+    }
+    ProfEnd();
+
+    // copies release: moved here from mid-globals (P3.2). The winner materialize above was
+    // the LAST $S reader on this path -- release the patched debug-section copies before the
+    // globals/publics staging begins instead of overlapping it. Same /PDBSTRIPPED gate as
+    // before (its second build re-walks cv->debug_s_arr Symbols after lnk_build_pdb returns;
+    // the materialize still ran -- winner ptrs never dangle either way). cand_arenas hold
+    // only the candidate ref/hash arrays (proc-ref arrays live on the surviving payload
+    // arenas) and die with the copies UNCONDITIONALLY -- they are ours; poison the dangling
+    // cand fields, keep the procref fields for the globals pass. The barrier after the copy
+    // loop above guarantees every worker is done reading before task 0 releases.
+    if (task_id == 0) {
+      if (task->free_sect_copies) {
+        ProfScope("Release Sect Data Copies") {
+          for EachIndex(obj_idx, task->cv->obj_count) {
+            lnk_obj_drop_section_data_copies(task->cv->obj_arr[obj_idx]);
+          }
+          for EachIndex(i, g_sect_copy_arena_count) {
+            if (g_sect_copy_arenas[i] != 0) { arena_release(g_sect_copy_arenas[i]); g_sect_copy_arenas[i] = 0; }
+          }
+        }
+      }
+      ProfScope("Release GSI Candidate Arenas") {
+        for EachIndex(i, task->preext_arena_count) {
+          if (task->cand_arenas[i] != 0) { arena_release(task->cand_arenas[i]); task->cand_arenas[i] = 0; }
+        }
+        for EachIndex(obj_idx, task->cv->obj_count) {
+          task->preext[obj_idx].cand_count  = 0;
+          task->preext[obj_idx].cand_ptrs   = 0; // poison dangling refs
+          task->preext[obj_idx].cand_hashes = 0;
+        }
+      }
+    }
+  }
+  ProfEnd();
 
   scratch_end(scratch);
 }
@@ -5673,11 +5721,11 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
 
   task.output = output_ptr;
 
-  // patched debug-section copies (obj->section_data_copies, GB-class at FN scale) can be
-  // handed back per-obj during the module-write pass -- UNLESS a /PDBSTRIPPED build
-  // follows: its pre-build stripping loop re-walks cv->debug_s_arr Symbols (which alias
-  // the copies) after this build returns. The RDI converter is safe (it reads the PDB
-  // artifact pages, not obj debug sections).
+  // patched debug-section copies (obj->section_data_copies, GB-class at FN scale) release at
+  // the END of the module-write phase, right after the fused dedup + winner materialize
+  // (P3.2) -- UNLESS a /PDBSTRIPPED build follows: its pre-build stripping loop re-walks
+  // cv->debug_s_arr Symbols (which alias the copies) after this build returns. The RDI
+  // converter is safe (it reads the PDB artifact pages, not obj debug sections).
   task.free_sect_copies = (config->pdb_stripped_name.size == 0);
 
   PDB_BuildHooks build_hooks = {0};
@@ -5715,14 +5763,18 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   task.string_ht = cv_dedup_string_tables(tp_arena, tp, cv->obj_count, cv->debug_s_arr);
   cv_string_hash_table_assign_buffer_offsets(tp, task.string_ht);
 
-  // the deduped buckets alias the objs' patched debug-section copies (the dedup task
-  // splits each raw string table in place), and both /names (pdb_strtab_build memcpys
-  // bucket bytes at serialize time in pdb_build_dbi_info) and DBI file-info hash these
-  // bytes AFTER the module-write pass releases the copies -- rehome the winning buckets
-  // into their own blob first (total = the deduped /names payload, tiny next to the
-  // copies being released). Offsets are already assigned; bytes are identical, so the
-  // /names stream and every recorded offset are unchanged.
-  if (task.free_sect_copies && task.string_ht.total_string_size > 0) {
+  // the deduped buckets alias the objs' $S string tables in place -- patched debug-section
+  // COPIES for reloc-carrying $S, RAW-MAPPED view bytes for reloc-free $S -- and both /names
+  // (pdb_strtab_build memcpys bucket bytes at serialize time in pdb_build_dbi_info) and DBI
+  // file-info hash these bytes AFTER the backing dies (copies release at the end of Write
+  // Modules; views die in P5) -- rehome the winning buckets into their own blob first
+  // (total = the deduped /names payload, tiny next to the backing being released). P3.1:
+  // UNCONDITIONAL, and the bucket walk below is backing-agnostic (every non-null winning
+  // bucket is copied, whatever its bytes alias), so raw-mapped tables are covered too.
+  // Offsets are already assigned; bytes are identical, so the /names stream and every
+  // recorded offset are unchanged -- /PDBSTRIPPED is unaffected (its second build makes its
+  // own string_ht from its own debug_s_arr; strtab serialize reads content-identical bytes).
+  if (task.string_ht.total_string_size > 0) {
     ProfBegin("Materialize String Table Bytes");
     U8 *blob   = push_array_no_zero(tp_arena->v[0], U8, task.string_ht.total_string_size);
     U64 cursor = 0;
@@ -5780,11 +5832,12 @@ ProfScope("Write Modules")
       lnk_build_pdb_distribute_obj_indices(scratch.arena, &task, cv->obj_count, C, weights);
 
       // P2b pre-extraction state: per-obj GSI input tables (candidate REFS into the live $S
-      // backing + synthesized proc-refs) filled inside the module-write visit, consumed
-      // walk-free by "Move Global Symbols". cand_arenas hold only the 16B-class ref/segment
-      // arrays and are transient (released with the section copies after the proc-ref
-      // insert); the proc-ref payload arenas survive until GSI serialization (same lifetime
-      // as the old proc_ref_arenas).
+      // backing + synthesized proc-refs) filled inside the module-write visit. P3.2: the
+      // candidate refs are consumed by the fused dedup + winner materialize in the
+      // lnk_write_pdb_modules epilogue and die there with the section copies (cand_arenas
+      // hold only the 16B-class ref arrays); "Move Global Symbols" consumes the materialized
+      // winners + the proc-ref tables, which live on the surviving payload arenas until GSI
+      // serialization (same lifetime as the old proc_ref_arenas).
       task.preext             = push_array(scratch.arena, LNK_GsiPreExtractObj, cv->obj_count);
       task.preext_arena_count = C;
       task.cand_arenas            = push_array(scratch.arena, Arena *, C);

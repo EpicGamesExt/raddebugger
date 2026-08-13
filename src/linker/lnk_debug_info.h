@@ -295,20 +295,21 @@ typedef enum
 // module-write per-obj visit (fused with the sizing walk, right after the obj's $S fixup
 // replay). Candidates are {pointer into the live $S backing, content hash} -- 16B/record, NO
 // payload copies (copying every pre-dedup candidate stacked ~6GB on top of the still-alive
-// section copies in the module window at FN scale). The $S backing (patched section copies)
-// therefore MUST stay alive until the GSI bucket fill materializes the dedup winners' bytes --
-// the copies release keeps its pre-P2b position (mid-globals, after the proc-ref insert).
-// Proc-ref payloads are synthesized by cv_make_proc_ref into their own surviving arenas at
-// extraction time. lnk_move_global_symbols_to_gsi consumes these tables walk-free (no $S
-// record decode), flattening per-obj segments in ascending obj-index order (deterministic and
-// cohort-independent).
+// section copies in the module window at FN scale). P3.2: dedup byte-compares resolve through
+// the refs into the live backing, so the whole dedup pipeline (insert + compact + winner
+// materialize) runs as the EPILOGUE of the module-write phase while every obj's backing is
+// resident; the copies AND the candidate ref tables release at the end of that phase.
+// Proc-ref payloads AND the per-obj procref value/hash arrays live on the surviving
+// procref_payload_arenas (consumed post-release by lnk_move_global_symbols_to_gsi, which
+// flattens per-obj segments in ascending obj-index order -- deterministic and
+// cohort-independent -- and otherwise reads only the materialized winner records).
 typedef struct
 {
   U64        cand_count;     // global records (cv_is_global_symbol + top-level typedefs)
-  void     **cand_ptrs;      // [cand_count] record starts INSIDE the obj's $S backing (alive until copies release)
+  void     **cand_ptrs;      // [cand_count] record starts INSIDE the obj's $S backing (dies at end of Write Modules)
   U64       *cand_hashes;    // [cand_count] u64_hash_from_str8(raw) computed at extraction
   U64        procref_count;  // GPROC32/LPROC32 records
-  CV_Symbol *procref_syms;   // [procref_count] cv_make_proc_ref results (payload on survive arenas)
+  CV_Symbol *procref_syms;   // [procref_count] cv_make_proc_ref results (arrays + payload on survive arenas)
   U64       *procref_hashes; // [procref_count] gsi_hash(name)
 } LNK_GsiPreExtractObj;
 
@@ -336,23 +337,30 @@ typedef struct
   struct LNK_PdbOutput *output; // when non-null, module streams enqueue to the background writer as they complete
 
   // when set, lnk_build_pdb drops every obj's patched debug-section copies
-  // (LNK_Obj.section_data_copies) and releases the SECT_DATA_COPIES arenas right after the
-  // proc-ref insert in "Move Global Symbols" -- the GSI bucket fill is the last $S reader
-  // (it materializes dedup-winner bytes out of the copies via the P2b candidate refs); also
-  // gates the /names bucket rehome and the mod->source_file_list repoint that decouple the
-  // string consumers from the copies. Must be 0 when a /PDBSTRIPPED build follows -- it
-  // re-walks cv->debug_s_arr after lnk_build_pdb.
+  // (LNK_Obj.section_data_copies) and releases the SECT_DATA_COPIES arenas at the END of the
+  // module-write phase, right after the fused dedup + winner materialize (P3.2: the last $S
+  // readers on this path). Must be 0 when a /PDBSTRIPPED build follows -- it re-walks
+  // cv->debug_s_arr after lnk_build_pdb. P3.1: the /names bucket rehome and the
+  // mod->source_file_list repoint are UNCONDITIONAL (they must also cover string tables in
+  // reloc-free RAW-MAPPED $S sections, which never had copies to begin with).
   B32 free_sect_copies;
 
   // P2b pre-extraction state (see LNK_GsiPreExtractObj). cand_arenas hold ONLY the per-obj
-  // ref/hash + proc-ref segment arrays (16B-per-record class, no payloads) and release with
-  // the section copies mid-globals. procref_payload_arenas hold cv_make_proc_ref payloads
-  // and must survive until GSI serialization (like the old proc_ref_arenas, they live to
-  // process exit).
+  // candidate ref/hash arrays (16B-per-record class, no payloads) and release with the
+  // section copies at the end of Write Modules. procref_payload_arenas hold the procref
+  // value/hash arrays + cv_make_proc_ref payloads and must survive until GSI serialization
+  // (like the old proc_ref_arenas, they live to process exit).
   LNK_GsiPreExtractObj *preext;                 // [cv->obj_count]
   Arena               **cand_arenas;            // [preext_arena_count]
   Arena               **procref_payload_arenas; // [preext_arena_count]
   U64                   preext_arena_count;     // Write Modules cohort width
+
+  // P3.2 fused-dedup output: the global-record winner set, materialized at the end of the
+  // module-write phase in compacted-slot order (ptr array + payload bytes on gsi->arena,
+  // alive through GSI serialization). The ONLY global-symbol input
+  // lnk_move_global_symbols_to_gsi reads.
+  U64    gsi_winner_count;
+  void **gsi_winner_ptrs; // [gsi_winner_count]
 } LNK_BuildPdb;
 
 typedef struct
