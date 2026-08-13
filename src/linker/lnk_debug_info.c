@@ -5082,8 +5082,10 @@ lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id, CV_
 // lnk_write_pdb_modules): candidates sort by (content hash, flat idx) -- flat idx is the
 // positional obj-major index, so the tiebreak (and thus each group's LEADER) is
 // schedule-independent.
-typedef struct { U64 hash; U64 flat_idx; } LNK_GsiSortEnt;
-typedef struct { U64 lo; U64 count; }      LNK_GsiGroup;
+#pragma pack(push, 4)
+typedef struct { U64 hash; U32 flat_idx; } LNK_GsiSortEnt;
+#pragma pack(pop)
+StaticAssert(sizeof(LNK_GsiSortEnt) == 12, lnk_gsi_sort_ent_size_check);
 typedef struct LNK_GsiMismatch { struct LNK_GsiMismatch *next; U64 grp; U64 flat_idx; String8 bytes; } LNK_GsiMismatch;
 #define LNK_GSI_LEADER_BIT (1u << 31)
 
@@ -5411,7 +5413,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
       for EachIndex(k, pre->cand_count) {
         U64 hash = pre->cand_hashes[k];
         U64 b = hash >> 56;
-        sorted[scatter_cursor[task_id * bucket_count + b]++] = (LNK_GsiSortEnt){hash, flat_base + k};
+        sorted[scatter_cursor[task_id * bucket_count + b]++] = (LNK_GsiSortEnt){hash, safe_cast_u32(flat_base + k)};
       }
     }
     barrier_wait(tp->barrier);
@@ -5425,7 +5427,6 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     U64           *bucket_group_counts = 0; // [256]
     U64           *group_base          = 0; // [256+1]
     U64            group_count         = 0;
-    LNK_GsiGroup  *groups              = 0; // [group_count]
     if (task_id == 0) {
       bucket_group_counts = push_array(scratch.arena, U64, bucket_count);
       group_base          = push_array(scratch.arena, U64, bucket_count + 1);
@@ -5448,10 +5449,8 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
       U64 acc = 0;
       for EachIndex(b, bucket_count) { group_base[b] = acc; acc += bucket_group_counts[b]; }
       group_base[bucket_count] = acc;
-      groups = push_array_no_zero(scratch.arena, LNK_GsiGroup, acc ? acc : 1);
     }
     group_count = 0;
-    tp_broadcast(&groups);
     if (task_id == 0) { group_count = group_base[bucket_count]; }
     tp_broadcast(&group_count);
 
@@ -5460,8 +5459,6 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
       for (U64 k = bucket_base[b], opl = bucket_base[b+1]; k < opl; ) {
         U64 e = k + 1;
         while (e < opl && sorted[e].hash == sorted[k].hash) { e += 1; }
-        groups[gid].lo    = k;
-        groups[gid].count = e - k;
         grp_of_flat[sorted[k].flat_idx] = (U32)gid | LNK_GSI_LEADER_BIT; // min flat idx of the run (flat is the sort tiebreak)
         for (U64 m = k + 1; m < e; m += 1) { grp_of_flat[sorted[m].flat_idx] = (U32)gid; }
         gid += 1; k = e;
