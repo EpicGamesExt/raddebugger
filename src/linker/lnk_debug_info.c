@@ -1394,15 +1394,15 @@ THREAD_POOL_TASK_FUNC(lnk_ifc_resolve_task)
   LNK_IfcRawRec      *recs    = task->recs[obj_idx];
   U64                 n       = task->counts[obj_idx];
   if (n == 0) { task->res_counts[obj_idx] = 0; return; }
-  CV_DebugT *debug_t = &input->debug_t_arr[obj_idx];
 
   U64 res_count = 0;
   U64 k_first = 0, k_last = 0;
   for EachIndex(t, n) {
-    LNK_IfcRawRec *r   = &recs[t];
-    CV_LeafHeader *hdr = cv_debug_t_get_leaf_header(debug_t, r->leaf_idx);
-    // exclude the placeholder leaf from output regardless: rewrite to NOTYPE
-    memory_write16(MemberFromPtr(CV_LeafHeader, hdr, kind), (U16)CV_LeafKind_NOTYPE);
+    LNK_IfcRawRec *r = &recs[t];
+    // exclude the placeholder leaf from output regardless: rewrite to NOTYPE. P4: journaled
+    // (KIND_ONLY -- the old write changed only the kind, size/payload stay) instead of
+    // CoW-dirtying the mapped view; capacity is pre-reserved serially (arena == 0 here)
+    lnk_notype_journal_push(0, &input->notype_journal[obj_idx], (U32)r->leaf_idx, 1, 0 /* bitmap pre-allocated */);
     if (r->entry == 0 || r->entry->blob_slot == 0) { continue; }
     U64       blob_i = r->entry->blob_slot - 1;
     IFC_File *f      = &task->ifc_files[blob_i];
@@ -1675,6 +1675,25 @@ lnk_apply_ifc_debug_records(TP_Context *tp, TP_Arena *tp_arena, LNK_CodeViewInpu
   resolve.res_counts = push_array(scratch.arena, U64, input->obj_count);
   resolve.k_first    = push_array(scratch.arena, U64, input->obj_count);
   resolve.k_last     = push_array(scratch.arena, U64, input->obj_count);
+  // P4: pre-reserve NOTYPE journal capacity + bitmap serially (one entry per 0x1522 record);
+  // the parallel resolve task pushes with arena == 0 and must never allocate
+  for EachIndex(obj_idx, input->obj_count) {
+    U64 n = scan.out_counts[obj_idx];
+    if (n == 0) { continue; }
+    LNK_NotypeJournal *journal = &input->notype_journal[obj_idx];
+    U32 need = journal->count + (U32)n;
+    if (need > journal->cap) {
+      U32 *new_v = push_array_no_zero(arena, U32, need);
+      MemoryCopyTyped(new_v, journal->v, journal->count);
+      journal->v   = new_v;
+      journal->cap = need;
+    }
+    if (journal->bitmap == 0) {
+      CV_DebugT *debug_t = &input->debug_t_arr[obj_idx];
+      journal->bit_cap = debug_t->count;
+      journal->bitmap  = push_array(arena, U64, (journal->bit_cap + 63) / 64);
+    }
+  }
   tp_for_parallel(tp, 0, input->obj_count, lnk_ifc_resolve_task, &resolve);
   lnk_log(LNK_Log_Timers, "[IFC] parallel resolve in %.2f ms", (F64)(now_time_us() - resolve_begin_us) / 1000.0);
 
@@ -1860,6 +1879,10 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
   Temp scratch = scratch_begin(0,0);
 
   LNK_CodeViewInput input = { .config = config, .obj_count = obj_count, .count = obj_count, .obj_arr = obj_arr, .rrt_input = rrt_input, .ts_obj_range = r1u64(0,0) };
+
+  // $T streaming (ring P4): per-real-obj NOTYPE journals (see LNK_NotypeJournal). Real objs
+  // only ([0, obj_count)); pseudo objs appended later mutate their arena-backed $T in place.
+  input.notype_journal = push_array(tp_arena->v[0], LNK_NotypeJournal, obj_count ? obj_count : 1);
 
   HashMap rrt_hm = {0};
   ProfScope("Make obj path -> RRT hash map")
@@ -2131,6 +2154,10 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
         CV_Leaf   leaf     = cv_debug_t_get_leaf(debug_t, 0);
         ts_kind = LNK_TypeServerKind_PDB;
         ts_info = cv_type_server_info_from_leaf(leaf);
+        // P4: ts_info.name points into the raw $T leaf 0 bytes of the mapped obj view -- copy it
+        // out so nothing downstream retains a raw-view pointer (ts_info is stored in ts_arr and
+        // read during/after the merge)
+        ts_info.name = push_str8_copy(tp_arena->v[0], ts_info.name);
         ts_path = lnk_find_first_file(scratch.arena, config->lib_dir_list, ts_info.name);
       }
 
@@ -2337,7 +2364,9 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
       debug_t->offsets  += 1;
     }
 
-    // remove LF_ENDPRECOMP from .debug$P
+    // remove LF_ENDPRECOMP from .debug$P -- P4: journal the NOTYPE rewrite instead of dirtying
+    // the mapped $P view (the backward header scan to FIND it still reads the raw view; those
+    // pages are hot from the parse)
     for EachIndex(i, input.debug_p_indices.count) {
       U64            debug_p_idx = input.debug_p_indices.v[i];
       CV_DebugT     *debug_p     = &input.debug_t_arr[debug_p_idx];
@@ -2345,8 +2374,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
         U64            lf_idx = debug_p->count - (i + 1);
         CV_LeafHeader *lf     = cv_debug_t_get_leaf_header(debug_p, lf_idx);
         if (lf->kind == CV_LeafKind_ENDPRECOMP) {
-          memory_write16(&lf->size, sizeof(lf->kind));
-          memory_write16(&lf->kind, CV_LeafKind_NOTYPE);
+          lnk_notype_journal_push(tp_arena->v[0], &input.notype_journal[debug_p_idx], (U32)lf_idx, 0, debug_p->count);
           break;
         }
       }
@@ -2471,6 +2499,101 @@ lnk_leaf_ref_leaf_idx(LNK_LeafRef ref)
   return (U32)ref;
 }
 
+// $T streaming (ring P4): NOTYPE journal ops. Pushes are single-threaded per obj (input-phase
+// pushes are serial or per-obj tasks; hash-phase pushes come from the obj's own hash task), so
+// no atomics. Sorted insert keeps lookup a bsearch; the common shapes are 0 entries (fast path)
+// or an append at the tail (input-phase entries land before hash-phase entries only for $P objs
+// that are also IFC consumers -- the linear tail walk handles the interleave).
+internal void
+lnk_notype_journal_push(Arena *arena, LNK_NotypeJournal *journal, U32 leaf_idx, B32 kind_only, U64 bit_cap)
+{
+  if (journal->count == journal->cap) {
+    AssertAlways(arena != 0); // pseudo objs never journal; real-obj pushes always have an arena
+    U32  new_cap = journal->cap ? journal->cap * 2 : 8;
+    U32 *new_v   = push_array_no_zero(arena, U32, new_cap);
+    MemoryCopyTyped(new_v, journal->v, journal->count);
+    journal->v   = new_v;
+    journal->cap = new_cap;
+  }
+  if (journal->bitmap == 0) {
+    AssertAlways(arena != 0);
+    journal->bitmap  = push_array(arena, U64, (bit_cap + 63) / 64);
+    journal->bit_cap = bit_cap;
+  }
+  // out-of-span indices (the pre-existing `curr_ti - min` quirk on invalid-TI error paths can
+  // exceed the leaf count) get a journal entry but no bit; readers only query leaf_idx < count,
+  // so the entry is unreachable either way (the old in-place write was equally out-of-bounds)
+  if (leaf_idx < journal->bit_cap) { journal->bitmap[leaf_idx >> 6] |= (1ull << (leaf_idx & 63)); }
+  U32 entry = leaf_idx | (kind_only ? LNK_NOTYPE_JOURNAL_KIND_ONLY : 0);
+  U32 i     = journal->count;
+  for (; i > 0 && (journal->v[i-1] & ~LNK_NOTYPE_JOURNAL_KIND_ONLY) > leaf_idx; i -= 1) {
+    journal->v[i] = journal->v[i-1];
+  }
+  Assert(i == 0 || (journal->v[i-1] & ~LNK_NOTYPE_JOURNAL_KIND_ONLY) != leaf_idx);
+  journal->v[i]   = entry;
+  journal->count += 1;
+}
+
+// O(1) hot-path test: bitmap == 0 for every obj without journal entries (the common case)
+internal B32
+lnk_notype_journal_test(LNK_NotypeJournal *journal, U64 leaf_idx)
+{
+  return journal->bitmap != 0 && leaf_idx < journal->bit_cap && ((journal->bitmap[leaf_idx >> 6] >> (leaf_idx & 63)) & 1);
+}
+
+internal B32
+lnk_notype_journal_find(LNK_NotypeJournal *journal, U32 leaf_idx, B32 *kind_only_out)
+{
+  if (journal->count == 0) { return 0; }
+  U32 lo = 0, hi = journal->count;
+  while (lo < hi) {
+    U32 mid = lo + (hi - lo) / 2;
+    U32 key = journal->v[mid] & ~LNK_NOTYPE_JOURNAL_KIND_ONLY;
+    if (key < leaf_idx)      { lo = mid + 1; }
+    else if (key > leaf_idx) { hi = mid;     }
+    else {
+      if (kind_only_out) { *kind_only_out = !!(journal->v[mid] & LNK_NOTYPE_JOURNAL_KIND_ONLY); }
+      return 1;
+    }
+  }
+  return 0;
+}
+
+// Journal-aware leaf read: raw views hold PRE-rewrite bytes for real objs, so present the
+// journaled view of the leaf to the hashers (identical to what the old in-place writes produced:
+// full rewrite => { kind=LF_NOTYPE, empty payload }; KIND_ONLY => kind=LF_NOTYPE, payload kept).
+internal CV_Leaf
+lnk_cv_leaf_from_leaf_ref(LNK_CodeViewInput *input, U32 obj_idx, U32 leaf_idx)
+{
+  CV_DebugT *debug_t = &input->debug_t_arr[obj_idx];
+  CV_Leaf    leaf    = cv_debug_t_get_leaf(debug_t, leaf_idx);
+  // hot path: one bitmap test; journals are empty for ~all objs
+  if (obj_idx < input->obj_count && lnk_notype_journal_test(&input->notype_journal[obj_idx], leaf_idx)) {
+    B32 kind_only = 0;
+    lnk_notype_journal_find(&input->notype_journal[obj_idx], leaf_idx, &kind_only);
+    leaf.kind = CV_LeafKind_NOTYPE;
+    if (!kind_only) { leaf.data.size = 0; }
+  }
+  return leaf;
+}
+
+// Journal-aware raw leaf size (materialize buffer sizing + copy). Hot path = the ORIGINAL
+// header read (one bitmap test on top); only a full NOTYPE rewrite changes the answer (the
+// leaf shrank to its 4-byte header; KIND_ONLY keeps the size field).
+internal U64
+lnk_leaf_ref_raw_size(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref)
+{
+  U32        obj_idx  = lnk_leaf_ref_obj_idx(leaf_ref);
+  U32        leaf_idx = lnk_leaf_ref_leaf_idx(leaf_ref);
+  CV_DebugT *debug_t  = &input->debug_t_arr[obj_idx];
+  if (obj_idx < input->obj_count && lnk_notype_journal_test(&input->notype_journal[obj_idx], leaf_idx)) {
+    B32 kind_only = 0;
+    lnk_notype_journal_find(&input->notype_journal[obj_idx], leaf_idx, &kind_only);
+    if (!kind_only) { return sizeof(CV_LeafHeader); }
+  }
+  return cv_debug_t_get_raw_leaf(debug_t, leaf_idx).size;
+}
+
 internal LNK_LeafRef
 lnk_leaf_ref_from_ti(LNK_CodeViewInput *input, U32 obj_idx, CV_TypeIndexSource source, CV_TypeIndex ti)
 {
@@ -2487,7 +2610,7 @@ lnk_leaf_ref_from_ti(LNK_CodeViewInput *input, U32 obj_idx, CV_TypeIndexSource s
       if (bits[rel >> 6] & (1ull << (rel & 63))) {
         U64 *packed = hash_map_search_u64_u64(&input->ifc_redirect_hm, Compose64Bit(obj_idx, ti));
         if (packed) {
-          return (LNK_LeafRef){ (U32)(*packed >> 32), (U32)(*packed & max_U32) };
+          return lnk_leaf_ref_make((U32)(*packed >> 32), (U32)(*packed & max_U32));
         }
       }
     }
@@ -2556,13 +2679,15 @@ lnk_match_leaf_ref(LNK_CodeViewInput *input, LNK_LeafRef a, LNK_LeafRef b)
   return a_hash == b_hash;
 }
 
+// P4: `leaf` is the caller's (journal-aware) read of the leaf -- this function no longer
+// re-reads it from the raw view. `journal_arena` backs NOTYPE journal growth for real objs
+// (pseudo objs keep in-place rewrites and may pass 0).
 internal U64
-lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TiOffsets ti_offs, B32 discard_cycles)
+lnk_hash_cv_leaf(LNK_CodeViewInput *input, Arena *journal_arena, LNK_LeafRef leaf_ref, CV_Leaf leaf, CV_TiOffsets ti_offs, B32 discard_cycles)
 {
   U32                 obj_idx        = lnk_leaf_ref_obj_idx(leaf_ref);
   U32                 leaf_idx       = lnk_leaf_ref_leaf_idx(leaf_ref);
   CV_DebugT          *debug_t        = &input->debug_t_arr[obj_idx];
-  CV_Leaf             leaf           = cv_debug_t_get_leaf(debug_t, leaf_idx);
   CV_TypeIndexSource  curr_ti_source = cv_type_index_source_from_leaf_kind(leaf.kind);
   CV_TypeIndex        curr_ti        = cv_ti_from_leaf_idx(debug_t, curr_ti_source, leaf_idx);
   U64                 ti_count       = cv_ti_offsets_count(&ti_offs);
@@ -2588,6 +2713,10 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TiOffsets ti
     lnk_hasher_update(&hasher, bytes, size);
   }
 
+  // P4: set when a discard below rewrote THIS leaf's header (the final header mix-in must
+  // then hash the NOTYPE header, exactly like the old post-write pointer read did)
+  B32 self_discarded = 0;
+
   // mix-in sub leaf hashes
   for (U64 ti_idx = 0; ti_idx < ti_count; ti_idx += 1) {
     CV_TiOff      sub_ti_n   = cv_ti_offset_at(&ti_offs, ti_idx);
@@ -2601,11 +2730,17 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TiOffsets ti
     }
 
     if (sub_ti >= debug_t->ti_ranges[sub_ti_n.source].max) {
-      // discard type
-      U32  leaf_idx    = curr_ti - debug_t->ti_ranges[curr_ti_source].min;
-      U8  *leaf_header = debug_t->data.str + debug_t->offsets[leaf_idx];
-      memory_write16(leaf_header + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
-      memory_write16(leaf_header + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
+      // discard type: journal the NOTYPE rewrite for view-backed real objs (raw input pages
+      // stay clean); pseudo objs keep the in-place write on their arena-backed copy
+      U32 leaf_idx = curr_ti - debug_t->ti_ranges[curr_ti_source].min;
+      if (obj_idx < input->obj_count) {
+        lnk_notype_journal_push(journal_arena, &input->notype_journal[obj_idx], leaf_idx, 0, debug_t->count);
+      } else {
+        U8 *leaf_header = debug_t->data.str + debug_t->offsets[leaf_idx];
+        memory_write16(leaf_header + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
+        memory_write16(leaf_header + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
+      }
+      if (leaf_idx == lnk_leaf_ref_leaf_idx(leaf_ref)) { self_discarded = 1; }
 
       // reset hasher
       lnk_hasher_init(&hasher, input->config->debug_types_hash);
@@ -2623,11 +2758,16 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TiOffsets ti
     // discard type with a cyclic-ref
     B32 is_type_graph_cyclic = discard_cycles && sub_ti > 0 && sub_ti > curr_ti;
     if (is_type_graph_cyclic) {
-      // discard type
-      U32  leaf_idx    = curr_ti - debug_t->ti_ranges[curr_ti_source].min;
-      U8  *leaf_header = debug_t->data.str + debug_t->offsets[leaf_idx];
-      memory_write16(leaf_header + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
-      memory_write16(leaf_header + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
+      // discard type (journal for real objs, in-place for pseudo -- see the invalid-TI branch)
+      U32 leaf_idx = curr_ti - debug_t->ti_ranges[curr_ti_source].min;
+      if (obj_idx < input->obj_count) {
+        lnk_notype_journal_push(journal_arena, &input->notype_journal[obj_idx], leaf_idx, 0, debug_t->count);
+      } else {
+        U8 *leaf_header = debug_t->data.str + debug_t->offsets[leaf_idx];
+        memory_write16(leaf_header + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
+        memory_write16(leaf_header + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
+      }
+      if (leaf_idx == lnk_leaf_ref_leaf_idx(leaf_ref)) { self_discarded = 1; }
 
       // reset hasher
       lnk_hasher_init(&hasher, input->config->debug_types_hash);
@@ -2650,9 +2790,20 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TiOffsets ti
     lnk_hasher_update_struct(&hasher, &sub_hash);
   }
 
-  // hash leaf header
-  CV_LeafHeader *leaf_header_ptr = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
-  lnk_hasher_update_struct(&hasher, leaf_header_ptr);
+  // hash leaf header. Hot path = the ORIGINAL raw pointer read; only journaled leaves (whose
+  // raw header is unpatched) and self-discards (whose rewrite went to the journal for real
+  // objs) reconstruct the header ({ size = data.size + sizeof(kind), kind } is byte-identical
+  // to what the old post-in-place-write read produced)
+  if (self_discarded) {
+    CV_LeafHeader leaf_header = { .size = sizeof(CV_LeafKind), .kind = CV_LeafKind_NOTYPE };
+    lnk_hasher_update_struct(&hasher, &leaf_header);
+  } else if (obj_idx < input->obj_count &&
+             lnk_notype_journal_test(&input->notype_journal[obj_idx], leaf_idx)) {
+    CV_LeafHeader leaf_header = { .size = (CV_LeafSize)(leaf.data.size + sizeof(CV_LeafKind)), .kind = leaf.kind };
+    lnk_hasher_update_struct(&hasher, &leaf_header);
+  } else {
+    lnk_hasher_update_struct(&hasher, cv_debug_t_get_leaf_header(debug_t, leaf_idx));
+  }
 
   // finalize the type hash
   U64 hash = lnk_hasher_digest64(&hasher);
@@ -2692,7 +2843,7 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
   root_frame->ti_offs      = root_ti_offs;
   root_frame->ti_next      = 0;
   root_frame->ti_count     = cv_ti_offsets_count(&root_ti_offs);
-  root_frame->leaf         = cv_debug_t_get_leaf(root_debug_t, lnk_leaf_ref_leaf_idx(root_leaf_ref));
+  root_frame->leaf         = lnk_cv_leaf_from_leaf_ref(input, lnk_leaf_ref_obj_idx(root_leaf_ref), lnk_leaf_ref_leaf_idx(root_leaf_ref));
   root_frame->ti_source    = cv_type_index_source_from_leaf_kind(root_frame->leaf.kind);
   root_frame->ti           = cv_ti_from_leaf_idx(root_debug_t, root_frame->ti_source, lnk_leaf_ref_leaf_idx(root_leaf_ref));
 
@@ -2721,7 +2872,7 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
       // recurse down to sub types
       HashStack *frame = push_array(temp.arena, HashStack, 1);
       frame->leaf_ref     = leaf_ref;
-      frame->leaf         = cv_debug_t_get_leaf(&input->debug_t_arr[obj_idx], leaf_idx);
+      frame->leaf         = lnk_cv_leaf_from_leaf_ref(input, obj_idx, leaf_idx);
       frame->ti_offs      = cv_leaf_ti_offsets(temp.arena, frame->leaf.kind, frame->leaf.data);
       frame->ti_next      = 0;
       frame->ti_count     = cv_ti_offsets_count(&frame->ti_offs);
@@ -2733,7 +2884,9 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
 
     // no more type indices, pop frame
     if (stack->ti_next >= stack->ti_count) {
-      lnk_hash_cv_leaf(input, stack->leaf_ref, stack->ti_offs, 0);
+      // deep hashing only runs on pseudo objs (type servers / .ifc blobs) and never leaves the
+      // root obj, so no journal arena is needed (in-place rewrite path)
+      lnk_hash_cv_leaf(input, 0, stack->leaf_ref, stack->leaf, stack->ti_offs, 0);
       SLLStackPop(stack);
     }
   }
@@ -2767,9 +2920,9 @@ THREAD_POOL_TASK_FUNC(lnk_hash_debug_t_task)
   CV_DebugT      *debug_t = &task->input->debug_t_arr[obj_idx];
   for EachIndex(leaf_idx, debug_t->count) {
     Temp         temp    = temp_begin(task->fixed_arenas[worker_id]);
-    CV_Leaf      leaf    = cv_debug_t_get_leaf(debug_t, leaf_idx);
+    CV_Leaf      leaf    = lnk_cv_leaf_from_leaf_ref(task->input, obj_idx, leaf_idx);
     CV_TiOffsets ti_offs = cv_leaf_ti_offsets(temp.arena, leaf.kind, leaf.data);
-    lnk_hash_cv_leaf(task->input, lnk_leaf_ref_make(obj_idx, leaf_idx), ti_offs, 1);
+    lnk_hash_cv_leaf(task->input, arena, lnk_leaf_ref_make(obj_idx, leaf_idx), leaf, ti_offs, 1);
     temp_end(temp);
   }
   ProfEnd();
@@ -2785,9 +2938,9 @@ THREAD_POOL_TASK_FUNC(lnk_hash_debug_t_deep_task)
   B32 is_ifc_blob = task->input->has_ifc_redirects && contains_1u64(task->input->ifc_obj_range, obj_idx);
   for EachIndex(leaf_idx, debug_t->count) {
     if (task->input->debug_h_arr[obj_idx].v[leaf_idx] != 0) { continue; }
-    if (is_ifc_blob && cv_debug_t_get_leaf_header(debug_t, leaf_idx)->kind == CV_LeafKind_NOTYPE) { continue; }
+    if (is_ifc_blob && cv_debug_t_get_leaf_header(debug_t, leaf_idx)->kind == CV_LeafKind_NOTYPE) { continue; } // blob $T is arena-backed + mutated in place -- raw read is post-rewrite
     Temp         temp    = temp_begin(task->fixed_arenas[worker_id]);
-    CV_Leaf      leaf    = cv_debug_t_get_leaf(debug_t, leaf_idx);
+    CV_Leaf      leaf    = lnk_cv_leaf_from_leaf_ref(task->input, obj_idx, leaf_idx);
     CV_TiOffsets ti_offs = cv_leaf_ti_offsets(temp.arena, leaf.kind, leaf.data);
     lnk_hash_cv_leaf_deep(temp.arena, task->input, lnk_leaf_ref_make(obj_idx, leaf_idx), ti_offs);
     temp_end(temp);
@@ -2825,9 +2978,18 @@ THREAD_POOL_TASK_FUNC(lnk_estimate_unique_leaves_task)
   // same prune rule as lnk_leaf_dedup_task: NOTYPE'd IFC blob leaves were never hashed and are
   // never inserted, so they must not contribute to the estimate either
   B32 is_ifc_blob = task->input->has_ifc_redirects && contains_1u64(task->input->ifc_obj_range, obj_idx);
+  // P4: raw views hold pre-rewrite bytes for journaled real-obj leaves -- overlay LF_NOTYPE
+  // via the per-obj journal bitmap (0 for ~all objs; one register test per leaf)
+  U64 *notype_bm  = 0;
+  U64  notype_cap = 0;
+  if (obj_idx < task->input->obj_count) {
+    notype_bm  = task->input->notype_journal[obj_idx].bitmap;
+    notype_cap = task->input->notype_journal[obj_idx].bit_cap;
+  }
   for (U64 leaf_idx = 0; leaf_idx < debug_t->count; leaf_idx += LNK_ESTIMATE_SAMPLE_STRIDE) {
     CV_LeafHeader *header = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
     CV_LeafKind    kind   = memory_read16(MemberFromPtr(CV_LeafHeader, header, kind));
+    if (notype_bm && leaf_idx < notype_cap && ((notype_bm[leaf_idx >> 6] >> (leaf_idx & 63)) & 1)) { kind = CV_LeafKind_NOTYPE; }
     if (is_ifc_blob && kind == CV_LeafKind_NOTYPE) { continue; }
     CV_TypeIndexSource leaf_source = cv_type_index_source_from_leaf_kind(kind);
     U64                bit_idx     = debug_h->v[leaf_idx] & (task->estimate_bitmap_bits[leaf_source] - 1);
@@ -2856,6 +3018,9 @@ THREAD_POOL_TASK_FUNC(lnk_populate_leaf_ht)
 
     LNK_LeafRef leaf_ref = lnk_leaf_ref_make(obj_idx, leaf_idx);
     B32 is_inserted_or_updated = 1;
+
+    // pop obj is a type-server pseudo obj: arena-backed, mutated in place, never journaled --
+    // the raw header read is the post-rewrite kind (original code path)
     CV_LeafHeader      *header      = cv_debug_t_get_leaf_header(debug_t, leaf_idx);             // leaf index -> leaf header
     CV_LeafKind         kind        = memory_read16(MemberFromPtr(CV_LeafHeader, header, kind)); // leaf header -> leaf kind
     CV_TypeIndexSource  leaf_source = cv_type_index_source_from_leaf_kind(kind);                 // leaf kind -> type stream
@@ -2898,6 +3063,16 @@ THREAD_POOL_TASK_FUNC(lnk_leaf_dedup_task)
   
   ProfBeginDynamic("dedup in obj 0x%llx (%.*s) leaf count %llu", obj_idx, str8_varg(task->input->obj_arr[obj_idx]->path), debug_t->count);
 
+  // P4: raw views hold pre-rewrite bytes for journaled real-obj leaves -- overlay LF_NOTYPE via
+  // the per-obj journal bitmap (0 for ~all objs). Blob objs are pseudo (in-place rewrites), so
+  // their skip below keeps the plain raw read.
+  U64 *notype_bm  = 0;
+  U64  notype_cap = 0;
+  if (obj_idx < task->input->obj_count) {
+    notype_bm  = task->input->notype_journal[obj_idx].bitmap;
+    notype_cap = task->input->notype_journal[obj_idx].bit_cap;
+  }
+
   for EachIndex(leaf_idx, debug_t->count) {
     // another worker overflowed an estimate-sized table -- the whole dedup result is discarded
     // and retried with the total-based caps, so bail out early
@@ -2909,6 +3084,7 @@ THREAD_POOL_TASK_FUNC(lnk_leaf_dedup_task)
     LNK_LeafRef         leaf_ref    = lnk_leaf_ref_make(obj_idx, leaf_idx);
     CV_LeafHeader      *header      = cv_debug_t_get_leaf_header(debug_t, leaf_idx);             // leaf index -> leaf header
     CV_LeafKind         kind        = memory_read16(MemberFromPtr(CV_LeafHeader, header, kind)); // leaf header -> leaf kind
+    if (notype_bm && leaf_idx < notype_cap && ((notype_bm[leaf_idx >> 6] >> (leaf_idx & 63)) & 1)) { kind = CV_LeafKind_NOTYPE; }
     CV_TypeIndexSource  leaf_source = cv_type_index_source_from_leaf_kind(kind);                 // leaf kind -> type stream
     LNK_LeafHashTable  *leaf_ht     = &task->leaf_ht_arr[leaf_source];                           // type stream -> hash table
     U64                 best_idx    = debug_h->v[leaf_idx] % leaf_ht->cap;                       // leaf ref -> hash -> bucket index
@@ -3523,9 +3699,8 @@ THREAD_POOL_TASK_FUNC(lnk_count_unique_leaf_sizes_task)
   Rng1U64 range = task->ranges[task_id];
   U64 size = 0;
   for EachInRange(i, range) {
-    LNK_LeafRef leaf_ref = task->unique_leaf_refs_arr[task->ti_source].v[i];
-    CV_DebugT  *debug_t  = &task->input->debug_t_arr[lnk_leaf_ref_obj_idx(leaf_ref)];
-    size += cv_debug_t_get_raw_leaf(debug_t, lnk_leaf_ref_leaf_idx(leaf_ref)).size;
+    // P4: journal-aware offsets-chain size -- no leaf-header reads through the mapped views
+    size += lnk_leaf_ref_raw_size(task->input, task->unique_leaf_refs_arr[task->ti_source].v[i]);
   }
   task->leaf_buffer_offsets[task_id] = size; // exclusive-scanned into offsets on the main thread
 }
@@ -3549,17 +3724,38 @@ THREAD_POOL_TASK_FUNC(lnk_materialize_unique_leaves_task)
     U32         obj_idx  = lnk_leaf_ref_obj_idx(leaf_ref);
     U32         leaf_idx = lnk_leaf_ref_leaf_idx(leaf_ref);
     CV_DebugT  *debug_t  = &task->input->debug_t_arr[obj_idx];
-    String8     raw_leaf = cv_debug_t_get_raw_leaf(debug_t, leaf_idx);
 
-    // copy raw leaf into the private buffer
-    MemoryCopy(cursor, raw_leaf.str, raw_leaf.size);
+    // copy raw leaf into the private buffer. Hot path = the ORIGINAL read+memcpy (one bitmap
+    // test on top); journaled leaves replay the NOTYPE rewrite into the COPY (full rewrite =>
+    // bare { size=sizeof(CV_LeafKind), kind=LF_NOTYPE } header; KIND_ONLY (0x1522) => copy then
+    // patch the kind). Byte-identical to the old post-in-place-write copy.
+    U64 raw_size;
+    if (obj_idx < task->input->obj_count &&
+        lnk_notype_journal_test(&task->input->notype_journal[obj_idx], leaf_idx)) {
+      B32 kind_only = 0;
+      lnk_notype_journal_find(&task->input->notype_journal[obj_idx], leaf_idx, &kind_only);
+      if (kind_only) {
+        String8 raw_leaf = cv_debug_t_get_raw_leaf(debug_t, leaf_idx);
+        raw_size = raw_leaf.size;
+        MemoryCopy(cursor, raw_leaf.str, raw_size);
+        memory_write16(cursor + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
+      } else {
+        raw_size = sizeof(CV_LeafHeader);
+        memory_write16(cursor + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
+        memory_write16(cursor + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
+      }
+    } else {
+      String8 raw_leaf = cv_debug_t_get_raw_leaf(debug_t, leaf_idx);
+      raw_size = raw_leaf.size;
+      MemoryCopy(cursor, raw_leaf.str, raw_size);
+    }
     task->result.v[task->ti_source][i] = cursor;
-    cursor += raw_leaf.size;
+    cursor += raw_size;
 
     // fixup type indices on the copy (same math the in-place leaf patcher applied)
     Temp temp = temp_begin(fixed_arena);
     CV_Leaf leaf = {0};
-    cv_read_leaf(str8(task->result.v[task->ti_source][i], raw_leaf.size), 0, 1, &leaf);
+    cv_read_leaf(str8(task->result.v[task->ti_source][i], raw_size), 0, 1, &leaf);
     CV_TiOffsets ti_offs = cv_leaf_ti_offsets(temp.arena, leaf.kind, leaf.data);
     lnk_fixup_cv_type_indices(task, obj_idx, leaf.data, ti_offs);
     temp_end(temp);
@@ -3573,11 +3769,9 @@ THREAD_POOL_TASK_FUNC(lnk_unbucket_hashes_task)
   LNK_MergeTypes *task = raw_task;
   Rng1U64 range = task->ranges[task_id];
   for EachInRange(i, range) {
-    LNK_LeafRef  leaf_ref = task->unique_leaf_refs_arr[task->ti_source].v[i];
-    U32          obj_idx  = lnk_leaf_ref_obj_idx(leaf_ref);
-    U32          leaf_idx = lnk_leaf_ref_leaf_idx(leaf_ref);
-    CV_DebugT   *debug_t  = &task->input->debug_t_arr[obj_idx];
-    String8      raw_leaf = cv_debug_t_get_raw_leaf(debug_t, leaf_idx);
+    LNK_LeafRef leaf_ref = task->unique_leaf_refs_arr[task->ti_source].v[i];
+    U32         obj_idx  = lnk_leaf_ref_obj_idx(leaf_ref);
+    U32         leaf_idx = lnk_leaf_ref_leaf_idx(leaf_ref);
     task->result.hashes[task->ti_source][i] = task->input->debug_h_arr[obj_idx].v[leaf_idx];
   }
 }
@@ -3592,9 +3786,15 @@ THREAD_POOL_TASK_FUNC(lnk_build_obj_ti_map)
   CV_DebugT    *debug_t    = &input->debug_t_arr[obj_idx];
   CV_TypeIndex *obj_ti_map = task->obj_ti_batch + task->obj_ti_map_offsets[obj_idx];
 
+  // P4: journal bitmap overlays LF_NOTYPE on journaled real-obj leaves (raw bytes are pre-rewrite)
+  U64 *notype_bm  = input->notype_journal[obj_idx].bitmap;
+  U64  notype_cap = input->notype_journal[obj_idx].bit_cap;
+
   for EachIndex(leaf_idx, debug_t->count) {
-    CV_Leaf             leaf       = cv_debug_t_get_leaf(debug_t, leaf_idx);
-    CV_TypeIndexSource  source     = cv_type_index_source_from_leaf_kind(leaf.kind);
+    CV_Leaf     leaf = cv_debug_t_get_leaf(debug_t, leaf_idx);
+    CV_LeafKind kind = leaf.kind;
+    if (notype_bm && leaf_idx < notype_cap && ((notype_bm[leaf_idx >> 6] >> (leaf_idx & 63)) & 1)) { kind = CV_LeafKind_NOTYPE; }
+    CV_TypeIndexSource  source   = cv_type_index_source_from_leaf_kind(kind);
     LNK_LeafRef         leaf_ref = lnk_leaf_ref_make(obj_idx, leaf_idx);
     LNK_AssignedTiHash *assigned = &task->assigned_ti_arr[source];
     obj_ti_map[leaf_idx] = lnk_assigned_ti_hash_search(assigned, input, leaf_ref);
@@ -3686,7 +3886,9 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     for EachElement(i, hash_targets) {
       task.indices = hash_targets[i].hash_indices;
       ProfBegin("Hash [Count: %.*s]", str8_varg(str8_from_count(scratch.arena, task.indices.count)));
-      tp_for_parallel(tp, 0, task.indices.count, hash_targets[i].hasher_task, &task);
+      // P4: pass real worker arenas -- the shallow hasher's invalid-TI/cyclic discards push
+      // NOTYPE journal entries (rare error paths, bytes are negligible on tp_temp)
+      tp_for_parallel(tp, tp_temp, task.indices.count, hash_targets[i].hasher_task, &task);
       ProfEnd();
     }
 

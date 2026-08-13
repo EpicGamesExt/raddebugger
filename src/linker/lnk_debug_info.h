@@ -102,6 +102,33 @@ typedef struct LNK_DebugSInlineJournal
   U32                 *node_counts; // [InlineeLines node_count] entries per node run
 } LNK_DebugSInlineJournal;
 
+// $T streaming (ring P4): per-real-obj journal of LF_NOTYPE kind rewrites. Raw mapped
+// .debug$T/$P views are never written anymore (writes used to CoW-dirty one input page per
+// discard); instead the rewrite is journaled here and mirrored into CV_DebugT.tags, and the
+// downstream byte readers (hash current-leaf reads, unique-leaf sizing, materialize) replay it.
+// Entry = leaf_idx | optional KIND_ONLY flag:
+//   full rewrite (default): header becomes { size=sizeof(CV_LeafKind), kind=LF_NOTYPE } -- the
+//     ENDPRECOMP strip and the invalid-TI/cyclic discards in lnk_hash_cv_leaf;
+//   KIND_ONLY: only the kind becomes LF_NOTYPE, size/payload preserved -- the LF_IFC_RECORD
+//     (0x1522) placeholder rewrite in lnk_ifc_resolve_task.
+// Entries are kept sorted by leaf_idx (sorted insert; pushes are single-threaded per obj).
+// Pseudo objs (type servers, .ifc blobs; obj_idx >= obj_count) keep their in-place writes:
+// their $T is arena-backed, not a mapped input view.
+//
+// HOT-PATH CONTRACT: readers stay on the ORIGINAL raw-byte code path unless the per-obj
+// bitmap says the leaf is journaled. `bitmap == 0` (the overwhelmingly common case: journals
+// exist only for $P objs, IFC consumers, and invalid-input error paths) costs one load+branch;
+// only journaled leaves pay the bsearch + reconstruct.
+#define LNK_NOTYPE_JOURNAL_KIND_ONLY (1u << 31)
+typedef struct LNK_NotypeJournal
+{
+  U32 *v; // (leaf_idx | LNK_NOTYPE_JOURNAL_KIND_ONLY?) ascending by leaf_idx
+  U32  count;
+  U32  cap;
+  U64 *bitmap;  // 1 bit / parse-time leaf slot; 0 until the first push
+  U64  bit_cap; // bits in bitmap
+} LNK_NotypeJournal;
+
 typedef struct
 {
   LNK_Config  *config;
@@ -166,6 +193,10 @@ typedef struct
   // original map is searched unchanged, so results are bit-identical to always searching.
   U64    **ifc_redirect_bits;   // [count]; null == obj has no redirect keys
   Rng1U64 *ifc_redirect_ti_rng; // [count]; [min,max) local-TI span covered by the obj's bitset
+
+  // $T streaming (ring P4): [obj_count] NOTYPE-rewrite journals, real objs only (see
+  // LNK_NotypeJournal). Pseudo objs at [obj_count, count) mutate their arena-backed $T in place.
+  LNK_NotypeJournal *notype_journal;
 } LNK_CodeViewInput;
 
 typedef struct
@@ -399,7 +430,12 @@ internal LNK_CodeViewInput lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp
 
 internal int             lnk_leaf_ref_compare                (LNK_LeafRef a, LNK_LeafRef b);
 internal B32             lnk_match_leaf_ref                  (LNK_CodeViewInput *input, LNK_LeafRef a, LNK_LeafRef b);
-internal U64             lnk_hash_cv_leaf                    (LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TiOffsets ti_offs, B32 discard_cycles);
+internal void            lnk_notype_journal_push             (Arena *arena, LNK_NotypeJournal *journal, U32 leaf_idx, B32 kind_only, U64 bit_cap);
+internal B32             lnk_notype_journal_test             (LNK_NotypeJournal *journal, U64 leaf_idx);
+internal B32             lnk_notype_journal_find             (LNK_NotypeJournal *journal, U32 leaf_idx, B32 *kind_only_out);
+internal CV_Leaf         lnk_cv_leaf_from_leaf_ref           (LNK_CodeViewInput *input, U32 obj_idx, U32 leaf_idx);
+internal U64             lnk_leaf_ref_raw_size               (LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
+internal U64             lnk_hash_cv_leaf                    (LNK_CodeViewInput *input, Arena *journal_arena, LNK_LeafRef leaf_ref, CV_Leaf leaf, CV_TiOffsets ti_offs, B32 discard_cycles);
 internal void            lnk_hash_cv_leaf_deep               (Arena *arena, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TiOffsets ti_offs);
 internal CV_TypeIndex    lnk_assigned_ti_hash_search          (LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
 internal LNK_MergedTypes lnk_merge_types                     (TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK_MergeTypeFlags merge_flags);
