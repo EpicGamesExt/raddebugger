@@ -322,28 +322,16 @@ typedef enum
   LNK_PDB_BuilderFlag_NATVIS      = (1<<5),
 } LNK_PDB_BuilderFlags;
 
-// Streaming-ring P2b/P3.3: per-obj global-symbol candidate REFS + proc-refs, extracted inside
-// the module-write per-obj visit (fused with the sizing walk, over the obj's post-fixup $S
-// bytes -- the window copy when g_debug_s_window, the patched backing otherwise). P3.3
-// candidates are POSITION records, not pointers: {content hash, Symbols node ordinal, offset
-// within node, record size} -- 18B/record, NO payload copies and NO live-backing aliasing, so
-// they survive the window being reused for the next obj. The module-write epilogue dedups by
-// hash grouping (sort by (hash, flat idx)), then RE-READS just the bytes it needs through the
-// same window fill: group leaders to materialize the winner payload, other members to
-// byte-confirm equality against their leader (a same-hash different-bytes member is a genuine
-// 64-bit collision -- expected ~never -- and materializes as its own winner, preserving the
-// old deduper's exact content set).
-// Proc-ref payloads AND the per-obj procref value/hash arrays live on the surviving
+// Streaming-ring P2b: per-obj global-symbol counts + proc-refs. Global-symbol records are
+// content-deduped directly from the one module-write window and only exact winners are copied
+// to surviving storage; no candidate metadata or payload survives the window. Proc-ref
+// payloads AND the per-obj procref value/hash arrays live on the surviving
 // procref_payload_arenas (consumed post-release by lnk_move_global_symbols_to_gsi, which
 // flattens per-obj segments in ascending obj-index order -- deterministic and
 // cohort-independent -- and otherwise reads only the materialized winner records).
 typedef struct
 {
   U64        cand_count;     // global records (cv_is_global_symbol + top-level typedefs)
-  U64       *cand_hashes;    // [cand_count] u64_hash_from_str8(raw) computed at extraction (post-reloc post-fixup bytes)
-  U32       *cand_offs;      // [cand_count] record start offset within its Symbols data_list node (COFF section-sized)
-  U32       *cand_nodes;     // [cand_count] Symbols data_list node ordinal
-  U16       *cand_lens;      // [cand_count] native CV_SymSize; full record size adds sizeof(CV_SymSize)
   U64        procref_count;  // GPROC32/LPROC32 records
   CV_Symbol *procref_syms;   // [procref_count] cv_make_proc_ref results (arrays + payload on survive arenas)
   U32       *procref_hashes; // [procref_count] gsi_hash(name)
@@ -374,27 +362,30 @@ typedef struct
 
   // when set, lnk_build_pdb drops every obj's patched debug-section copies
   // (LNK_Obj.section_data_copies) and releases the SECT_DATA_COPIES arenas at the END of the
-  // module-write phase, right after the fused dedup + winner materialize (P3.2: the last $S
-  // readers on this path). Must be 0 when a /PDBSTRIPPED build follows -- it re-walks
+  // module-write phase, right after direct winner dedup/materialization (the last $S reader
+  // on this path). Must be 0 when a /PDBSTRIPPED build follows -- it re-walks
   // cv->debug_s_arr after lnk_build_pdb. P3.1: the /names bucket rehome and the
   // mod->source_file_list repoint are UNCONDITIONAL (they must also cover string tables in
   // reloc-free RAW-MAPPED $S sections, which never had copies to begin with).
   B32 free_sect_copies;
 
-  // P2b pre-extraction state (see LNK_GsiPreExtractObj). cand_arenas hold ONLY the per-obj
-  // candidate position/hash arrays (18B per record, no payloads) and release with the
-  // section copies at the end of Write Modules. procref_payload_arenas hold the procref
-  // value/hash arrays + cv_make_proc_ref payloads and must survive until GSI serialization
+  // P2b pre-extraction state (see LNK_GsiPreExtractObj). procref_payload_arenas hold exact
+  // global-symbol winners plus the procref value/hash arrays and cv_make_proc_ref payloads.
+  // They must survive until GSI serialization
   // (like the old proc_ref_arenas, they live to process exit).
   LNK_GsiPreExtractObj *preext;                 // [cv->obj_count]
-  Arena               **cand_arenas;            // [preext_arena_count]
   Arena               **procref_payload_arenas; // [preext_arena_count]
   U64                   preext_arena_count;     // Write Modules cohort width
 
-  // P3.2 fused-dedup output: the global-record winner set, materialized at the end of the
-  // module-write phase in compacted-slot order (ptr array + payload bytes on gsi->arena,
-  // alive through GSI serialization). The ONLY global-symbol input
-  // lnk_move_global_symbols_to_gsi reads.
+  // Transient exact-content set used only inside Write Modules. Empty slots are claimed with
+  // a reservation sentinel before a winner is copied, so duplicates allocate no payload.
+  U64                   gsi_dedup_bucket_cap;
+  void                **gsi_dedup_buckets;
+
+  // Direct exact-dedup output: the winner pointer array is compacted from hash-table slot
+  // order onto gsi->arena; payload bytes remain on the per-worker surviving arenas above.
+  // Both stay alive through GSI serialization. This is the only global-symbol input read by
+  // lnk_move_global_symbols_to_gsi.
   U64    gsi_winner_count;
   void **gsi_winner_ptrs; // [gsi_winner_count]
 } LNK_BuildPdb;

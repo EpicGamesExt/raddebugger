@@ -4502,14 +4502,12 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
   ProfBegin("Global Symbols");
   {
-    // P3.2: dedup + compaction + winner materialize ran inside the module-write phase
-    // (lnk_write_pdb_modules epilogue) while the patched $S backing was alive -- the backing
-    // and the candidate ref tables are already RELEASED by the time this pass runs. Consume
-    // only the materialized winner records (task->gsi_winner_ptrs, compacted-slot order,
-    // payload on gsi->arena): hash names, size buckets, sharded fill. Zero $S touches
-    // anywhere in this pass. Determinism unchanged: the winner array is compacted-slot order
-    // (cohort-invariant), the fill below walks it in global order per bucket shard, and every
-    // GSI bucket chain is content-sorted at serialization (gsi_symbol_is_before).
+    // Exact dedup + compaction ran inside the module-write phase while each transformed $S
+    // window was alive; section backing is already released by the time this pass runs.
+    // Consume only materialized winner records (pointer array in hash-table slot order,
+    // payload on surviving per-worker arenas): hash names, size buckets, sharded fill. This
+    // pass never touches $S. Winner-array order is schedule-dependent, but every GSI bucket
+    // chain is content-sorted at serialization (gsi_symbol_is_before), so output is stable.
     U64    symbol_count = task->gsi_winner_count;
     void **symbol_arr   = task->gsi_winner_ptrs; // [symbol_count] materialized copies
 
@@ -4523,7 +4521,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     tp_broadcast(&symbol_hashes);
 
     // hash symbols (reads the materialized winner bytes -- byte-identical to the $S records
-    // they were copied from, so every hash value matches the pre-P3.2 flow)
+    // they were copied from, so every hash value matches the pre-direct-dedup flow)
     Rng1U64 symbol_range = symbol_ranges[task_id];
     for EachInRange(i, symbol_range) {
       CV_Symbol symbol = cv_symbol_from_ptr(symbol_arr[i]);
@@ -4563,7 +4561,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
         // deterministic same-name tie-break for the per-bucket sort in gsi_serialize_symbols_task
         // (gsi_symbol_is_before compares name -> offset -> kind -> data bytes): key on the content
         // hash of the full raw record, never a slot/array position. The winner ARRAY order is a
-        // dedup-implementation detail (P3.3: hash-group order; P3.2: compacted CAS slots) and
+        // dedup-implementation detail (currently compacted open-addressing slot order) and
         // per-bucket insert order follows it -- the content-keyed sort is what makes the
         // serialized bytes invariant to it. On collision the comparator's kind/data-bytes
         // fallback stays content-deterministic, and byte-identical records cannot reach the
@@ -4644,10 +4642,9 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
   }
   ProfEnd();
 
-  // P3.2: the patched debug-section copies + candidate ref arenas were released at the END of
-  // the module-write phase (lnk_write_pdb_modules epilogue) -- nothing here reads $S. The
-  // procref value/hash arrays + payloads consumed above live on the surviving
-  // procref_payload_arenas (through GSI serialization).
+  // Patched debug-section copies were released at the end of the module-write phase; nothing
+  // here reads $S. Global winner bytes and the procref value/hash arrays + payloads consumed
+  // above live on the surviving procref_payload_arenas through GSI serialization.
 
   ProfBegin("Public Symbols");
   {
@@ -4935,7 +4932,60 @@ lnk_write_debug_s_to_pdb_module(PDB_DbiModule *mod, CV_DebugS debug_s, String8No
 typedef struct LNK_PdbOutput LNK_PdbOutput;
 internal void lnk_pdb_output_enqueue_stream(LNK_PdbOutput *output, MSF_Context *msf, MSF_StreamNumber sn);
 
-// Streaming-ring P2b: extract the obj's GSI inputs -- global-record candidate refs and
+#define LNK_GSI_DEDUP_RESERVED ((void *)(U64)1)
+
+internal U64
+lnk_count_gsi_candidates(CV_DebugS debug_s)
+{
+  U64 count = 0;
+  String8List symbols = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
+  for EachNode(n, String8Node, symbols.first) {
+    for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
+      CV_Symbol symbol = {0};
+      TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
+      if (cv_is_global_symbol(symbol.kind) || (depth == 0 && cv_is_typedef(symbol.kind))) { count += 1; }
+      if (cv_is_scope_symbol(symbol.kind)) {
+        depth += 1;
+      } else if (cv_is_end_symbol(symbol.kind)) {
+        if (depth == 0) { Assert(0 && "malformed symbol stream"); break; }
+        depth -= 1;
+      }
+    }
+  }
+  return count;
+}
+
+// Exact concurrent content set. Claiming an empty slot with a sentinel before allocating is
+// important: only the thread that adds a distinct record copies bytes, so the common duplicate
+// case consumes neither transient metadata nor discarded arena space. Published pointers own
+// immutable bytes on a per-worker surviving arena and are safe to compare immediately.
+internal void
+lnk_gsi_deduper_insert_copy(void **buckets, U64 bucket_cap, U64 hash, void *symbol_ptr, Arena *dst_arena)
+{
+  String8 raw      = cv_raw_from_symbol(symbol_ptr);
+  U64     best_idx = hash % bucket_cap;
+  U64     idx      = best_idx;
+  for (;;) {
+    void *curr = ins_atomic_ptr_eval(&buckets[idx]);
+    if (curr == 0) {
+      void *cmp = ins_atomic_ptr_eval_cond_assign(&buckets[idx], LNK_GSI_DEDUP_RESERVED, 0);
+      if (cmp == 0) {
+        U8 *copy = push_array_no_zero(dst_arena, U8, raw.size);
+        MemoryCopy(copy, raw.str, raw.size);
+        ins_atomic_ptr_eval_assign(&buckets[idx], copy);
+        return;
+      }
+      curr = cmp;
+    }
+    while (curr == LNK_GSI_DEDUP_RESERVED) { curr = ins_atomic_ptr_eval(&buckets[idx]); }
+    String8 seen = cv_raw_from_symbol(curr);
+    if (seen.size == raw.size && MemoryMatch(seen.str, raw.str, raw.size)) { return; }
+    idx = (idx + 1 == bucket_cap) ? 0 : idx + 1;
+    Assert(idx != best_idx);
+  }
+}
+
+// Streaming-ring P2b: extract the obj's GSI inputs -- direct global-record winners and
 // proc-refs -- inside the module-write per-obj visit, so lnk_move_global_symbols_to_gsi does
 // no $S record-decode walks (its only remaining $S touch is the bucket-fill materialize of
 // the dedup winners' bytes through the refs). Runs right after the obj's deferred $S fixup
@@ -4948,11 +4998,8 @@ internal void lnk_pdb_output_enqueue_stream(LNK_PdbOutput *output, MSF_Context *
 // - proc-ref walk: obj-continuous scope depth + module-stream cursor (starts at
 //   sizeof(CV_Signature); records the module write drops -- SKIP, globals, top-level typedefs,
 //   0x1176 -- do not advance it).
-// Per-obj candidate position/hash arrays (P3.3: {hash, node, off, size} -- no pointers into
-// the reused window) land on the transient per-worker cand_arenas that release at the END of
-// the module-write phase, after the epilogue dedup consumed them. Proc-ref value/hash arrays
-// AND payloads go on the surviving procref_payload_arenas (referenced until GSI serialization
-// -- the globals pass flattens them AFTER the window phase), same lifetime as the old
+// Exact global winners plus proc-ref value/hash arrays and payloads go on the surviving
+// procref_payload_arenas (referenced until GSI serialization), same lifetime as the old
 // proc_ref_arenas.
 internal void
 lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id, CV_DebugS *debug_s_ptr)
@@ -4963,19 +5010,21 @@ lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id, CV_
 
   LNK_GsiPreExtractObj *pre        = &task->preext[obj_idx];
   PDB_GsiContext       *gsi        = task->pdb->gsi;
-  Arena                *cand_arena = task->cand_arenas[task_id];
+  Arena                *payload_arena = task->procref_payload_arenas[task_id];
 
-  // candidate count pass (mirrors the old collect loop in lnk_move_global_symbols_to_gsi)
+  // Dedup directly from the one post-reloc/post-fixup window. The size-only pass already
+  // counted these records from invariant headers so the shared table is pre-sized.
   U64 cand_count = 0;
   for EachNode(n, String8Node, symbols.first) {
     for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
       CV_Symbol symbol = {0};
       TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
-
       if (cv_is_global_symbol(symbol.kind) || (depth == 0 && cv_is_typedef(symbol.kind))) {
+        U8 *ptr = cv_ptr_from_symbol(symbol);
+        lnk_gsi_deduper_insert_copy(task->gsi_dedup_buckets, task->gsi_dedup_bucket_cap,
+                                    u64_hash_from_str8(cv_raw_from_symbol(ptr)), ptr, payload_arena);
         cand_count += 1;
       }
-
       if (cv_is_scope_symbol(symbol.kind)) {
         depth += 1;
       } else if (cv_is_end_symbol(symbol.kind)) {
@@ -4984,46 +5033,7 @@ lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id, CV_
       }
     }
   }
-
-  // candidate fill pass (P3.3): store a POSITION record -- {content hash, Symbols node
-  // ordinal, offset within node, record size} -- NOT a pointer: the window these bytes live
-  // in is reused for the next obj. The hash is the same expression the old insert used
-  // (u64_hash_from_str8 over cv_raw_from_symbol) computed over the post-reloc post-fixup
-  // bytes, so every value matches the pre-P3.3 flow. The epilogue dedup groups by hash and
-  // re-reads only the bytes it needs through a fresh window fill (deterministic re-fill).
-  if (cand_count) {
-    pre->cand_hashes = push_array_no_zero(cand_arena, U64, cand_count);
-    pre->cand_offs   = push_array_no_zero(cand_arena, U32, cand_count);
-    pre->cand_nodes  = push_array_no_zero(cand_arena, U32, cand_count);
-    pre->cand_lens   = push_array_no_zero(cand_arena, U16, cand_count);
-    U64 k = 0;
-    U64 node_idx = 0;
-    for (String8Node *n = symbols.first; n != 0; n = n->next, node_idx += 1) {
-      for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
-        CV_Symbol symbol = {0};
-        TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
-
-        if (cv_is_global_symbol(symbol.kind) || (depth == 0 && cv_is_typedef(symbol.kind))) {
-          U8     *ptr = cv_ptr_from_symbol(symbol);
-          String8 raw = cv_raw_from_symbol(ptr);
-          pre->cand_hashes[k] = u64_hash_from_str8(raw);
-          pre->cand_offs  [k] = safe_cast_u32(ptr - n->string.str);
-          pre->cand_nodes [k] = (U32)node_idx;
-          pre->cand_lens  [k] = ((CV_SymbolHeader *)ptr)->size;
-          k += 1;
-        }
-
-        if (cv_is_scope_symbol(symbol.kind)) {
-          depth += 1;
-        } else if (cv_is_end_symbol(symbol.kind)) {
-          if (depth == 0) { Assert(0 && "malformed symbol stream"); break; }
-          depth -= 1;
-        }
-      }
-    }
-    Assert(k == cand_count);
-    pre->cand_count = cand_count;
-  }
+  Assert(cand_count == pre->cand_count);
 
   // proc-ref count pass (mirrors the old proc-ref sizing walk)
   U64 procref_count = 0;
@@ -5038,10 +5048,8 @@ lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id, CV_
   }
 
   // proc-ref fill pass (mirrors the old build walk: identical layout math + skip set).
-  // P3.2: the value/hash arrays live on the SURVIVING payload arena (not cand_arena) -- the
-  // globals pass flattens them after cand_arenas die with the section copies.
+  // The value/hash arrays live on the surviving payload arena.
   if (procref_count) {
-    Arena *payload_arena = task->procref_payload_arenas[task_id];
     pre->procref_syms   = push_array_no_zero(payload_arena, CV_Symbol, procref_count);
     pre->procref_hashes = push_array_no_zero(payload_arena, U32,       procref_count);
 
@@ -5078,33 +5086,6 @@ lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id, CV_
   }
 }
 
-// P3.3 epilogue-dedup working types (see the "Dedup Global Symbols" block in
-// lnk_write_pdb_modules): candidates sort by (content hash, flat idx) -- flat idx is the
-// positional obj-major index, so the tiebreak (and thus each group's LEADER) is
-// schedule-independent.
-#pragma pack(push, 4)
-typedef struct { U64 hash; U32 flat_idx; } LNK_GsiSortEnt;
-#pragma pack(pop)
-StaticAssert(sizeof(LNK_GsiSortEnt) == 12, lnk_gsi_sort_ent_size_check);
-typedef struct LNK_GsiMismatch { struct LNK_GsiMismatch *next; U64 grp; U64 flat_idx; String8 bytes; } LNK_GsiMismatch;
-#define LNK_GSI_LEADER_BIT (1u << 31)
-
-internal int
-lnk_gsi_sort_ent_is_before(void *raw_a, void *raw_b)
-{
-  LNK_GsiSortEnt *a = raw_a, *b = raw_b;
-  if (a->hash != b->hash) { return a->hash < b->hash; }
-  return a->flat_idx < b->flat_idx;
-}
-
-internal int
-lnk_gsi_mismatch_is_before(void *raw_a, void *raw_b)
-{
-  LNK_GsiMismatch *a = *(LNK_GsiMismatch **)raw_a, *b = *(LNK_GsiMismatch **)raw_b;
-  if (a->grp != b->grp) { return a->grp < b->grp; }
-  return a->flat_idx < b->flat_idx;
-}
-
 internal
 THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
 {
@@ -5129,11 +5110,17 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     // re-accumulated sizes match. Fixup replay, parity, and the GSI extraction all move to
     // the write pass's single fill.
     lnk_write_debug_s_to_pdb_module(task->mod_arr[obj_idx], task->cv->debug_s_arr[obj_idx], 0, 0);
+    task->preext[obj_idx].cand_count = lnk_count_gsi_candidates(task->cv->debug_s_arr[obj_idx]);
   }
   barrier_wait(tp->barrier);
 
-  // alloc module streams
+  // Allocate module streams and the exact global-symbol content set. Candidate count depends
+  // only on record headers, so this table is ready before the one transformed window visit.
   if (task_id == 0) {
+    U64 cand_count = 0;
+    for EachIndex(obj_idx, task->cv->obj_count) { cand_count += task->preext[obj_idx].cand_count; }
+    task->gsi_dedup_bucket_cap = Max(cand_count * 13 / 10, 1);
+    task->gsi_dedup_buckets    = push_array(scratch.arena, void *, task->gsi_dedup_bucket_cap);
     for EachIndex(obj_idx, task->cv->obj_count) {
       PDB_DbiModule *mod = task->mod_arr[obj_idx];
       U64 mod_size = mod->sym_data_size + mod->c11_data_size + mod->c13_data_size + mod->globrefs_size;
@@ -5321,339 +5308,52 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     barrier_wait(tp->barrier);
   }
 
-  // ===== Streaming-ring P3.3: two-pass global-symbol dedup + winner materialize =====
-  // Candidates are POSITION records ({hash, node, off, size} -- see LNK_GsiPreExtractObj):
-  // nothing aliases the reused window, so dedup cannot byte-compare through live pointers the
-  // way the P3.2 content-CAS did. Instead: sort the candidate set by (hash, flat idx), take
-  // each equal-hash run as a group, then RE-READ only the bytes the outcome needs through a
-  // fresh symbols-only window fill (deterministic re-fill = the visit bytes): each group's
-  // LEADER (first member in flat order) materializes as the winner payload; every other
-  // member re-reads once to byte-confirm equality against its leader. A confirmed mismatch is
-  // a genuine 64-bit hash collision (expected ~never at any scale we link) and materializes
-  // as its own additional winner in first-occurrence order -- so the winner CONTENT SET is
-  // exactly the old deduper's (distinct record bytes), only the array ORDER differs (group
-  // order instead of compacted-slot order). That order is downstream-invisible:
-  // lnk_move_global_symbols_to_gsi buckets winners by name hash and every GSI bucket is
-  // content-sorted at serialization (gsi_symbol_is_before keyed on the content hash written
-  // into dst->offset), and byte-identical records cannot reach the sort.
-  ProfBegin("Dedup Global Symbols");
+  // Compact the exact winners published during the one module-write window visit. Bucket
+  // order is deterministic for a fixed content set; downstream GSI buckets content-sort
+  // records before serialization, so the pointer-array order is byte-invisible.
+  ProfBegin("Compact Global Symbol Winners");
   {
-    PDB_GsiContext *gsi = task->pdb->gsi;
+    U64    *compact_counts = 0;
+    U64     winner_count   = 0;
+    void  **winner_ptrs    = 0;
+    if (task_id == 0) { compact_counts = push_array(scratch.arena, U64, tp->worker_count); }
+    tp_broadcast(&compact_counts);
 
-    // positional flatten in ascending obj-index order (deterministic for any cohort
-    // width/schedule). The per-obj candidate arrays remain live through this phase and are
-    // already indexed by flat-base + local. Count radix buckets directly from those arrays,
-    // then scatter {hash, flat} into the single sorted array below; a separate flat-order
-    // sort-entry array would duplicate another 16 bytes per candidate at peak memory.
-    U64             global_symbol_count = 0;
-    U64            *cand_offsets        = 0; // [obj_count+1] prefix sums in obj-index order
-    U32            *grp_of_flat         = 0; // [N] group id | LNK_GSI_LEADER_BIT
-    if (task_id == 0) {
-      cand_offsets = push_array_no_zero(scratch.arena, U64, task->cv->obj_count + 1);
-      U64 acc = 0;
-      for EachIndex(obj_idx, task->cv->obj_count) {
-        cand_offsets[obj_idx] = acc;
-        acc += task->preext[obj_idx].cand_count;
-      }
-      cand_offsets[task->cv->obj_count] = acc;
-      global_symbol_count = acc;
-      U64 n = global_symbol_count ? global_symbol_count : 1;
-      grp_of_flat = push_array_no_zero(scratch.arena, U32, n);
-    }
-    tp_broadcast(&global_symbol_count);
-    tp_broadcast(&cand_offsets);
-    tp_broadcast(&grp_of_flat);
-
-    // sort by (hash, flat idx): 256-way MSB scatter (deterministic positional layout: bucket
-    // base + per-(bucket,worker) prefix), then a full per-bucket
-    // sort -- the final array is a pure function of the candidate set for any cohort
-    ProfBegin("Group Global Symbols");
-    U64             bucket_count   = 256;
-    U64            *scatter_counts = 0; // [C][256]
-    U64            *scatter_cursor = 0; // [C][256]
-    U64            *bucket_base    = 0; // [256+1]
-    LNK_GsiSortEnt *sorted         = 0; // [N]
-    if (task_id == 0) {
-      scatter_counts = push_array(scratch.arena, U64, tp->worker_count * bucket_count);
-      scatter_cursor = push_array(scratch.arena, U64, tp->worker_count * bucket_count);
-      bucket_base    = push_array(scratch.arena, U64, bucket_count + 1);
-      sorted         = push_array_no_zero(scratch.arena, LNK_GsiSortEnt, global_symbol_count ? global_symbol_count : 1);
-    }
-    tp_broadcast(&scatter_counts);
-    tp_broadcast(&scatter_cursor);
-    tp_broadcast(&bucket_base);
-    tp_broadcast(&sorted);
-
-    for EachIndex(i, obj_indices.count) {
-      LNK_GsiPreExtractObj *pre = &task->preext[obj_indices.v[i]];
-      for EachIndex(k, pre->cand_count) {
-        scatter_counts[task_id * bucket_count + (pre->cand_hashes[k] >> 56)] += 1;
-      }
+    U64 slot_lo = (task_id * task->gsi_dedup_bucket_cap) / tp->worker_count;
+    U64 slot_hi = ((task_id + 1) * task->gsi_dedup_bucket_cap) / tp->worker_count;
+    for (U64 slot = slot_lo; slot < slot_hi; slot += 1) {
+      void *p = task->gsi_dedup_buckets[slot];
+      Assert(p != LNK_GSI_DEDUP_RESERVED);
+      compact_counts[task_id] += (p != 0);
     }
     barrier_wait(tp->barrier);
 
+    for EachIndex(w, tp->worker_count) { winner_count += compact_counts[w]; }
     if (task_id == 0) {
-      U64 acc = 0;
-      for EachIndex(b, bucket_count) {
-        bucket_base[b] = acc;
-        for EachIndex(w, tp->worker_count) {
-          scatter_cursor[w * bucket_count + b] = acc;
-          acc += scatter_counts[w * bucket_count + b];
-        }
-      }
-      bucket_base[bucket_count] = acc;
-      Assert(acc == global_symbol_count);
+      winner_ptrs = push_array_no_zero(task->pdb->gsi->arena, void *, winner_count ? winner_count : 1);
     }
-    barrier_wait(tp->barrier);
-
-    for EachIndex(i, obj_indices.count) {
-      U64 obj_idx = obj_indices.v[i];
-      LNK_GsiPreExtractObj *pre = &task->preext[obj_idx];
-      U64 flat_base = cand_offsets[obj_idx];
-      for EachIndex(k, pre->cand_count) {
-        U64 hash = pre->cand_hashes[k];
-        U64 b = hash >> 56;
-        sorted[scatter_cursor[task_id * bucket_count + b]++] = (LNK_GsiSortEnt){hash, safe_cast_u32(flat_base + k)};
-      }
-    }
-    barrier_wait(tp->barrier);
-
-    for (U64 b = task_id; b < bucket_count; b += tp->worker_count) {
-      radsort(sorted + bucket_base[b], bucket_base[b+1] - bucket_base[b], lnk_gsi_sort_ent_is_before);
-    }
-    barrier_wait(tp->barrier);
-
-    // groups = equal-hash runs; group ids are bucket-major run ordinals (deterministic)
-    U64           *bucket_group_counts = 0; // [256]
-    U64           *group_base          = 0; // [256+1]
-    U64            group_count         = 0;
-    if (task_id == 0) {
-      bucket_group_counts = push_array(scratch.arena, U64, bucket_count);
-      group_base          = push_array(scratch.arena, U64, bucket_count + 1);
-    }
-    tp_broadcast(&bucket_group_counts);
-    tp_broadcast(&group_base);
-
-    for (U64 b = task_id; b < bucket_count; b += tp->worker_count) {
-      U64 c = 0;
-      for (U64 k = bucket_base[b], opl = bucket_base[b+1]; k < opl; ) {
-        U64 e = k + 1;
-        while (e < opl && sorted[e].hash == sorted[k].hash) { e += 1; }
-        c += 1; k = e;
-      }
-      bucket_group_counts[b] = c;
-    }
-    barrier_wait(tp->barrier);
-
-    if (task_id == 0) {
-      U64 acc = 0;
-      for EachIndex(b, bucket_count) { group_base[b] = acc; acc += bucket_group_counts[b]; }
-      group_base[bucket_count] = acc;
-    }
-    group_count = 0;
-    if (task_id == 0) { group_count = group_base[bucket_count]; }
-    tp_broadcast(&group_count);
-
-    for (U64 b = task_id; b < bucket_count; b += tp->worker_count) {
-      U64 gid = group_base[b];
-      for (U64 k = bucket_base[b], opl = bucket_base[b+1]; k < opl; ) {
-        U64 e = k + 1;
-        while (e < opl && sorted[e].hash == sorted[k].hash) { e += 1; }
-        grp_of_flat[sorted[k].flat_idx] = (U32)gid | LNK_GSI_LEADER_BIT; // min flat idx of the run (flat is the sort tiebreak)
-        for (U64 m = k + 1; m < e; m += 1) { grp_of_flat[sorted[m].flat_idx] = (U32)gid; }
-        gid += 1; k = e;
-      }
-      Assert(gid == group_base[b+1]);
-    }
-    barrier_wait(tp->barrier);
-    ProfEnd();
-
-    // leader materialize (pass A): per obj, re-read the leader records' bytes (symbols-only
-    // window fill under g_debug_s_window; the live patched backing otherwise) and copy them
-    // into per-lane payload arenas on gsi->arena (alive through GSI serialization), keyed by
-    // group id -- exactly one writer per group. Arena packing order varies with the cohort;
-    // every consumer reads through winner_ptrs (group order), never the arenas.
-    ProfBegin("Materialize Global Winners");
-    U64    *mat_sizes   = 0; // [C] leader payload bytes per lane
-    Arena **mat_arenas  = 0; // [C]
-    void  **winner_ptrs = 0; // [group_count] on gsi->arena
-    if (task_id == 0) {
-      mat_sizes   = push_array(scratch.arena, U64, tp->worker_count);
-      winner_ptrs = push_array_no_zero(gsi->arena, void *, group_count ? group_count : 1);
-    }
-    tp_broadcast(&mat_sizes);
     tp_broadcast(&winner_ptrs);
 
-    for (U64 obj_idx = task_id; obj_idx < task->cv->obj_count; obj_idx += tp->worker_count) {
-      LNK_GsiPreExtractObj *pre = &task->preext[obj_idx];
-      U64 lo = cand_offsets[obj_idx], opl = cand_offsets[obj_idx+1];
-      for (U64 k = lo; k < opl; k += 1) {
-        if (grp_of_flat[k] & LNK_GSI_LEADER_BIT) { mat_sizes[task_id] += AlignPow2(pre->cand_lens[k - lo] + sizeof(CV_SymSize), sizeof(void *)); }
-      }
+    U64 dst = 0;
+    for (U64 w = 0; w < task_id; w += 1) { dst += compact_counts[w]; }
+    for (U64 slot = slot_lo; slot < slot_hi; slot += 1) {
+      void *p = task->gsi_dedup_buckets[slot];
+      if (p != 0) { winner_ptrs[dst++] = p; }
     }
     barrier_wait(tp->barrier);
     if (task_id == 0) {
-      mat_arenas = alloc_arena_many(gsi->arena, tp->worker_count, mat_sizes);
+      task->gsi_winner_count = winner_count;
+      task->gsi_winner_ptrs  = winner_ptrs;
     }
-    tp_broadcast(&mat_arenas);
+  }
+  ProfEnd();
 
-    for (U64 obj_idx = task_id; obj_idx < task->cv->obj_count; obj_idx += tp->worker_count) {
-      U64 lo = cand_offsets[obj_idx], opl = cand_offsets[obj_idx+1];
-      LNK_GsiPreExtractObj *pre = &task->preext[obj_idx];
-
-      B32 any_leader = 0;
-      for (U64 k = lo; k < opl; k += 1) { if (grp_of_flat[k] & LNK_GSI_LEADER_BIT) { any_leader = 1; break; } }
-      if (!any_leader) { continue; }
-
-      Temp wtemp = temp_begin(scratch.arena);
-      CV_DebugS resolved = g_debug_s_window
-                         ? lnk_obj_window_debug_s(wtemp.arena, task->cv, obj_idx, task->pe.image_base, task->image_section_table, 1)
-                         : task->cv->debug_s_arr[obj_idx];
-      String8List symbols = cv_sub_section_from_debug_s(resolved, CV_C13SubSectionKind_Symbols);
-      U8 **node_base = push_array_no_zero(wtemp.arena, U8 *, symbols.node_count ? symbols.node_count : 1);
-      { U64 ni = 0; for EachNode(n, String8Node, symbols.first) { node_base[ni++] = n->string.str; } }
-
-      Arena *dst_arena = mat_arenas[task_id];
-      for (U64 k = lo; k < opl; k += 1) {
-        if (!(grp_of_flat[k] & LNK_GSI_LEADER_BIT)) { continue; }
-        U64 local_idx = k - lo;
-        U32 size = pre->cand_lens[local_idx] + sizeof(CV_SymSize);
-        U8 *src  = node_base[pre->cand_nodes[local_idx]] + pre->cand_offs[local_idx];
-        U8 *copy = push_array_no_zero(dst_arena, U8, size);
-        MemoryCopy(copy, src, size);
-#if BUILD_DEBUG
-        // re-read fidelity: the fresh window fill must reproduce the visit-time bytes exactly
-        Assert(pre->cand_hashes[local_idx] == u64_hash_from_str8(str8(copy, size)));
-#endif
-        winner_ptrs[grp_of_flat[k] & ~LNK_GSI_LEADER_BIT] = copy;
-      }
-      temp_end(wtemp);
-    }
-    barrier_wait(tp->barrier);
-
-    // byte-confirm (pass B): every non-leader member re-reads once and memcmps against its
-    // leader's materialized copy. A mismatch (same 64-bit hash, different bytes) is recorded
-    // -- bytes copied onto the transient per-lane cand arena -- and resolved serially below.
-    LNK_GsiMismatch **mismatch_lists = 0; // [C]
-    U64              *mismatch_counts = 0; // [C]
-    if (task_id == 0) {
-      mismatch_lists  = push_array(scratch.arena, LNK_GsiMismatch *, tp->worker_count);
-      mismatch_counts = push_array(scratch.arena, U64, tp->worker_count);
-    }
-    tp_broadcast(&mismatch_lists);
-    tp_broadcast(&mismatch_counts);
-
-    for (U64 obj_idx = task_id; obj_idx < task->cv->obj_count; obj_idx += tp->worker_count) {
-      U64 lo = cand_offsets[obj_idx], opl = cand_offsets[obj_idx+1];
-      LNK_GsiPreExtractObj *pre = &task->preext[obj_idx];
-
-      B32 any_member = 0;
-      for (U64 k = lo; k < opl; k += 1) { if (!(grp_of_flat[k] & LNK_GSI_LEADER_BIT)) { any_member = 1; break; } }
-      if (!any_member) { continue; }
-
-      Temp wtemp = temp_begin(scratch.arena);
-      CV_DebugS resolved = g_debug_s_window
-                         ? lnk_obj_window_debug_s(wtemp.arena, task->cv, obj_idx, task->pe.image_base, task->image_section_table, 1)
-                         : task->cv->debug_s_arr[obj_idx];
-      String8List symbols = cv_sub_section_from_debug_s(resolved, CV_C13SubSectionKind_Symbols);
-      U8 **node_base = push_array_no_zero(wtemp.arena, U8 *, symbols.node_count ? symbols.node_count : 1);
-      { U64 ni = 0; for EachNode(n, String8Node, symbols.first) { node_base[ni++] = n->string.str; } }
-
-      for (U64 k = lo; k < opl; k += 1) {
-        if (grp_of_flat[k] & LNK_GSI_LEADER_BIT) { continue; }
-        U64     local_idx = k - lo;
-        U64     grp    = grp_of_flat[k];
-        U32     size   = pre->cand_lens[local_idx] + sizeof(CV_SymSize);
-        U8     *src    = node_base[pre->cand_nodes[local_idx]] + pre->cand_offs[local_idx];
-        String8 leader = cv_raw_from_symbol(winner_ptrs[grp]);
-#if BUILD_DEBUG
-        Assert(pre->cand_hashes[local_idx] == u64_hash_from_str8(str8(src, size)));
-#endif
-        if (leader.size == size && MemoryMatch(leader.str, src, size)) { continue; }
-        // genuine hash collision: keep the bytes (transient cand arena, dies with the phase)
-        LNK_GsiMismatch *m = push_array_no_zero(task->cand_arenas[task_id], LNK_GsiMismatch, 1);
-        U8 *bytes_copy = push_array_no_zero(task->cand_arenas[task_id], U8, size);
-        MemoryCopy(bytes_copy, src, size);
-        m->grp      = grp;
-        m->flat_idx = k;
-        m->bytes    = str8(bytes_copy, size);
-        m->next     = mismatch_lists[task_id];
-        mismatch_lists[task_id]   = m;
-        mismatch_counts[task_id] += 1;
-      }
-      temp_end(wtemp);
-    }
-    barrier_wait(tp->barrier);
-
-    // serial collision resolution + final winner array (task 0). Mismatches are expected to
-    // be ZERO on real inputs; the path exists so a 64-bit collision degrades to correct
-    // output instead of silently folding distinct records. Distinct extra contents
-    // materialize in (group, first-occurrence flat) order -- deterministic.
-    if (task_id == 0) {
-      U64 total_mismatches = 0;
-      for EachIndex(w, tp->worker_count) { total_mismatches += mismatch_counts[w]; }
-
-      U64 winner_total = group_count;
-
-      if (total_mismatches == 0) {
-        task->gsi_winner_count = winner_total;
-        task->gsi_winner_ptrs  = winner_ptrs;
-      } else {
-        Temp mtemp = temp_begin(scratch.arena);
-        LNK_GsiMismatch **flat_mismatches = push_array_no_zero(mtemp.arena, LNK_GsiMismatch *, total_mismatches);
-        {
-          U64 c = 0;
-          for EachIndex(w, tp->worker_count) {
-            for (LNK_GsiMismatch *m = mismatch_lists[w]; m != 0; m = m->next) { flat_mismatches[c++] = m; }
-          }
-          Assert(c == total_mismatches);
-        }
-        radsort(flat_mismatches, total_mismatches, lnk_gsi_mismatch_is_before);
-
-        void **extras      = push_array_no_zero(mtemp.arena, void *, total_mismatches);
-        U64    extra_count = 0;
-        for (U64 a = 0; a < total_mismatches; ) {
-          U64 b = a;
-          while (b < total_mismatches && flat_mismatches[b]->grp == flat_mismatches[a]->grp) { b += 1; }
-          // distinct contents beyond the leader, first-occurrence order within the group
-          U64 group_extra_lo = extra_count;
-          for (U64 k = a; k < b; k += 1) {
-            String8 bytes       = flat_mismatches[k]->bytes;
-            B32     is_distinct = 1;
-            for (U64 e = group_extra_lo; e < extra_count && is_distinct; e += 1) {
-              String8 seen = cv_raw_from_symbol(extras[e]);
-              if (seen.size == bytes.size && MemoryMatch(seen.str, bytes.str, bytes.size)) { is_distinct = 0; }
-            }
-            if (is_distinct) {
-              U8 *copy = push_array_no_zero(gsi->arena, U8, bytes.size);
-              MemoryCopy(copy, bytes.str, bytes.size);
-              extras[extra_count++] = copy;
-            }
-          }
-          a = b;
-        }
-
-        void **final_ptrs = push_array_no_zero(gsi->arena, void *, winner_total + extra_count);
-        MemoryCopyTyped(final_ptrs, winner_ptrs, winner_total);
-        MemoryCopyTyped(final_ptrs + winner_total, extras, extra_count);
-        temp_end(mtemp);
-
-        task->gsi_winner_count = winner_total + extra_count;
-        task->gsi_winner_ptrs  = final_ptrs;
-      }
-    }
-    barrier_wait(tp->barrier);
-    ProfEnd();
-
-    // copies release: moved here from mid-globals (P3.2). The winner materialize above was
+    // Copies release: moved here from mid-globals. Direct winner materialization above was
     // the LAST $S reader on this path -- release the patched debug-section copies before the
     // globals/publics staging begins instead of overlapping it. Same /PDBSTRIPPED gate as
     // before (its second build re-walks cv->debug_s_arr Symbols after lnk_build_pdb returns;
-    // the materialize still ran -- winner ptrs never dangle either way). cand_arenas hold
-    // only the candidate ref/hash arrays (proc-ref arrays live on the surviving payload
-    // arenas) and die with the copies UNCONDITIONALLY -- they are ours; poison the dangling
-    // cand fields, keep the procref fields for the globals pass. The barrier after the copy
-    // loop above guarantees every worker is done reading before task 0 releases.
+    // the materialize still ran -- winner ptrs never dangle either way). The barrier above
+    // guarantees every worker is done reading before task 0 releases section copies.
     if (task_id == 0) {
       if (task->free_sect_copies) {
         ProfScope("Release Sect Data Copies") {
@@ -5665,21 +5365,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
           }
         }
       }
-      ProfScope("Release GSI Candidate Arenas") {
-        for EachIndex(i, task->preext_arena_count) {
-          if (task->cand_arenas[i] != 0) { arena_release(task->cand_arenas[i]); task->cand_arenas[i] = 0; }
-        }
-        for EachIndex(obj_idx, task->cv->obj_count) {
-          task->preext[obj_idx].cand_count  = 0;
-          task->preext[obj_idx].cand_hashes = 0; // poison dangling refs (incl. the pass-B mismatch bytes on cand_arenas)
-          task->preext[obj_idx].cand_offs   = 0;
-          task->preext[obj_idx].cand_nodes  = 0;
-          task->preext[obj_idx].cand_lens   = 0;
-        }
-      }
     }
-  }
-  ProfEnd();
 
   scratch_end(scratch);
 }
@@ -6437,19 +6123,13 @@ ProfScope("Write Modules")
       }
       lnk_build_pdb_distribute_obj_indices(scratch.arena, &task, cv->obj_count, C, weights);
 
-      // P2b pre-extraction state: per-obj GSI input tables (candidate REFS into the live $S
-      // backing + synthesized proc-refs) filled inside the module-write visit. P3.2: the
-      // candidate refs are consumed by the fused dedup + winner materialize in the
-      // lnk_write_pdb_modules epilogue and die there with the section copies (cand_arenas
-      // hold only the 16B-class ref arrays); "Move Global Symbols" consumes the materialized
-      // winners + the proc-ref tables, which live on the surviving payload arenas until GSI
-      // serialization (same lifetime as the old proc_ref_arenas).
+      // Per-obj counts/proc-refs plus per-lane surviving payload arenas. Exact global-symbol
+      // winners are copied into these arenas directly from the one transformed $S window;
+      // Move Global Symbols later consumes the compacted winner pointers and proc-ref tables.
       task.preext             = push_array(scratch.arena, LNK_GsiPreExtractObj, cv->obj_count);
       task.preext_arena_count = C;
-      task.cand_arenas            = push_array(scratch.arena, Arena *, C);
       task.procref_payload_arenas = push_array(scratch.arena, Arena *, C);
       for EachIndex(i, C) {
-        task.cand_arenas[i]            = arena_alloc(.commit_size = MB(2), .name = "GSI_CANDIDATES");
         task.procref_payload_arenas[i] = arena_alloc(.commit_size = MB(2), .name = "GSI_PROC_REFS");
       }
 #if BUILD_DEBUG
