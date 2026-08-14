@@ -4584,7 +4584,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     // single-threaded on task 0; sizing has no determinism impact)
     if (task_id == 0) {
       U64 *bucket_adds = push_array(scratch.arena, U64, gsi->bucket_count);
-      for EachIndex(i, symbol_count) { bucket_adds[symbol_hashes[i] % gsi->bucket_count] += 1; }
+      for EachIndex(i, symbol_count) { bucket_adds[symbol_hashes[i] & (PDB_GSI_V70_BUCKET_COUNT - 1)] += 1; }
       for EachIndex(bucket_idx, gsi->bucket_count) {
         if (bucket_adds[bucket_idx]) { gsi_reserve(gsi, bucket_idx, bucket_adds[bucket_idx]); }
       }
@@ -4600,7 +4600,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
       U64 shard_min = (task_id * gsi->bucket_count) / tp->worker_count;
       U64 shard_max = ((task_id + 1) * gsi->bucket_count) / tp->worker_count;
       for EachIndex(i, symbol_count) {
-        U64 bucket_idx = symbol_hashes[i] % gsi->bucket_count;
+        U64 bucket_idx = symbol_hashes[i] & (PDB_GSI_V70_BUCKET_COUNT - 1);
         if (bucket_idx < shard_min || bucket_idx >= shard_max) { continue; }
         PDB_GsiSymbolBucket *bucket = &gsi->bucket_arr[bucket_idx];
         CV_Symbol *dst = &bucket->v[bucket->count];
@@ -4667,7 +4667,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     // single-threaded on task 0; sizing has no determinism impact)
     if (task_id == 0) {
       U64 *bucket_adds = push_array(scratch.arena, U64, gsi->bucket_count);
-      for EachIndex(i, total_proc_ref_count) { bucket_adds[proc_ref_hashes[i] % gsi->bucket_count] += 1; }
+      for EachIndex(i, total_proc_ref_count) { bucket_adds[proc_ref_hashes[i] & (PDB_GSI_V70_BUCKET_COUNT - 1)] += 1; }
       for EachIndex(bucket_idx, gsi->bucket_count) {
         if (bucket_adds[bucket_idx]) { gsi_reserve(gsi, bucket_idx, bucket_adds[bucket_idx]); }
       }
@@ -4680,7 +4680,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
       U64 shard_min = (task_id * gsi->bucket_count) / tp->worker_count;
       U64 shard_max = ((task_id + 1) * gsi->bucket_count) / tp->worker_count;
       for EachIndex(i, total_proc_ref_count) {
-        U64 bucket_idx = proc_ref_hashes[i] % gsi->bucket_count;
+        U64 bucket_idx = proc_ref_hashes[i] & (PDB_GSI_V70_BUCKET_COUNT - 1);
         if (bucket_idx < shard_min || bucket_idx >= shard_max) { continue; }
         PDB_GsiSymbolBucket *bucket = &gsi->bucket_arr[bucket_idx];
         bucket->v[bucket->count] = proc_ref_symbols[i];
@@ -4832,7 +4832,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     if (task_id == 0) {
       PDB_GsiContext *pub_gsi     = psi->gsi;
       U64            *bucket_adds = push_array(scratch.arena, U64, pub_gsi->bucket_count);
-      for EachIndex(i, public_symbol_total_count) { bucket_adds[public_symbol_flat_hashes[i] % pub_gsi->bucket_count] += 1; }
+      for EachIndex(i, public_symbol_total_count) { bucket_adds[public_symbol_flat_hashes[i] & (PDB_GSI_V70_BUCKET_COUNT - 1)] += 1; }
       for EachIndex(bucket_idx, pub_gsi->bucket_count) {
         if (bucket_adds[bucket_idx]) { gsi_reserve(pub_gsi, bucket_idx, bucket_adds[bucket_idx]); }
       }
@@ -4846,7 +4846,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
       U64             shard_min = (task_id * pub_gsi->bucket_count) / tp->worker_count;
       U64             shard_max = ((task_id + 1) * pub_gsi->bucket_count) / tp->worker_count;
       for EachIndex(i, public_symbol_total_count) {
-        U64 bucket_idx = public_symbol_flat_hashes[i] % pub_gsi->bucket_count;
+        U64 bucket_idx = public_symbol_flat_hashes[i] & (PDB_GSI_V70_BUCKET_COUNT - 1);
         if (bucket_idx < shard_min || bucket_idx >= shard_max) { continue; }
         PDB_GsiSymbolBucket *bucket = &pub_gsi->bucket_arr[bucket_idx];
         bucket->v[bucket->count] = public_symbol_flat_vals[i];
