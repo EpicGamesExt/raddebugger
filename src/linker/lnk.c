@@ -3232,8 +3232,10 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
   // only target colors vary between rounds, so cache non-recursive relocation data
   // and rehash target colors each round
   typedef struct {
-    U64 *color;
-    U64 static_id;
+    union {
+      U64 *color;
+      U64  static_id;
+    };
     U64 association_id;
     U32 value;
     COFF_SymbolValueInterpType interp;
@@ -3617,7 +3619,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
       lnk_hasher_update_struct(&hasher, &contrib->static_hash);
       for EachIndex(reloc_idx, contrib->reloc_count) {
         RelocTarget *target    = contrib->reloc_targets[reloc_idx];
-        U64          target_id = target->color ? *target->color : target->static_id;
+        U64          target_id = target->interp == COFF_SymbolValueInterp_Regular ? *target->color : target->static_id;
         lnk_hasher_update_struct(&hasher, &target_id);
         lnk_hasher_update_struct(&hasher, &target->association_id);
       }
