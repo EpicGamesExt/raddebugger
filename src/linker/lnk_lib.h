@@ -23,10 +23,6 @@ typedef struct LNK_Lib
   U64                 *symbol_discs;
   String8              long_names;
   U64                  input_idx;
-  
-  struct LNK_SymbolHashTrieChunk **search_cursor_chunks;
-  U64                             *search_cursor_indices;
-  B32                              searched_anti_deps;
 } LNK_Lib;
  
 typedef struct LNK_LibNode
