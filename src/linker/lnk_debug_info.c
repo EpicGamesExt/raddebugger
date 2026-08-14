@@ -4900,7 +4900,7 @@ lnk_assert_debug_s_prov_parity(LNK_Obj *obj, CV_DebugS *debug_s)
 }
 
 internal U64
-lnk_write_debug_s_to_pdb_module(PDB_DbiModule *mod, CV_DebugS debug_s, String8Node *buf, U64 *buf_pos)
+lnk_write_debug_s_to_pdb_module(PDB_DbiModule *mod, CV_DebugS debug_s, String8Node *buf, U64 *buf_pos, LNK_GsiPreExtractObj *pre)
 {
   U64 mod_cursor = 0;
 
@@ -4920,9 +4920,29 @@ lnk_write_debug_s_to_pdb_module(PDB_DbiModule *mod, CV_DebugS debug_s, String8No
     // write symbols
     U64 scope_depth = 0;
     for EachNode(n, String8Node, symbols.first) {
+      U64 cand_depth  = 0;
+      B32 cand_active = 1;
       for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
         CV_Symbol symbol = {0};
         TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
+
+        if (pre != 0) {
+          if (cand_active && (cv_is_global_symbol(symbol.kind) || (cand_depth == 0 && cv_is_typedef(symbol.kind)))) {
+            pre->cand_count += 1;
+          }
+          if (symbol.kind == CV_SymKind_GPROC32    || symbol.kind == CV_SymKind_LPROC32 ||
+              symbol.kind == CV_SymKind_GPROC32_ID || symbol.kind == CV_SymKind_LPROC32_ID) {
+            pre->procref_count += 1;
+          }
+          if (cand_active) {
+            if (cv_is_scope_symbol(symbol.kind)) {
+              cand_depth += 1;
+            } else if (cv_is_end_symbol(symbol.kind)) {
+              if (cand_depth == 0) { Assert(0 && "malformed symbol stream"); cand_active = 0; }
+              else                 { cand_depth -= 1; }
+            }
+          }
+        }
 
         if      (symbol.kind == CV_SymKind_SKIP)                 { continue; }
         else if (cv_is_global_symbol(symbol.kind))               { continue; }
@@ -4992,35 +5012,6 @@ typedef struct LNK_PdbOutput LNK_PdbOutput;
 internal void lnk_pdb_output_enqueue_stream(LNK_PdbOutput *output, MSF_Context *msf, MSF_StreamNumber sn);
 
 #define LNK_GSI_DEDUP_RESERVED ((void *)(U64)1)
-
-internal U64
-lnk_count_gsi_candidates(CV_DebugS debug_s, U64 *procref_count_out)
-{
-  U64 count         = 0;
-  U64 procref_count = 0;
-  String8List symbols = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
-  for EachNode(n, String8Node, symbols.first) {
-    for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
-      CV_Symbol symbol = {0};
-      TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
-      if (cv_is_global_symbol(symbol.kind) || (depth == 0 && cv_is_typedef(symbol.kind))) { count += 1; }
-      // ID procs are rewritten to their non-ID forms by the deferred fixup replay before
-      // extraction. Count both spellings here while reading the raw invariant headers.
-      if (symbol.kind == CV_SymKind_GPROC32    || symbol.kind == CV_SymKind_LPROC32 ||
-          symbol.kind == CV_SymKind_GPROC32_ID || symbol.kind == CV_SymKind_LPROC32_ID) {
-        procref_count += 1;
-      }
-      if (cv_is_scope_symbol(symbol.kind)) {
-        depth += 1;
-      } else if (cv_is_end_symbol(symbol.kind)) {
-        if (depth == 0) { Assert(0 && "malformed symbol stream"); break; }
-        depth -= 1;
-      }
-    }
-  }
-  *procref_count_out = procref_count;
-  return count;
-}
 
 // Exact concurrent content set. Claiming an empty slot with a sentinel before allocating is
 // important: only the thread that adds a distinct record copies bytes, so the common duplicate
@@ -5162,8 +5153,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     // g_debug_s_window (the patched backing otherwise) -- the write pass below asserts the
     // re-accumulated sizes match. Fixup replay, parity, and the GSI extraction all move to
     // the write pass's single fill.
-    lnk_write_debug_s_to_pdb_module(task->mod_arr[obj_idx], task->cv->debug_s_arr[obj_idx], 0, 0);
-    task->preext[obj_idx].cand_count = lnk_count_gsi_candidates(task->cv->debug_s_arr[obj_idx], &task->preext[obj_idx].procref_count);
+    lnk_write_debug_s_to_pdb_module(task->mod_arr[obj_idx], task->cv->debug_s_arr[obj_idx], 0, 0, &task->preext[obj_idx]);
   }
   barrier_wait(tp->barrier);
 
@@ -5224,7 +5214,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
 #endif
       String8Node buf = *mod_data.first;
       U64         pos = 0;
-      lnk_write_debug_s_to_pdb_module(mod, debug_s, &buf, &pos);
+      lnk_write_debug_s_to_pdb_module(mod, debug_s, &buf, &pos, 0);
 #if BUILD_DEBUG
       Assert(mod->sym_data_size == size_check[0]);
       Assert(mod->c11_data_size == size_check[1]);
