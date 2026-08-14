@@ -2785,8 +2785,10 @@ THREAD_POOL_TASK_FUNC(lnk_opt_ref_task)
   // a miss only costs the recompute -- the cached value is a pure function of the key because
   // the symbol table and parsed_symbols are read-only during /OPT:REF.
   // Keep the table small enough that initializing every worker does not become a page-fault
-  // amplifier (32K slots is 768KiB per worker, versus 24MiB at 1M slots).
-  typedef struct { U64 key; LNK_Obj *obj; U64 symbol_idx; } LNK_RefResolveSlot;
+  // amplifier. Pack the resolved object input index + symbol index into one U64 and recover the
+  // object through objs_by_idx: 32K slots is 512KiB per worker (versus 768KiB with a pointer and
+  // widened symbol index, or 24MiB at the old 1M-slot size).
+  typedef struct { U64 key; U64 ref; } LNK_RefResolveSlot;
   U64                 resolve_cache_mask = (1ull << 15) - 1;
   LNK_RefResolveSlot *resolve_cache      = push_array_no_zero(scratch.arena, LNK_RefResolveSlot, resolve_cache_mask + 1);
   MemorySet(resolve_cache, 0xff, sizeof(resolve_cache[0]) * (resolve_cache_mask + 1));
@@ -2818,7 +2820,9 @@ THREAD_POOL_TASK_FUNC(lnk_opt_ref_task)
             for (U64 probe_idx = 0; probe_idx < 8; probe_idx += 1) {
               U64 slot = (cache_hash + probe_idx) & resolve_cache_mask;
               if (resolve_cache[slot].key == cache_key) {
-                ref_symbol = (LNK_ObjSymbolRef){ .obj = resolve_cache[slot].obj, .symbol_idx = (U32)resolve_cache[slot].symbol_idx };
+                U64 packed_ref = resolve_cache[slot].ref;
+                ref_symbol = packed_ref != max_U64 ? (LNK_ObjSymbolRef){ .obj = objs_by_idx[packed_ref >> 32], .symbol_idx = (U32)packed_ref }
+                                                   : (LNK_ObjSymbolRef){0};
                 cache_hit  = 1;
                 break;
               }
@@ -2877,7 +2881,8 @@ THREAD_POOL_TASK_FUNC(lnk_opt_ref_task)
               // memoize (skip the cyclic-warning path so the warning replays per reloc as before)
               if (!was_cyclic) {
                 if (cache_slot == max_U64) { cache_slot = cache_hash & resolve_cache_mask; }
-                resolve_cache[cache_slot] = (LNK_RefResolveSlot){ .key = cache_key, .obj = ref_symbol.obj, .symbol_idx = ref_symbol.symbol_idx };
+                U64 packed_ref = ref_symbol.obj ? Compose64Bit(ref_symbol.obj->input_idx, ref_symbol.symbol_idx) : max_U64;
+                resolve_cache[cache_slot] = (LNK_RefResolveSlot){ .key = cache_key, .ref = packed_ref };
               }
             }
           }
