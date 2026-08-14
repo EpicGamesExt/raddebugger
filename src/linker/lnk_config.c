@@ -109,7 +109,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,     0, LNK_CmdValueKind_Scalar, "RAD_UNRESOLVED_SYMBOL_REF_LIMIT",      ":#",                   "Limit number of unresolved symbol references linker reports."                     },
   { LNK_CmdSwitch_Rad_Version,                      0, LNK_CmdValueKind_Null,   "RAD_VERSION",                          "",                     "Print version and exit."                                                          },
   { LNK_CmdSwitch_Rad_Workers,                      0, LNK_CmdValueKind_Scalar, "RAD_WORKERS",                          ":#",                   "Set number of workers created in the pool. Number is capped at 1024. When /RAD_SHARED_THREAD_POOL is specified this number cant exceed /RAD_SHARED_THREAD_POOL_MAX_WORKERS." },
-  { LNK_CmdSwitch_Rad_DebugWorkers,                 0, LNK_CmdValueKind_Scalar, "RAD_DEBUG_WORKERS",                    ":#",                   "Cap concurrent workers in page-fault-bound debug-input stages (parse/prefetch). Default 12; 0 = uncapped. Output is identical either way; the cap only trades idle spinning in the kernel page-fault path for free cores." },
+  { LNK_CmdSwitch_Rad_DebugWorkers,                 0, LNK_CmdValueKind_Scalar, "RAD_DEBUG_WORKERS",                    ":#",                   "Cap concurrent workers in page-fault-bound debug-input stages (parse/prefetch). Default 20; 0 = uncapped. Output is identical either way; the cap only trades idle spinning in the kernel page-fault path for free cores." },
   { LNK_CmdSwitch_Rad_WorkDir,                      0, LNK_CmdValueKind_Scalar, "RAD_WORK_DIR",                         ":PATH",                "Working directory used for stable debug paths."                                   },
 
   { LNK_CmdSwitch_RadTypeServer,                   0, LNK_CmdValueKind_Scalar, "RAD_TYPE_SERVER", ":FILENAME", "Merge types and store them in the specified file. The filename must have the .rrt extension." },
@@ -2985,10 +2985,10 @@ lnk_config_init(U64 argc, char **argv)
   config->work_dir     = get_current_path(arena);
   config->force        = lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Force);
 
-  // fault-bound debug-input stages spin on the kernel page-fault path past ~12
-  // concurrent workers (throughput ceiling); default cap trades that spin for
+  // fault-bound debug-input stages spin on the kernel page-fault path past ~20
+  // concurrent workers (current throughput knee); default cap trades that spin for
   // free cores, /RAD_DEBUG_WORKERS:0 restores full width
-  config->debug_worker_cap = 12;
+  config->debug_worker_cap = 20;
 
   // apply command line switches
   for EachNode(cmd, LNK_CmdOption, cmd_line.first_option) {

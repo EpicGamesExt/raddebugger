@@ -128,9 +128,9 @@ THREAD_POOL_TASK_FUNC(lnk_prefetch_task)
 
 // Run a per-item parallel-for on at most `cap` workers. The debug-input stages
 // this wraps are page-fault-bound: the kernel working-set-insert path tops out
-// near ~3M pages/s regardless of thread count, so lanes past ~12 only convert
-// free cores into spin inside the fault handler (measured on the FN editor
-// DLL: 12 lanes beat 64 on wall AND cut stage kernel CPU 357s -> 41s). Items
+// near ~3M pages/s regardless of thread count, so lanes past ~20 only convert
+// free cores into spin inside the fault handler (the knee moved up after giant-input
+// jobification; 24+ lanes still regress wall and sharply increase kernel CPU). Items
 // are pulled from a shared cursor, so per-item outputs land in the same
 // item-indexed slots as the uncapped path -- output is byte-identical.
 typedef struct
