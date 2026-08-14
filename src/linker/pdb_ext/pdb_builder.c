@@ -1133,7 +1133,8 @@ pdb_type_server_push_udt_arr(PDB_TypeServer *ts, U64 count, U32 *hash_arr, Strin
     bucket->raw_leaf   = raw_leaf;
     bucket->type_index = ts->ti_lo + ts->leaf_list.node_count + leaf_idx;
 
-    U32 bucket_idx = hash % ts->bucket_cap;
+    Assert(ts->bucket_cap == PDB_TYPE_SERVER_HASH_BUCKET_COUNT_CURRENT);
+    U32 bucket_idx = hash % PDB_TYPE_SERVER_HASH_BUCKET_COUNT_CURRENT;
     SLLStackPush(ts->buckets[bucket_idx], bucket);
   }
 
@@ -1204,7 +1205,8 @@ THREAD_POOL_TASK_FUNC(pdb_push_udt_leaf_task)
       if (~udt_info.props & CV_TypeProp_FwdRef) {
         // hash udt and compute bucket index
         U32 hash       = pdb_hash_udt(udt_info, leaf.data);
-        U32 bucket_idx = hash % type_ht_cap;
+        Assert(type_ht_cap == PDB_TYPE_SERVER_HASH_BUCKET_COUNT_CURRENT);
+        U32 bucket_idx = hash % PDB_TYPE_SERVER_HASH_BUCKET_COUNT_CURRENT;
 
         // fill out & insert bucket
         PDB_TypeBucket *bucket = &new_buckets[bucket_cursor++];
@@ -2386,7 +2388,7 @@ gsi_reserve(PDB_GsiContext *gsi, U64 bucket_idx, U64 additional)
 internal CV_Symbol *
 gsi_push_(PDB_GsiContext *gsi, U32 hash, CV_Symbol *symbol)
 {
-  U64            bucket_idx = hash % gsi->bucket_count;
+  U64            bucket_idx = hash & (PDB_GSI_V70_BUCKET_COUNT - 1);
   PDB_GsiSymbolBucket *bucket     = &gsi->bucket_arr[bucket_idx];
   if (bucket->count == bucket->cap) {
     // rare path: bulk inserters reserve up front via gsi_reserve
@@ -2463,7 +2465,7 @@ gsi_search(PDB_GsiContext *gsi, CV_Symbol *symbol)
 {
   String8 name    = cv_name_from_symbol(symbol->kind, symbol->data);
   U32     hash    = gsi_hash(gsi, name);
-  U64     ibucket = hash % gsi->bucket_count;
+  U64     ibucket = hash & (PDB_GSI_V70_BUCKET_COUNT - 1);
 
   PDB_GsiSymbolBucket *bucket = &gsi->bucket_arr[ibucket];
   for EachIndex(i, bucket->count) {
