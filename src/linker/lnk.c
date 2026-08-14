@@ -3252,14 +3252,14 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
   } Contrib;
 
   // Reuse both tables without clearing them between refinement rounds. U32 generations and
-  // indices keep these records at 40 and 16 bytes respectively. The old-color key is dead
-  // after group indexing/counting, so the assignment phase overwrites it with the output color
-  // instead of carrying a second U64 through the 16M-slot table.
+  // indices keep these records at 32 and 16 bytes respectively. The 128-bit group hash is dead
+  // before old-color indexing, so that phase stores its U32 slot index in the hash bytes. The
+  // old-color key is then dead after split counting, so assignment overwrites it with the output
+  // color. These lifetime reuses avoid carrying either result through the 16M-slot table.
   typedef struct {
     ColorKey key;
     U32      state; // generation << 2 | (0 = empty, 1 = initializing, 2 = ready)
     U32      first_contrib_idx;
-    U32      old_color_slot_idx;
   } ColorHashSlot;
 
   typedef struct { ColorHashSlot *slots; U64 slots_count; } ColorHashTable;
@@ -3702,7 +3702,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
 
           old_slot_idx = (old_slot_idx + 1) & (old_color_table.slots_count - 1);
         }
-        slot->old_color_slot_idx = safe_cast_u32(old_slot_idx);
+        memory_write32(&slot->key.hash, safe_cast_u32(old_slot_idx));
       }
     }
     ProfEnd();
@@ -3716,7 +3716,8 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
       ColorHashSlot *color_slot = &color_table.slots[contrib->color_slot_idx];
       if (ins_atomic_u32_eval(&color_slot->first_contrib_idx) != contrib_idx) { continue; }
 
-      OldColorHashSlot *old_color_slot = &old_color_table.slots[color_slot->old_color_slot_idx];
+      U32 old_color_slot_idx = memory_read32(&color_slot->key.hash);
+      OldColorHashSlot *old_color_slot = &old_color_table.slots[old_color_slot_idx];
       if (ins_atomic_u32_eval(&old_color_slot->first_contrib_idx) != contrib_idx) {
         split_count += 1;
       }
@@ -3754,7 +3755,8 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
       ColorHashSlot *color_slot = &color_table.slots[contrib->color_slot_idx];
       if (ins_atomic_u32_eval(&color_slot->first_contrib_idx) != contrib_idx) { continue; }
 
-      OldColorHashSlot *old_color_slot = &old_color_table.slots[color_slot->old_color_slot_idx];
+      U32 old_color_slot_idx = memory_read32(&color_slot->key.hash);
+      OldColorHashSlot *old_color_slot = &old_color_table.slots[old_color_slot_idx];
       if (ins_atomic_u32_eval(&old_color_slot->first_contrib_idx) == contrib_idx) {
         // key.old_color has completed its lookup lifetime; reuse it as the output color
       } else {
