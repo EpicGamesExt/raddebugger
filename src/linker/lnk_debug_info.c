@@ -2929,12 +2929,36 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
   temp_end(temp);
 }
 
+// Map a uniformly distributed 64-bit hash into [0, cap) with one multiply-high. Unlike `% cap`,
+// this does not require a runtime integer division; hash tables only require a stable uniform
+// mapping, not the remainder specifically.
+force_inline U64
+lnk_hash_range(U64 hash, U64 cap)
+{
+#if COMPILER_MSVC && ARCH_X64
+  U64 high;
+  _umul128(hash, cap, &high);
+  return high;
+#elif (COMPILER_CLANG || COMPILER_GCC) && ARCH_64BIT
+  return (U64)(((__uint128_t)hash * (__uint128_t)cap) >> 64);
+#else
+  U64 hash_lo = (U32)hash, hash_hi = hash >> 32;
+  U64 cap_lo  = (U32)cap,  cap_hi  = cap  >> 32;
+  U64 p00 = hash_lo * cap_lo;
+  U64 p01 = hash_lo * cap_hi;
+  U64 p10 = hash_hi * cap_lo;
+  U64 p11 = hash_hi * cap_hi;
+  U64 carry = ((p00 >> 32) + (U32)p01 + (U32)p10) >> 32;
+  return p11 + (p01 >> 32) + (p10 >> 32) + carry;
+#endif
+}
+
 internal CV_TypeIndex
 lnk_assigned_ti_hash_search(LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref)
 {
   CV_DebugH *debug_h  = &input->debug_h_arr[lnk_leaf_ref_obj_idx(leaf_ref)];
   U64        hash     = debug_h->v[lnk_leaf_ref_leaf_idx(leaf_ref)];
-  U64        best_idx = hash % ht->cap;
+  U64        best_idx = lnk_hash_range(hash, ht->cap);
   U64        idx      = best_idx;
   do {
     CV_TypeIndex ti = ht->ti_arr[idx];
@@ -3222,7 +3246,7 @@ THREAD_POOL_TASK_FUNC(lnk_assign_type_indices_task)
     CV_TypeIndex  type_index = min_type_index + i;
 
     U64 hash     = debug_h_arr[lnk_leaf_ref_obj_idx(leaf_ref)].v[lnk_leaf_ref_leaf_idx(leaf_ref)];
-    U64 best_idx = hash % assigned->cap;
+    U64 best_idx = lnk_hash_range(hash, assigned->cap);
     U64 idx      = best_idx;
 
     B32 is_inserted = 0;
