@@ -521,6 +521,33 @@ typedef struct
   B32                       decommit_after_write; // hand the buffer's pages back to the OS once written
 } LNK_BackgroundFileWriteJob;
 
+typedef struct
+{
+  void *ptr;
+  U64   size; // zero marks the end of the queue
+} LNK_BackgroundFileDecommitJob;
+
+internal void
+lnk_background_file_decommit_thread(void *raw_writer)
+{
+  ProfBeginFunction();
+  set_thread_namef("PDB Page Decommit");
+
+  LNK_BackgroundFileWriter *writer = raw_writer;
+  for (;;) {
+    LNK_BackgroundFileDecommitJob job = {0};
+    RingGuard guard = guarded_ring_open(writer->decommit_queue);
+    B32 is_read = guarded_ring_read_struct_or_wait(&guard, &job, max_U64);
+    guarded_ring_close(&guard);
+    Assert(is_read);
+    if (job.size == 0) { break; }
+    decommit_memory(job.ptr, job.size);
+    ins_atomic_u64_add_eval(&writer->decommit_bytes_completed, job.size);
+  }
+
+  ProfEnd();
+}
+
 // Opening the output file can cost seconds on the caller's thread when it
 // replaces a previous multi-GB artifact (NTFS truncate/dealloc of the old
 // allocation happens inside CreateFile). Jobs on one file are queue-ordered,
@@ -623,26 +650,55 @@ lnk_background_file_writer_issue_write_batch(LNK_BackgroundFileWriter *writer, L
       end_ptr += next->data.size;
     }
     U64 merged_size = end_off - batch[i].file_off;
-    if (batch[i].file->is_open) {
-      U64 write_size = lnk_write_file(&batch[i].file->file, batch[i].file_off, batch[i].data.str, merged_size);
-      if (write_size != merged_size) {
-        batch[i].file->write_failed = 1;
+
+    // Keep at most one MSF data node of dead-but-still-committed page data in
+    // flight.  Besides bounding the memory lag versus synchronous decommit,
+    // this prevents one multi-node VirtualFree from delaying all reclamation.
+    U64 decommit_pipeline_cap = MB(128);
+    U64 part_cap = writer->is_decommit_running && batch[i].decommit_after_write ? decommit_pipeline_cap : max_U64;
+    for (U64 part_off = 0; part_off < merged_size; ) {
+      U64 part_size = Min(merged_size - part_off, part_cap);
+      U8 *part_ptr = batch[i].data.str + part_off;
+      if (batch[i].file->is_open) {
+        U64 write_size = lnk_write_file(&batch[i].file->file, batch[i].file_off + part_off, part_ptr, part_size);
+        if (write_size != part_size) {
+          batch[i].file->write_failed = 1;
+        }
+        batch[i].file->bytes_written += write_size;
+        U64 done_now = ins_atomic_u64_add_eval(&writer->bytes_completed, write_size);
+        writer->writes_issued += 1;
+        if ((done_now >> 29) != ((done_now - write_size) >> 29)) { // every 512MiB
+          lnk_log(LNK_Log_Timers, "[pdbw] t=%.3fs written=%.2f GiB enq=%.2f GiB jobs=%llu/%llu writes=%llu avg=%llu KiB", (F64)(now_time_us() - writer->begin_time_us) / 1e6, (F64)done_now / GB(1), (F64)ins_atomic_u64_eval(&writer->bytes_enqueued) / GB(1), writer->jobs_completed, ins_atomic_u64_eval(&writer->jobs_enqueued), writer->writes_issued, (done_now / writer->writes_issued) / KB(1));
+        }
       }
-      batch[i].file->bytes_written += write_size;
-      U64 done_now = ins_atomic_u64_add_eval(&writer->bytes_completed, write_size);
-      writer->jobs_completed += (j + 1 - i);
-      writer->writes_issued  += 1;
-      if ((done_now >> 29) != ((done_now - write_size) >> 29)) { // every 512MiB
-        lnk_log(LNK_Log_Timers, "[pdbw] t=%.3fs written=%.2f GiB enq=%.2f GiB jobs=%llu/%llu writes=%llu avg=%llu KiB", (F64)(now_time_us() - writer->begin_time_us) / 1e6, (F64)done_now / GB(1), (F64)ins_atomic_u64_eval(&writer->bytes_enqueued) / GB(1), writer->jobs_completed, ins_atomic_u64_eval(&writer->jobs_enqueued), writer->writes_issued, (done_now / writer->writes_issued) / KB(1));
+      if (batch[i].decommit_after_write) {
+        // The buffer is immutable and write-once (a sealed MSF stream run); once it is
+        // on disk its pages are dead weight in the commit charge. Round INWARD to whole
+        // OS pages so neighbors sharing the boundary pages are untouched.
+        U64 lo = AlignPow2((U64)part_ptr, KB(4));
+        U64 hi = ((U64)part_ptr + part_size) & ~(U64)(KB(4) - 1);
+        if (lo < hi) {
+          U64 decommit_size = hi - lo;
+          if (writer->is_decommit_running) {
+            while (ins_atomic_u64_eval(&writer->decommit_bytes_enqueued) -
+                   ins_atomic_u64_eval(&writer->decommit_bytes_completed) + decommit_size > decommit_pipeline_cap) {
+              sleep_ms(0);
+            }
+            ins_atomic_u64_add_eval(&writer->decommit_bytes_enqueued, decommit_size);
+            LNK_BackgroundFileDecommitJob job = { .ptr = (void *)lo, .size = decommit_size };
+            RingGuard guard = guarded_ring_open(writer->decommit_queue);
+            B32 is_written = guarded_ring_write_struct_or_wait(&guard, &job, max_U64);
+            guarded_ring_close(&guard);
+            Assert(is_written);
+          } else {
+            decommit_memory((void *)lo, decommit_size);
+          }
+        }
       }
+      part_off += part_size;
     }
-    if (batch[i].decommit_after_write) {
-      // the buffer is immutable and write-once (a sealed MSF stream run); once it is
-      // on disk its pages are dead weight in the commit charge. Round INWARD to whole
-      // OS pages so neighbors sharing the boundary pages are untouched.
-      U64 lo = AlignPow2((U64)batch[i].data.str, KB(4));
-      U64 hi = ((U64)end_ptr) & ~(U64)(KB(4) - 1);
-      if (lo < hi) { decommit_memory((void *)lo, hi - lo); }
+    if (batch[i].file->is_open) {
+      writer->jobs_completed += (j + 1 - i);
     }
     i = j + 1;
   }
@@ -655,6 +711,9 @@ lnk_background_file_writer_thread(void *raw_writer)
   set_thread_namef("Background File Writer");
 
   LNK_BackgroundFileWriter *writer = raw_writer;
+
+  writer->decommit_thread = thread_launch(lnk_background_file_decommit_thread, writer);
+  writer->is_decommit_running = writer->decommit_thread.u64[0] != 0;
 
   U64 batch_cap = 8192;
   LNK_BackgroundFileWriteJob *batch = (LNK_BackgroundFileWriteJob *)reserve_memory(batch_cap * sizeof(batch[0]));
@@ -712,6 +771,16 @@ lnk_background_file_writer_thread(void *raw_writer)
     }
   }
 
+  if (writer->is_decommit_running) {
+    LNK_BackgroundFileDecommitJob job = {0};
+    RingGuard guard = guarded_ring_open(writer->decommit_queue);
+    B32 is_written = guarded_ring_write_struct_or_wait(&guard, &job, max_U64);
+    guarded_ring_close(&guard);
+    Assert(is_written);
+    thread_join(writer->decommit_thread, max_U64);
+    writer->is_decommit_running = 0;
+  }
+
   release_memory(batch, batch_cap * sizeof(batch[0]));
   ProfEnd();
 }
@@ -723,6 +792,7 @@ lnk_background_file_writer_begin(LNK_BackgroundFileWriter *writer)
 
   writer->queue_arena   = arena_alloc(.reserve_size = MB(2), .commit_size = MB(2), .name = "BACKGROUND_FILE_WRITE_QUEUE");
   writer->queue         = guarded_ring_alloc(writer->queue_arena, MB(1));
+  writer->decommit_queue = guarded_ring_alloc(writer->queue_arena, KB(64));
   writer->begin_time_us = now_time_us();
   ProfEnd();
 }

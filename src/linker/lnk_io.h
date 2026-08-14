@@ -30,13 +30,18 @@ typedef struct
 {
   Arena              *queue_arena;
   GuardedRing        *queue;
+  GuardedRing        *decommit_queue;
   Thread              thread;
+  Thread              decommit_thread;
   LNK_BackgroundFile *file_first;
   LNK_BackgroundFile *file_last;
   B32                 is_running;
+  B32                 is_decommit_running;
   U64                 begin_time_us;   // Timers telemetry anchor
   U64                 bytes_enqueued;  // atomic; producer side
   U64                 bytes_completed; // atomic; writer thread
+  U64                 decommit_bytes_enqueued;  // atomic; writer thread
+  U64                 decommit_bytes_completed; // atomic; decommit thread
   U64                 jobs_enqueued;   // atomic; producer side
   U64                 jobs_completed;  // writer thread
   U64                 writes_issued;   // writer thread; post-coalesce WriteFile count
