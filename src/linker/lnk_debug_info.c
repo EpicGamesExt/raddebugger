@@ -5013,7 +5013,7 @@ internal void
 lnk_gsi_deduper_insert_copy(void **buckets, U64 bucket_cap, U64 hash, void *symbol_ptr, Arena *dst_arena)
 {
   String8 raw      = cv_raw_from_symbol(symbol_ptr);
-  U64     best_idx = hash % bucket_cap;
+  U64     best_idx = lnk_hash_range(hash, bucket_cap);
   U64     idx      = best_idx;
   for (;;) {
     void *curr = ins_atomic_ptr_eval(&buckets[idx]);
