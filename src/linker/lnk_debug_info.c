@@ -4994,15 +4994,22 @@ internal void lnk_pdb_output_enqueue_stream(LNK_PdbOutput *output, MSF_Context *
 #define LNK_GSI_DEDUP_RESERVED ((void *)(U64)1)
 
 internal U64
-lnk_count_gsi_candidates(CV_DebugS debug_s)
+lnk_count_gsi_candidates(CV_DebugS debug_s, U64 *procref_count_out)
 {
-  U64 count = 0;
+  U64 count         = 0;
+  U64 procref_count = 0;
   String8List symbols = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
   for EachNode(n, String8Node, symbols.first) {
     for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
       CV_Symbol symbol = {0};
       TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
       if (cv_is_global_symbol(symbol.kind) || (depth == 0 && cv_is_typedef(symbol.kind))) { count += 1; }
+      // ID procs are rewritten to their non-ID forms by the deferred fixup replay before
+      // extraction. Count both spellings here while reading the raw invariant headers.
+      if (symbol.kind == CV_SymKind_GPROC32    || symbol.kind == CV_SymKind_LPROC32 ||
+          symbol.kind == CV_SymKind_GPROC32_ID || symbol.kind == CV_SymKind_LPROC32_ID) {
+        procref_count += 1;
+      }
       if (cv_is_scope_symbol(symbol.kind)) {
         depth += 1;
       } else if (cv_is_end_symbol(symbol.kind)) {
@@ -5011,6 +5018,7 @@ lnk_count_gsi_candidates(CV_DebugS debug_s)
       }
     }
   }
+  *procref_count_out = procref_count;
   return count;
 }
 
@@ -5071,78 +5079,64 @@ lnk_extract_gsi_inputs_for_obj(LNK_BuildPdb *task, U64 obj_idx, U64 task_id, CV_
   PDB_GsiContext       *gsi        = task->pdb->gsi;
   Arena                *payload_arena = task->procref_payload_arenas[task_id];
 
-  // Dedup directly from the one post-reloc/post-fixup window. The size-only pass already
-  // counted these records from invariant headers so the shared table is pre-sized.
-  U64 cand_count = 0;
+  // Dedup globals and build proc refs in one decode walk over the post-reloc/post-fixup
+  // window. The size-only pass counted both record sets from invariant raw headers, so all
+  // arrays and the shared table are exact-sized before this visit.
+  U64 procref_count = pre->procref_count;
+  if (procref_count) {
+    pre->procref_syms   = push_array_no_zero(payload_arena, CV_Symbol, procref_count);
+    pre->procref_hashes = push_array_no_zero(payload_arena, U32,       procref_count);
+  }
+
+  CV_ModIndex imod          = task->mod_arr[obj_idx]->imod;
+  U64         symbol_cursor = sizeof(CV_Signature);
+  U64         scope_depth   = 0;
+  U64         cand_count    = 0;
+  U64         procref_idx   = 0;
   for EachNode(n, String8Node, symbols.first) {
-    for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
+    U64 cand_depth  = 0;
+    B32 cand_active = 1;
+    for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
       CV_Symbol symbol = {0};
       TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
-      if (cv_is_global_symbol(symbol.kind) || (depth == 0 && cv_is_typedef(symbol.kind))) {
+
+      if (cand_active && (cv_is_global_symbol(symbol.kind) || (cand_depth == 0 && cv_is_typedef(symbol.kind)))) {
         U8 *ptr = cv_ptr_from_symbol(symbol);
         lnk_gsi_deduper_insert_copy(task->gsi_dedup_buckets, task->gsi_dedup_bucket_cap,
                                     u64_hash_from_str8(cv_raw_from_symbol(ptr)), ptr, payload_arena);
         cand_count += 1;
       }
-      if (cv_is_scope_symbol(symbol.kind)) {
-        depth += 1;
-      } else if (cv_is_end_symbol(symbol.kind)) {
-        if (depth == 0) { Assert(0 && "malformed symbol stream"); break; }
-        depth -= 1;
+      if (cand_active) {
+        if (cv_is_scope_symbol(symbol.kind)) {
+          cand_depth += 1;
+        } else if (cv_is_end_symbol(symbol.kind)) {
+          if (cand_depth == 0) { Assert(0 && "malformed symbol stream"); cand_active = 0; }
+          else                 { cand_depth -= 1; }
+        }
       }
-    }
-  }
-  Assert(cand_count == pre->cand_count);
 
-  // proc-ref count pass (mirrors the old proc-ref sizing walk)
-  U64 procref_count = 0;
-  for EachNode(n, String8Node, symbols.first) {
-    for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
-      CV_Symbol symbol = {0};
-      TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
-      if (symbol.kind == CV_SymKind_GPROC32 || symbol.kind == CV_SymKind_LPROC32) {
-        procref_count += 1;
-      }
-    }
-  }
-
-  // proc-ref fill pass (mirrors the old build walk: identical layout math + skip set).
-  // The value/hash arrays live on the surviving payload arena.
-  if (procref_count) {
-    pre->procref_syms   = push_array_no_zero(payload_arena, CV_Symbol, procref_count);
-    pre->procref_hashes = push_array_no_zero(payload_arena, U32,       procref_count);
-
-    CV_ModIndex imod          = task->mod_arr[obj_idx]->imod;
-    U64         symbol_cursor = sizeof(CV_Signature);
-    U64         scope_depth   = 0;
-    U64         k             = 0;
-    for EachNode(n, String8Node, symbols.first) {
-      for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
-        CV_Symbol symbol = {0};
-        TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
-
-        if      (symbol.kind == CV_SymKind_SKIP)                 { continue; }
-        else if (cv_is_global_symbol(symbol.kind))               { continue; }
-        else if (cv_is_typedef(symbol.kind) && scope_depth == 0) { continue; }
-        else if (symbol.kind == 0x1176)                          { continue; }
-
+      B32 is_module_symbol = (symbol.kind != CV_SymKind_SKIP &&
+                              !cv_is_global_symbol(symbol.kind) &&
+                              !(cv_is_typedef(symbol.kind) && scope_depth == 0) &&
+                              symbol.kind != 0x1176);
+      if (is_module_symbol) {
         if      (cv_is_scope_symbol(symbol.kind)) { scope_depth += 1; }
         else if (cv_is_end_symbol(symbol.kind))   { scope_depth -= 1; }
 
         if (symbol.kind == CV_SymKind_GPROC32 || symbol.kind == CV_SymKind_LPROC32) {
           String8 name = cv_name_from_symbol(symbol.kind, symbol.data);
-          pre->procref_syms[k] = cv_make_proc_ref(payload_arena, imod, symbol_cursor, name, cv_is_lproc(symbol));
-          pre->procref_syms[k].offset = symbol_cursor;
-          pre->procref_hashes[k] = gsi_hash(gsi, name);
-          k += 1;
+          pre->procref_syms[procref_idx] = cv_make_proc_ref(payload_arena, imod, symbol_cursor, name, cv_is_lproc(symbol));
+          pre->procref_syms[procref_idx].offset = symbol_cursor;
+          pre->procref_hashes[procref_idx] = gsi_hash(gsi, name);
+          procref_idx += 1;
         }
 
         symbol_cursor += cv_write_symbol_buf(0, 0, &symbol, PDB_SYMBOL_ALIGN);
       }
     }
-    Assert(k == procref_count);
-    pre->procref_count = procref_count;
   }
+  Assert(cand_count == pre->cand_count);
+  Assert(procref_idx == procref_count);
 }
 
 internal
@@ -5169,7 +5163,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     // re-accumulated sizes match. Fixup replay, parity, and the GSI extraction all move to
     // the write pass's single fill.
     lnk_write_debug_s_to_pdb_module(task->mod_arr[obj_idx], task->cv->debug_s_arr[obj_idx], 0, 0);
-    task->preext[obj_idx].cand_count = lnk_count_gsi_candidates(task->cv->debug_s_arr[obj_idx]);
+    task->preext[obj_idx].cand_count = lnk_count_gsi_candidates(task->cv->debug_s_arr[obj_idx], &task->preext[obj_idx].procref_count);
   }
   barrier_wait(tp->barrier);
 
