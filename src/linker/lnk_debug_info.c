@@ -2497,7 +2497,10 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
 internal force_inline LNK_LeafRef
 lnk_leaf_ref_make(U64 obj_idx, U64 leaf_idx)
 {
-  LNK_LeafRef result = Compose64Bit(safe_cast_u32(obj_idx), safe_cast_u32(leaf_idx));
+  // Type indices consume the low 32 bits. Realistic object counts fit comfortably in the
+  // remaining 29 payload bits; the top three bits stay free for the dedup-table hash tag.
+  Assert(obj_idx < (1ull << 29) - 1);
+  LNK_LeafRef result = (obj_idx << 32) | safe_cast_u32(leaf_idx);
   Assert(result != LNK_LEAF_REF_NULL);
   return result;
 }
@@ -2505,7 +2508,7 @@ lnk_leaf_ref_make(U64 obj_idx, U64 leaf_idx)
 internal force_inline U32
 lnk_leaf_ref_obj_idx(LNK_LeafRef ref)
 {
-  return (U32)(ref >> 32);
+  return (U32)((ref >> 32) & ((1ull << 29) - 1));
 }
 
 internal force_inline U32
@@ -2692,6 +2695,23 @@ lnk_match_leaf_ref(LNK_CodeViewInput *input, LNK_LeafRef a, LNK_LeafRef b)
   U64 a_hash = lnk_hash_from_leaf_ref(input, a);
   U64 b_hash = lnk_hash_from_leaf_ref(input, b);
   return a_hash == b_hash;
+}
+
+#define LNK_LEAF_BUCKET_TAG_MASK (7ull << 61)
+
+internal force_inline LNK_LeafRef
+lnk_leaf_bucket_tag(LNK_LeafRef ref, U64 hash)
+{
+  Assert((ref & LNK_LEAF_BUCKET_TAG_MASK) == 0);
+  LNK_LeafRef result = ref | (hash & LNK_LEAF_BUCKET_TAG_MASK);
+  Assert(result != LNK_LEAF_REF_NULL);
+  return result;
+}
+
+internal force_inline LNK_LeafRef
+lnk_leaf_bucket_untag(LNK_LeafRef ref)
+{
+  return ref & ~LNK_LEAF_BUCKET_TAG_MASK;
 }
 
 // P4: `leaf` is the caller's (journal-aware) read of the leaf -- this function no longer
@@ -3040,20 +3060,22 @@ THREAD_POOL_TASK_FUNC(lnk_populate_leaf_ht)
     CV_LeafKind         kind        = memory_read16(MemberFromPtr(CV_LeafHeader, header, kind)); // leaf header -> leaf kind
     CV_TypeIndexSource  leaf_source = cv_type_index_source_from_leaf_kind(kind);                 // leaf kind -> type stream
     LNK_LeafHashTable  *leaf_ht     = &task->leaf_ht_arr[leaf_source];                           // type stream -> hash table
-    U64                 best_idx    = debug_h->v[leaf_idx] % leaf_ht->cap;                       // leaf ref -> hash -> bucket index
+    U64                 hash        = debug_h->v[leaf_idx];                                     // leaf ref -> hash
+    U64                 best_idx    = hash & (leaf_ht->cap - 1);                                // hash -> bucket index
+    LNK_LeafRef         tagged      = lnk_leaf_bucket_tag(leaf_ref, hash);
     U64                 idx         = best_idx;
 
     do {
-      LNK_LeafRef curr = ins_atomic_u64_eval(&leaf_ht->bucket_arr[idx]);
-      if (curr == LNK_LEAF_REF_NULL) {
-        LNK_LeafRef cmp = ins_atomic_u64_eval_cond_assign(&leaf_ht->bucket_arr[idx], leaf_ref, curr);
-        if (cmp == curr) {
+      LNK_LeafRef curr_tagged = ins_atomic_u64_eval(&leaf_ht->bucket_arr[idx]);
+      if (curr_tagged == LNK_LEAF_REF_NULL) {
+        LNK_LeafRef cmp = ins_atomic_u64_eval_cond_assign(&leaf_ht->bucket_arr[idx], tagged, curr_tagged);
+        if (cmp == curr_tagged) {
           goto exit;
         }
       }
 
       // advance to next bucket
-      idx = ((idx + 1) == leaf_ht->cap ? 0 : (idx + 1));
+      idx = (idx + 1) & (leaf_ht->cap - 1);
     } while (idx != best_idx);
     is_inserted_or_updated = 0;
     exit:;
@@ -3093,7 +3115,6 @@ THREAD_POOL_TASK_FUNC(lnk_leaf_dedup_task)
     // and retried with the total-based caps, so bail out early
     if (ins_atomic_u32_eval(&task->leaf_ht_overflow) != 0) { break; }
     if (is_ifc_blob && cv_debug_t_get_leaf_header(debug_t, leaf_idx)->kind == CV_LeafKind_NOTYPE) { continue; }
-
     B32 is_inserted_or_updated = 1;
 
     LNK_LeafRef         leaf_ref    = lnk_leaf_ref_make(obj_idx, leaf_idx);
@@ -3102,31 +3123,36 @@ THREAD_POOL_TASK_FUNC(lnk_leaf_dedup_task)
     if (notype_bm && leaf_idx < notype_cap && ((notype_bm[leaf_idx >> 6] >> (leaf_idx & 63)) & 1)) { kind = CV_LeafKind_NOTYPE; }
     CV_TypeIndexSource  leaf_source = cv_type_index_source_from_leaf_kind(kind);                 // leaf kind -> type stream
     LNK_LeafHashTable  *leaf_ht     = &task->leaf_ht_arr[leaf_source];                           // type stream -> hash table
-    U64                 best_idx    = debug_h->v[leaf_idx] % leaf_ht->cap;                       // leaf ref -> hash -> bucket index
+    U64                 hash        = debug_h->v[leaf_idx];                                     // leaf ref -> hash
+    U64                 best_idx    = hash & (leaf_ht->cap - 1);                                // hash -> bucket index
+    LNK_LeafRef         tagged      = lnk_leaf_bucket_tag(leaf_ref, hash);
     U64                 idx         = best_idx;
 
     do {
       // load leaf ref
-      LNK_LeafRef curr = ins_atomic_u64_eval(&leaf_ht->bucket_arr[idx]);
+      LNK_LeafRef curr_tagged = ins_atomic_u64_eval(&leaf_ht->bucket_arr[idx]);
 
-      while (curr == LNK_LEAF_REF_NULL || lnk_match_leaf_ref(task->input, curr, leaf_ref)) {
+      while (curr_tagged == LNK_LEAF_REF_NULL ||
+             ((curr_tagged & LNK_LEAF_BUCKET_TAG_MASK) == (tagged & LNK_LEAF_BUCKET_TAG_MASK) &&
+              lnk_hash_from_leaf_ref(task->input, lnk_leaf_bucket_untag(curr_tagged)) == hash)) {
+        LNK_LeafRef curr = curr_tagged == LNK_LEAF_REF_NULL ? LNK_LEAF_REF_NULL : lnk_leaf_bucket_untag(curr_tagged);
         // exit if leaf ref is not recent
         if (curr != LNK_LEAF_REF_NULL && lnk_leaf_ref_compare(leaf_ref, curr) >= 0) {
           goto exit;
         }
 
         // try to update the bucket
-        LNK_LeafRef cmp = ins_atomic_u64_eval_cond_assign(&leaf_ht->bucket_arr[idx], leaf_ref, curr);
-        if (cmp == curr) {
+        LNK_LeafRef cmp = ins_atomic_u64_eval_cond_assign(&leaf_ht->bucket_arr[idx], tagged, curr_tagged);
+        if (cmp == curr_tagged) {
           goto exit;
         }
 
         // another thread updated the bucket -- retry
-        curr = cmp;
+        curr_tagged = cmp;
       }
 
       // advance to next bucket
-      idx = ((idx + 1) == leaf_ht->cap ? 0 : (idx + 1));
+      idx = (idx + 1) & (leaf_ht->cap - 1);
     } while (idx != best_idx);
     
     is_inserted_or_updated = 0;
@@ -3173,7 +3199,7 @@ THREAD_POOL_TASK_FUNC(lnk_get_present_buckets_task)
 
   for EachInRange(bucket_idx, task->ranges[task_id]) {
     if (ht->bucket_arr[bucket_idx] != LNK_LEAF_REF_NULL) {
-      unique_leaf_refs.v[cursor++] = ht->bucket_arr[bucket_idx];
+      unique_leaf_refs.v[cursor++] = lnk_leaf_bucket_untag(ht->bucket_arr[bucket_idx]);
     }
   }
 
