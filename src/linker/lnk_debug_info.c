@@ -2598,18 +2598,28 @@ lnk_cv_leaf_from_leaf_ref(LNK_CodeViewInput *input, U32 obj_idx, U32 leaf_idx)
 // Journal-aware raw leaf size (materialize buffer sizing + copy). Hot path = the ORIGINAL
 // header read (one bitmap test on top); only a full NOTYPE rewrite changes the answer (the
 // leaf shrank to its 4-byte header; KIND_ONLY keeps the size field).
+#define LNK_LEAF_MATERIALIZE_FULL_NOTYPE 1
+#define LNK_LEAF_MATERIALIZE_KIND_NOTYPE 2
+
 internal U64
-lnk_leaf_ref_raw_size(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref)
+lnk_leaf_ref_materialize_meta(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref)
 {
   U32        obj_idx  = lnk_leaf_ref_obj_idx(leaf_ref);
   U32        leaf_idx = lnk_leaf_ref_leaf_idx(leaf_ref);
   CV_DebugT *debug_t  = &input->debug_t_arr[obj_idx];
+  U64        raw_size = cv_debug_t_get_raw_leaf(debug_t, leaf_idx).size;
+  U64        rewrite  = 0;
   if (obj_idx < input->obj_count && lnk_notype_journal_test(&input->notype_journal[obj_idx], leaf_idx)) {
     B32 kind_only = 0;
     lnk_notype_journal_find(&input->notype_journal[obj_idx], leaf_idx, &kind_only);
-    if (!kind_only) { return sizeof(CV_LeafHeader); }
+    if (kind_only) {
+      rewrite = LNK_LEAF_MATERIALIZE_KIND_NOTYPE;
+    } else {
+      raw_size = sizeof(CV_LeafHeader);
+      rewrite = LNK_LEAF_MATERIALIZE_FULL_NOTYPE;
+    }
   }
-  return cv_debug_t_get_raw_leaf(debug_t, leaf_idx).size;
+  return (raw_size << 2) | rewrite;
 }
 
 internal LNK_LeafRef
@@ -2961,9 +2971,10 @@ lnk_assigned_ti_hash_search(LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LN
   U64        best_idx = lnk_hash_range(hash, ht->cap);
   U64        idx      = best_idx;
   do {
-    CV_TypeIndex ti = ht->ti_arr[idx];
+    U8 *entry = ht->v + idx * LNK_ASSIGNED_TI_ENTRY_SIZE;
+    CV_TypeIndex ti = memory_read32(entry + LNK_ASSIGNED_TI_TI_OFF);
     if (ti == 0) { break; }
-    if (ht->hash_arr[idx] == hash) { return ti; }
+    if (memory_read64(entry + LNK_ASSIGNED_TI_HASH_OFF) == hash) { return ti; }
     idx = (idx + 1) == ht->cap ? 0 : (idx + 1);
   } while (idx != best_idx);
 
@@ -3251,11 +3262,13 @@ THREAD_POOL_TASK_FUNC(lnk_assign_type_indices_task)
 
     B32 is_inserted = 0;
     do {
-      CV_TypeIndex curr_type_index = assigned->ti_arr[idx];
+      U8 *entry = assigned->v + idx * LNK_ASSIGNED_TI_ENTRY_SIZE;
+      CV_TypeIndex *ti_ptr = (CV_TypeIndex *)(entry + LNK_ASSIGNED_TI_TI_OFF);
+      CV_TypeIndex curr_type_index = *ti_ptr;
       if (curr_type_index == 0) {
-        CV_TypeIndex cmp_type_index = ins_atomic_u32_eval_cond_assign(&assigned->ti_arr[idx], type_index, curr_type_index);
+        CV_TypeIndex cmp_type_index = ins_atomic_u32_eval_cond_assign(ti_ptr, type_index, curr_type_index);
         if (cmp_type_index == curr_type_index) {
-          assigned->hash_arr[idx] = hash;
+          memory_write64(entry + LNK_ASSIGNED_TI_HASH_OFF, hash);
           is_inserted = 1;
           break;
         }
@@ -3764,8 +3777,12 @@ THREAD_POOL_TASK_FUNC(lnk_count_unique_leaf_sizes_task)
   Rng1U64 range = task->ranges[task_id];
   U64 size = 0;
   for EachInRange(i, range) {
-    // P4: journal-aware offsets-chain size -- no leaf-header reads through the mapped views
-    size += lnk_leaf_ref_raw_size(task->input, task->unique_leaf_refs_arr[task->ti_source].v[i]);
+    // Cache size + NOTYPE disposition in result.v's otherwise-unused slots. Materialization
+    // consumes and replaces each value with the final pointer, avoiding a second journal lookup
+    // and raw-leaf header read without allocating a side array.
+    U64 meta = lnk_leaf_ref_materialize_meta(task->input, task->unique_leaf_refs_arr[task->ti_source].v[i]);
+    task->result.v[task->ti_source][i] = (U8 *)meta;
+    size += meta >> 2;
   }
   task->leaf_buffer_offsets[task_id] = size; // exclusive-scanned into offsets on the main thread
 }
@@ -3789,38 +3806,33 @@ THREAD_POOL_TASK_FUNC(lnk_materialize_unique_leaves_task)
     U32         obj_idx  = lnk_leaf_ref_obj_idx(leaf_ref);
     U32         leaf_idx = lnk_leaf_ref_leaf_idx(leaf_ref);
     CV_DebugT  *debug_t  = &task->input->debug_t_arr[obj_idx];
+    U64         meta     = (U64)task->result.v[task->ti_source][i];
+    U64         raw_size = meta >> 2;
+    U64         rewrite  = meta & 3;
 
     // copy raw leaf into the private buffer. Hot path = the ORIGINAL read+memcpy (one bitmap
     // test on top); journaled leaves replay the NOTYPE rewrite into the COPY (full rewrite =>
     // bare { size=sizeof(CV_LeafKind), kind=LF_NOTYPE } header; KIND_ONLY (0x1522) => copy then
     // patch the kind). Byte-identical to the old post-in-place-write copy.
-    U64 raw_size;
-    if (obj_idx < task->input->obj_count &&
-        lnk_notype_journal_test(&task->input->notype_journal[obj_idx], leaf_idx)) {
-      B32 kind_only = 0;
-      lnk_notype_journal_find(&task->input->notype_journal[obj_idx], leaf_idx, &kind_only);
-      if (kind_only) {
-        String8 raw_leaf = cv_debug_t_get_raw_leaf(debug_t, leaf_idx);
-        raw_size = raw_leaf.size;
-        MemoryCopy(cursor, raw_leaf.str, raw_size);
-        memory_write16(cursor + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
-      } else {
-        raw_size = sizeof(CV_LeafHeader);
-        memory_write16(cursor + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
+    if (rewrite == LNK_LEAF_MATERIALIZE_FULL_NOTYPE) {
+      memory_write16(cursor + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
+      memory_write16(cursor + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
+    } else {
+      U8 *raw_leaf = debug_t->data.str + debug_t->offsets[leaf_idx];
+      MemoryCopy(cursor, raw_leaf, raw_size);
+      if (rewrite == LNK_LEAF_MATERIALIZE_KIND_NOTYPE) {
         memory_write16(cursor + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
       }
-    } else {
-      String8 raw_leaf = cv_debug_t_get_raw_leaf(debug_t, leaf_idx);
-      raw_size = raw_leaf.size;
-      MemoryCopy(cursor, raw_leaf.str, raw_size);
     }
     task->result.v[task->ti_source][i] = cursor;
     cursor += raw_size;
 
     // fixup type indices on the copy (same math the in-place leaf patcher applied)
     Temp temp = temp_begin(fixed_arena);
-    CV_Leaf leaf = {0};
-    cv_read_leaf(str8(task->result.v[task->ti_source][i], raw_size), 0, 1, &leaf);
+    CV_Leaf leaf = {
+      .kind = memory_read16(task->result.v[task->ti_source][i] + OffsetOf(CV_LeafHeader, kind)),
+      .data = str8(task->result.v[task->ti_source][i] + sizeof(CV_LeafHeader), raw_size - sizeof(CV_LeafHeader)),
+    };
     CV_TiOffsets ti_offs = cv_leaf_ti_offsets(temp.arena, leaf.kind, leaf.data);
     lnk_fixup_cv_type_indices(task, obj_idx, leaf.data, ti_offs);
     temp_end(temp);
@@ -4184,13 +4196,10 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
       task.ti_source                         = ti_source;
       task.assigned_ti_arr[ti_source].cap    = ((task.unique_leaf_refs_arr[ti_source].count * 13) / 10);
-      task.assigned_ti_arr[ti_source].ti_arr = push_array(scratch.arena, CV_TypeIndex, task.assigned_ti_arr[ti_source].cap);
-
-      // bucket_arr used to back hash_arr here to avoid a fresh allocation, but the bucket
-      // arena is released right after the extract loop (above) so the probe tables' multi-GB
-      // working set is gone before the merge-types commit peak; allocate hash_arr fresh --
-      // it is sized by the (much smaller) unique count, not the total-based bucket cap
-      task.assigned_ti_arr[ti_source].hash_arr = push_array(scratch.arena, U64, task.assigned_ti_arr[ti_source].cap);
+      // Keep hash + assigned TI adjacent: the fixup passes probe this table hundreds of
+      // millions of times and usually need both fields. Packed 12-byte entries preserve the
+      // exact former 8+4 byte footprint while normally requiring one cache line instead of two.
+      task.assigned_ti_arr[ti_source].v = push_array(scratch.arena, U8, task.assigned_ti_arr[ti_source].cap * LNK_ASSIGNED_TI_ENTRY_SIZE);
 
       task.min_type_indices[ti_source] = CV_MinComplexTypeIndex;
       task.ranges = tp_divide_work(scratch.arena, task.unique_leaf_refs_arr[ti_source].count, tp->worker_count);
@@ -4323,7 +4332,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
         entry_count += a->count; entry_bytes += a->count * (a->is_wide ? sizeof(LNK_DebugSPatchWide) : sizeof(LNK_DebugSPatch)); wide_runs += !!a->is_wide;
       }
       U64 assigned_bytes = 0;
-      for EachIndex(s, CV_TypeIndexSource_COUNT) { assigned_bytes += task.assigned_ti_arr[s].cap * (sizeof(CV_TypeIndex) + sizeof(U64)); }
+      for EachIndex(s, CV_TypeIndexSource_COUNT) { assigned_bytes += task.assigned_ti_arr[s].cap * LNK_ASSIGNED_TI_ENTRY_SIZE; }
       U64 leaf_buffer_bytes = task.result.leaf_buffers[CV_TypeIndexSource_TPI].size + task.result.leaf_buffers[CV_TypeIndexSource_IPI].size;
       lnk_log(LNK_Log_Debug, "$S fixup journal: %llu entries / %llu bytes (%llu wide runs) (state it decouples from module write: assigned-TI tables %llu bytes, merged leaf buffers %llu bytes)",
               entry_count, entry_bytes, wide_runs, assigned_bytes, leaf_buffer_bytes);

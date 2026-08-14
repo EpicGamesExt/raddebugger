@@ -220,11 +220,14 @@ typedef struct
   LNK_LeafRef *bucket_arr;
 } LNK_LeafHashTable;
 
+#define LNK_ASSIGNED_TI_ENTRY_SIZE 12
+#define LNK_ASSIGNED_TI_HASH_OFF    0
+#define LNK_ASSIGNED_TI_TI_OFF      8
+
 typedef struct
 {
-  U64           cap;
-  CV_TypeIndex *ti_arr;
-  U64          *hash_arr;
+  U64 cap;
+  U8 *v;
 } LNK_AssignedTiHash;
 
 typedef struct LNK_LeafRange
@@ -425,7 +428,7 @@ internal void            lnk_notype_journal_push             (Arena *arena, LNK_
 internal B32             lnk_notype_journal_test             (LNK_NotypeJournal *journal, U64 leaf_idx);
 internal B32             lnk_notype_journal_find             (LNK_NotypeJournal *journal, U32 leaf_idx, B32 *kind_only_out);
 internal CV_Leaf         lnk_cv_leaf_from_leaf_ref           (LNK_CodeViewInput *input, U32 obj_idx, U32 leaf_idx);
-internal U64             lnk_leaf_ref_raw_size               (LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
+internal U64             lnk_leaf_ref_materialize_meta       (LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
 internal U64             lnk_hash_cv_leaf                    (LNK_CodeViewInput *input, Arena *journal_arena, LNK_LeafRef leaf_ref, CV_Leaf leaf, CV_TiOffsets ti_offs, B32 discard_cycles);
 internal void            lnk_hash_cv_leaf_deep               (Arena *arena, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TiOffsets ti_offs);
 internal CV_TypeIndex    lnk_assigned_ti_hash_search          (LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
