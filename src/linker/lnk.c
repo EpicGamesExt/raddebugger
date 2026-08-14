@@ -2926,8 +2926,9 @@ THREAD_POOL_TASK_FUNC(lnk_opt_ref_task)
               }
 
               // push associated section
-              for EachNode(associated_n, U32Node, walk_obj->coff.sections.associated_section_numbers[section_number]) {
-                U32 assoc_sn = associated_n->data;
+              U32Array associated_sections = lnk_obj_associated_sections_from_section_number(walk_obj, section_number);
+              for EachIndex(associated_idx, associated_sections.count) {
+                U32 assoc_sn = associated_sections.v[associated_idx];
 
 
                 {
@@ -3505,8 +3506,9 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
                   }
 
                   U64 child_pos = 0;
-                  for EachNode(child_n, U32Node, target_obj->coff.sections.associated_section_numbers[parent_sect]) {
-                    if (child_n->data == target_sect) { break; }
+                  U32Array associated_sections = lnk_obj_associated_sections_from_section_number(target_obj, parent_sect);
+                  for EachIndex(child_idx, associated_sections.count) {
+                    if (associated_sections.v[child_idx] == target_sect) { break; }
                     child_pos += 1;
                   }
 
@@ -4060,8 +4062,9 @@ internal U32
 lnk_icf_debug_s_child_from_section(LNK_Obj *obj, U32 fn_sn)
 {
   if (fn_sn == 0 || fn_sn > obj->coff.sections.count_no_null) { return 0; }
-  for EachNode(assoc_n, U32Node, obj->coff.sections.associated_section_numbers[fn_sn]) {
-    U32 sn = assoc_n->data;
+  U32Array associated_sections = lnk_obj_associated_sections_from_section_number(obj, fn_sn);
+  for EachIndex(assoc_idx, associated_sections.count) {
+    U32 sn = associated_sections.v[assoc_idx];
     if (sn == 0 || sn > obj->coff.sections.count_no_null) { continue; }
     if (~obj->coff.sections.headers[sn].flags & LNK_SECTION_FLAG_DEBUG) { continue; }
     if (str8_match(lnk_obj_section_name_from_section_number(obj, sn), str8_lit(".debug$S"), 0)) { return sn; }
@@ -4233,8 +4236,9 @@ THREAD_POOL_TASK_FUNC(lnk_icf_mark_folded_lines_task)
       temp_end(fold_temp);
     }
 
-    for EachNode(assoc_n, U32Node, obj->coff.sections.associated_section_numbers[section_number]) {
-      U32 assoc_sn = assoc_n->data;
+    U32Array associated_sections = lnk_obj_associated_sections_from_section_number(obj, section_number);
+    for EachIndex(assoc_idx, associated_sections.count) {
+      U32 assoc_sn = associated_sections.v[assoc_idx];
       if (assoc_sn == 0 || assoc_sn > obj->coff.sections.count_no_null) { continue; }
       if (~obj->coff.sections.headers[assoc_sn].flags & LNK_SECTION_FLAG_DEBUG) { continue; }
       // exclude the follower's .debug$S from full module collection (it would otherwise merge

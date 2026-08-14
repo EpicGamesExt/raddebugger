@@ -396,10 +396,9 @@ lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
     *dst_section.flags |= COFF_SectionFlag_LnkRemove;
 
     // remove associated sections from the output
-    for (U32Node *associated_section = dst_ref.obj->coff.sections.associated_section_numbers[dst_parsed.section_number];
-        associated_section != 0;
-        associated_section = associated_section->next) {
-      LNK_ObjSection section = lnk_obj_section_from_section_number(dst_ref.obj, associated_section->data);
+    U32Array associated_sections = lnk_obj_associated_sections_from_section_number(dst_ref.obj, dst_parsed.section_number);
+    for EachIndex(associated_idx, associated_sections.count) {
+      LNK_ObjSection section = lnk_obj_section_from_section_number(dst_ref.obj, associated_sections.v[associated_idx]);
       *section.flags |= COFF_SectionFlag_LnkRemove;
     }
   }
