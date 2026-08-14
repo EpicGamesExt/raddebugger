@@ -2784,8 +2784,10 @@ THREAD_POOL_TASK_FUNC(lnk_opt_ref_task)
   // millions of times. Open-addressing and lossy (a collision past the probe window evicts);
   // a miss only costs the recompute -- the cached value is a pure function of the key because
   // the symbol table and parsed_symbols are read-only during /OPT:REF.
+  // Keep the table small enough that initializing every worker does not become a page-fault
+  // amplifier (32K slots is 768KiB per worker, versus 24MiB at 1M slots).
   typedef struct { U64 key; LNK_Obj *obj; U64 symbol_idx; } LNK_RefResolveSlot;
-  U64                 resolve_cache_mask = (1ull << 20) - 1;
+  U64                 resolve_cache_mask = (1ull << 15) - 1;
   LNK_RefResolveSlot *resolve_cache      = push_array_no_zero(scratch.arena, LNK_RefResolveSlot, resolve_cache_mask + 1);
   MemorySet(resolve_cache, 0xff, sizeof(resolve_cache[0]) * (resolve_cache_mask + 1));
 
