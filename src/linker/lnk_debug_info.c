@@ -4952,7 +4952,9 @@ lnk_write_debug_s_to_pdb_module(PDB_DbiModule *mod, CV_DebugS debug_s, String8No
         if      (cv_is_scope_symbol(symbol.kind)) { scope_depth += 1; }
         else if (cv_is_end_symbol(symbol.kind))   { scope_depth -= 1; }
 
-        U64 symbol_size = cv_write_symbol_buf(buf, buf_pos, &symbol, PDB_SYMBOL_ALIGN);
+        String8 raw_symbol = cv_raw_from_symbol(cv_ptr_from_symbol(symbol));
+        U64 symbol_size = (raw_symbol.size & (PDB_SYMBOL_ALIGN - 1)) == 0 ? str8_buffer_write(buf, buf_pos, raw_symbol)
+                                                                         : cv_write_symbol_buf(buf, buf_pos, &symbol, PDB_SYMBOL_ALIGN);
         mod_cursor         += symbol_size;
         mod->sym_data_size += symbol_size;
       }
