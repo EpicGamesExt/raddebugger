@@ -3206,11 +3206,11 @@ lnk_icf_scope_from_section_number(LNK_Obj *obj, U32 section_number)
 }
 
 internal void
-lnk_icf_atomic_min_u64(U64 *dst, U64 value)
+lnk_icf_atomic_min_u32(U32 *dst, U32 value)
 {
   // preserve stable leaders despite concurrent insertion
-  for (U64 old_value = ins_atomic_u64_eval(dst); value < old_value;) {
-    U64 observed = ins_atomic_u64_eval_cond_assign(dst, value, old_value);
+  for (U32 old_value = ins_atomic_u32_eval(dst); value < old_value;) {
+    U32 observed = ins_atomic_u32_eval_cond_assign(dst, value, old_value);
     if (observed == old_value) { break; }
     old_value = observed;
   }
@@ -3238,32 +3238,34 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
     COFF_SymbolValueInterpType interp;
   } RelocTarget;
 
+  // Contribution and table indices are bounded to U32 below. Keeping the hot contribution
+  // record at 64 bytes cuts both its footprint and the demand-zero work during ICF.
   typedef struct {
     ColorKey            key;
     U128                static_hash;
     RelocTarget        **reloc_targets;
-    U64                 reloc_count;
-    U64                 color_slot_idx;
+    U32                 color_slot_idx;
+    U32                 reloc_count;
     U32                 obj_idx;
     U32                 section_number;
-    LNK_ICF_Scope       scope;
   } Contrib;
 
-  // reuse both tables without clearing them between refinement rounds
+  // Reuse both tables without clearing them between refinement rounds. U32 generations and
+  // indices keep these records at 48 and 16 bytes respectively (down from 56 and 24 bytes).
   typedef struct {
-    U64      state; // generation << 2 | (0 = empty, 1 = initializing, 2 = ready)
     ColorKey key;
-    U64      first_contrib_idx;
-    U64      old_color_slot_idx;
     U64      color;
+    U32      state; // generation << 2 | (0 = empty, 1 = initializing, 2 = ready)
+    U32      first_contrib_idx;
+    U32      old_color_slot_idx;
   } ColorHashSlot;
 
   typedef struct { ColorHashSlot *slots; U64 slots_count; } ColorHashTable;
 
   typedef struct {
-    U64 state; // generation << 2 | (0 = empty, 1 = initializing, 2 = ready)
     U64 old_color;
-    U64 first_contrib_idx;
+    U32 state; // generation << 2 | (0 = empty, 1 = initializing, 2 = ready)
+    U32 first_contrib_idx;
   } OldColorHashSlot;
 
   typedef struct { OldColorHashSlot *slots; U64 slots_count; } OldColorHashTable;
@@ -3386,6 +3388,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
   } shared = {
     .contrib_count = sum_array_u64(task->objs_count, contrib_counts)
   };
+  Assert(shared.contrib_count <= max_U32);
   if (task_id == 0) {
     ProfBegin("Init");
 
@@ -3438,7 +3441,6 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
       *contrib = (Contrib){
         .obj_idx        = safe_cast_u32(obj->input_idx),
         .section_number = safe_cast_u32(it.v.section_number),
-        .scope          = scope,
       };
 
       Temp temp = temp_begin(scratch.arena);
@@ -3446,11 +3448,13 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
       U32List           associated_sections = lnk_obj_collect_associated_section_numbers(temp.arena, obj, it.v.section_number, associated_filter);
       u32_list_push(temp.arena, &associated_sections, it.v.section_number);
 
+      U64 reloc_count = 0;
       for EachNode(associated_n, U32Node, associated_sections.first) {
         COFF_SectionHeader *associated_header = lnk_coff_section_header_from_section_number(obj, associated_n->data);
         COFF_RelocArray     associated_relocs = lnk_coff_relocs_from_section_header(obj, associated_header);
-        contrib->reloc_count += associated_relocs.count;
+        reloc_count += associated_relocs.count;
       }
+      contrib->reloc_count = safe_cast_u32(reloc_count);
       if (contrib->reloc_count) {
         contrib->reloc_targets = push_array(scratch2.arena, RelocTarget *, contrib->reloc_count);
       }
@@ -3559,14 +3563,15 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
 
   ColorHashTable    color_table      = {0};
   OldColorHashTable old_color_table  = {0};
-  U64              *table_generation = 0;
+  U32              *table_generation = 0;
   if (task_id == 0) {
     ProfBegin("Alloc hash tables");
     color_table.slots_count     = u64_up_to_pow2(Max(2, shared.contrib_count*2));
+    Assert(color_table.slots_count <= (U64)max_U32 + 1);
     color_table.slots           = push_array(scratch.arena, ColorHashSlot, color_table.slots_count);
     old_color_table.slots_count = color_table.slots_count;
     old_color_table.slots       = push_array(scratch.arena, OldColorHashSlot, old_color_table.slots_count);
-    table_generation            = push_array_no_zero(scratch.arena, U64, 1);
+    table_generation            = push_array_no_zero(scratch.arena, U32, 1);
     *table_generation           = 0;
     ProfEnd();
   }
@@ -3589,15 +3594,15 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
       *shared.is_part_stable = 1;
 
       // update hash tables generations
-      Assert(*table_generation < (max_U64 >> 2));
+      Assert(*table_generation < (max_U32 >> 2));
       *table_generation += 1;
     }
     barrier_wait(tp->barrier);
 
     // unpack the table generation
-    U64 table_generation_value = *table_generation;
-    U64 initializing_state     = (table_generation_value << 2) | 1;
-    U64 ready_state            = (table_generation_value << 2) | 2;
+    U32 table_generation_value = *table_generation;
+    U32 initializing_state     = (table_generation_value << 2) | 1;
+    U32 ready_state            = (table_generation_value << 2) | 2;
 
     ProfBegin("Compute colored hashes");
     for EachInRange(contrib_idx, shared.contrib_ranges[task_id]) {
@@ -3623,29 +3628,29 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
       U64 color_slot_idx = table_hash & (color_table.slots_count - 1);
       for (;;) {
         ColorHashSlot *color_slot = &color_table.slots[color_slot_idx];
-        U64            state      = ins_atomic_u64_eval(&color_slot->state);
+        U32            state      = ins_atomic_u32_eval(&color_slot->state);
 
         if ((state >> 2) != table_generation_value) {
-          if (ins_atomic_u64_eval_cond_assign(&color_slot->state, initializing_state, state) == state) {
+          if (ins_atomic_u32_eval_cond_assign(&color_slot->state, initializing_state, state) == state) {
             color_slot->key               = contrib->key;
-            color_slot->first_contrib_idx = contrib_idx;
-            contrib->color_slot_idx       = color_slot_idx;
-            ins_atomic_u64_eval_assign(&color_slot->state, ready_state);
+            color_slot->first_contrib_idx = safe_cast_u32(contrib_idx);
+            contrib->color_slot_idx       = safe_cast_u32(color_slot_idx);
+            ins_atomic_u32_eval_assign(&color_slot->state, ready_state);
             break;
           }
           continue;
         }
 
         if (state == initializing_state) {
-          do { state = ins_atomic_u64_eval(&color_slot->state); } while (state == initializing_state);
+          do { state = ins_atomic_u32_eval(&color_slot->state); } while (state == initializing_state);
           continue;
         }
 
         Assert(state == ready_state);
 
         if (color_slot->key.old_color == contrib->key.old_color && u128_match(color_slot->key.hash, contrib->key.hash)) {
-          lnk_icf_atomic_min_u64(&color_slot->first_contrib_idx, contrib_idx);
-          contrib->color_slot_idx = color_slot_idx;
+          lnk_icf_atomic_min_u32(&color_slot->first_contrib_idx, safe_cast_u32(contrib_idx));
+          contrib->color_slot_idx = safe_cast_u32(color_slot_idx);
           break;
         }
 
@@ -3661,40 +3666,40 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
     for EachInRange(contrib_idx, contrib_range) {
       Contrib       *contrib = &shared.contribs[contrib_idx];
       ColorHashSlot *slot    = &color_table.slots[contrib->color_slot_idx];
-      if (ins_atomic_u64_eval(&slot->first_contrib_idx) == contrib_idx) {
+      if (ins_atomic_u32_eval(&slot->first_contrib_idx) == contrib_idx) {
         Assert(old_color_table.slots_count > 0 && (old_color_table.slots_count & (old_color_table.slots_count - 1)) == 0);
         U64 old_color    = slot->key.old_color;
         U64 table_hash   = hash_map_hasher(str8_struct(&old_color));
         U64 old_slot_idx = table_hash & (old_color_table.slots_count - 1);
         for (;;) {
           OldColorHashSlot *old_color_slot = &old_color_table.slots[old_slot_idx];
-          U64               state          = ins_atomic_u64_eval(&old_color_slot->state);
+          U32               state          = ins_atomic_u32_eval(&old_color_slot->state);
 
           if ((state >> 2) != table_generation_value) {
-            if (ins_atomic_u64_eval_cond_assign(&old_color_slot->state, initializing_state, state) == state) {
+            if (ins_atomic_u32_eval_cond_assign(&old_color_slot->state, initializing_state, state) == state) {
               old_color_slot->old_color         = old_color;
-              old_color_slot->first_contrib_idx = contrib_idx;
-              ins_atomic_u64_eval_assign(&old_color_slot->state, ready_state);
+              old_color_slot->first_contrib_idx = safe_cast_u32(contrib_idx);
+              ins_atomic_u32_eval_assign(&old_color_slot->state, ready_state);
               break;
             }
             continue;
           }
 
           if (state == initializing_state) {
-            do { state = ins_atomic_u64_eval(&old_color_slot->state); } while (state == initializing_state);
+            do { state = ins_atomic_u32_eval(&old_color_slot->state); } while (state == initializing_state);
             continue;
           }
 
           Assert(state == ready_state);
 
           if (old_color_slot->old_color == old_color) {
-            lnk_icf_atomic_min_u64(&old_color_slot->first_contrib_idx, contrib_idx);
+            lnk_icf_atomic_min_u32(&old_color_slot->first_contrib_idx, safe_cast_u32(contrib_idx));
             break;
           }
 
           old_slot_idx = (old_slot_idx + 1) & (old_color_table.slots_count - 1);
         }
-        slot->old_color_slot_idx = old_slot_idx;
+        slot->old_color_slot_idx = safe_cast_u32(old_slot_idx);
       }
     }
     ProfEnd();
@@ -3706,10 +3711,10 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
     for EachInRange(contrib_idx, contrib_range) {
       Contrib       *contrib    = &shared.contribs[contrib_idx];
       ColorHashSlot *color_slot = &color_table.slots[contrib->color_slot_idx];
-      if (ins_atomic_u64_eval(&color_slot->first_contrib_idx) != contrib_idx) { continue; }
+      if (ins_atomic_u32_eval(&color_slot->first_contrib_idx) != contrib_idx) { continue; }
 
       OldColorHashSlot *old_color_slot = &old_color_table.slots[color_slot->old_color_slot_idx];
-      if (ins_atomic_u64_eval(&old_color_slot->first_contrib_idx) != contrib_idx) {
+      if (ins_atomic_u32_eval(&old_color_slot->first_contrib_idx) != contrib_idx) {
         split_count += 1;
       }
     }
@@ -3744,10 +3749,10 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
     for EachInRange(contrib_idx, contrib_range) {
       Contrib       *contrib    = &shared.contribs[contrib_idx];
       ColorHashSlot *color_slot = &color_table.slots[contrib->color_slot_idx];
-      if (ins_atomic_u64_eval(&color_slot->first_contrib_idx) != contrib_idx) { continue; }
+      if (ins_atomic_u32_eval(&color_slot->first_contrib_idx) != contrib_idx) { continue; }
 
       OldColorHashSlot *old_color_slot = &old_color_table.slots[color_slot->old_color_slot_idx];
-      if (ins_atomic_u64_eval(&old_color_slot->first_contrib_idx) == contrib_idx) {
+      if (ins_atomic_u32_eval(&old_color_slot->first_contrib_idx) == contrib_idx) {
         color_slot->color = color_slot->key.old_color;
       } else {
         color_slot->color = ++next_split_color;
@@ -3791,20 +3796,21 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
   for EachInRange(contrib_idx, shared.contrib_ranges[task_id]) {
     Contrib       *contrib    = &shared.contribs[contrib_idx];
     ColorHashSlot *color_slot = &color_table.slots[contrib->color_slot_idx];
-    Contrib       *leader     = &shared.contribs[ins_atomic_u64_eval(&color_slot->first_contrib_idx)];
+    Contrib       *leader     = &shared.contribs[ins_atomic_u32_eval(&color_slot->first_contrib_idx)];
     
     LNK_Obj *contrib_obj = objs[contrib->obj_idx];
     LNK_Obj *leader_obj  = objs[leader->obj_idx];
 
     if (fold_stats) {
-      FoldStats *st    = fold_stats + (task_id * LNK_ICF_Scope_COUNT);
-      U64        fsize = lnk_coff_section_header_from_section_number(contrib_obj, contrib->section_number)->fsize;
+      FoldStats    *st    = fold_stats + (task_id * LNK_ICF_Scope_COUNT);
+      U64           fsize = lnk_coff_section_header_from_section_number(contrib_obj, contrib->section_number)->fsize;
+      LNK_ICF_Scope scope = lnk_icf_scope_from_section_number(contrib_obj, contrib->section_number);
       if (leader == contrib) {
-        st[leader->scope].live_count += 1;
-        st[leader->scope].live_size  += fsize;
+        st[scope].live_count += 1;
+        st[scope].live_size  += fsize;
       } else {
-        st[contrib->scope].count += 1;
-        st[contrib->scope].size  += fsize;
+        st[scope].count += 1;
+        st[scope].size  += fsize;
       }
     }
 
