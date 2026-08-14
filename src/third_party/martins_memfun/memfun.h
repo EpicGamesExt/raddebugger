@@ -1,5 +1,9 @@
 #pragma once
 
+//
+// https://github.com/mmozeiko/overflow/tree/main/memfun
+//
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -48,33 +52,46 @@ MEM_API bool MemIsEqual(const void* ptr1, const void* ptr2, size_t size);
 // returns first offset of "value" byte, or "size" if not found
 MEM_API size_t MemFind(const void* ptr, size_t size, uint8_t value);
 
-
-MEM_API int MemCompare_sse2  (const void* ptr1, const void* ptr2, size_t size);
-MEM_API int MemCompare_avx2  (const void* ptr1, const void* ptr2, size_t size);
-MEM_API int MemCompare_avx512(const void* ptr1, const void* ptr2, size_t size);
-MEM_API int MemCompare_arm64 (const void* ptr1, const void* ptr2, size_t size);
-MEM_API int MemCompare_rvv   (const void* ptr1, const void* ptr2, size_t size);
+// returns first offset of byte not equal to "value", or "size" if not found
+MEM_API size_t MemFindNot(const void* ptr, size_t size, uint8_t value);
 
 
-MEM_API int MemCompareI_sse2  (const void* ptr1, const void* ptr2, size_t size);
-MEM_API int MemCompareI_avx2  (const void* ptr1, const void* ptr2, size_t size);
-MEM_API int MemCompareI_avx512(const void* ptr1, const void* ptr2, size_t size);
-MEM_API int MemCompareI_arm64 (const void* ptr1, const void* ptr2, size_t size);
-MEM_API int MemCompareI_rvv   (const void* ptr1, const void* ptr2, size_t size);
+// use functions below directly if you want to avoid dynamic dispatch (only relevant on x64)
 
+MEM_API int MemCompare_sse2   (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompare_avx2   (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompare_avx512 (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompare_neon   (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompare_rvv    (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompare_generic(const void* ptr1, const void* ptr2, size_t size);
 
-MEM_API bool MemIsEqual_sse2  (const void* ptr1, const void* ptr2, size_t size);
-MEM_API bool MemIsEqual_avx2  (const void* ptr1, const void* ptr2, size_t size);
-MEM_API bool MemIsEqual_avx512(const void* ptr1, const void* ptr2, size_t size);
-MEM_API bool MemIsEqual_arm64 (const void* ptr1, const void* ptr2, size_t size);
-MEM_API bool MemIsEqual_rvv   (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompareI_sse2   (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompareI_avx2   (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompareI_avx512 (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompareI_neon   (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompareI_rvv    (const void* ptr1, const void* ptr2, size_t size);
+MEM_API int MemCompareI_generic(const void* ptr1, const void* ptr2, size_t size);
 
+MEM_API bool MemIsEqual_sse2   (const void* ptr1, const void* ptr2, size_t size);
+MEM_API bool MemIsEqual_avx2   (const void* ptr1, const void* ptr2, size_t size);
+MEM_API bool MemIsEqual_avx512 (const void* ptr1, const void* ptr2, size_t size);
+MEM_API bool MemIsEqual_neon   (const void* ptr1, const void* ptr2, size_t size);
+MEM_API bool MemIsEqual_rvv    (const void* ptr1, const void* ptr2, size_t size);
+MEM_API bool MemIsEqual_generic(const void* ptr1, const void* ptr2, size_t size);
 
-MEM_API size_t MemFind_sse2  (const void* ptr, size_t size, uint8_t value);
-MEM_API size_t MemFind_avx2  (const void* ptr, size_t size, uint8_t value);
-MEM_API size_t MemFind_avx512(const void* ptr, size_t size, uint8_t value);
-MEM_API size_t MemFind_arm64 (const void* ptr, size_t size, uint8_t value);
-MEM_API size_t MemFind_rvv   (const void* ptr, size_t size, uint8_t value);
+MEM_API size_t MemFind_sse2   (const void* ptr, size_t size, uint8_t value);
+MEM_API size_t MemFind_avx2   (const void* ptr, size_t size, uint8_t value);
+MEM_API size_t MemFind_avx512 (const void* ptr, size_t size, uint8_t value);
+MEM_API size_t MemFind_neon   (const void* ptr, size_t size, uint8_t value);
+MEM_API size_t MemFind_rvv    (const void* ptr, size_t size, uint8_t value);
+MEM_API size_t MemFind_generic(const void* ptr, size_t size, uint8_t value);
+
+MEM_API size_t MemFindNot_sse2   (const void* ptr, size_t size, uint8_t value);
+MEM_API size_t MemFindNot_avx2   (const void* ptr, size_t size, uint8_t value);
+MEM_API size_t MemFindNot_avx512 (const void* ptr, size_t size, uint8_t value);
+MEM_API size_t MemFindNot_neon   (const void* ptr, size_t size, uint8_t value);
+MEM_API size_t MemFindNot_rvv    (const void* ptr, size_t size, uint8_t value);
+MEM_API size_t MemFindNot_generic(const void* ptr, size_t size, uint8_t value);
 
 
 #ifdef __cplusplus
@@ -109,8 +126,6 @@ MEM_API size_t MemFind_rvv   (const void* ptr, size_t size, uint8_t value);
 #elif defined(__riscv) && __riscv_v >= 1000000
 #  define MEM_ARCH_RVV 1
 #  include <riscv_vector.h>
-#else
-#  error unsupported arch
 #endif
 
 // cpuid, only for x64
@@ -121,13 +136,13 @@ MEM_API size_t MemFind_rvv   (const void* ptr, size_t size, uint8_t value);
 #    define MEM_CPUID2(x, y, info)        __cpuid_count(x, y, info[0], info[1], info[2], info[3])
 #    define MEM_XGETBV(x)                 __builtin_ia32_xgetbv(x)
 #    define MEM_GET32_RELAXED(ptr)        __atomic_load_n(ptr, __ATOMIC_RELAXED)
-#    define MEM_SET32_RELAXED(ptr, value) __atomic_store_n(ptr, value, __ATOMIC_RELAXED);
+#    define MEM_SET32_RELAXED(ptr, value) __atomic_store_n(ptr, value, __ATOMIC_RELAXED)
 #  elif MEM_COMPILER_MSVC
 #    define MEM_CPUID(x, info)            __cpuid(info, x)
 #    define MEM_CPUID2(x, y, info)        __cpuidex(info, x, y)
 #    define MEM_XGETBV(x)                 _xgetbv(x)
 #    define MEM_GET32_RELAXED(ptr)        __iso_volatile_load32(ptr)
-#    define MEM_SET32_RELAXED(ptr, value) __iso_volatile_store32(ptr, value);
+#    define MEM_SET32_RELAXED(ptr, value) __iso_volatile_store32(ptr, value)
 #  endif
 #endif
 
@@ -156,8 +171,10 @@ typedef struct { uint64_t value; } MemUnalignedPtr64;
 
 // byteswap
 #if MEM_COMPILER_CLANG || MEM_COMPILER_GCC
+#  define MEM_BSWAP32(x) __builtin_bswap32(x)
 #  define MEM_BSWAP64(x) __builtin_bswap64(x)
 #elif MEM_COMPILER_MSVC
+#  define MEM_BSWAP32(x) _byteswap_ulong(x)
 #  define MEM_BSWAP64(x) _byteswap_uint64(x)
 #endif
 
@@ -194,6 +211,7 @@ typedef struct { uint64_t value; } MemUnalignedPtr64;
 #  define MEM_TARGET_AVX2
 #  define MEM_TARGET_AVX512
 #endif
+
 
 static inline uint8_t MemToLower1(uint8_t x)
 {
@@ -257,6 +275,7 @@ static inline __m512i MemToLower64(__m512i x)
 #endif
 }
 
+
 MEM_DISABLE_ASAN
 int MemCompare_sse2(const void* ptr1, const void* ptr2, size_t size)
 {
@@ -272,28 +291,41 @@ int MemCompare_sse2(const void* ptr1, const void* ptr2, size_t size)
     {
         const uint32_t PAGE_SIZE = 4096;
 
+        // if 16 bytes from each pointer does not cross page boundary, can safely load them as 16-byte vector
         uint32_t address = (uint32_t)(uintptr_t)p1 | (uint32_t)(uintptr_t)p2;
         if ((address & (PAGE_SIZE - 1)) <= PAGE_SIZE - 16)
         {
             __m128i a0 = _mm_loadu_si128((const __m128i*)p1);
             __m128i b0 = _mm_loadu_si128((const __m128i*)p2);
+
+            // set lanes to 0xff if bytes are equal, or 0x00 if not
             __m128i r0 = _mm_cmpeq_epi8(a0, b0);
 
-            uint32_t mask = (1 + (uint16_t)_mm_movemask_epi8(r0)) & ((1 << size) - 1);
-            if (mask)
-            {
-                size_t index = MEM_CTZ32(mask);
-                return p1[index] - p2[index];
-            }
-            return 0;
+            // extract top bit of each lane to mask
+            // it will have bit value 0 in positions where bytes are not equal
+            // adding 1 will flip lowest bit with value 0 to value 1
+            // and change all bits with value 1 below it to 0
+            uint32_t m = 1U + (uint16_t)_mm_movemask_epi8(r0);
+
+            // get index of byte that's different, m is guaranteed non-zero, because there are only max 16 bytes here
+            size_t index = MEM_CTZ32(m);
+
+            // return comparison result, or 0 if inputs are equal
+            return index < size ? p1[index] - p2[index] : 0;
         }
+
+        // cannot overread buffers, need to load exactly "size" bytes only
 
         if (size < 2) // size == 1
         {
             return p1[0] - p2[0];
         }
 
+        // will load pair of 4, 8 or 16 overlapping bytes
+        // a/b0 from beginning of buffer
+        // a/b1 from end of buffers
         uint64_t a0, b0, a1, b1;
+
         if (size < 4) // 2 <= size < 4
         {
             a0 = MEM_PTR16U(p1);
@@ -316,11 +348,15 @@ int MemCompare_sse2(const void* ptr1, const void* ptr2, size_t size)
             b1 = MEM_PTR64U(p2 + size - 8);
         }
 
+        // use a0/b0 if they are not equal, otherwise a1/b1
+        // byte swap because in big-endian bytes can be compared as uint64 numbers
         uint64_t a = MEM_BSWAP64(a0 != b0 ? a0 : a1);
         uint64_t b = MEM_BSWAP64(a0 != b0 ? b0 : b1);
+
         return (a > b) - (a < b);
     }
 
+    // process 64-byte blocks as much as possible
     while (size >= 64)
     {
         __m128i a0 = _mm_loadu_si128((const __m128i*)(p1 + 0x00));
@@ -331,38 +367,30 @@ int MemCompare_sse2(const void* ptr1, const void* ptr2, size_t size)
         __m128i b2 = _mm_loadu_si128((const __m128i*)(p2 + 0x20));
         __m128i a3 = _mm_loadu_si128((const __m128i*)(p1 + 0x30));
         __m128i b3 = _mm_loadu_si128((const __m128i*)(p2 + 0x30));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m128i r0 = _mm_cmpeq_epi8(a0, b0);
         __m128i r1 = _mm_cmpeq_epi8(a1, b1);
         __m128i r2 = _mm_cmpeq_epi8(a2, b2);
         __m128i r3 = _mm_cmpeq_epi8(a3, b3);
+
+        // combine comparisons - leave 0x00 in all lanes that were not equal
         __m128i r = _mm_and_si128(_mm_and_si128(r0, r1), _mm_and_si128(r2, r3));
 
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
         uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r);
         if (mask)
         {
-            mask = 1 + (uint16_t)_mm_movemask_epi8(r0);
-            if (mask)
-            {
-                size_t index = 0x00 + MEM_CTZ32(mask);
-                return p1[index] - p2[index];
-            }
+            // if mask is non-zero that means there is difference somewhere
+            // do the same thing as above, but for all r0/r1/r2/r3 comparisons
+            uint64_t m0 = (uint16_t)_mm_movemask_epi8(r0);
+            uint64_t m1 = (uint16_t)_mm_movemask_epi8(r1);
+            uint64_t m2 = (uint16_t)_mm_movemask_epi8(r2);
+            uint64_t m3 = (uint16_t)_mm_movemask_epi8(r3);
+            uint64_t m4 = 1ULL + (m0 | (m1 << 16) | (m2 << 32) | (m3 << 48));
 
-            mask = 1 + (uint16_t)_mm_movemask_epi8(r1);
-            if (mask)
-            {
-                size_t index = 0x10 + MEM_CTZ32(mask);
-                return p1[index] - p2[index];
-            }
-
-            mask = 1 + (uint16_t)_mm_movemask_epi8(r2);
-            if (mask)
-            {
-                size_t index = 0x20 + MEM_CTZ32(mask);
-                return p1[index] - p2[index];
-            }
-
-            mask = 1 + (uint16_t)_mm_movemask_epi8(r3);
-            size_t index = 0x30 + MEM_CTZ32(mask);
+            // m4 is guaranteed to be non-zero, extract index and return result
+            size_t index = MEM_CTZ64(m4);
             return p1[index] - p2[index];
         }
 
@@ -373,65 +401,83 @@ int MemCompare_sse2(const void* ptr1, const void* ptr2, size_t size)
 
     if (size & 32) // 32 <= size < 64
     {
-        __m128i a0 = _mm_loadu_si128((const __m128i*)p1);
-        __m128i b0 = _mm_loadu_si128((const __m128i*)p2);
-        __m128i r0 = _mm_cmpeq_epi8(a0, b0);
-
-        uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = MEM_CTZ32(mask);
-            return p1[index] - p2[index];
-        }
-
+        // load 64 bytes, some will overlap, 0/1 from beginning of buffers, 2/3 from end of buffers
+        __m128i a0 = _mm_loadu_si128((const __m128i*)(p1 + 0x00));
+        __m128i b0 = _mm_loadu_si128((const __m128i*)(p2 + 0x00));
         __m128i a1 = _mm_loadu_si128((const __m128i*)(p1 + 0x10));
         __m128i b1 = _mm_loadu_si128((const __m128i*)(p2 + 0x10));
+        __m128i a2 = _mm_loadu_si128((const __m128i*)(p1 + size - 0x20));
+        __m128i b2 = _mm_loadu_si128((const __m128i*)(p2 + size - 0x20));
+        __m128i a3 = _mm_loadu_si128((const __m128i*)(p1 + size - 0x10));
+        __m128i b3 = _mm_loadu_si128((const __m128i*)(p2 + size - 0x10));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m128i r0 = _mm_cmpeq_epi8(a0, b0);
         __m128i r1 = _mm_cmpeq_epi8(a1, b1);
+        __m128i r2 = _mm_cmpeq_epi8(a2, b2);
+        __m128i r3 = _mm_cmpeq_epi8(a3, b3);
 
-        mask = 1 + (uint16_t)_mm_movemask_epi8(r1);
-        if (mask)
-        {
-            size_t index = 0x10 + MEM_CTZ32(mask);
-            return p1[index] - p2[index];
-        }
+        // extract top bit masks
+        uint64_t m0 = (uint16_t)_mm_movemask_epi8(r0);
+        uint64_t m1 = (uint16_t)_mm_movemask_epi8(r1);
+        uint64_t m2 = (uint16_t)_mm_movemask_epi8(r2);
+        uint64_t m3 = (uint16_t)_mm_movemask_epi8(r3);
 
-        size -= 32;
-        p1 += 32;
-        p2 += 32;
+        // combine masks, handling overlapped ones, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint64_t m = 1ULL + (m0 | (m1 << 16) | (m2 << (size - 32)) | (m3 << (size - 16)));
+
+        // get index of byte that's different, m is guaranteed non-zero, because there only max 63 bytes here
+        size_t index = MEM_CTZ64(m);
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? p1[index] - p2[index] : 0;
     }
-
-    if (size & 16) // 16 <= size < 32
+    else if (size & 16) // 16 <= size < 32
     {
+        // load 32 bytes, some will overlap
         __m128i a0 = _mm_loadu_si128((const __m128i*)p1);
         __m128i b0 = _mm_loadu_si128((const __m128i*)p2);
+        __m128i a1 = _mm_loadu_si128((const __m128i*)(p1 + size - 0x10));
+        __m128i b1 = _mm_loadu_si128((const __m128i*)(p2 + size - 0x10));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m128i r0 = _mm_cmpeq_epi8(a0, b0);
+        __m128i r1 = _mm_cmpeq_epi8(a1, b1);
 
-        uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = MEM_CTZ32(mask);
-            return p1[index] - p2[index];
-        }
+        // extract top bit masks
+        uint32_t m0 = (uint16_t)_mm_movemask_epi8(r0);
+        uint32_t m1 = (uint16_t)_mm_movemask_epi8(r1);
 
-        size -= 16;
-        p1 += 16;
-        p2 += 16;
+        // combine masks, handling overlapped ones, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint32_t m = 1U + (m0 | (m1 << (size - 16)));
+
+        // get index of byte that's different, m is guaranteed non-zero, because there only max 31 bytes here
+        size_t index = MEM_CTZ32(m);
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? p1[index] - p2[index] : 0;
     }
-
-    if (size) // size < 16
+    else if (size) // 0 < size < 16, but initially size > 16
     {
-        __m128i a0 = _mm_loadu_si128((const __m128i*)(p1 + size - 16));
-        __m128i b0 = _mm_loadu_si128((const __m128i*)(p2 + size - 16));
+        // load 16 bytes from end of buffer
+        // this will load previously checked bytes in 64 byte loop (they were equal)
+        __m128i a0 = _mm_loadu_si128((const __m128i*)(p1 + size - 0x10));
+        __m128i b0 = _mm_loadu_si128((const __m128i*)(p2 + size - 0x10));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m128i r0 = _mm_cmpeq_epi8(a0, b0);
 
-        uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = MEM_CTZ32(mask) + size - 16;
-            return p1[index] - p2[index];
-        }
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint32_t m = 1U + (uint16_t)_mm_movemask_epi8(r0);
+
+        // get index of byte that's different, m is guaranteed non-zero, because there only max 15 bytes here
+        size_t index = MEM_CTZ32(m) + size - 16;
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? p1[index] - p2[index] : 0;
     }
 
+    // no differences found, inputs are equal
     return 0;
 }
 
@@ -450,30 +496,39 @@ int MemCompareI_sse2(const void* ptr1, const void* ptr2, size_t size)
     {
         const uint32_t PAGE_SIZE = 4096;
 
+        // if 16 bytes from each pointer does not cross page boundary, can safely load them as 16-byte vector
         uint32_t address = (uint32_t)(uintptr_t)p1 | (uint32_t)(uintptr_t)p2;
         if ((address & (PAGE_SIZE - 1)) <= PAGE_SIZE - 16)
         {
+            // load bytes and convert them to lowercase
             __m128i a0 = MemToLower16(_mm_loadu_si128((const __m128i*)p1));
             __m128i b0 = MemToLower16(_mm_loadu_si128((const __m128i*)p2));
+
+            // set lanes to 0xff if bytes are equal, or 0x00 if not
             __m128i r0 = _mm_cmpeq_epi8(a0, b0);
 
-            uint32_t mask = (1 + (uint16_t)_mm_movemask_epi8(r0)) & ((1 << size) - 1);
-            if (mask)
-            {
-                size_t index = MEM_CTZ32(mask);
-                return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-            }
+            // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+            uint32_t m = 1U + (uint16_t)_mm_movemask_epi8(r0);
 
-            return 0;
+            // get index of byte that's different, m is guaranteed non-zero, because there are only max 16 bytes here
+            size_t index = MEM_CTZ32(m);
+
+            // return comparison result, or 0 if inputs are equal
+            return index < size ? MemToLower1(p1[index]) - MemToLower1(p2[index]) : 0;
         }
+
+        // cannot overread buffers, need to load exactly "size" bytes only
 
         if (size < 2) // size == 1
         {
             return MemToLower1(p1[0]) - MemToLower1(p2[0]);
         }
 
-        size_t n;
+        // will load pair of 4, 8 or 16 overlapping bytes
+        // a/b0 from beginning of buffer
+        // a/b1 from end of buffers
         __m128i a0, b0, a1, b1;
+        size_t n;
 
         if (size < 4) // 2 <= size < 4
         {
@@ -500,25 +555,30 @@ int MemCompareI_sse2(const void* ptr1, const void* ptr2, size_t size)
             n = 8;
         }
 
+        // pack bytes into 16-byte simd register
+        // a/b0 goes into low 64-bit lane
+        // a/b1 goes into high 64-bit lane
         __m128i a = _mm_unpacklo_epi64(a0, a1);
         __m128i b = _mm_unpacklo_epi64(b0, b1);
+
+        // lowercase, and set lanes to 0xff if bytes are equal, or 0x00 if not
         __m128i r = _mm_cmpeq_epi8(MemToLower16(a), MemToLower16(b));
 
-        uint16_t mask = (1 + (uint16_t)_mm_movemask_epi8(r));
-        if (mask)
-        {
-            size_t index = MEM_CTZ32(mask);
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint32_t m = 1U + (uint16_t)_mm_movemask_epi8(r);
 
-            // index = (index < 8) ? index : (index - 8) + (size - n);
-            size -= 8 + n;
-            index += index < 8 ? 0 : size;
+        // get index of byte that's different, m is guaranteed non-zero, because there are only max 16 bytes here
+        size_t index = MEM_CTZ32(m);
 
-            return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-        }
+        // adjust index to correct byte position (due to how they were packed with _mm_unpacklo_epi64)
+        // index = (index < 8) ? index : (index - 8) + (size - n);
+        index += (index >= 8) * (size - 8 - n);
 
-        return 0;
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? MemToLower1(p1[index]) - MemToLower1(p2[index]) : 0;
     }
 
+    // process 64-byte blocks as much as possible
     while (size >= 64)
     {
         __m128i a0 = MemToLower16(_mm_loadu_si128((const __m128i*)(p1 + 0x00)));
@@ -529,38 +589,31 @@ int MemCompareI_sse2(const void* ptr1, const void* ptr2, size_t size)
         __m128i b2 = MemToLower16(_mm_loadu_si128((const __m128i*)(p2 + 0x20)));
         __m128i a3 = MemToLower16(_mm_loadu_si128((const __m128i*)(p1 + 0x30)));
         __m128i b3 = MemToLower16(_mm_loadu_si128((const __m128i*)(p2 + 0x30)));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m128i r0 = _mm_cmpeq_epi8(a0, b0);
         __m128i r1 = _mm_cmpeq_epi8(a1, b1);
         __m128i r2 = _mm_cmpeq_epi8(a2, b2);
         __m128i r3 = _mm_cmpeq_epi8(a3, b3);
+
+        // combine comparisons - leave 0x00 in lanes that were not equal
         __m128i r = _mm_and_si128(_mm_and_si128(r0, r1), _mm_and_si128(r2, r3));
 
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
         uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r);
         if (mask)
         {
-            mask = 1 + (uint16_t)_mm_movemask_epi8(r0);
-            if (mask)
-            {
-                size_t index = 0x00 + MEM_CTZ32(mask);
-                return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-            }
+            // extract top bit masks for each comparison
+            uint64_t m0 = (uint16_t)_mm_movemask_epi8(r0);
+            uint64_t m1 = (uint16_t)_mm_movemask_epi8(r1);
+            uint64_t m2 = (uint16_t)_mm_movemask_epi8(r2);
+            uint64_t m3 = (uint16_t)_mm_movemask_epi8(r3);
 
-            mask = 1 + (uint16_t)_mm_movemask_epi8(r1);
-            if (mask)
-            {
-                size_t index = 0x10 + MEM_CTZ32(mask);
-                return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-            }
+            // combine masks, and flip lowest 0 bit to 1, changing all bits below it to 0
+            uint64_t m4 = 1ULL + (m0 | (m1 << 16) | (m2 << 32) | (m3 << 48));
 
-            mask = 1 + (uint16_t)_mm_movemask_epi8(r2);
-            if (mask)
-            {
-                size_t index = 0x20 + MEM_CTZ32(mask);
-                return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-            }
-
-            mask = 1 + (uint16_t)_mm_movemask_epi8(r3);
-            size_t index = 0x30 + MEM_CTZ32(mask);
+            // m4 is guaranteed to be non-zero, extract index and return result
+            size_t index = MEM_CTZ64(m4);
             return MemToLower1(p1[index]) - MemToLower1(p2[index]);
         }
 
@@ -571,65 +624,83 @@ int MemCompareI_sse2(const void* ptr1, const void* ptr2, size_t size)
 
     if (size & 32) // 32 <= size < 64
     {
-        __m128i a0 = MemToLower16(_mm_loadu_si128((const __m128i*)p1));
-        __m128i b0 = MemToLower16(_mm_loadu_si128((const __m128i*)p2));
-        __m128i r0 = _mm_cmpeq_epi8(a0, b0);
-
-        uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = MEM_CTZ32(mask);
-            return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-        }
-
+        // load 64 bytes, some will overlap, 0/1 from beginning of buffers, 2/3 from end of buffers
+        __m128i a0 = MemToLower16(_mm_loadu_si128((const __m128i*)(p1 + 0x00)));
+        __m128i b0 = MemToLower16(_mm_loadu_si128((const __m128i*)(p2 + 0x00)));
         __m128i a1 = MemToLower16(_mm_loadu_si128((const __m128i*)(p1 + 0x10)));
         __m128i b1 = MemToLower16(_mm_loadu_si128((const __m128i*)(p2 + 0x10)));
+        __m128i a2 = MemToLower16(_mm_loadu_si128((const __m128i*)(p1 + size - 0x20)));
+        __m128i b2 = MemToLower16(_mm_loadu_si128((const __m128i*)(p2 + size - 0x20)));
+        __m128i a3 = MemToLower16(_mm_loadu_si128((const __m128i*)(p1 + size - 0x10)));
+        __m128i b3 = MemToLower16(_mm_loadu_si128((const __m128i*)(p2 + size - 0x10)));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m128i r0 = _mm_cmpeq_epi8(a0, b0);
         __m128i r1 = _mm_cmpeq_epi8(a1, b1);
+        __m128i r2 = _mm_cmpeq_epi8(a2, b2);
+        __m128i r3 = _mm_cmpeq_epi8(a3, b3);
 
-        mask = 1 + (uint16_t)_mm_movemask_epi8(r1);
-        if (mask)
-        {
-            size_t index = 0x10 + MEM_CTZ32(mask);
-            return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-        }
+        // extract top bit masks
+        uint64_t m0 = (uint16_t)_mm_movemask_epi8(r0);
+        uint64_t m1 = (uint16_t)_mm_movemask_epi8(r1);
+        uint64_t m2 = (uint16_t)_mm_movemask_epi8(r2);
+        uint64_t m3 = (uint16_t)_mm_movemask_epi8(r3);
 
-        size -= 32;
-        p1 += 32;
-        p2 += 32;
+        // combine masks, handling overlapped ones, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint64_t m = 1ULL + (m0 | (m1 << 16) | (m2 << (size - 32)) | (m3 << (size - 16)));
+
+        // get index of byte that's different, m is guaranteed non-zero, because there only max 63 bytes here
+        size_t index = MEM_CTZ64(m);
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? MemToLower1(p1[index]) - MemToLower1(p2[index]) : 0;
     }
-
-    if (size & 16) // 16 <= size < 32
+    else if (size & 16) // 16 <= size < 32
     {
+        // load 32 bytes, some will overlap
         __m128i a0 = MemToLower16(_mm_loadu_si128((const __m128i*)p1));
         __m128i b0 = MemToLower16(_mm_loadu_si128((const __m128i*)p2));
+        __m128i a1 = MemToLower16(_mm_loadu_si128((const __m128i*)(p1 + size - 0x10)));
+        __m128i b1 = MemToLower16(_mm_loadu_si128((const __m128i*)(p2 + size - 0x10)));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m128i r0 = _mm_cmpeq_epi8(a0, b0);
+        __m128i r1 = _mm_cmpeq_epi8(a1, b1);
 
-        uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = MEM_CTZ32(mask);
-            return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-        }
+        // extract top bit masks
+        uint32_t m0 = (uint16_t)_mm_movemask_epi8(r0);
+        uint32_t m1 = (uint16_t)_mm_movemask_epi8(r1);
 
-        size -= 16;
-        p1 += 16;
-        p2 += 16;
+        // combine masks, handling overlapped ones, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint32_t m = 1U + (m0 | (m1 << (size - 16)));
+
+        // get index of byte that's different, m is guaranteed non-zero, because there only max 31 bytes here
+        size_t index = MEM_CTZ32(m);
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? MemToLower1(p1[index]) - MemToLower1(p2[index]) : 0;
     }
-
-    if (size) // size < 16
+    else if (size) // 0 < size < 16, but initially size > 16
     {
-        __m128i a0 = MemToLower16(_mm_loadu_si128((const __m128i*)(p1 + size - 16)));
-        __m128i b0 = MemToLower16(_mm_loadu_si128((const __m128i*)(p2 + size - 16)));
+        // load 16 bytes from end of buffer
+        // this will load previously checked bytes in 64 byte loop (they were equal)
+        __m128i a0 = MemToLower16(_mm_loadu_si128((const __m128i*)(p1 + size - 0x10)));
+        __m128i b0 = MemToLower16(_mm_loadu_si128((const __m128i*)(p2 + size - 0x10)));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m128i r0 = _mm_cmpeq_epi8(a0, b0);
 
-        uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = MEM_CTZ32(mask) + size - 16;
-            return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-        }
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint32_t m = 1U + (uint16_t)_mm_movemask_epi8(r0);
+
+        // get index of byte that's different, m is guaranteed non-zero, because there only max 15 bytes here
+        size_t index = MEM_CTZ32(m) + size - 16;
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? MemToLower1(p1[index]) - MemToLower1(p2[index]) : 0;
     }
 
+    // no differences found, inputs are equal
     return 0;
 }
 
@@ -648,23 +719,36 @@ bool MemIsEqual_sse2(const void* ptr1, const void* ptr2, size_t size)
     {
         const uint32_t PAGE_SIZE = 4096;
 
+        // if 16 bytes from each pointer does not cross page boundary, can safely load them as 16-byte vector
         uint32_t address = (uint32_t)(uintptr_t)p1 | (uint32_t)(uintptr_t)p2;
         if ((address & (PAGE_SIZE - 1)) <= PAGE_SIZE - 16)
         {
             __m128i a0 = _mm_loadu_si128((const __m128i*)p1);
             __m128i b0 = _mm_loadu_si128((const __m128i*)p2);
+
+            // set lanes to 0xff if bytes are equal, or 0x00 if not
             __m128i r0 = _mm_cmpeq_epi8(a0, b0);
 
-            uint32_t mask = 1 + (uint16_t)_mm_movemask_epi8(r0);
+            // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+            uint32_t mask = 1U + (uint16_t)_mm_movemask_epi8(r0);
+
+            // need to ignore top "32 - size" bits, only low bits matter
+            // return "true" if they are zero, otherwise "false"
             return (mask << (32 - size)) == 0;
         }
+
+        // cannot overread buffers, need to load exactly "size" bytes only
 
         if (size < 2) // size == 1
         {
             return p1[0] == p2[0];
         }
 
+        // will load pair of 4, 8 or 16 overlapping bytes
+        // a/b0 from beginning of buffer
+        // a/b1 from end of buffers
         uint64_t a0, b0, a1, b1;
+
         if (size < 4) // 2 <= size < 4
         {
             a0 = MEM_PTR16U(p1);
@@ -687,9 +771,12 @@ bool MemIsEqual_sse2(const void* ptr1, const void* ptr2, size_t size)
             b1 = MEM_PTR64U(p2 + size - 8);
         }
 
+        // compare loaded bytes on equality, overlapped ones will be checked twice
+        // but result will still be correct
         return (a0 == b0) & (a1 == b1);
     }
 
+    // process 64-byte blocks as much as possible
     while (size >= 64)
     {
         __m128i a0 = _mm_loadu_si128((const __m128i*)(p1 + 0x00));
@@ -700,15 +787,21 @@ bool MemIsEqual_sse2(const void* ptr1, const void* ptr2, size_t size)
         __m128i b2 = _mm_loadu_si128((const __m128i*)(p2 + 0x20));
         __m128i a3 = _mm_loadu_si128((const __m128i*)(p1 + 0x30));
         __m128i b3 = _mm_loadu_si128((const __m128i*)(p2 + 0x30));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m128i r0 = _mm_cmpeq_epi8(a0, b0);
         __m128i r1 = _mm_cmpeq_epi8(a1, b1);
         __m128i r2 = _mm_cmpeq_epi8(a2, b2);
         __m128i r3 = _mm_cmpeq_epi8(a3, b3);
+
+        // combine comparisons - leave 0x00 in lanes that were not equal
         __m128i r = _mm_and_si128(_mm_and_si128(r0, r1), _mm_and_si128(r2, r3));
 
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
         uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r);
         if (mask)
         {
+            // non-zero mask => there is difference in bytes
             return false;
         }
 
@@ -719,55 +812,70 @@ bool MemIsEqual_sse2(const void* ptr1, const void* ptr2, size_t size)
 
     if (size & 32) // 32 <= size < 64
     {
-        __m128i a0 = _mm_loadu_si128((const __m128i*)p1);
-        __m128i b0 = _mm_loadu_si128((const __m128i*)p2);
+        // load 64 bytes, some will overlap, 0/1 from beginning of buffers, 2/3 from end of buffers
+        __m128i a0 = _mm_loadu_si128((const __m128i*)(p1 + 0x00));
+        __m128i b0 = _mm_loadu_si128((const __m128i*)(p2 + 0x00));
         __m128i a1 = _mm_loadu_si128((const __m128i*)(p1 + 0x10));
         __m128i b1 = _mm_loadu_si128((const __m128i*)(p2 + 0x10));
+        __m128i a2 = _mm_loadu_si128((const __m128i*)(p1 + size - 0x20));
+        __m128i b2 = _mm_loadu_si128((const __m128i*)(p2 + size - 0x20));
+        __m128i a3 = _mm_loadu_si128((const __m128i*)(p1 + size - 0x10));
+        __m128i b3 = _mm_loadu_si128((const __m128i*)(p2 + size - 0x10));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m128i r0 = _mm_cmpeq_epi8(a0, b0);
         __m128i r1 = _mm_cmpeq_epi8(a1, b1);
-        __m128i r = _mm_and_si128(r0, r1);
+        __m128i r2 = _mm_cmpeq_epi8(a2, b2);
+        __m128i r3 = _mm_cmpeq_epi8(a3, b3);
 
+        // combine comparisons - leave 0x00 in lanes that were not equal
+        __m128i r = _mm_and_si128(_mm_and_si128(r0, r1), _mm_and_si128(r2, r3));
+
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
         uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r);
-        if (mask)
-        {
-            return false;
-        }
 
-        size -= 32;
-        p1 += 32;
-        p2 += 32;
+        // zero mask => inputs are equal, no difference in bytes
+        return mask == 0;
     }
-
-    if (size & 16) // 16 <= size < 32
+    else if (size & 16) // 16 <= size < 32
     {
+        // load 32 bytes, some will overlap
         __m128i a0 = _mm_loadu_si128((const __m128i*)p1);
         __m128i b0 = _mm_loadu_si128((const __m128i*)p2);
+        __m128i a1 = _mm_loadu_si128((const __m128i*)(p1 + size - 0x10));
+        __m128i b1 = _mm_loadu_si128((const __m128i*)(p2 + size - 0x10));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m128i r0 = _mm_cmpeq_epi8(a0, b0);
+        __m128i r1 = _mm_cmpeq_epi8(a1, b1);
 
-        uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r0);
-        if (mask)
-        {
-            return false;
-        }
+        // combine comparisons - leave 0x00 in lanes that were not equal
+        __m128i r = _mm_and_si128(r0, r1);
 
-        size -= 16;
-        p1 += 16;
-        p2 += 16;
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r);
+
+        // zero mask => inputs are equal, no difference in bytes
+        return mask == 0;
     }
-
-    if (size) // size < 16
+    else if (size) // 0 < size < 16, but initially size > 16
     {
-        __m128i a0 = _mm_loadu_si128((const __m128i*)(p1 + size - 16));
-        __m128i b0 = _mm_loadu_si128((const __m128i*)(p2 + size - 16));
+        // load 16 bytes from end of buffer
+        // this will load previously checked bytes in 64 byte loop (they were equal)
+        __m128i a0 = _mm_loadu_si128((const __m128i*)(p1 + size - 0x10));
+        __m128i b0 = _mm_loadu_si128((const __m128i*)(p2 + size - 0x10));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m128i r0 = _mm_cmpeq_epi8(a0, b0);
 
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
         uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r0);
-        if (mask)
-        {
-            return false;
-        }
+
+        // zero mask => inputs are equal, no difference in bytes
+        return mask == 0;
     }
 
+    // no differences found, inputs are equal
     return true;
 }
 
@@ -775,6 +883,7 @@ MEM_DISABLE_ASAN
 size_t MemFind_sse2(const void* ptr, size_t size, uint8_t value)
 {
     const uint8_t* p = (const uint8_t*)ptr;
+
     const __m128i value16 = _mm_set1_epi8((char)value);
 
     if (size == 0)
@@ -787,37 +896,58 @@ size_t MemFind_sse2(const void* ptr, size_t size, uint8_t value)
         size_t address = (uint32_t)(uintptr_t)p % 16;
         size_t extra = (address + size) <= 16 ? address : 0;
 
+        // will load before the beginning buffer (16-byte aligned) if end is too close
+        // to 16-byte boundary, otherwise will load past the end of buffer
         __m128i a0 = _mm_loadu_si128((const __m128i*)(p - extra));
-        __m128i r0 = _mm_cmpeq_epi8(a0, value16);
-        uint32_t mask = ((uint16_t)_mm_movemask_epi8(r0) >> extra) & ((1 << size) - 1);
 
-        return mask ? MEM_CTZ32(mask) : size;
+        // set lane to 0xff if lane matches input value, or 0x00 if not
+        __m128i r0 = _mm_cmpeq_epi8(a0, value16);
+
+        // drop any lowest "extra" bits (due to loading bytes before beginning buffer)
+        uint32_t m = (uint16_t)_mm_movemask_epi8(r0) >> extra;
+
+        // mask out high bits (due to loading bytes after end of buffer)
+        // this will make mask non-zero, and will result in returning "size" value if inputs are equal
+        m |= 1U << size;
+
+        // return index of first bit set, which will be index of first byte matching input value
+        return MEM_CTZ32(m);
     }
 
     size_t offset = 0;
+
+    // process 64-byte blocks as much as possible
     while (size >= 64)
     {
         __m128i a0 = _mm_loadu_si128((const __m128i*)(p + 0x00));
         __m128i a1 = _mm_loadu_si128((const __m128i*)(p + 0x10));
         __m128i a2 = _mm_loadu_si128((const __m128i*)(p + 0x20));
         __m128i a3 = _mm_loadu_si128((const __m128i*)(p + 0x30));
-        __m128i r0 = _mm_cmpeq_epi8(a0, value16);
-        __m128i r1 = _mm_cmpeq_epi8(a1, value16);
-        __m128i r2 = _mm_cmpeq_epi8(a2, value16);
-        __m128i r3 = _mm_cmpeq_epi8(a3, value16);
+
+        // set lane to 0xff if lane matches input value, or 0x00 if not
+        __m128i r0 = _mm_cmpeq_epi8(value16, a0);
+        __m128i r1 = _mm_cmpeq_epi8(value16, a1);
+        __m128i r2 = _mm_cmpeq_epi8(value16, a2);
+        __m128i r3 = _mm_cmpeq_epi8(value16, a3);
+
+        // combine comparisons - leave 0xff in lanes there equal to input value
         __m128i r = _mm_or_si128(_mm_or_si128(r0, r1), _mm_or_si128(r2, r3));
 
+        // extract top bit mask, it will be non-zero if there is at least one matching lane to input value
         uint16_t mask = (uint16_t)_mm_movemask_epi8(r);
         if (mask)
         {
+            // extract top bit masks for each comparison
             uint64_t m0 = (uint16_t)_mm_movemask_epi8(r0);
             uint64_t m1 = (uint16_t)_mm_movemask_epi8(r1);
             uint64_t m2 = (uint16_t)_mm_movemask_epi8(r2);
             uint64_t m3 = mask; // if r0=r1=r2=0, then r3=r
 
+            // combine them into one mask, m4 is guaranteed to be non-zero
             uint64_t m4 = m0 | (m1 << 16) | (m2 << 32) | (m3 << 48);
-            size_t index = MEM_CTZ64(m4);
-            return offset + index;
+
+            // find first bit set, and return index
+            return offset + MEM_CTZ64(m4);
         }
 
         offset += 64;
@@ -825,66 +955,219 @@ size_t MemFind_sse2(const void* ptr, size_t size, uint8_t value)
         p += 64;
     }
 
-    if (size & 32)
+    if (size & 32) // 32 <= size < 64
     {
+        // load 64 bytes, some will overlap
         __m128i a0 = _mm_loadu_si128((const __m128i*)p);
-        __m128i r0 = _mm_cmpeq_epi8(a0, value16);
-
-        uint16_t mask = (uint16_t)_mm_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = MEM_CTZ32(mask);
-            return offset + index;
-        }
-
         __m128i a1 = _mm_loadu_si128((const __m128i*)(p + 0x10));
-        __m128i r1 = _mm_cmpeq_epi8(a1, value16);
+        __m128i a2 = _mm_loadu_si128((const __m128i*)(p + size - 0x20));
+        __m128i a3 = _mm_loadu_si128((const __m128i*)(p + size - 0x10));
 
-        mask = (uint16_t)_mm_movemask_epi8(r1);
-        if (mask)
-        {
-            size_t index = 0x10 + MEM_CTZ32(mask);
-            return offset + index;
-        }
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m128i r0 = _mm_cmpeq_epi8(value16, a0);
+        __m128i r1 = _mm_cmpeq_epi8(value16, a1);
+        __m128i r2 = _mm_cmpeq_epi8(value16, a2);
+        __m128i r3 = _mm_cmpeq_epi8(value16, a3);
 
-        offset += 32;
-        size -= 32;
-        p += 32;
+        // extract top bit masks for each comparison
+        uint64_t m0 = (uint16_t)_mm_movemask_epi8(r0);
+        uint64_t m1 = (uint16_t)_mm_movemask_epi8(r1);
+        uint64_t m2 = (uint16_t)_mm_movemask_epi8(r2);
+        uint64_t m3 = (uint16_t)_mm_movemask_epi8(r3);
+
+        // combine masks, handling overlapped ones
+        uint64_t m = m0 | (m1 << 16) | (m2 << (size - 32)) | (m3 << (size - 16));
+
+        // make sure mask is non-zero, this will result in returning "size" value if inputs are equal
+        m |= 1ULL << size;
+
+        // find first bit set, and return index
+        return offset + MEM_CTZ64(m);
     }
-
-    if (size & 16)
+    else if (size & 16) // 16 <= size < 32
     {
+        // load 32 bytes, some will overlap
         __m128i a0 = _mm_loadu_si128((const __m128i*)p);
-        __m128i r0 = _mm_cmpeq_epi8(a0, value16);
+        __m128i a1 = _mm_loadu_si128((const __m128i*)(p + size - 0x10));
 
-        uint16_t mask = (uint16_t)_mm_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = MEM_CTZ32(mask);
-            return offset + index;
-        }
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m128i r0 = _mm_cmpeq_epi8(value16, a0);
+        __m128i r1 = _mm_cmpeq_epi8(value16, a1);
 
-        offset += 16;
-        size -= 16;
-        p += 16;
+        // extract top bit masks for each comparison
+        uint32_t m0 = (uint16_t)_mm_movemask_epi8(r0);
+        uint32_t m1 = (uint16_t)_mm_movemask_epi8(r1);
+
+        // combine masks, handling overlapped ones
+        uint32_t m = m0 | (m1 << (size - 16));
+
+        // make sure mask is non-zero, this will result in returning "size" value if inputs are equal
+        m |= 1U << size;
+
+        // find first bit set, and return index
+        return offset + MEM_CTZ32(m);
     }
-
-    if (size) // size < 16
+    else if (size) // 0 < size < 16, but initially size > 16
     {
-        __m128i a0 = _mm_loadu_si128((const __m128i*)(p + size - 16));
-        __m128i r0 = _mm_cmpeq_epi8(a0, value16);
+        // load 16 bytes from end of buffer
+        // this will load previously checked bytes in 64 byte loop (they did not match input value)
+        __m128i a0 = _mm_loadu_si128((const __m128i*)(p + size - 0x10));
 
-        uint16_t mask = (uint16_t)_mm_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = MEM_CTZ32(mask) + size - 16;
-            return offset + index;
-        }
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m128i r0 = _mm_cmpeq_epi8(value16, a0);
 
-        offset += size;
+        // extract top bit mask, make sure it is non-zero
+        uint32_t m = (uint16_t)_mm_movemask_epi8(r0) | (1U << 16);
+
+        // find first bit set, adjust it due to reused bytes in load, and return index
+        return offset + MEM_CTZ32(m) + size - 16;
     }
 
-    return offset;
+    // no input value found, return original size (current offset plus pending tail size)
+    return offset + size;
+}
+
+MEM_DISABLE_ASAN
+size_t MemFindNot_sse2(const void* ptr, size_t size, uint8_t value)
+{
+    const uint8_t* p = (const uint8_t*)ptr;
+
+    const __m128i value16 = _mm_set1_epi8((char)value);
+
+    if (size == 0)
+    {
+        return 0;
+    }
+
+    if (size <= 16)
+    {
+        size_t address = (uint32_t)(uintptr_t)p % 16;
+        size_t extra = (address + size) <= 16 ? address : 0;
+
+        // will load before the beginning buffer (16-byte aligned) if end is too close
+        // to 16-byte boundary, otherwise will load past the end of buffer
+        __m128i a0 = _mm_loadu_si128((const __m128i*)(p - extra));
+
+        // set lane to 0xff if lane matches input value, or 0x00 if not
+        __m128i r0 = _mm_cmpeq_epi8(a0, value16);
+
+        // add 1 to flip lowest 0 bit (non-equal position) to 1, changing all bits below it to 0
+        // drop any lowest "extra" bits (due to loading bytes before beginning buffer)
+        uint32_t m = 1U + ((uint16_t)_mm_movemask_epi8(r0) >> extra);
+
+        // mask out high bits (due to loading bytes after end of buffer)
+        // this will make mask non-zero, and will result in returning "size" value if all bytes are same as input value
+        m |= 1U << size;
+
+        // return index of first bit set, which will be index of first byte not matching input value
+        return MEM_CTZ32(m);
+    }
+
+    size_t offset = 0;
+
+    // process 64-byte blocks as much as possible
+    while (size >= 64)
+    {
+        __m128i a0 = _mm_loadu_si128((const __m128i*)(p + 0x00));
+        __m128i a1 = _mm_loadu_si128((const __m128i*)(p + 0x10));
+        __m128i a2 = _mm_loadu_si128((const __m128i*)(p + 0x20));
+        __m128i a3 = _mm_loadu_si128((const __m128i*)(p + 0x30));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m128i r0 = _mm_cmpeq_epi8(value16, a0);
+        __m128i r1 = _mm_cmpeq_epi8(value16, a1);
+        __m128i r2 = _mm_cmpeq_epi8(value16, a2);
+        __m128i r3 = _mm_cmpeq_epi8(value16, a3);
+
+        // combine comparisons - leave 0x00 in lanes that were not equal
+        __m128i r = _mm_and_si128(_mm_and_si128(r0, r1), _mm_and_si128(r2, r3));
+
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint16_t mask = 1 + (uint16_t)_mm_movemask_epi8(r);
+        if (mask)
+        {
+            // extract top bit masks for comparisons
+            uint64_t m0 = (uint16_t)_mm_movemask_epi8(r0);
+            uint64_t m1 = (uint16_t)_mm_movemask_epi8(r1);
+            uint64_t m2 = (uint16_t)_mm_movemask_epi8(r2);
+            uint64_t m3 = (uint16_t)_mm_movemask_epi8(r3);
+
+            // combine masks, and flip lowest 0 bit(non - equal position) to 1, changing all bits below it to 0
+            uint64_t m4 = 1ULL + (m0 | (m1 << 16) | (m2 << 32) | (m3 << 48));
+
+            // m4 is guaranteed to be non-zero, extract index and return result
+            return offset + MEM_CTZ64(m4);
+        }
+
+        offset += 64;
+        size -= 64;
+        p += 64;
+    }
+
+    if (size & 32) // 32 <= size < 64
+    {
+        // load 64 bytes, some will overlap, 0/1 from beginning of buffers, 2/3 from end of buffers
+        __m128i a0 = _mm_loadu_si128((const __m128i*)p);
+        __m128i a1 = _mm_loadu_si128((const __m128i*)(p + 0x10));
+        __m128i a2 = _mm_loadu_si128((const __m128i*)(p + size - 0x20));
+        __m128i a3 = _mm_loadu_si128((const __m128i*)(p + size - 0x10));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m128i r0 = _mm_cmpeq_epi8(value16, a0);
+        __m128i r1 = _mm_cmpeq_epi8(value16, a1);
+        __m128i r2 = _mm_cmpeq_epi8(value16, a2);
+        __m128i r3 = _mm_cmpeq_epi8(value16, a3);
+
+        // extract top bit masks
+        uint64_t m0 = (uint16_t)_mm_movemask_epi8(r0);
+        uint64_t m1 = (uint16_t)_mm_movemask_epi8(r1);
+        uint64_t m2 = (uint16_t)_mm_movemask_epi8(r2);
+        uint64_t m3 = (uint16_t)_mm_movemask_epi8(r3);
+
+        // combine masks, handling overlapped ones, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint64_t m = 1ULL + (m0 | (m1 << 16) | (m2 << (size - 32)) | (m3 << (size - 16)));
+
+        // return index of byte that's different, m is guaranteed non-zero, because there only max 63 bytes here
+        return offset + MEM_CTZ64(m);
+    }
+    else if (size & 16) // 16 <= size < 32
+    {
+        // load 32 bytes, some will overlap
+        __m128i a0 = _mm_loadu_si128((const __m128i*)p);
+        __m128i a1 = _mm_loadu_si128((const __m128i*)(p + size - 0x10));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m128i r0 = _mm_cmpeq_epi8(value16, a0);
+        __m128i r1 = _mm_cmpeq_epi8(value16, a1);
+
+        // extract top bit masks
+        uint32_t m0 = (uint16_t)_mm_movemask_epi8(r0);
+        uint32_t m1 = (uint16_t)_mm_movemask_epi8(r1);
+
+        // combine masks, handling overlapped ones, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint32_t m = 1U + (m0 | (m1 << (size - 16)));
+
+        // return index of byte that's different, m is guaranteed non-zero, because there only max 31 bytes here
+        return offset + MEM_CTZ32(m);
+    }
+    else if (size) // 0 < size < 16, but initially size > 16
+    {
+        // load 16 bytes from end of buffer
+        // this will load previously checked bytes in 64 byte loop (they matched input value)
+        __m128i a0 = _mm_loadu_si128((const __m128i*)(p + size - 0x10));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m128i r0 = _mm_cmpeq_epi8(value16, a0);
+
+        // extract top bit mask, flip lowest 0 bit (non-equal position) to 1, changing all bits below it to 0
+        uint32_t m = 1U + (uint16_t)_mm_movemask_epi8(r0);
+
+        // get index of byte that's different, m is guaranteed non-zero, because there only max 15 bytes here
+        return offset + MEM_CTZ32(m) + size - 16;
+    }
+
+    // all bytes are same as input value, return original size (current offset plus pending tail size)
+    return offset + size;
 }
 
 MEM_DISABLE_ASAN
@@ -903,22 +1186,30 @@ int MemCompare_avx2(const void* ptr1, const void* ptr2, size_t size)
     {
         const uint32_t PAGE_SIZE = 4096;
 
+        // if 32 bytes from each pointer does not cross page boundary, can safely load them as 16-byte vector
         uint32_t address = (uint32_t)(uintptr_t)p1 | (uint32_t)(uintptr_t)p2;
         if ((address & (PAGE_SIZE - 1)) <= PAGE_SIZE - 32)
         {
             __m256i a0 = _mm256_loadu_si256((const __m256i*)p1);
             __m256i b0 = _mm256_loadu_si256((const __m256i*)p2);
+
+            // set lanes to 0xff if bytes are equal, or 0x00 if not
             __m256i r0 = _mm256_cmpeq_epi8(a0, b0);
 
-            uint32_t mask = _bzhi_u32(1 + (uint32_t)_mm256_movemask_epi8(r0), (uint32_t)size);
-            if (mask)
-            {
-                size_t index = _tzcnt_u32(mask);
-                return p1[index] - p2[index];
-            }
+            // extract top bit of each lane to mask
+            // it will have bit value 0 in positions where bytes are not equal
+            // adding 1 will flip lowest bit with value 0 to value 1
+            // and change all bits with value 1 below it to 0
+            uint32_t m = 1U + (uint32_t)_mm256_movemask_epi8(r0);
 
-            return 0;
+            // get index of byte that's different, evaluates to 32 if all bytes are equal
+            size_t index = _tzcnt_u32(m);
+
+            // return comparison result, or 0 if inputs are equal
+            return index < size ? p1[index] - p2[index] : 0;
         }
+
+        // cannot overread buffers, need to load exactly "size" bytes only
 
         if (size < 2) // size == 1
         {
@@ -926,60 +1217,75 @@ int MemCompare_avx2(const void* ptr1, const void* ptr2, size_t size)
         }
         else if (size < 4) // 2 <= size < 4
         {
+            // load two pairs of 2 overlapping bytes, in big-endian
             uint32_t a0 = MEM_GET16BE(p1);
             uint32_t b0 = MEM_GET16BE(p2);
             uint32_t a1 = MEM_GET16BE(p1 + size - 2);
             uint32_t b1 = MEM_GET16BE(p2 + size - 2);
+            // use a0/b0 if they are not equal, otherwise a1/b1
             uint32_t a = (a0 != b0 ? a0 : a1);
             uint32_t b = (a0 != b0 ? b0 : b1);
+            // big-endian numbers can be subtracted to get their order
+            // as long as numbers are small so subtraction does not overflow 32-bit int
             return (int)a - (int)b;
         }
         else if (size < 8) // 4 <= size < 8
         {
+            // load two pairs of 4 overlapping bytes, in big-endian
             uint32_t a0 = MEM_GET32BE(p1);
             uint32_t b0 = MEM_GET32BE(p2);
             uint32_t a1 = MEM_GET32BE(p1 + size - 4);
             uint32_t b1 = MEM_GET32BE(p2 + size - 4);
+            // use a0/b0 if they are not equal, otherwise a1/b1
             uint32_t a = (a0 != b0 ? a0 : a1);
             uint32_t b = (a0 != b0 ? b0 : b1);
+            // big-endian numbers can be compared directly
             return (a > b) - (a < b);
         }
         else if (size <= 16) // 8 <= size <= 16
         {
+            // load two pairs of 8 overlapping bytes, in big-endian
             uint64_t a0 = MEM_GET64BE(p1);
             uint64_t b0 = MEM_GET64BE(p2);
             uint64_t a1 = MEM_GET64BE(p1 + size - 8);
             uint64_t b1 = MEM_GET64BE(p2 + size - 8);
+            // use a0/b0 if they are not equal, otherwise a1/b1
             uint64_t a = (a0 != b0 ? a0 : a1);
             uint64_t b = (a0 != b0 ? b0 : b1);
+            // big-endian numbers can be compared directly
             return (a > b) - (a < b);
         }
         else // 16 < size <= 32
         {
+            // load two pairs of 16 overlapping bytes
             __m128i a0 = _mm_loadu_si128((const __m128i*)p1);
             __m128i b0 = _mm_loadu_si128((const __m128i*)p2);
-            __m128i a1 = _mm_loadu_si128((const __m128i*)(p1 + size - 16));
-            __m128i b1 = _mm_loadu_si128((const __m128i*)(p2 + size - 16));
+            __m128i a1 = _mm_loadu_si128((const __m128i*)(p1 + size - 0x10));
+            __m128i b1 = _mm_loadu_si128((const __m128i*)(p2 + size - 0x10));
+
+            // combine them into 32-byte registers
             __m256i a = _mm256_inserti128_si256(_mm256_castsi128_si256(a0), a1, 1);
             __m256i b = _mm256_inserti128_si256(_mm256_castsi128_si256(b0), b1, 1);
+
+            // set lanes to 0xff if bytes are equal, or 0x00 if not
             __m256i r = _mm256_cmpeq_epi8(a, b);
 
-            uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r);
-            if (mask)
-            {
-                size_t index = _tzcnt_u64(mask);
+            // extract top bit masks, flip lowest 0 bit to 1, changing all bits below it to 0
+            uint32_t m = 1U + (uint32_t)_mm256_movemask_epi8(r);
 
-                // index = (index < 16) ? index : (index - 16) + (size - 16);
-                size -= 32;
-                index += index < 16 ? 0 : size;
+            // get index of byte that's different, evaluates to 32 if all bytes are equal
+            size_t index = _tzcnt_u32(m);
 
-                return p1[index] - p2[index];
-            }
+            // adjust index to correct byte position (due to how they were packed with _mm256_inserti128_si256)
+            // index = (index < 16) ? index : (index - 16) + (size - 16);
+            index += (index >= 16) * (size - 32);
 
-            return 0;
+            // return comparison result, or 0 if inputs are equal
+            return index < size ? p1[index] - p2[index] : 0;
         }
     }
 
+    // process 128-byte blocks as much as possible
     while (size >= 128)
     {
         __m256i a0 = _mm256_loadu_si256((const __m256i*)(p1 + 0x00));
@@ -990,38 +1296,39 @@ int MemCompare_avx2(const void* ptr1, const void* ptr2, size_t size)
         __m256i b2 = _mm256_loadu_si256((const __m256i*)(p2 + 0x40));
         __m256i a3 = _mm256_loadu_si256((const __m256i*)(p1 + 0x60));
         __m256i b3 = _mm256_loadu_si256((const __m256i*)(p2 + 0x60));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m256i r0 = _mm256_cmpeq_epi8(a0, b0);
         __m256i r1 = _mm256_cmpeq_epi8(a1, b1);
         __m256i r2 = _mm256_cmpeq_epi8(a2, b2);
         __m256i r3 = _mm256_cmpeq_epi8(a3, b3);
+
+        // combine comparisons - leave 0x00 in all lanes that were not equal
         __m256i r = _mm256_and_si256(_mm256_and_si256(r0, r1), _mm256_and_si256(r2, r3));
 
-        uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r);
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint32_t mask = 1U + (uint32_t)_mm256_movemask_epi8(r);
         if (mask)
         {
-            mask = 1 + (uint32_t)_mm256_movemask_epi8(r0);
-            if (mask)
-            {
-                size_t index = 0x00 + _tzcnt_u32(mask);
-                return p1[index] - p2[index];
-            }
+            // extract top bit masks from individual comparisons
+            uint64_t m0 = (uint32_t)_mm256_movemask_epi8(r0);
+            uint64_t m1 = (uint32_t)_mm256_movemask_epi8(r1);
+            uint64_t m2 = (uint32_t)_mm256_movemask_epi8(r2);
+            uint64_t m3 = (uint32_t)_mm256_movemask_epi8(r3);
 
-            mask = 1 + (uint32_t)_mm256_movemask_epi8(r1);
-            if (mask)
-            {
-                size_t index = 0x20 + _tzcnt_u32(mask);
-                return p1[index] - p2[index];
-            }
+            // combine masks, flip lowest 0 bit to 1, changing all bits below it to 0
+            uint64_t m01 = 1ULL + (m0 | (m1 << 32));
+            uint64_t m23 = 1ULL + (m2 | (m3 << 32));
 
-            mask = 1 + (uint32_t)_mm256_movemask_epi8(r2);
-            if (mask)
-            {
-                size_t index = 0x40 + _tzcnt_u32(mask);
-                return p1[index] - p2[index];
-            }
+            // find index of byte with difference
+            size_t idx0 = _tzcnt_u64(m01);
+            size_t idx1 = _tzcnt_u64(m23);
 
-            mask = 1 + (uint32_t)_mm256_movemask_epi8(r3);
-            size_t index = 0x60 + _tzcnt_u32(mask);
+            // combine both indices to actual index across both comparisons
+            size_t index = 0;
+            index += idx0;
+            index += m01 ? 0 : idx1;
+
             return p1[index] - p2[index];
         }
 
@@ -1032,65 +1339,90 @@ int MemCompare_avx2(const void* ptr1, const void* ptr2, size_t size)
 
     if (size & 64) // 64 <= size < 128
     {
-        __m256i a0 = _mm256_loadu_si256((const __m256i*)p1);
-        __m256i b0 = _mm256_loadu_si256((const __m256i*)p2);
-        __m256i r0 = _mm256_cmpeq_epi8(a0, b0);
-
-        uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = _tzcnt_u32(mask);
-            return p1[index] - p2[index];
-        }
-
+        // load 128 bytes, some will overlap, 0/1 from beginning of buffers, 2/3 from end of buffers
+        __m256i a0 = _mm256_loadu_si256((const __m256i*)(p1 + 0x00));
+        __m256i b0 = _mm256_loadu_si256((const __m256i*)(p2 + 0x00));
         __m256i a1 = _mm256_loadu_si256((const __m256i*)(p1 + 0x20));
         __m256i b1 = _mm256_loadu_si256((const __m256i*)(p2 + 0x20));
+        __m256i a2 = _mm256_loadu_si256((const __m256i*)(p1 + size - 0x40));
+        __m256i b2 = _mm256_loadu_si256((const __m256i*)(p2 + size - 0x40));
+        __m256i a3 = _mm256_loadu_si256((const __m256i*)(p1 + size - 0x20));
+        __m256i b3 = _mm256_loadu_si256((const __m256i*)(p2 + size - 0x20));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m256i r0 = _mm256_cmpeq_epi8(a0, b0);
         __m256i r1 = _mm256_cmpeq_epi8(a1, b1);
+        __m256i r2 = _mm256_cmpeq_epi8(a2, b2);
+        __m256i r3 = _mm256_cmpeq_epi8(a3, b3);
 
-        mask = 1 + (uint32_t)_mm256_movemask_epi8(r1);
-        if (mask)
-        {
-            size_t index = 0x20 + _tzcnt_u32(mask);
-            return p1[index] - p2[index];
-        }
+        // extract top bit masks
+        uint64_t m0 = (uint32_t)_mm256_movemask_epi8(r0);
+        uint64_t m1 = (uint32_t)_mm256_movemask_epi8(r1);
+        uint64_t m2 = (uint32_t)_mm256_movemask_epi8(r2);
+        uint64_t m3 = (uint32_t)_mm256_movemask_epi8(r3);
 
-        size -= 64;
-        p1 += 64;
-        p2 += 64;
+        // combine masks, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint64_t m01 = 1ULL + (m0 | (m1 << 32));
+        uint64_t m23 = 1ULL + (m2 | (m3 << 32));
+
+        // get index of byte with difference, plus adjust due to overlap
+        size_t idx0 = _tzcnt_u64(m01);
+        size_t idx1 = _tzcnt_u64(m23) + (size - 64) - 64; // 64 will be already in idx0
+
+        // combine both indices to actual index across both comparisons
+        size_t index = 0;
+        index += idx0;
+        index += m01 ? 0 : idx1;
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? p1[index] - p2[index] : 0;
     }
-
-    if (size & 32) // 32 <= size < 64
+    else if (size & 32) // 32 <= size < 64
     {
+        // load 64 bytes, some will overlap
         __m256i a0 = _mm256_loadu_si256((const __m256i*)p1);
         __m256i b0 = _mm256_loadu_si256((const __m256i*)p2);
+        __m256i a1 = _mm256_loadu_si256((const __m256i*)(p1 + size - 0x20));
+        __m256i b1 = _mm256_loadu_si256((const __m256i*)(p2 + size - 0x20));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m256i r0 = _mm256_cmpeq_epi8(a0, b0);
+        __m256i r1 = _mm256_cmpeq_epi8(a1, b1);
 
-        uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = _tzcnt_u32(mask);
-            return p1[index] - p2[index];
-        }
+        // extract top bit masks
+        uint64_t m0 = (uint32_t)_mm256_movemask_epi8(r0);
+        uint64_t m1 = (uint32_t)_mm256_movemask_epi8(r1);
 
-        size -= 32;
-        p1 += 32;
-        p2 += 32;
+        // combine masks, handling overlapped ones, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint64_t m = 1ULL + (m0 | (m1 << (size - 32)));
+
+        // get index of byte that's different
+        size_t index = _tzcnt_u64(m);
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? p1[index] - p2[index] : 0;
     }
-
-    if (size) // size < 32
+    else if (size) // 0 < size < 32, but initially size > 32
     {
-        __m256i a0 = _mm256_loadu_si256((const __m256i*)(p1 + size - 32));
-        __m256i b0 = _mm256_loadu_si256((const __m256i*)(p2 + size - 32));
+        // load 32 bytes from end of buffer
+        // this will load previously checked bytes in 128 byte loop (they were equal)
+        __m256i a0 = _mm256_loadu_si256((const __m256i*)(p1 + size - 0x20));
+        __m256i b0 = _mm256_loadu_si256((const __m256i*)(p2 + size - 0x20));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m256i r0 = _mm256_cmpeq_epi8(a0, b0);
 
-        uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = _tzcnt_u32(mask) + size - 32;
-            return p1[index] - p2[index];
-        }
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint32_t m = 1U + (uint32_t)_mm256_movemask_epi8(r0);
+
+        // get index of byte that's different
+        size_t index = _tzcnt_u32(m) + size - 32;
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? p1[index] - p2[index] : 0;
     }
 
+    // no differences found, inputs are equal
     return 0;
 }
 
@@ -1110,30 +1442,39 @@ int MemCompareI_avx2(const void* ptr1, const void* ptr2, size_t size)
     {
         const uint32_t PAGE_SIZE = 4096;
 
+        // if 32 bytes from each pointer does not cross page boundary, can safely load them as 16-byte vector
         uint32_t address = (uint32_t)(uintptr_t)p1 | (uint32_t)(uintptr_t)p2;
         if ((address & (PAGE_SIZE - 1)) <= PAGE_SIZE - 32)
         {
+            // load bytes and convert them to lowercase
             __m256i a0 = MemToLower32(_mm256_loadu_si256((const __m256i*)p1));
             __m256i b0 = MemToLower32(_mm256_loadu_si256((const __m256i*)p2));
+
+            // set lanes to 0xff if bytes are equal, or 0x00 if not
             __m256i r0 = _mm256_cmpeq_epi8(a0, b0);
 
-            uint32_t mask = _bzhi_u32(1 + (uint32_t)_mm256_movemask_epi8(r0), (uint32_t)size);
-            if (mask)
-            {
-                size_t index = _tzcnt_u32(mask);
-                return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-            }
+            // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+            uint32_t m = 1U + (uint32_t)_mm256_movemask_epi8(r0);
 
-            return 0;
+            // get index of byte that's different, evaluates to 32 if all bytes are equal
+            size_t index = _tzcnt_u32(m);
+
+            // return comparison result, or 0 if inputs are equal
+            return index < size ? MemToLower1(p1[index]) - MemToLower1(p2[index]) : 0;
         }
+
+        // cannot overread buffers, need to load exactly "size" bytes only
 
         if (size < 2) // size == 1
         {
             return MemToLower1(p1[0]) - MemToLower1(p2[0]);
         }
 
-        size_t n;
+        // will load pair of 4, 8, 16 or 32 overlapping bytes
+        // a/b0 from beginning of buffer
+        // a/b1 from end of buffers
         __m128i a0, b0, a1, b1;
+        size_t n;
 
         if (size < 4) // 2 <= size < 4
         {
@@ -1168,25 +1509,30 @@ int MemCompareI_avx2(const void* ptr1, const void* ptr2, size_t size)
             n = 16;
         }
 
+        // pack bytes into 16-byte simd register
+        // a/b0 goes into low 128-bit part
+        // a/b1 goes into high 128-bit part
         __m256i a = _mm256_inserti128_si256(_mm256_castsi128_si256(a0), a1, 1);
         __m256i b = _mm256_inserti128_si256(_mm256_castsi128_si256(b0), b1, 1);
+
+        // lowercase, and set lanes to 0xff if bytes are equal, or 0x00 if not
         __m256i r = _mm256_cmpeq_epi8(MemToLower32(a), MemToLower32(b));
 
-        uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r);
-        if (mask)
-        {
-            size_t index = _tzcnt_u64(mask);
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint32_t m = 1U + (uint32_t)_mm256_movemask_epi8(r);
 
-            // index = (index < 16) ? index : (index - 16) + (size - n);
-            size -= 16 + n;
-            index += index < 16 ? 0 : size;
+        // get index of byte that's different, evaluates to 32 if all bytes are equal
+        size_t index = _tzcnt_u32(m);
 
-            return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-        }
+        // adjust index to correct byte position (due to how they were packed with _mm256_inserti128_si256)
+        // index = (index < 16) ? index : (index - 16) + (size - n);
+        index += (index >= 16) * (size - 16 - n);
 
-        return 0;
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? MemToLower1(p1[index]) - MemToLower1(p2[index]) : 0;
     }
 
+    // process 128-byte blocks as much as possible
     while (size >= 128)
     {
         __m256i a0 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p1 + 0x00)));
@@ -1197,38 +1543,39 @@ int MemCompareI_avx2(const void* ptr1, const void* ptr2, size_t size)
         __m256i b2 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p2 + 0x40)));
         __m256i a3 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p1 + 0x60)));
         __m256i b3 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p2 + 0x60)));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m256i r0 = _mm256_cmpeq_epi8(a0, b0);
         __m256i r1 = _mm256_cmpeq_epi8(a1, b1);
         __m256i r2 = _mm256_cmpeq_epi8(a2, b2);
         __m256i r3 = _mm256_cmpeq_epi8(a3, b3);
+
+        // combine comparisons - leave 0x00 in lanes that were not equal
         __m256i r = _mm256_and_si256(_mm256_and_si256(r0, r1), _mm256_and_si256(r2, r3));
 
-        uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r);
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint32_t mask = 1U + (uint32_t)_mm256_movemask_epi8(r);
         if (mask)
         {
-            mask = 1 + (uint32_t)_mm256_movemask_epi8(r0);
-            if (mask)
-            {
-                size_t index = 0x00 + _tzcnt_u32(mask);
-                return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-            }
+            // extract top bit masks for each comparison
+            uint64_t m0 = (uint32_t)_mm256_movemask_epi8(r0);
+            uint64_t m1 = (uint32_t)_mm256_movemask_epi8(r1);
+            uint64_t m2 = (uint32_t)_mm256_movemask_epi8(r2);
+            uint64_t m3 = (uint32_t)_mm256_movemask_epi8(r3);
 
-            mask = 1 + (uint32_t)_mm256_movemask_epi8(r1);
-            if (mask)
-            {
-                size_t index = 0x20 + _tzcnt_u32(mask);
-                return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-            }
+            // combine masks, and flip lowest 0 bit to 1, changing all bits below it to 0
+            uint64_t m01 = 1ULL + (m0 | (m1 << 32));
+            uint64_t m23 = 1ULL + (m2 | (m3 << 32));
 
-            mask = 1 + (uint32_t)_mm256_movemask_epi8(r2);
-            if (mask)
-            {
-                size_t index = 0x40 + _tzcnt_u32(mask);
-                return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-            }
+            // find index of byte with difference
+            size_t idx0 = _tzcnt_u64(m01);
+            size_t idx1 = _tzcnt_u64(m23);
 
-            mask = 1 + (uint32_t)_mm256_movemask_epi8(r3);
-            size_t index = 0x60 + _tzcnt_u32(mask);
+            // combine both indices to actual index across both comparisons
+            size_t index = 0;
+            index += idx0;
+            index += m01 ? 0 : idx1;
+
             return MemToLower1(p1[index]) - MemToLower1(p2[index]);
         }
 
@@ -1239,65 +1586,90 @@ int MemCompareI_avx2(const void* ptr1, const void* ptr2, size_t size)
 
     if (size & 64) // 64 <= size < 128
     {
-        __m256i a0 = MemToLower32(_mm256_loadu_si256((const __m256i*)p1));
-        __m256i b0 = MemToLower32(_mm256_loadu_si256((const __m256i*)p2));
-        __m256i r0 = _mm256_cmpeq_epi8(a0, b0);
-
-        uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = _tzcnt_u32(mask);
-            return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-        }
-
+        // load 128 bytes, some will overlap, 0/1 from beginning of buffers, 2/3 from end of buffers
+        __m256i a0 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p1 + 0x00)));
+        __m256i b0 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p2 + 0x00)));
         __m256i a1 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p1 + 0x20)));
         __m256i b1 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p2 + 0x20)));
+        __m256i a2 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p1 + size - 0x40)));
+        __m256i b2 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p2 + size - 0x40)));
+        __m256i a3 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p1 + size - 0x20)));
+        __m256i b3 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p2 + size - 0x20)));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m256i r0 = _mm256_cmpeq_epi8(a0, b0);
         __m256i r1 = _mm256_cmpeq_epi8(a1, b1);
+        __m256i r2 = _mm256_cmpeq_epi8(a2, b2);
+        __m256i r3 = _mm256_cmpeq_epi8(a3, b3);
 
-        mask = 1 + (uint32_t)_mm256_movemask_epi8(r1);
-        if (mask)
-        {
-            size_t index = 0x20 + _tzcnt_u32(mask);
-            return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-        }
+        // extract top bit masks
+        uint64_t m0 = (uint32_t)_mm256_movemask_epi8(r0);
+        uint64_t m1 = (uint32_t)_mm256_movemask_epi8(r1);
+        uint64_t m2 = (uint32_t)_mm256_movemask_epi8(r2);
+        uint64_t m3 = (uint32_t)_mm256_movemask_epi8(r3);
 
-        size -= 64;
-        p1 += 64;
-        p2 += 64;
+        // combine masks, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint64_t m01 = 1ULL + (m0 | (m1 << 32));
+        uint64_t m23 = 1ULL + (m2 | (m3 << 32));
+
+        // get index of byte with difference, plus adjust due to overlap
+        size_t idx0 = _tzcnt_u64(m01);
+        size_t idx1 = _tzcnt_u64(m23) + (size - 64) - 64; // 64 will be already in idx0
+
+        // combine both indices to actual index across both comparisons
+        size_t index = 0;
+        index += idx0;
+        index += m01 ? 0 : idx1;
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? MemToLower1(p1[index]) - MemToLower1(p2[index]) : 0;
     }
-
-    if (size & 32) // 32 <= size < 64
+    else if (size & 32) // 32 <= size < 64
     {
+        // load 64 bytes, some will overlap
         __m256i a0 = MemToLower32(_mm256_loadu_si256((const __m256i*)p1));
         __m256i b0 = MemToLower32(_mm256_loadu_si256((const __m256i*)p2));
+        __m256i a1 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p1 + size - 0x20)));
+        __m256i b1 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p2 + size - 0x20)));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m256i r0 = _mm256_cmpeq_epi8(a0, b0);
+        __m256i r1 = _mm256_cmpeq_epi8(a1, b1);
 
-        uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = _tzcnt_u32(mask);
-            return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-        }
+        // extract top bit masks
+        uint64_t m0 = (uint32_t)_mm256_movemask_epi8(r0);
+        uint64_t m1 = (uint32_t)_mm256_movemask_epi8(r1);
 
-        size -= 32;
-        p1 += 32;
-        p2 += 32;
+        // combine masks, handling overlapped ones, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint64_t m = 1ULL + (m0 | (m1 << (size - 32)));
+
+        // get index of byte that's different
+        size_t index = _tzcnt_u64(m);
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? MemToLower1(p1[index]) - MemToLower1(p2[index]) : 0;
     }
-
-    if (size) // size < 32
+    else if (size) // 0 < size < 32, but initially size > 32
     {
-        __m256i a0 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p1 + size - 32)));
-        __m256i b0 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p2 + size - 32)));
+        // load 32 bytes from end of buffer
+        // this will load previously checked bytes in 128 byte loop (they were equal)
+        __m256i a0 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p1 + size - 0x20)));
+        __m256i b0 = MemToLower32(_mm256_loadu_si256((const __m256i*)(p2 + size - 0x20)));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m256i r0 = _mm256_cmpeq_epi8(a0, b0);
 
-        uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = _tzcnt_u32(mask) + size - 32;
-            return MemToLower1(p1[index]) - MemToLower1(p2[index]);
-        }
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint32_t m = 1U + (uint32_t)_mm256_movemask_epi8(r0);
+
+        // get index of byte that's different
+        size_t index = _tzcnt_u32(m) + size - 32;
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? MemToLower1(p1[index]) - MemToLower1(p2[index]) : 0;
     }
 
+    // no differences found, inputs are equal
     return 0;
 }
 
@@ -1317,16 +1689,25 @@ bool MemIsEqual_avx2(const void* ptr1, const void* ptr2, size_t size)
     {
         const uint32_t PAGE_SIZE = 4096;
 
+        // if 32 bytes from each pointer does not cross page boundary, can safely load them as 32-byte vector
         uint32_t address = (uint32_t)(uintptr_t)p1 | (uint32_t)(uintptr_t)p2;
         if ((address & (PAGE_SIZE - 1)) <= PAGE_SIZE - 32)
         {
             __m256i a0 = _mm256_loadu_si256((const __m256i*)p1);
             __m256i b0 = _mm256_loadu_si256((const __m256i*)p2);
+
+            // set lanes to 0xff if bytes are equal, or 0x00 if not
             __m256i r0 = _mm256_cmpeq_epi8(a0, b0);
 
-            uint32_t mask = 1 + (uint32_t)_mm256_movemask_epi8(r0);
+            // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+            uint32_t mask = 1U + (uint32_t)_mm256_movemask_epi8(r0);
+
+            // need to ignore top "32 - size" bits, only low bits matter
+            // return "true" if they are zero, otherwise "false"
             return _bzhi_u32(mask, (uint32_t)size) == 0;
         }
+
+        // cannot overread buffers, need to load exactly "size" bytes only
 
         if (size < 2) // size == 1
         {
@@ -1334,41 +1715,52 @@ bool MemIsEqual_avx2(const void* ptr1, const void* ptr2, size_t size)
         }
         else if (size < 4) // 2 <= size < 4
         {
+            // load two pairs of 2 overlapping bytes
             uint32_t a0 = MEM_PTR16U(p1);
             uint32_t b0 = MEM_PTR16U(p2);
             uint32_t a1 = MEM_PTR16U(p1 + size - 2);
             uint32_t b1 = MEM_PTR16U(p2 + size - 2);
+            // return "true" if both are equal
             return (a0 == b0) & (a1 == b1);
         }
         else if (size < 8) // 4 <= size < 8
         {
+            // load two pairs of 4 overlapping bytes
             uint32_t a0 = MEM_PTR32U(p1);
             uint32_t b0 = MEM_PTR32U(p2);
             uint32_t a1 = MEM_PTR32U(p1 + size - 4);
             uint32_t b1 = MEM_PTR32U(p2 + size - 4);
+            // return "true" if both are equal
             return (a0 == b0) & (a1 == b1);
         }
         else if (size <= 16) // 8 <= size <= 16
         {
+            // load two pairs of 8 overlapping bytes
             uint64_t a0 = MEM_PTR64U(p1);
             uint64_t b0 = MEM_PTR64U(p2);
             uint64_t a1 = MEM_PTR64U(p1 + size - 8);
             uint64_t b1 = MEM_PTR64U(p2 + size - 8);
+            // return "true" if both are equal
             return (a0 == b0) & (a1 == b1);
         }
         else // 16 < size <= 32
         {
+            // load two pairs of 16 overlapping bytes
             __m128i a0 = _mm_loadu_si128((const __m128i*)p1);
             __m128i b0 = _mm_loadu_si128((const __m128i*)p2);
             __m128i a1 = _mm_loadu_si128((const __m128i*)(p1 + size - 16));
             __m128i b1 = _mm_loadu_si128((const __m128i*)(p2 + size - 16));
+            // combine them into simd register (low lane & high lane)
             __m256i a = _mm256_inserti128_si256(_mm256_castsi128_si256(a1), a0, 1);
             __m256i b = _mm256_inserti128_si256(_mm256_castsi128_si256(b1), b0, 1);
+            // produce 0 if all of them are equal
             __m256i r = _mm256_xor_si256(a, b);
+            // return true, if whole simd register is 0
             return !!_mm256_testz_si256(r, r);
         }
     }
 
+    // process 128-byte blocks as much as possible
     while (size >= 128)
     {
         __m256i a0 = _mm256_loadu_si256((const __m256i*)(p1 + 0x00));
@@ -1379,14 +1771,18 @@ bool MemIsEqual_avx2(const void* ptr1, const void* ptr2, size_t size)
         __m256i b2 = _mm256_loadu_si256((const __m256i*)(p2 + 0x40));
         __m256i a3 = _mm256_loadu_si256((const __m256i*)(p1 + 0x60));
         __m256i b3 = _mm256_loadu_si256((const __m256i*)(p2 + 0x60));
+
+        // produce 0 if all of them are equal
         __m256i r0 = _mm256_xor_si256(a0, b0);
         __m256i r1 = _mm256_xor_si256(a1, b1);
         __m256i r2 = _mm256_xor_si256(a2, b2);
         __m256i r3 = _mm256_xor_si256(a3, b3);
-        __m256i r = _mm256_or_si256(_mm256_or_si256(r0, r1), _mm256_or_si256(r2, r3));
 
+        // combine results - leave non-zero value in any lane if they were not equal
+        __m256i r = _mm256_or_si256(_mm256_or_si256(r0, r1), _mm256_or_si256(r2, r3));
         if (!_mm256_testz_si256(r, r))
         {
+            // if simd register is not fully 0, then inputs are not equal
             return false;
         }
 
@@ -1397,52 +1793,61 @@ bool MemIsEqual_avx2(const void* ptr1, const void* ptr2, size_t size)
 
     if (size & 64) // 64 <= size < 128
     {
-        __m256i a0 = _mm256_loadu_si256((const __m256i*)p1);
-        __m256i b0 = _mm256_loadu_si256((const __m256i*)p2);
+        // load 128 bytes, some will overlap, 0/1 from beginning of buffers, 2/3 from end of buffers
+        __m256i a0 = _mm256_loadu_si256((const __m256i*)(p1 + 0x00));
+        __m256i b0 = _mm256_loadu_si256((const __m256i*)(p2 + 0x00));
         __m256i a1 = _mm256_loadu_si256((const __m256i*)(p1 + 0x20));
         __m256i b1 = _mm256_loadu_si256((const __m256i*)(p2 + 0x20));
+        __m256i a2 = _mm256_loadu_si256((const __m256i*)(p1 + size - 0x40));
+        __m256i b2 = _mm256_loadu_si256((const __m256i*)(p2 + size - 0x40));
+        __m256i a3 = _mm256_loadu_si256((const __m256i*)(p1 + size - 0x20));
+        __m256i b3 = _mm256_loadu_si256((const __m256i*)(p2 + size - 0x20));
+
+        // produce 0 if all of them are equal
         __m256i r0 = _mm256_xor_si256(a0, b0);
         __m256i r1 = _mm256_xor_si256(a1, b1);
-        __m256i r = _mm256_or_si256(r0, r1);
+        __m256i r2 = _mm256_xor_si256(a2, b2);
+        __m256i r3 = _mm256_xor_si256(a3, b3);
 
-        if (!_mm256_testz_si256(r, r))
-        {
-            return false;
-        }
+        // combine results - leave non-zero value in any lane if they were not equal
+        __m256i r = _mm256_or_si256(_mm256_or_si256(r0, r1), _mm256_or_si256(r2, r3));
 
-        size -= 64;
-        p1 += 64;
-        p2 += 64;
+        // return true, if simd register is fully 0, meaning inputs are equal
+        return !!_mm256_testz_si256(r, r);
     }
-
-    if (size & 32) // 32 <= size < 64
+    else if (size & 32) // 32 <= size < 64
     {
+        // load 64 bytes, some will overlap
         __m256i a0 = _mm256_loadu_si256((const __m256i*)p1);
         __m256i b0 = _mm256_loadu_si256((const __m256i*)p2);
+        __m256i a1 = _mm256_loadu_si256((const __m256i*)(p1 + size - 0x20));
+        __m256i b1 = _mm256_loadu_si256((const __m256i*)(p2 + size - 0x20));
+
+        // produce 0 if all of them are equal
         __m256i r0 = _mm256_xor_si256(a0, b0);
+        __m256i r1 = _mm256_xor_si256(a1, b1);
 
-        if (!_mm256_testz_si256(r0, r0))
-        {
-            return false;
-        }
+        // combine results - leave non-zero value in any lane if they were not equal
+        __m256i r = _mm256_or_si256(r0, r1);
 
-        size -= 32;
-        p1 += 32;
-        p2 += 32;
+        // return true, if simd register is fully 0, meaning inputs are equal
+        return !!_mm256_testz_si256(r, r);
     }
-
-    if (size) // size < 32
+    else if (size) // 0 < size < 32, but initially size > 32
     {
-        __m256i a0 = _mm256_loadu_si256((const __m256i*)(p1 + size - 32));
-        __m256i b0 = _mm256_loadu_si256((const __m256i*)(p2 + size - 32));
+        // load 64 bytes, some will overlap
+        // this will load previously checked bytes in 128 byte loop (they were equal)
+        __m256i a0 = _mm256_loadu_si256((const __m256i*)(p1 + size - 0x20));
+        __m256i b0 = _mm256_loadu_si256((const __m256i*)(p2 + size - 0x20));
+
+        // produce 0 if all of them are equal
         __m256i r0 = _mm256_xor_si256(a0, b0);
 
-        if (!_mm256_testz_si256(r0, r0))
-        {
-            return false;
-        }
+        // return true, if simd register is fully 0, meaning inputs are equal
+        return !!_mm256_testz_si256(r0, r0);
     }
 
+    // no differences found, inputs are equal
     return true;
 }
 
@@ -1451,6 +1856,7 @@ MEM_TARGET_AVX2
 size_t MemFind_avx2(const void* ptr, size_t size, uint8_t value)
 {
     const uint8_t* p = (const uint8_t*)ptr;
+
     __m256i value32 = _mm256_set1_epi8((char)value);
 
     if (size == 0)
@@ -1463,42 +1869,62 @@ size_t MemFind_avx2(const void* ptr, size_t size, uint8_t value)
         size_t address = (uint32_t)(uintptr_t)p % 32;
         size_t extra = (address + size) <= 32 ? address : 0;
 
+        // will load before the beginning buffer (32-byte aligned) if end is too close
+        // to 32-byte boundary, otherwise will load past the end of buffer
         __m256i a0 = _mm256_loadu_si256((const __m256i*)(p - extra));
+
+        // set lane to 0xff if lane matches input value, or 0x00 if not
         __m256i r0 = _mm256_cmpeq_epi8(value32, a0);
 
-        uint32_t mask = (uint32_t)_mm256_movemask_epi8(r0);
-        mask = _bzhi_u32(MEM_SHRX_32(mask, (uint32_t)extra), (uint32_t)size);
+        // drop any lowest "extra" bits (due to loading bytes before beginning buffer)
+        uint32_t m = MEM_SHRX_32((uint32_t)_mm256_movemask_epi8(r0), (uint32_t)extra);
 
-        return mask ? _tzcnt_u32(mask) : size;
+        // mask out high bits (due to loading bytes after end of buffer)
+        // this will result in returning "size" value if all bytes are same as input value
+        m |= (uint32_t)(1ULL << size);
+
+        // return index of first bit set, which will be index of first byte different from input value
+        return _tzcnt_u32(m);
     }
 
     size_t offset = 0;
+
+    // process 128-byte blocks as much as possible
     while (size >= 128)
     {
         __m256i a0 = _mm256_loadu_si256((const __m256i*)(p + 0x00));
         __m256i a1 = _mm256_loadu_si256((const __m256i*)(p + 0x20));
         __m256i a2 = _mm256_loadu_si256((const __m256i*)(p + 0x40));
         __m256i a3 = _mm256_loadu_si256((const __m256i*)(p + 0x60));
+
+        // set lane to 0xff if lane matches input value, or 0x00 if not
         __m256i r0 = _mm256_cmpeq_epi8(value32, a0);
         __m256i r1 = _mm256_cmpeq_epi8(value32, a1);
         __m256i r2 = _mm256_cmpeq_epi8(value32, a2);
         __m256i r3 = _mm256_cmpeq_epi8(value32, a3);
+
+        // combine comparisons - leave 0xff in lanes there equal to input value
         __m256i r = _mm256_or_si256(_mm256_or_si256(r0, r1), _mm256_or_si256(r2, r3));
 
+        // extract top bit mask, it will be non-zero if there is at least one matching lane to input value
         uint32_t mask = (uint32_t)_mm256_movemask_epi8(r);
         if (mask)
         {
+            // extract top bit masks for each comparison
             uint64_t m0 = (uint32_t)_mm256_movemask_epi8(r0);
             uint64_t m1 = (uint32_t)_mm256_movemask_epi8(r1);
             uint64_t m2 = (uint32_t)_mm256_movemask_epi8(r2);
             uint64_t m3 = mask; // if r0=r1=r2=0, then r3=r
 
+            // combine masks
             uint64_t m01 = m0 | (m1 << 32);
             uint64_t m23 = m2 | (m3 << 32);
 
+            // find index of byte with difference
             size_t idx0 = _tzcnt_u64(m01);
             size_t idx1 = _tzcnt_u64(m23);
 
+            // combine both indices to actual index across both comparisons
             offset += idx0;
             offset += m01 ? 0 : idx1;
             return offset;
@@ -1511,64 +1937,236 @@ size_t MemFind_avx2(const void* ptr, size_t size, uint8_t value)
 
     if (size & 64) // 64 <= size < 128
     {
-        __m256i a0 = _mm256_loadu_si256((const __m256i*)p);
-        __m256i r0 = _mm256_cmpeq_epi8(value32, a0);
-
-        uint32_t mask = (uint32_t)_mm256_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = _tzcnt_u32(mask);
-            return offset + index;
-        }
-
+        // load 128 bytes, some will overlap, 0/1 from beginning of buffers, 2/3 from end of buffers
+        __m256i a0 = _mm256_loadu_si256((const __m256i*)(p + 0x00));
         __m256i a1 = _mm256_loadu_si256((const __m256i*)(p + 0x20));
+        __m256i a2 = _mm256_loadu_si256((const __m256i*)(p + size - 0x40));
+        __m256i a3 = _mm256_loadu_si256((const __m256i*)(p + size - 0x20));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m256i r0 = _mm256_cmpeq_epi8(value32, a0);
+        __m256i r1 = _mm256_cmpeq_epi8(value32, a1);
+        __m256i r2 = _mm256_cmpeq_epi8(value32, a2);
+        __m256i r3 = _mm256_cmpeq_epi8(value32, a3);
+
+        // extract top bit masks for each comparison
+        uint64_t m0 = (uint32_t)_mm256_movemask_epi8(r0);
+        uint64_t m1 = (uint32_t)_mm256_movemask_epi8(r1);
+        uint64_t m2 = (uint32_t)_mm256_movemask_epi8(r2);
+        uint64_t m3 = (uint32_t)_mm256_movemask_epi8(r3);
+
+        // combine masks
+        uint64_t m01 = m0 | (m1 << 32);
+        uint64_t m23 = m2 | (m3 << 32);
+
+        // get index of byte with difference, plus adjust due to overlap
+        size_t idx0 = _tzcnt_u64(m01);
+        size_t idx1 = _tzcnt_u64(m23) + (size - 64) - 64; // 64 will be already in idx0
+
+        // combine both indices to actual index across both comparisons
+        offset += idx0;
+        offset += m01 ? 0 : idx1;
+        return offset;
+    }
+    else if (size & 32) // 32 <= size < 64
+    {
+        // load 64 bytes, some will overlap, 0/1 from beginning of buffers, 2/3 from end of buffers
+        __m256i a0 = _mm256_loadu_si256((const __m256i*)p);
+        __m256i a1 = _mm256_loadu_si256((const __m256i*)(p + size - 0x20));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m256i r0 = _mm256_cmpeq_epi8(value32, a0);
         __m256i r1 = _mm256_cmpeq_epi8(value32, a1);
 
-        mask = (uint32_t)_mm256_movemask_epi8(r1);
-        if (mask)
-        {
-            size_t index = 0x20 + _tzcnt_u32(mask);
-            return offset + index;
-        }
+        // extract top bit masks for each comparison
+        uint64_t m0 = (uint32_t)_mm256_movemask_epi8(r0);
+        uint64_t m1 = (uint32_t)_mm256_movemask_epi8(r1);
 
-        offset += 64;
-        size -= 64;
-        p += 64;
+        // combine masks, handling overlapped ones
+        uint64_t m = m0 | (m1 << (size - 32));
+
+        // make sure mask is non-zero, this will result in returning "size" value if inputs are equal
+        m |= 1ULL << size;
+
+        // find first bit set, and return index
+        return offset + _tzcnt_u64(m);
+    }
+    else if (size) // 0 < size < 32, but initially size > 32
+    {
+        // load 32 bytes from end of buffer
+        // this will load previously checked bytes in 128 byte loop (they did not match input value)
+        __m256i a0 = _mm256_loadu_si256((const __m256i*)(p + size - 0x20));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m256i r0 = _mm256_cmpeq_epi8(value32, a0);
+
+        // extract top bit mask
+        uint32_t m = (uint32_t)_mm256_movemask_epi8(r0);
+
+        // find first bit set, adjust it due to reused bytes in load, and return index
+        return offset + _tzcnt_u32(m) + size - 32;
     }
 
-    if (size & 32) // 32 <= size < 64
+    // no input value found, return original size (current offset plus pending tail size)
+    return offset + size;
+}
+
+MEM_DISABLE_ASAN
+MEM_TARGET_AVX2
+size_t MemFindNot_avx2(const void* ptr, size_t size, uint8_t value)
+{
+    const uint8_t* p = (const uint8_t*)ptr;
+
+    __m256i value32 = _mm256_set1_epi8((char)value);
+
+    if (size == 0)
     {
+        return 0;
+    }
+
+    if (size <= 32)
+    {
+        size_t address = (uint32_t)(uintptr_t)p % 32;
+        size_t extra = (address + size) <= 32 ? address : 0;
+
+        // will load before the beginning buffer (32-byte aligned) if end is too close
+        // to 32-byte boundary, otherwise will load past the end of buffer
+        __m256i a0 = _mm256_loadu_si256((const __m256i*)(p - extra));
+        // set lane to 0xff if lane matches input value, or 0x00 if not
+
+        __m256i r0 = _mm256_cmpeq_epi8(value32, a0);
+
+        // add 1 to flip lowest 0 bit (non-equal position) to 1, changing all bits below it to 0
+        // drop any lowest "extra" bits (due to loading bytes before beginning buffer)
+        uint32_t m = 1U + MEM_SHRX_32((uint32_t)_mm256_movemask_epi8(r0), (uint32_t)extra);
+
+        // mask out high bits (due to loading bytes after end of buffer)
+        // this will result in returning "size" value if inputs are equal
+        m |= (uint32_t)(1ULL << size);
+
+        // return index of first bit set, which will be index of first byte matching input value
+        return _tzcnt_u32(m);
+    }
+
+    size_t offset = 0;
+
+    // process 128-byte blocks as much as possible
+    while (size >= 128)
+    {
+        __m256i a0 = _mm256_loadu_si256((const __m256i*)(p + 0x00));
+        __m256i a1 = _mm256_loadu_si256((const __m256i*)(p + 0x20));
+        __m256i a2 = _mm256_loadu_si256((const __m256i*)(p + 0x40));
+        __m256i a3 = _mm256_loadu_si256((const __m256i*)(p + 0x60));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m256i r0 = _mm256_cmpeq_epi8(value32, a0);
+        __m256i r1 = _mm256_cmpeq_epi8(value32, a1);
+        __m256i r2 = _mm256_cmpeq_epi8(value32, a2);
+        __m256i r3 = _mm256_cmpeq_epi8(value32, a3);
+
+        // combine comparisons - leave 0x00 in lanes that were not equal
+        __m256i r = _mm256_and_si256(_mm256_and_si256(r0, r1), _mm256_and_si256(r2, r3));
+
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint32_t mask = 1U + (uint32_t)_mm256_movemask_epi8(r);
+        if (mask)
+        {
+            // extract top bit masks for comparisons
+            uint64_t m0 = (uint32_t)_mm256_movemask_epi8(r0);
+            uint64_t m1 = (uint32_t)_mm256_movemask_epi8(r1);
+            uint64_t m2 = (uint32_t)_mm256_movemask_epi8(r2);
+            uint64_t m3 = (uint32_t)_mm256_movemask_epi8(r3);
+
+            // combine masks, and flip lowest 0 bit(non - equal position) to 1, changing all bits below it to 0
+            uint64_t m01 = 1ULL + (m0 | (m1 << 32));
+            uint64_t m23 = 1ULL + (m2 | (m3 << 32));
+
+            // find index of byte with difference
+            size_t idx0 = _tzcnt_u64(m01);
+            size_t idx1 = _tzcnt_u64(m23);
+
+            // combine both indices to actual index across both comparisons
+            offset += idx0;
+            offset += m01 ? 0 : idx1;
+            return offset;
+        }
+
+        offset += 128;
+        size -= 128;
+        p += 128;
+    }
+
+    if (size & 64) // 64 <= size < 128
+    {
+        // load 128 bytes, some will overlap
+        __m256i a0 = _mm256_loadu_si256((const __m256i*)(p + 0x00));
+        __m256i a1 = _mm256_loadu_si256((const __m256i*)(p + 0x20));
+        __m256i a2 = _mm256_loadu_si256((const __m256i*)(p + size - 0x40));
+        __m256i a3 = _mm256_loadu_si256((const __m256i*)(p + size - 0x20));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        __m256i r0 = _mm256_cmpeq_epi8(value32, a0);
+        __m256i r1 = _mm256_cmpeq_epi8(value32, a1);
+        __m256i r2 = _mm256_cmpeq_epi8(value32, a2);
+        __m256i r3 = _mm256_cmpeq_epi8(value32, a3);
+
+        // extract top bit masks
+        uint64_t m0 = (uint32_t)_mm256_movemask_epi8(r0);
+        uint64_t m1 = (uint32_t)_mm256_movemask_epi8(r1);
+        uint64_t m2 = (uint32_t)_mm256_movemask_epi8(r2);
+        uint64_t m3 = (uint32_t)_mm256_movemask_epi8(r3);
+
+        // combine masks, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint64_t m01 = 1ULL + (m0 | (m1 << 32));
+        uint64_t m23 = 1ULL + (m2 | (m3 << 32));
+
+        // get index of byte with difference, plus adjust due to overlap
+        size_t idx0 = _tzcnt_u64(m01);
+        size_t idx1 = _tzcnt_u64(m23) + (size - 64) - 64; // 64 will be already in idx0
+
+        // combine both indices to actual index across both comparisons
+        offset += idx0;
+        offset += m01 ? 0 : idx1;
+        return offset;
+    }
+    else if (size & 32) // 32 <= size < 64
+    {
+        // load 64 bytes, some will overlap
         __m256i a0 = _mm256_loadu_si256((const __m256i*)p);
+        __m256i a1 = _mm256_loadu_si256((const __m256i*)(p + size - 0x20));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m256i r0 = _mm256_cmpeq_epi8(value32, a0);
+        __m256i r1 = _mm256_cmpeq_epi8(value32, a1);
 
-        uint32_t mask = (uint32_t)_mm256_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = _tzcnt_u32(mask);
-            return offset + index;
-        }
+        // extract top bit masks
+        uint64_t m0 = (uint32_t)_mm256_movemask_epi8(r0);
+        uint64_t m1 = (uint32_t)_mm256_movemask_epi8(r1);
 
-        offset += 32;
-        size -= 32;
-        p += 32;
+        // combine masks, handling overlapped ones, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint64_t m = 1ULL + (m0 | (m1 << (size - 32)));
+
+        // return index of byte that's different, m is guaranteed non-zero, because there only max 63 bytes here
+        return offset + _tzcnt_u64(m);
     }
-
-    if (size) // size < 32
+    else if (size) // 0 < size < 32, but initially size > 32
     {
-        __m256i a0 = _mm256_loadu_si256((const __m256i*)(p + size - 32));
+        // load 32 bytes from end of buffer
+        // this will load previously checked bytes in 64 byte loop (they did match input value)
+        __m256i a0 = _mm256_loadu_si256((const __m256i*)(p + size - 0x20));
+
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         __m256i r0 = _mm256_cmpeq_epi8(value32, a0);
 
-        uint32_t mask = (uint32_t)_mm256_movemask_epi8(r0);
-        if (mask)
-        {
-            size_t index = _tzcnt_u32(mask) + size - 32;
-            return offset + index;
-        }
+        // extract top bit mask, flip lowest 0 bit to 1, changing all bits below it to 0
+        uint32_t mask = 1U + (uint32_t)_mm256_movemask_epi8(r0);
 
-        offset += size;
+        // get index of byte that's different, m is guaranteed non-zero, because there only max 31 bytes here
+        return offset + _tzcnt_u32(mask) + size - 32;
     }
 
-    return offset;
+    // all bytes are same as input value, return original size (current offset plus pending tail size)
+    return offset + size;
 }
 
 MEM_TARGET_AVX512
@@ -1577,19 +2175,26 @@ int MemCompare_avx512(const void* ptr1, const void* ptr2, size_t size)
     const uint8_t* p1 = (const uint8_t*)ptr1;
     const uint8_t* p2 = (const uint8_t*)ptr2;
 
+    // first handle any non-multiple of 64 size, so code later can deal with 64-byte multiple sizes
     size_t extra = size & 63;
     if (extra)
     {
+        //  mask to load "extra" amount of bytes
         __mmask64 mask = _cvtu64_mask64(_bzhi_u64(~0ULL, (uint32_t)extra));
 
+        // do masked load
         __m512i a = _mm512_maskz_loadu_epi8(mask, p1);
         __m512i b = _mm512_maskz_loadu_epi8(mask, p2);
 
+        // check if any bytes are different
         __mmask64 m = _mm512_cmpneq_epu8_mask(a, b);
         if (!_kortestz_mask64_u8(m, m))
         {
+            // if they are different, then find position of byte that is less than other value
             int r1 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a, b)));
             int r2 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b, a)));
+
+            // return signed difference which is comparison result
             return r1 - r2;
         }
 
@@ -1598,16 +2203,22 @@ int MemCompare_avx512(const void* ptr1, const void* ptr2, size_t size)
         p2 += extra;
     }
 
+    // now size is multiple of 64 bytes, handle case when it is not 128-byte multiple
     if (size & 64)
     {
+        // 64 byte loads
         __m512i a = _mm512_loadu_epi8(p1);
         __m512i b = _mm512_loadu_epi8(p2);
 
+        // check if any bytes are different
         __mmask64 m = _mm512_cmpneq_epu8_mask(a, b);
         if (!_kortestz_mask64_u8(m, m))
         {
+            // if they are different, then find position of byte that is less than other value
             int r1 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a, b)));
             int r2 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b, a)));
+
+            // return signed difference which is comparison result
             return r1 - r2;
         }
 
@@ -1616,6 +2227,7 @@ int MemCompare_avx512(const void* ptr1, const void* ptr2, size_t size)
         p2 += 64;
     }
 
+    // now size is 128-byte multiple, process rest of them in 128-byte blocks
     while (size)
     {
         __m512i a0 = _mm512_loadu_epi8(p1 + 0x00);
@@ -1623,17 +2235,22 @@ int MemCompare_avx512(const void* ptr1, const void* ptr2, size_t size)
         __m512i a1 = _mm512_loadu_epi8(p1 + 0x40);
         __m512i b1 = _mm512_loadu_epi8(p2 + 0x40);
 
+        // check if any bytes are different
         __mmask64 m0 = _mm512_cmpneq_epu8_mask(a0, b0);
         __mmask64 m1 = _mm512_cmpneq_epu8_mask(a1, b1);
         if (!_kortestz_mask64_u8(m0, m1))
         {
+            // if they are different, then find position of byte that is less than other value
             int r10 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a0, b0)));
             int r20 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b0, a0)));
             int r11 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a1, b1)));
             int r21 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b1, a1)));
 
+            // if low 64 bytes are the same, use indices for high 64 bytes
             int r1 = (r10 == r20) ? r11 : r10;
             int r2 = (r10 == r20) ? r21 : r20;
+
+            // return signed difference which is comparison result
             return r1 - r2;
         }
 
@@ -1642,6 +2259,7 @@ int MemCompare_avx512(const void* ptr1, const void* ptr2, size_t size)
         p2 += 128;
     }
 
+    // no differences found, inputs are equal
     return 0;
 }
 
@@ -1651,19 +2269,26 @@ int MemCompareI_avx512(const void* ptr1, const void* ptr2, size_t size)
     const uint8_t* p1 = (const uint8_t*)ptr1;
     const uint8_t* p2 = (const uint8_t*)ptr2;
 
+    // first handle any non-multiple of 64 size, so code later can deal with 64-byte multiple sizes
     size_t extra = size & 63;
     if (extra)
     {
+        //  mask to load "extra" amount of bytes
         __mmask64 mask = _cvtu64_mask64(_bzhi_u64(~0ULL, (uint32_t)extra));
 
+        // do masked load & convert to lowercase
         __m512i a = MemToLower64(_mm512_maskz_loadu_epi8(mask, p1));
         __m512i b = MemToLower64(_mm512_maskz_loadu_epi8(mask, p2));
 
+        // check if any bytes are different
         __mmask64 m = _mm512_cmpneq_epu8_mask(a, b);
         if (!_kortestz_mask64_u8(m, m))
         {
+            // if they are different, then find position of byte that is less than other value
             int r1 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a, b)));
             int r2 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b, a)));
+
+            // return signed difference which is comparison result
             return r1 - r2;
         }
 
@@ -1672,16 +2297,22 @@ int MemCompareI_avx512(const void* ptr1, const void* ptr2, size_t size)
         p2 += extra;
     }
 
+    // now size is multiple of 64 bytes, handle case when it is not 128-byte multiple
     if (size & 64)
     {
+        // 64 byte loads & convert to lowercase
         __m512i a = MemToLower64(_mm512_loadu_epi8(p1));
         __m512i b = MemToLower64(_mm512_loadu_epi8(p2));
 
+        // check if any bytes are different
         __mmask64 m = _mm512_cmpneq_epu8_mask(a, b);
         if (!_kortestz_mask64_u8(m, m))
         {
+            // if they are different, then find position of byte that is less than other value
             int r1 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a, b)));
             int r2 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b, a)));
+
+            // return signed difference which is comparison result
             return r1 - r2;
         }
 
@@ -1690,6 +2321,7 @@ int MemCompareI_avx512(const void* ptr1, const void* ptr2, size_t size)
         p2 += 64;
     }
 
+    // now size is 128-byte multiple, process rest of them in 128-byte blocks
     while (size)
     {
         __m512i a0 = MemToLower64(_mm512_loadu_epi8(p1 + 0x00));
@@ -1697,17 +2329,22 @@ int MemCompareI_avx512(const void* ptr1, const void* ptr2, size_t size)
         __m512i a1 = MemToLower64(_mm512_loadu_epi8(p1 + 0x40));
         __m512i b1 = MemToLower64(_mm512_loadu_epi8(p2 + 0x40));
 
+        // check if any bytes are different
         __mmask64 m0 = _mm512_cmpneq_epu8_mask(a0, b0);
         __mmask64 m1 = _mm512_cmpneq_epu8_mask(a1, b1);
         if (!_kortestz_mask64_u8(m0, m1))
         {
+            // if they are different, then find position of byte that is less than other value
             int r10 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a0, b0)));
             int r20 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b0, a0)));
             int r11 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(a1, b1)));
             int r21 = (int)_tzcnt_u64(_cvtmask64_u64(_mm512_cmplt_epu8_mask(b1, a1)));
 
+            // if low 64 bytes are the same, use indices for high 64 bytes
             int r1 = (r10 == r20) ? r11 : r10;
             int r2 = (r10 == r20) ? r21 : r20;
+
+            // return signed difference which is comparison result
             return r1 - r2;
         }
 
@@ -1716,6 +2353,7 @@ int MemCompareI_avx512(const void* ptr1, const void* ptr2, size_t size)
         p2 += 128;
     }
 
+    // no differences found, inputs are equal
     return 0;
 }
 
@@ -1725,17 +2363,22 @@ bool MemIsEqual_avx512(const void* ptr1, const void* ptr2, size_t size)
     const uint8_t* p1 = (const uint8_t*)ptr1;
     const uint8_t* p2 = (const uint8_t*)ptr2;
 
+    // first handle any non-multiple of 64 size, so code later can deal with 64-byte multiple sizes
     size_t extra = size & 63;
     if (extra)
     {
+        //  mask to load "extra" amount of bytes
         __mmask64 mask = _cvtu64_mask64(_bzhi_u64(~0ULL, (uint32_t)extra));
 
+        // do masked load & convert to lowercase
         __m512i a = _mm512_maskz_loadu_epi8(mask, p1);
         __m512i b = _mm512_maskz_loadu_epi8(mask, p2);
 
+        // check if any bytes are different
         __mmask64 m = _mm512_cmpneq_epu8_mask(a, b);
         if (!_kortestz_mask64_u8(m, m))
         {
+            // they are different
             return false;
         }
 
@@ -1744,14 +2387,18 @@ bool MemIsEqual_avx512(const void* ptr1, const void* ptr2, size_t size)
         p2 += extra;
     }
 
+    // now size is multiple of 64 bytes, handle case when it is not 128-byte multiple
     if (size & 64)
     {
+        // 64 byte loads
         __m512i a = _mm512_loadu_epi8(p1);
         __m512i b = _mm512_loadu_epi8(p2);
 
+        // check if any bytes are different
         __mmask64 m = _mm512_cmpneq_epu8_mask(a, b);
         if (!_kortestz_mask64_u8(m, m))
         {
+            // they are different
             return false;
         }
 
@@ -1760,6 +2407,7 @@ bool MemIsEqual_avx512(const void* ptr1, const void* ptr2, size_t size)
         p2 += 64;
     }
 
+    // now size is 128-byte multiple, process rest of them in 128-byte blocks
     while (size)
     {
         __m512i a0 = _mm512_loadu_epi8(p1 + 0x00);
@@ -1767,11 +2415,12 @@ bool MemIsEqual_avx512(const void* ptr1, const void* ptr2, size_t size)
         __m512i a1 = _mm512_loadu_epi8(p1 + 0x40);
         __m512i b1 = _mm512_loadu_epi8(p2 + 0x40);
 
+        // check if any bytes are different
         __mmask64 m0 = _mm512_cmpneq_epu8_mask(a0, b0);
         __mmask64 m1 = _mm512_cmpneq_epu8_mask(a1, b1);
-
         if (!_kortestz_mask64_u8(m0, m1))
         {
+            // they are different
             return false;
         }
 
@@ -1780,6 +2429,7 @@ bool MemIsEqual_avx512(const void* ptr1, const void* ptr2, size_t size)
         p2 += 128;
     }
 
+    // no differences found, inputs are equal
     return true;
 }
 
@@ -1791,16 +2441,21 @@ size_t MemFind_avx512(const void* ptr, size_t size, uint8_t value)
 
     size_t offset = 0;
 
+    // first handle any non-multiple of 64 size, so code later can deal with 64-byte multiple sizes
     size_t extra = size & 63;
     if (extra)
     {
+        //  mask to load "extra" amount of bytes
         __mmask64 mask = _cvtu64_mask64(_bzhi_u64(~0ULL, (uint32_t)extra));
 
-        __m512i a = _mm512_mask_loadu_epi8(_mm512_set1_epi8((char)~value), mask, p);
+        // do masked load, zeroing out upper bytes
+        __m512i a = _mm512_maskz_loadu_epi8(mask, p);
 
-        __mmask64 m = _mm512_cmpeq_epu8_mask(value64, a);
+        // check if any bytes matches input value, only low "extra" bytes
+        __mmask64 m = _mm512_mask_cmpeq_epu8_mask(mask, value64, a);
         if (!_kortestz_mask64_u8(m, m))
         {
+            // if it does, return index of lowest byte that matches
             return (size_t)_tzcnt_u64(_cvtmask64_u64(m));
         }
 
@@ -1809,13 +2464,17 @@ size_t MemFind_avx512(const void* ptr, size_t size, uint8_t value)
         p += extra;
     }
 
+    // now size is multiple of 64 bytes, handle case when it is not 128-byte multiple
     if (size & 64)
     {
+        // 64 byte load
         __m512i a = _mm512_loadu_epi8(p);
 
+        // check if any bytes matches input value
         __mmask64 m = _mm512_cmpeq_epu8_mask(value64, a);
         if (!_kortestz_mask64_u8(m, m))
         {
+            // if it does, return index of lowest byte that matches
             return offset + (size_t)_tzcnt_u64(_cvtmask64_u64(m));
         }
 
@@ -1824,19 +2483,22 @@ size_t MemFind_avx512(const void* ptr, size_t size, uint8_t value)
         p += 64;
     }
 
+    // now size is 128-byte multiple, process rest of them in 128-byte blocks
     while (size)
     {
         __m512i a0 = _mm512_loadu_epi8(p + 0x00);
         __m512i a1 = _mm512_loadu_epi8(p + 0x40);
 
+        // check if any bytes matches input value
         __mmask64 m0 = _mm512_cmpeq_epu8_mask(value64, a0);
         __mmask64 m1 = _mm512_cmpeq_epu8_mask(value64, a1);
-
         if (!_kortestz_mask64_u8(m0, m1))
         {
+            // if it does, get index of lowest byte that matches
             size_t r0 = _tzcnt_u64(_cvtmask64_u64(m0));
             size_t r1 = _tzcnt_u64(_cvtmask64_u64(m1));
 
+            // combine both indices to actual index across both comparisons
             offset += r0;
             offset += r0 == 64 ? r1 : 0;
             return offset;
@@ -1847,6 +2509,87 @@ size_t MemFind_avx512(const void* ptr, size_t size, uint8_t value)
         p += 128;
     }
 
+    // no input value found
+    return offset;
+}
+
+MEM_TARGET_AVX512
+size_t MemFindNot_avx512(const void* ptr, size_t size, uint8_t value)
+{
+    const uint8_t* p = (const uint8_t*)ptr;
+    const __m512i value64 = _mm512_set1_epi8((char)value);
+
+    size_t offset = 0;
+
+    // first handle any non-multiple of 64 size, so code later can deal with 64-byte multiple sizes
+    size_t extra = size & 63;
+    if (extra)
+    {
+        //  mask to load "extra" amount of bytes
+        __mmask64 mask = _cvtu64_mask64(_bzhi_u64(~0ULL, (uint32_t)extra));
+
+        // do masked load, zeroing out upper bytes
+        __m512i a = _mm512_maskz_loadu_epi8(mask, p);
+
+        // check if any bytes are different, only low "extra" bytes
+        __mmask64 m = _mm512_mask_cmpneq_epu8_mask(mask, value64, a);
+        if (!_kortestz_mask64_u8(m, m))
+        {
+            // if they are, return index of lowest byte that does not match
+            return (size_t)_tzcnt_u64(_cvtmask64_u64(m));
+        }
+
+        offset += extra;
+        size -= extra;
+        p += extra;
+    }
+
+    // now size is multiple of 64 bytes, handle case when it is not 128-byte multiple
+    if (size & 64)
+    {
+        // 64 byte load
+        __m512i a = _mm512_loadu_epi8(p);
+
+        // check if any bytes are different
+        __mmask64 m = _mm512_cmpneq_epu8_mask(value64, a);
+        if (!_kortestz_mask64_u8(m, m))
+        {
+            // if they are, return index of lowest byte that does not match
+            return offset + (size_t)_tzcnt_u64(_cvtmask64_u64(m));
+        }
+
+        offset += 64;
+        size -= 64;
+        p += 64;
+    }
+
+    // now size is 128-byte multiple, process rest of them in 128-byte blocks
+    while (size)
+    {
+        __m512i a0 = _mm512_loadu_epi8(p + 0x00);
+        __m512i a1 = _mm512_loadu_epi8(p + 0x40);
+
+        // check if any bytes are different
+        __mmask64 m0 = _mm512_cmpneq_epu8_mask(value64, a0);
+        __mmask64 m1 = _mm512_cmpneq_epu8_mask(value64, a1);
+        if (!_kortestz_mask64_u8(m0, m1))
+        {
+            // if they are, get index of lowest byte that does not match
+            size_t r0 = _tzcnt_u64(_cvtmask64_u64(m0));
+            size_t r1 = _tzcnt_u64(_cvtmask64_u64(m1));
+
+            // combine both indices to actual index across both comparisons
+            offset += r0;
+            offset += r0 == 64 ? r1 : 0;
+            return offset;
+        }
+
+        offset += 128;
+        size -= 128;
+        p += 128;
+    }
+
+    // all bytes are same as input value
     return offset;
 }
 
@@ -1864,7 +2607,7 @@ static inline uint8x16_t MemToLower16(uint8x16_t x)
 }
 
 MEM_DISABLE_ASAN
-int MemCompare_arm64(const void* ptr1, const void* ptr2, size_t size)
+int MemCompare_neon(const void* ptr1, const void* ptr2, size_t size)
 {
     const uint8_t* p1 = (const uint8_t*)ptr1;
     const uint8_t* p2 = (const uint8_t*)ptr2;
@@ -1881,7 +2624,11 @@ int MemCompare_arm64(const void* ptr1, const void* ptr2, size_t size)
             return p1[0] - p2[0];
         }
 
+        // will load pair of 4, 8 or 16 overlapping bytes
+        // a/b0 from beginning of buffer
+        // a/b1 from end of buffers
         uint64_t a0, b0, a1, b1;
+
         if (size < 4) // 2 <= size < 4
         {
             a0 = MEM_PTR16U(p1);
@@ -1904,46 +2651,55 @@ int MemCompare_arm64(const void* ptr1, const void* ptr2, size_t size)
             b1 = MEM_PTR64U(p2 + size - 8);
         }
 
+        // use a0/b0 if they are not equal, otherwise a1/b1
+        // byte swap because in big-endian bytes can be compared as uint64 numbers
         uint64_t a = MEM_BSWAP64(a0 != b0 ? a0 : a1);
         uint64_t b = MEM_BSWAP64(a0 != b0 ? b0 : b1);
+
         return (a > b) - (a < b);
     }
 
-    uint8x16_t va = vdupq_n_u8(0);
-    uint8x16_t vb = vdupq_n_u8(0);
+    const uint8x16_t index4 = vreinterpretq_u8_u64(vdupq_n_u64(0x8040201008040201));
 
+    // process 64-byte blocks as much as possible
     while (size >= 64)
     {
         uint8x16x4_t a = vld1q_u8_x4(p1);
         uint8x16x4_t b = vld1q_u8_x4(p2);
 
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         uint8x16_t c0 = vceqq_u8(a.val[0], b.val[0]);
         uint8x16_t c1 = vceqq_u8(a.val[1], b.val[1]);
         uint8x16_t c2 = vceqq_u8(a.val[2], b.val[2]);
         uint8x16_t c3 = vceqq_u8(a.val[3], b.val[3]);
-        uint8x16_t c = vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3));
 
+        // combine comparisons - leave 0xff in lanes that were not equal in at least one of inputs
+        uint8x16_t c = vmvnq_u8(vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3)));
+
+        // nibbles will contain 16 masks with 4-bit value 0xf for lanes that were not equal
+        // meaning if nibbles is non-zero, then there is mismatch in input bytes
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(c), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
-        if (nibbles + 1)
+        if (nibbles)
         {
-            uint8x16_t vm;
-            va = a.val[3];
-            vb = b.val[3];
+            // change all lanes with 0xff byte to 0
+            // but for lanes with 0x00 byte keep its index (8 based)
+            uint8x16_t m0 = vbicq_u8(index4, c0);
+            uint8x16_t m1 = vbicq_u8(index4, c1);
+            uint8x16_t m2 = vbicq_u8(index4, c2);
+            uint8x16_t m3 = vbicq_u8(index4, c3);
 
-            vm = vdupq_n_u8(vminvq_u8(c2));
-            va = vbslq_u8(vm, va, a.val[2]);
-            vb = vbslq_u8(vm, vb, b.val[2]);
+            // sum pairs of masks, so result fits into 64-bit low lane
+            uint8x16_t s1 = vpaddq_u8(vpaddq_u8(m0, m1), vpaddq_u8(m2, m3));
+            uint8x16_t s2 = vpaddq_u8(s1, s1);
 
-            vm = vdupq_n_u8(vminvq_u8(c1));
-            va = vbslq_u8(vm, va, a.val[1]);
-            vb = vbslq_u8(vm, vb, b.val[1]);
+            // now s3 will have bit set 1 in position we want to extract
+            uint64_t s3 = vgetq_lane_u64(vreinterpretq_u64_u8(s2), 0);
 
-            vm = vdupq_n_u8(vminvq_u8(c0));
-            va = vbslq_u8(vm, va, a.val[0]);
-            vb = vbslq_u8(vm, vb, b.val[0]);
+            // get index for byte position that's different in inputs, s3 is non-zero here
+            size_t index = MEM_CTZ64(s3);
 
-            goto done;
+            return p1[index] - p2[index];
         }
 
         size -= 64;
@@ -1953,74 +2709,106 @@ int MemCompare_arm64(const void* ptr1, const void* ptr2, size_t size)
 
     if (size & 32) // 32 <= size < 64
     {
-        uint8x16x2_t a = vld1q_u8_x2(p1);
-        uint8x16x2_t b = vld1q_u8_x2(p2);
+        // load 64 bytes, some will overlap, 0/1 from beginning of buffers, 2/3 from end of buffers
+        uint8x16x2_t a0 = vld1q_u8_x2(p1);
+        uint8x16x2_t b0 = vld1q_u8_x2(p2);
+        uint8x16x2_t a1 = vld1q_u8_x2(p1 + size - 0x20);
+        uint8x16x2_t b1 = vld1q_u8_x2(p2 + size - 0x20);
 
-        uint8x16_t c0 = vceqq_u8(a.val[0], b.val[0]);
-        uint8x16_t c1 = vceqq_u8(a.val[1], b.val[1]);
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        uint8x16_t c0 = vceqq_u8(a0.val[0], b0.val[0]);
+        uint8x16_t c1 = vceqq_u8(a0.val[1], b0.val[1]);
+        uint8x16_t c2 = vceqq_u8(a1.val[0], b1.val[0]);
+        uint8x16_t c3 = vceqq_u8(a1.val[1], b1.val[1]);
 
-        uint8x8_t mask0 = vshrn_n_u16(vreinterpretq_u16_u8(c0), 4);
-        uint64_t nibbles0 = vget_lane_u64(vreinterpret_u64_u8(mask0), 0);
-        if (nibbles0 + 1)
-        {
-            va = a.val[0];
-            vb = b.val[0];
-            goto done;
-        }
+        // comparisons to bit index masks
+        uint8x16_t m0 = vbicq_u8(index4, c0);
+        uint8x16_t m1 = vbicq_u8(index4, c1);
+        uint8x16_t m2 = vbicq_u8(index4, c2);
+        uint8x16_t m3 = vbicq_u8(index4, c3);
 
-        uint8x8_t mask1 = vshrn_n_u16(vreinterpretq_u16_u8(c1), 4);
-        uint64_t nibbles1 = vget_lane_u64(vreinterpret_u64_u8(mask1), 0);
-        if (nibbles1 + 1)
-        {
-            va = a.val[1];
-            vb = b.val[1];
-            goto done;
-        }
+        // sum pairs of masks, so result fits into 64-bit low lane
+        uint8x16_t s1 = vpaddq_u8(vpaddq_u8(m0, m1), vpaddq_u8(m2, m3));
+        uint8x16_t s2 = vpaddq_u8(s1, s1);
 
-        size -= 32;
-        p1 += 32;
-        p2 += 32;
+        // extract 64-bit index mask
+        uint64_t m = vgetq_lane_u64(vreinterpretq_u64_u8(s2), 0);
+
+        // get index for byte position that's different in inputs, or 64 if inputs are equal
+        size_t index = m ? MEM_CTZ64(m) : 64;
+
+        // adjust index to correct byte position, due to reused bytes in load
+        // index = (index < 32) ? index : (index - 32) + (size - 32);
+        index += (index >= 32) * (size - 64);
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? p1[index] - p2[index] : 0;
     }
-
-    if (size & 16) // 16 <= size < 32
+    else if (size & 16) // 16 <= size < 32
     {
-        va = vld1q_u8(p1);
-        vb = vld1q_u8(p2);
+        // load 32 bytes, some will overlap
+        uint8x16_t a0 = vld1q_u8(p1);
+        uint8x16_t b0 = vld1q_u8(p2);
+        uint8x16_t a1 = vld1q_u8(p1 + size - 0x10);
+        uint8x16_t b1 = vld1q_u8(p2 + size - 0x10);
 
-        uint8x16_t c = vceqq_u8(va, vb);
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        uint8x16_t c0 = vceqq_u8(a0, b0);
+        uint8x16_t c1 = vceqq_u8(a1, b1);
 
+        // comparisons to bit index masks
+        uint8x16_t m0 = vbicq_u8(index4, c0);
+        uint8x16_t m1 = vbicq_u8(index4, c1);
+
+        // sum pairs of masks, so result fits into 64-bit low lane
+        uint8x16_t s1 = vpaddq_u8(m0, m1);
+        uint8x16_t s2 = vpaddq_u8(s1, s1);
+        uint8x16_t s3 = vpaddq_u8(s2, s2);
+
+        // extract 64-bit index mask
+        uint32_t m = vgetq_lane_u32(vreinterpretq_u32_u8(s3), 0);
+
+        // get index for byte position that's different in inputs, or 32 if inputs are equal
+        size_t index = m ? MEM_CTZ32(m) : 32;
+
+        // adjust index to correct byte position, due to reused bytes in load
+        // index = (index < 16) ? index : (index - 16) + (size - 16);
+        index += (index >= 16) * (size - 32);
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? p1[index] - p2[index] : 0;
+    }
+    else if (size) // 0 < size < 16, but initially size > 16
+    {
+        // load 16 bytes from end of buffer
+        // this will load previously checked bytes in 64 byte loop (they were equal)
+        uint8x16_t a = vld1q_u8(p1 + size - 16);
+        uint8x16_t b = vld1q_u8(p2 + size - 16);
+
+        // set lanes to 0x00 if bytes are equal, or 0xff if not
+        uint8x16_t c = vmvnq_u8(vceqq_u8(a, b));
+
+        // nibbles will contain 16 masks with 4-bit value 0x0 if lanes were equal
+        // if there is one lane that was not equal, it contains 0xf
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(c), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
-        if (nibbles + 1)
-        {
-            goto done;
-        }
 
-        size -= 16;
-        p1 += 16;
-        p2 += 16;
+        // get index for byte position that's different in inputs, or 16
+        size_t index = (nibbles ? MEM_CTZ64(nibbles) : 64) / 4;
+
+        // adjust index due to reused bytes in load
+        index += size - 16;
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? p1[index] - p2[index] : 0;
     }
 
-    if (size) // size < 16
-    {
-        va = vld1q_u8(p1 + size - 16);
-        vb = vld1q_u8(p2 + size - 16);
-    }
-
-done:;
-    uint64x2_t a64 = vreinterpretq_u64_u8(vrev64q_u8(va));
-    uint64x2_t b64 = vreinterpretq_u64_u8(vrev64q_u8(vb));
-    uint64_t a0 = vgetq_lane_u64(a64, 0);
-    uint64_t b0 = vgetq_lane_u64(b64, 0);
-    uint64_t a1 = vgetq_lane_u64(a64, 1);
-    uint64_t b1 = vgetq_lane_u64(b64, 1);
-    uint64_t a = (a0 != b0 ? a0 : a1);
-    uint64_t b = (a0 != b0 ? b0 : b1);
-    return (a > b) - (a < b);
+    // no differences found, inputs are equal
+    return 0;
 }
 
 MEM_DISABLE_ASAN
-int MemCompareI_arm64(const void* ptr1, const void* ptr2, size_t size)
+int MemCompareI_neon(const void* ptr1, const void* ptr2, size_t size)
 {
     const uint8_t* p1 = (const uint8_t*)ptr1;
     const uint8_t* p2 = (const uint8_t*)ptr2;
@@ -2039,85 +2827,96 @@ int MemCompareI_arm64(const void* ptr1, const void* ptr2, size_t size)
 
         if (size < 4) // 2 <= size < 4
         {
+            // load pair of 4 overlapping bytes
             uint64_t a0 = MEM_PTR16U(p1);
             uint64_t b0 = MEM_PTR16U(p2);
             uint64_t a1 = MEM_PTR16U(p1 + size - 2);
             uint64_t b1 = MEM_PTR16U(p2 + size - 2);
+
+            // combine, lower case them and byteswap to have numbers in big-endian
             uint64_t tmp = MEM_BSWAP64(MemToLower8(a0 | (a1 << 16) | (b0 << 32) | (b1 << 48)));
             uint32_t a = (uint32_t)(tmp >> 32);
             uint32_t b = (uint32_t)tmp;
+
+            // can compare uint64 numbers if they are big-endian
             return (a > b) - (a < b);
         }
         else if (size < 8) // 4 <= size < 8
         {
+            // load pair of 8 overlapping bytes
             uint64_t a0 = MEM_PTR32U(p1);
             uint64_t b0 = MEM_PTR32U(p2);
             uint64_t a1 = MEM_PTR32U(p1 + size - 4);
             uint64_t b1 = MEM_PTR32U(p2 + size - 4);
+
+            // combine, lower case them and byteswap to have numbers in big-endian
             uint64_t a = MEM_BSWAP64(MemToLower8(a0 | (a1 << 32)));
             uint64_t b = MEM_BSWAP64(MemToLower8(b0 | (b1 << 32)));
+
+            // can compare uint64 numbers if they are big-endian
             return (a > b) - (a < b);
         }
         else // 8 <= size <= 16
         {
+            // load pair of 16 overlapping bytes
             uint8x16_t va = vcombine_u8(vld1_u8(p1), vld1_u8(p1 + size - 8));
             uint8x16_t vb = vcombine_u8(vld1_u8(p2), vld1_u8(p2 + size - 8));
+
+            // lower case them and byteswap to have numbers in big-endian
             uint64x2_t a64 = vreinterpretq_u64_u8(vrev64q_u8(MemToLower16(va)));
             uint64x2_t b64 = vreinterpretq_u64_u8(vrev64q_u8(MemToLower16(vb)));
+
+            // use a0/b0 if they are not equal, otherwise a1/b1
             uint64_t a0 = vgetq_lane_u64(a64, 0);
             uint64_t b0 = vgetq_lane_u64(b64, 0);
             uint64_t a1 = vgetq_lane_u64(a64, 1);
             uint64_t b1 = vgetq_lane_u64(b64, 1);
             uint64_t a = (a0 != b0 ? a0 : a1);
             uint64_t b = (a0 != b0 ? b0 : b1);
+
             return (a > b) - (a < b);
         }
     }
 
-    uint8x16_t va = vdupq_n_u8(0);
-    uint8x16_t vb = vdupq_n_u8(0);
+    const uint8x16_t index4 = vreinterpretq_u8_u64(vdupq_n_u64(0x8040201008040201));
 
+    // process 64-byte blocks as much as possible
     while (size >= 64)
     {
         uint8x16x4_t a = vld1q_u8_x4(p1);
         uint8x16x4_t b = vld1q_u8_x4(p2);
 
-        a.val[0] = MemToLower16(a.val[0]);
-        b.val[0] = MemToLower16(b.val[0]);
-        a.val[1] = MemToLower16(a.val[1]);
-        b.val[1] = MemToLower16(b.val[1]);
-        a.val[2] = MemToLower16(a.val[2]);
-        b.val[2] = MemToLower16(b.val[2]);
-        a.val[3] = MemToLower16(a.val[3]);
-        b.val[3] = MemToLower16(b.val[3]);
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        uint8x16_t c0 = vceqq_u8(MemToLower16(a.val[0]), MemToLower16(b.val[0]));
+        uint8x16_t c1 = vceqq_u8(MemToLower16(a.val[1]), MemToLower16(b.val[1]));
+        uint8x16_t c2 = vceqq_u8(MemToLower16(a.val[2]), MemToLower16(b.val[2]));
+        uint8x16_t c3 = vceqq_u8(MemToLower16(a.val[3]), MemToLower16(b.val[3]));
 
-        uint8x16_t c0 = vceqq_u8(a.val[0], b.val[0]);
-        uint8x16_t c1 = vceqq_u8(a.val[1], b.val[1]);
-        uint8x16_t c2 = vceqq_u8(a.val[2], b.val[2]);
-        uint8x16_t c3 = vceqq_u8(a.val[3], b.val[3]);
-        uint8x16_t c = vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3));
+        // combine comparisons - leave 0xff in lanes that were not equal in at least one of inputs
+        uint8x16_t c = vmvnq_u8(vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3)));
 
+        // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(c), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
-        if (nibbles + 1)
+        if (nibbles)
         {
-            uint8x16_t vm;
-            va = a.val[3];
-            vb = b.val[3];
+            // comparisons to bit index masks
+            uint8x16_t m0 = vbicq_u8(index4, c0);
+            uint8x16_t m1 = vbicq_u8(index4, c1);
+            uint8x16_t m2 = vbicq_u8(index4, c2);
+            uint8x16_t m3 = vbicq_u8(index4, c3);
 
-            vm = vdupq_n_u8(vminvq_u8(c2));
-            va = vbslq_u8(vm, va, a.val[2]);
-            vb = vbslq_u8(vm, vb, b.val[2]);
+            // sum pairs of masks, so result fits into 64-bit low lane
+            uint8x16_t s1 = vpaddq_u8(vpaddq_u8(m0, m1), vpaddq_u8(m2, m3));
+            uint8x16_t s2 = vpaddq_u8(s1, s1);
 
-            vm = vdupq_n_u8(vminvq_u8(c1));
-            va = vbslq_u8(vm, va, a.val[1]);
-            vb = vbslq_u8(vm, vb, b.val[1]);
+            // extract 64-bit index mask
+            uint64_t s3 = vgetq_lane_u64(vreinterpretq_u64_u8(s2), 0);
 
-            vm = vdupq_n_u8(vminvq_u8(c0));
-            va = vbslq_u8(vm, va, a.val[0]);
-            vb = vbslq_u8(vm, vb, b.val[0]);
+            // get index for byte position that's different in inputs, s3 is non-zero here
+            size_t index = MEM_CTZ64(s3);
 
-            goto done;
+            return MemToLower1(p1[index]) - MemToLower1(p2[index]);
         }
 
         size -= 64;
@@ -2127,79 +2926,106 @@ int MemCompareI_arm64(const void* ptr1, const void* ptr2, size_t size)
 
     if (size & 32) // 32 <= size < 64
     {
-        uint8x16x2_t a = vld1q_u8_x2(p1);
-        uint8x16x2_t b = vld1q_u8_x2(p2);
+        // load 64 bytes, some will overlap
+        uint8x16x2_t a0 = vld1q_u8_x2(p1);
+        uint8x16x2_t b0 = vld1q_u8_x2(p2);
+        uint8x16x2_t a1 = vld1q_u8_x2(p1 + size - 0x20);
+        uint8x16x2_t b1 = vld1q_u8_x2(p2 + size - 0x20);
 
-        a.val[0] = MemToLower16(a.val[0]);
-        b.val[0] = MemToLower16(b.val[0]);
-        a.val[1] = MemToLower16(a.val[1]);
-        b.val[1] = MemToLower16(b.val[1]);
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        uint8x16_t c0 = vceqq_u8(MemToLower16(a0.val[0]), MemToLower16(b0.val[0]));
+        uint8x16_t c1 = vceqq_u8(MemToLower16(a0.val[1]), MemToLower16(b0.val[1]));
+        uint8x16_t c2 = vceqq_u8(MemToLower16(a1.val[0]), MemToLower16(b1.val[0]));
+        uint8x16_t c3 = vceqq_u8(MemToLower16(a1.val[1]), MemToLower16(b1.val[1]));
 
-        uint8x16_t c0 = vceqq_u8(a.val[0], b.val[0]);
-        uint8x16_t c1 = vceqq_u8(a.val[1], b.val[1]);
+        // comparisons to bit index masks
+        uint8x16_t m0 = vbicq_u8(index4, c0);
+        uint8x16_t m1 = vbicq_u8(index4, c1);
+        uint8x16_t m2 = vbicq_u8(index4, c2);
+        uint8x16_t m3 = vbicq_u8(index4, c3);
 
-        uint8x8_t mask0 = vshrn_n_u16(vreinterpretq_u16_u8(c0), 4);
-        uint64_t nibbles0 = vget_lane_u64(vreinterpret_u64_u8(mask0), 0);
-        if (nibbles0 + 1)
-        {
-            va = a.val[0];
-            vb = b.val[0];
-            goto done;
-        }
+        // sum pairs of masks, so result fits into 64-bit low lane
+        uint8x16_t s1 = vpaddq_u8(vpaddq_u8(m0, m1), vpaddq_u8(m2, m3));
+        uint8x16_t s2 = vpaddq_u8(s1, s1);
 
-        uint8x8_t mask1 = vshrn_n_u16(vreinterpretq_u16_u8(c1), 4);
-        uint64_t nibbles1 = vget_lane_u64(vreinterpret_u64_u8(mask1), 0);
-        if (nibbles1 + 1)
-        {
-            va = a.val[1];
-            vb = b.val[1];
-            goto done;
-        }
+        // extract 64-bit index mask
+        uint64_t m = vgetq_lane_u64(vreinterpretq_u64_u8(s2), 0);
 
-        size -= 32;
-        p1 += 32;
-        p2 += 32;
+        // get index for byte position that's different in inputs, or 64 if inputs are equal
+        size_t index = m ? MEM_CTZ64(m) : 64;
+
+        // adjust index to correct byte position, due to reused bytes in load
+        // index = (index < 32) ? index : (index - 32) + (size - 32);
+        index += (index >= 32) * (size - 64);
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? MemToLower1(p1[index]) - MemToLower1(p2[index]) : 0;
     }
-
-    if (size & 16) // 16 <= size < 32
+    else if (size & 16) // 16 <= size < 32
     {
-        va = MemToLower16(vld1q_u8(p1));
-        vb = MemToLower16(vld1q_u8(p2));
+        // load 32 bytes, some will overlap
+        uint8x16_t a0 = vld1q_u8(p1);
+        uint8x16_t b0 = vld1q_u8(p2);
+        uint8x16_t a1 = vld1q_u8(p1 + size - 0x10);
+        uint8x16_t b1 = vld1q_u8(p2 + size - 0x10);
 
-        uint8x16_t c = vceqq_u8(va, vb);
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        uint8x16_t c0 = vceqq_u8(MemToLower16(a0), MemToLower16(b0));
+        uint8x16_t c1 = vceqq_u8(MemToLower16(a1), MemToLower16(b1));
 
+        // comparisons to bit index masks
+        uint8x16_t m0 = vbicq_u8(index4, c0);
+        uint8x16_t m1 = vbicq_u8(index4, c1);
+
+        // sum pairs of masks, so result fits into 64-bit low lane
+        uint8x16_t s1 = vpaddq_u8(m0, m1);
+        uint8x16_t s2 = vpaddq_u8(s1, s1);
+        uint8x16_t s3 = vpaddq_u8(s2, s2);
+
+        // extract 64-bit index mask
+        uint32_t m = vgetq_lane_u32(vreinterpretq_u32_u8(s3), 0);
+
+        // get index for byte position that's different in inputs, or 32 if inputs are equal
+        size_t index = m ? MEM_CTZ32(m) : 32;
+
+        // adjust index to correct byte position, due to reused bytes in load
+        // index = (index < 16) ? index : (index - 16) + (size - 16);
+        index += (index >= 16) * (size - 32);
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? MemToLower1(p1[index]) - MemToLower1(p2[index]) : 0;
+    }
+    else if (size) // 0 < size < 16, but initially size > 16
+    {
+        // load 16 bytes from end of buffer
+        // this will load previously checked bytes in 64 byte loop (they were equal)
+        uint8x16_t a = vld1q_u8(p1 + size - 16);
+        uint8x16_t b = vld1q_u8(p2 + size - 16);
+
+        // set lanes to 0x00 if bytes are equal, or 0xff if not
+        uint8x16_t c = vmvnq_u8(vceqq_u8(MemToLower16(a), MemToLower16(b)));
+
+        // nibbles will contain 16 masks with 4-bit value 0x0 if lanes were equal
+        // if there is one lane that was not equal, it contains 0xf
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(c), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
-        if (nibbles + 1)
-        {
-            goto done;
-        }
 
-        size -= 16;
-        p1 += 16;
-        p2 += 16;
+        // get index for byte position that's different in inputs, or 16
+        size_t index = (nibbles ? MEM_CTZ64(nibbles) : 64) / 4;
+
+        // adjust index due to reused bytes in load
+        index += size - 16;
+
+        // return comparison result, or 0 if inputs are equal
+        return index < size ? MemToLower1(p1[index]) - MemToLower1(p2[index]) : 0;
     }
 
-    if (size) // size < 16
-    {
-        va = MemToLower16(vld1q_u8(p1 + size - 16));
-        vb = MemToLower16(vld1q_u8(p2 + size - 16));
-    }
-
-done:;
-    uint64x2_t a64 = vreinterpretq_u64_u8(vrev64q_u8(va));
-    uint64x2_t b64 = vreinterpretq_u64_u8(vrev64q_u8(vb));
-    uint64_t a0 = vgetq_lane_u64(a64, 0);
-    uint64_t b0 = vgetq_lane_u64(b64, 0);
-    uint64_t a1 = vgetq_lane_u64(a64, 1);
-    uint64_t b1 = vgetq_lane_u64(b64, 1);
-    uint64_t a = (a0 != b0 ? a0 : a1);
-    uint64_t b = (a0 != b0 ? b0 : b1);
-    return (a > b) - (a < b);
+    // no differences found, inputs are equal
+    return 0;
 }
 
 MEM_DISABLE_ASAN
-bool MemIsEqual_arm64(const void* ptr1, const void* ptr2, size_t size)
+bool MemIsEqual_neon(const void* ptr1, const void* ptr2, size_t size)
 {
     const uint8_t* p1 = (const uint8_t*)ptr1;
     const uint8_t* p2 = (const uint8_t*)ptr2;
@@ -2216,7 +3042,11 @@ bool MemIsEqual_arm64(const void* ptr1, const void* ptr2, size_t size)
             return p1[0] == p2[0];
         }
 
+        // will load pair of 4, 8 or 16 overlapping bytes
+        // a/b0 from beginning of buffer
+        // a/b1 from end of buffers
         uint64_t a0, b0, a1, b1;
+
         if (size < 4) // 2 <= size < 4
         {
             a0 = MEM_PTR16U(p1);
@@ -2239,24 +3069,32 @@ bool MemIsEqual_arm64(const void* ptr1, const void* ptr2, size_t size)
             b1 = MEM_PTR64U(p2 + size - 8);
         }
 
+        // compare loaded bytes on equality, overlapped ones will be checked twice
+        // but result will still be correct
         return (a0 == b0) & (a1 == b1);
     }
 
+    // process 64-byte blocks as much as possible
     while (size >= 64)
     {
         uint8x16x4_t a = vld1q_u8_x4(p1);
         uint8x16x4_t b = vld1q_u8_x4(p2);
 
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
         uint8x16_t c0 = vceqq_u8(a.val[0], b.val[0]);
         uint8x16_t c1 = vceqq_u8(a.val[1], b.val[1]);
         uint8x16_t c2 = vceqq_u8(a.val[2], b.val[2]);
         uint8x16_t c3 = vceqq_u8(a.val[3], b.val[3]);
-        uint8x16_t c = vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3));
 
+        // combine comparisons - leave 0xff in lanes that were not equal in at least one of inputs
+        uint8x16_t c = vmvnq_u8(vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3)));
+
+        // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(c), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
-        if (nibbles + 1)
+        if (nibbles)
         {
+            // if nibbles is non-zero then there is at least one difference
             return false;
         }
 
@@ -2267,66 +3105,77 @@ bool MemIsEqual_arm64(const void* ptr1, const void* ptr2, size_t size)
 
     if (size & 32) // 32 <= size < 64
     {
-        uint8x16x2_t a = vld1q_u8_x2(p1);
-        uint8x16x2_t b = vld1q_u8_x2(p2);
+        // load 64 bytes, some will overlap
+        uint8x16x2_t a0 = vld1q_u8_x2(p1);
+        uint8x16x2_t b0 = vld1q_u8_x2(p2);
+        uint8x16x2_t a1 = vld1q_u8_x2(p1 + size - 0x20);
+        uint8x16x2_t b1 = vld1q_u8_x2(p2 + size - 0x20);
 
-        uint8x16_t c0 = vceqq_u8(a.val[0], b.val[0]);
-        uint8x16_t c1 = vceqq_u8(a.val[1], b.val[1]);
-        uint8x16_t c = vandq_u8(c0, c1);
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        uint8x16_t c0 = vceqq_u8(a0.val[0], b0.val[0]);
+        uint8x16_t c1 = vceqq_u8(a0.val[1], b0.val[1]);
+        uint8x16_t c2 = vceqq_u8(a1.val[0], b1.val[0]);
+        uint8x16_t c3 = vceqq_u8(a1.val[1], b1.val[1]);
 
+        // combine comparisons - leave 0xff in lanes that were not equal in at least one of inputs
+        uint8x16_t c = vmvnq_u8(vandq_u8(vandq_u8(c0, c1), vandq_u8(c2, c3)));
+
+        // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(c), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
-        if (nibbles + 1)
-        {
-            return false;
-        }
 
-        size -= 32;
-        p1 += 32;
-        p2 += 32;
+        // if nibbles are zero, then there were no differences in inputs
+        return nibbles == 0;
     }
-
-    if (size & 16) // 16 <= size < 32
+    else if (size & 16) // 16 <= size < 32
     {
-        uint8x16_t a = vld1q_u8(p1);
-        uint8x16_t b = vld1q_u8(p2);
-        uint8x16_t c = vceqq_u8(a, b);
+        // load 32 bytes, some will overlap
+        uint8x16_t a0 = vld1q_u8(p1);
+        uint8x16_t b0 = vld1q_u8(p2);
+        uint8x16_t a1 = vld1q_u8(p1 + size - 0x10);
+        uint8x16_t b1 = vld1q_u8(p2 + size - 0x10);
 
+        // set lanes to 0xff if bytes are equal, or 0x00 if not
+        uint8x16_t c0 = vceqq_u8(a0, b0);
+        uint8x16_t c1 = vceqq_u8(a1, b1);
+
+        // combine comparisons - leave 0xff in lanes that were not equal in at least one of inputs
+        uint8x16_t c = vmvnq_u8(vandq_u8(c0, c1));
+
+        // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(c), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
-        if (nibbles + 1)
-        {
-            return false;
-        }
 
-        size -= 16;
-        p1 += 16;
-        p2 += 16;
+        // if nibbles are zero, then there were no differences in inputs
+        return nibbles == 0;
     }
-
-    if (size) // size < 16
+    else if (size) // 0 < size < 16, but initially size > 16
     {
-        uint8x16_t a = vld1q_u8(p1 + size - 16);
-        uint8x16_t b = vld1q_u8(p2 + size - 16);
-        uint8x16_t c = vceqq_u8(a, b);
+        // load 16 bytes from end of buffer
+        // this will load previously checked bytes in 64 byte loop (they were equal)
+        uint8x16_t a = vld1q_u8(p1 + size - 0x10);
+        uint8x16_t b = vld1q_u8(p2 + size - 0x10);
 
+        // combine comparisons - leave 0xff in lanes that were not equal in at least one of inputs
+        uint8x16_t c = vmvnq_u8(vceqq_u8(a, b));
+
+        // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(c), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
-        if (nibbles + 1)
-        {
-            return false;
-        }
+
+        // if nibbles are zero, then there were no differences in inputs
+        return nibbles == 0;
     }
 
+    // no differences found, inputs are equal
     return true;
 }
 
 MEM_DISABLE_ASAN
-size_t MemFind_arm64(const void* ptr, size_t size, uint8_t value)
+size_t MemFind_neon(const void* ptr, size_t size, uint8_t value)
 {
     const uint8_t* p = (const uint8_t*)ptr;
 
-    const uint8x16_t index4 = vreinterpretq_u8_u64(vdupq_n_u64(0x8040201008040201));
     const uint8x16_t value16 = vdupq_n_u8(value);
 
     if (size == 0)
@@ -2339,42 +3188,72 @@ size_t MemFind_arm64(const void* ptr, size_t size, uint8_t value)
         size_t address = (uint32_t)(uintptr_t)p % 16;
         size_t extra = (address + size) <= 16 ? address : 0;
 
+        // will load before the beginning buffer (16-byte aligned) if end is too close
+        // to 16-byte boundary, otherwise will load past the end of buffer
         uint8x16_t a = vld1q_u8(p - extra);
+
+        // set lane to 0xff if lane matches input value, or 0x00 if not
         uint8x16_t b = vceqq_u8(a, value16);
 
+        // nibbles will contain 16 masks with 4-bit value 0xf if lane matches input value
+        // if there is one lane that was not equal, mask contains 0x0
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(b), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
-        if (nibbles)
-        {
-            size_t index = MEM_CTZ64(nibbles >> (4*extra)) / 4;
-            return index < size ? index : size;
-        }
 
-        return size;
+        // drop any lowest "extra" bits (due to loading bytes before beginning buffer)
+        nibbles >>= (4 * extra);
+
+        // for non-zero nibble find first bit set, which will be index of first byte matching input value
+        size_t index = (nibbles ? MEM_CTZ64(nibbles) : 64) / 4;
+
+        // mask out any high bits (due to load past end of buffer)
+        return index < size ? index : size;
     }
 
+    const uint8x16_t index4 = vreinterpretq_u8_u64(vdupq_n_u64(0x8040201008040201));
+
     size_t offset = 0;
+
+    // process 64-byte blocks as much as possible
     while (size >= 64)
     {
         uint8x16x4_t a = vld1q_u8_x4(p);
+
+        // set lane to 0xff if lane matches input value, or 0x00 if not
         uint8x16_t b0 = vceqq_u8(a.val[0], value16);
         uint8x16_t b1 = vceqq_u8(a.val[1], value16);
         uint8x16_t b2 = vceqq_u8(a.val[2], value16);
         uint8x16_t b3 = vceqq_u8(a.val[3], value16);
-        uint8x16_t b = vorrq_u8(vorrq_u8(b0, b1), vorrq_u8(b2, b3));
 
+        // combine comparisons - leave 0xff in lanes there equal to input value
+        uint8x16_t b01 = vorrq_u8(b0, b1);
+        uint8x16_t b23 = vorrq_u8(b2, b3);
+#if defined(__clang__)
+        // without this clang 19+ generates worse code (runs slower)
+        __asm__ __volatile__("" : "+w"(b01), "+w"(b23));
+#endif
+        uint8x16_t b = vorrq_u8(b01, b23);
+
+        // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(b), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
         if (nibbles)
         {
-            uint8x16_t mask0 = vandq_u8(b0, index4);
-            uint8x16_t mask1 = vandq_u8(b1, index4);
-            uint8x16_t mask2 = vandq_u8(b2, index4);
-            uint8x16_t mask3 = vandq_u8(b3, index4);
+            // comparisons to bit index masks
+            uint8x16_t m0 = vandq_u8(b0, index4);
+            uint8x16_t m1 = vandq_u8(b1, index4);
+            uint8x16_t m2 = vandq_u8(b2, index4);
+            uint8x16_t m3 = vandq_u8(b3, index4);
 
-            uint8x16_t sum = vpaddq_u8(vpaddq_u8(mask0, mask1), vpaddq_u8(mask2, mask3));
-            uint64_t sum64 = vgetq_lane_u64(vreinterpretq_u64_u8(vpaddq_u8(sum, sum)), 0);
-            return offset + MEM_CTZ64(sum64);
+            // sum pairs of masks, so result fits into 64-bit low lane
+            uint8x16_t s1 = vpaddq_u8(vpaddq_u8(m0, m1), vpaddq_u8(m2, m3));
+            uint8x16_t s2 = vpaddq_u8(s1, s1);
+
+            // extract 64-bit index mask
+            uint64_t s3 = vgetq_lane_u64(vreinterpretq_u64_u8(s2), 0);
+
+            // get index for byte position that matches input value
+            return offset + MEM_CTZ64(s3);
         }
 
         offset += 64;
@@ -2384,58 +3263,264 @@ size_t MemFind_arm64(const void* ptr, size_t size, uint8_t value)
 
     if (size & 32) // 32 <= size < 64
     {
-        uint8x16x2_t a = vld1q_u8_x2(p);
+        // load 64 bytes, some will overlap
+        uint8x16x2_t a0 = vld1q_u8_x2(p);
+        uint8x16x2_t a1 = vld1q_u8_x2(p + size - 0x20);
+
+        // set lane to 0xff if lane matches input value, or 0x00 if not
+        uint8x16_t b0 = vceqq_u8(a0.val[0], value16);
+        uint8x16_t b1 = vceqq_u8(a0.val[1], value16);
+        uint8x16_t b2 = vceqq_u8(a1.val[0], value16);
+        uint8x16_t b3 = vceqq_u8(a1.val[1], value16);
+
+        // comparisons to bit index masks
+        uint8x16_t m0 = vandq_u8(b0, index4);
+        uint8x16_t m1 = vandq_u8(b1, index4);
+        uint8x16_t m2 = vandq_u8(b2, index4);
+        uint8x16_t m3 = vandq_u8(b3, index4);
+
+        // sum pairs of masks, so result fits into 64-bit low lane
+        uint8x16_t s1 = vpaddq_u8(vpaddq_u8(m0, m1), vpaddq_u8(m2, m3));
+        uint8x16_t s2 = vpaddq_u8(s1, s1);
+
+        // extract 64-bit index mask
+        uint64_t m = vgetq_lane_u64(vreinterpretq_u64_u8(s2), 0);
+
+        // get index of byte that matches input value, or 64
+        size_t index = m ? MEM_CTZ64(m) : 64;
+
+        // adjust index to correct byte position, due to reused bytes in load
+        // index = (index < 32) ? index : (index - 32) + (size - 32);
+        index += (index >= 32) * (size - 64);
+
+        return offset + index;
+    }
+    else if (size & 16) // 16 <= size < 32
+    {
+        // load 32 bytes, some will overlap
+        uint8x16_t a0 = vld1q_u8(p);
+        uint8x16_t a1 = vld1q_u8(p + size - 0x10);
+
+        // set lane to 0xff if lane matches input value, or 0x00 if not
+        uint8x16_t b0 = vceqq_u8(a0, value16);
+        uint8x16_t b1 = vceqq_u8(a1, value16);
+
+        // comparisons to bit index masks
+        uint8x16_t m0 = vandq_u8(b0, index4);
+        uint8x16_t m1 = vandq_u8(b1, index4);
+
+        // sum pairs of masks, so result fits into 64-bit low lane
+        uint8x16_t s1 = vpaddq_u8(m0, m1);
+        uint8x16_t s2 = vpaddq_u8(s1, s1);
+        uint8x16_t s3 = vpaddq_u8(s2, s2);
+
+        // extract 64-bit index mask
+        uint32_t m = vgetq_lane_u32(vreinterpretq_u32_u8(s3), 0);
+
+        // get index of byte that matches input value, or 32
+        size_t index = m ? MEM_CTZ32(m) : 32;
+
+        // adjust index to correct byte position, due to reused bytes in load
+        // index = (index < 16) ? index : (index - 16) + (size - 16);
+        index += (index >= 16) * (size - 32);
+
+        return offset + index;
+    }
+    else if (size) // 0 < size < 16, but initially size > 16
+    {
+        // load 32 bytes from end of buffer
+        // this will load previously checked bytes in 64 byte loop (they did not match input value)
+        uint8x16_t a = vld1q_u8(p + size - 16);
+
+        // set lane to 0xff if lane matches input value, or 0x00 if not
+        uint8x16_t b = vceqq_u8(a, value16);
+
+        // extract 4-bit nibble mask
+        uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(b), 4);
+        uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
+
+        // get index of byte that matches input value, or 16
+        size_t index = (nibbles ? MEM_CTZ64(nibbles) : 64) / 4;
+
+        // adjust index due to reused bytes in load
+        return offset + index + size - 16;
+    }
+
+    // no input value found, return original size (current offset plus pending tail size)
+    return offset + size;
+}
+
+MEM_DISABLE_ASAN
+size_t MemFindNot_neon(const void* ptr, size_t size, uint8_t value)
+{
+    const uint8_t* p = (const uint8_t*)ptr;
+
+    const uint8x16_t value16 = vdupq_n_u8(value);
+
+    if (size == 0)
+    {
+        return 0;
+    }
+
+    if (size <= 16)
+    {
+        size_t address = (uint32_t)(uintptr_t)p % 16;
+        size_t extra = (address + size) <= 16 ? address : 0;
+
+        // will load before the beginning buffer (16-byte aligned) if end is too close
+        // to 16-byte boundary, otherwise will load past the end of buffer
+        uint8x16_t a = vld1q_u8(p - extra);
+
+        // set lane to 0x00 if lane matches input value, or 0xff if not
+        uint8x16_t b = vmvnq_u8(vceqq_u8(a, value16));
+
+        // nibbles will contain 16 masks with 4-bit value 0x0 if lane matches input value
+        // if there is one lane that was not equal, it contains 0xf
+        uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(b), 4);
+        uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
+
+        // drop any lowest "extra" bits (due to loading bytes before beginning buffer)
+        nibbles >>= (4 * extra);
+
+        // for non-zero nibble find first bit set, which will be index of first byte different from input value
+        size_t index = (nibbles ? MEM_CTZ64(nibbles) : 64) / 4;
+
+        // mask out any high bits (due to load past end of buffer)
+        return index < size ? index : size;
+    }
+
+    const uint8x16_t index4 = vreinterpretq_u8_u64(vdupq_n_u64(0x8040201008040201));
+
+    size_t offset = 0;
+
+    // process 64-byte blocks as much as possible
+    while (size >= 64)
+    {
+        uint8x16x4_t a = vld1q_u8_x4(p);
+
+        // set lane to 0xff if lane matches input value, or 0x00 if not
         uint8x16_t b0 = vceqq_u8(a.val[0], value16);
         uint8x16_t b1 = vceqq_u8(a.val[1], value16);
+        uint8x16_t b2 = vceqq_u8(a.val[2], value16);
+        uint8x16_t b3 = vceqq_u8(a.val[3], value16);
 
-        uint8x16_t mask0 = vandq_u8(b0, index4);
-        uint8x16_t mask1 = vandq_u8(b1, index4);
+        // combine comparisons - leave 0xff in lanes that were not matching in at least one of inputs
+        uint8x16_t b = vmvnq_u8(vandq_u8(vandq_u8(b0, b1), vandq_u8(b2, b3)));
 
-        uint8x16_t sum1 = vpaddq_u8(mask0, mask1);
-        uint8x16_t sum2 = vpaddq_u8(sum1, sum1);
-        uint32_t sum32 = vgetq_lane_u32(vreinterpretq_u32_u8(vpaddq_u8(sum2, sum2)), 0);
-        if (sum32)
-        {
-            return offset + MEM_CTZ32(sum32);
-        }
-
-        offset += 32;
-        size -= 32;
-        p += 32;
-    }
-
-    if (size & 16) // 16 <= size < 32
-    {
-        uint8x16_t a = vld1q_u8(p);
-        uint8x16_t b = vceqq_u8(a, value16);
-
+        // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(b), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
         if (nibbles)
         {
-            return offset + MEM_CTZ64(nibbles) / 4;
+            // comparisons to bit index masks
+            uint8x16_t m0 = vbicq_u8(index4, b0);
+            uint8x16_t m1 = vbicq_u8(index4, b1);
+            uint8x16_t m2 = vbicq_u8(index4, b2);
+            uint8x16_t m3 = vbicq_u8(index4, b3);
+
+            // sum pairs of masks, so result fits into 64-bit low lane
+            uint8x16_t s1 = vpaddq_u8(vpaddq_u8(m0, m1), vpaddq_u8(m2, m3));
+            uint8x16_t s2 = vpaddq_u8(s1, s1);
+
+            // extract 64-bit index mask
+            uint64_t s3 = vgetq_lane_u64(vreinterpretq_u64_u8(s2), 0);
+
+            // get index for byte position that's different from input value
+            return offset + MEM_CTZ64(s3);
         }
 
-        offset += 16;
-        size -= 16;
-        p += 16;
+        offset += 64;
+        size -= 64;
+        p += 64;
     }
 
-    if (size) // size < 16
+    if (size & 32) // 32 <= size < 64
     {
+        // load 64 bytes, some will overlap
+        uint8x16x2_t a0 = vld1q_u8_x2(p);
+        uint8x16x2_t a1 = vld1q_u8_x2(p + size - 0x20);
+
+        // set lane to 0xff if lane matches input value, or 0x00 if not
+        uint8x16_t b0 = vceqq_u8(a0.val[0], value16);
+        uint8x16_t b1 = vceqq_u8(a0.val[1], value16);
+        uint8x16_t b2 = vceqq_u8(a1.val[0], value16);
+        uint8x16_t b3 = vceqq_u8(a1.val[1], value16);
+
+        // comparisons to bit index masks
+        uint8x16_t m0 = vbicq_u8(index4, b0);
+        uint8x16_t m1 = vbicq_u8(index4, b1);
+        uint8x16_t m2 = vbicq_u8(index4, b2);
+        uint8x16_t m3 = vbicq_u8(index4, b3);
+
+        // sum pairs of masks, so result fits into 64-bit low lane
+        uint8x16_t s1 = vpaddq_u8(vpaddq_u8(m0, m1), vpaddq_u8(m2, m3));
+        uint8x16_t s2 = vpaddq_u8(s1, s1);
+
+        // extract 64-bit index mask
+        uint64_t m = vgetq_lane_u64(vreinterpretq_u64_u8(s2), 0);
+
+        // get index of byte that does not match input value, or 64
+        size_t index = m ? MEM_CTZ64(m) : 64;
+
+        // adjust index to correct byte position, due to reused bytes in load
+        // index = (index < 32) ? index : (index - 32) + (size - 32);
+        index += (index >= 32) * (size - 64);
+
+        return offset + index;
+    }
+    else if (size & 16) // 16 <= size < 32
+    {
+        // load 32 bytes, some will overlap
+        uint8x16_t a0 = vld1q_u8(p);
+        uint8x16_t a1 = vld1q_u8(p + size - 0x10);
+
+        // set lane to 0xff if lane matches input value, or 0x00 if not
+        uint8x16_t b0 = vceqq_u8(a0, value16);
+        uint8x16_t b1 = vceqq_u8(a1, value16);
+
+        // comparisons to bit index masks
+        uint8x16_t m0 = vbicq_u8(index4, b0);
+        uint8x16_t m1 = vbicq_u8(index4, b1);
+
+        // sum pairs of masks, so result fits into 64-bit low lane
+        uint8x16_t s1 = vpaddq_u8(m0, m1);
+        uint8x16_t s2 = vpaddq_u8(s1, s1);
+        uint8x16_t s3 = vpaddq_u8(s2, s2);
+
+        // extract 64-bit index mask
+        uint32_t m = vgetq_lane_u32(vreinterpretq_u32_u8(s3), 0);
+
+        // get index of byte that does not match input value, or 32
+        size_t index = m ? MEM_CTZ32(m) : 32;
+
+        // adjust index to correct byte position, due to reused bytes in load
+        // index = (index < 16) ? index : (index - 16) + (size - 16);
+        index += (index >= 16) * (size - 32);
+
+        return offset + index;
+    }
+    else if (size) // 0 < size < 16, but initially size > 16
+    {
+        // load 16 bytes from end of buffer
+        // this will load previously checked bytes in 64 byte loop (they did match input value)
         uint8x16_t a = vld1q_u8(p + size - 16);
-        uint8x16_t b = vceqq_u8(a, value16);
 
+        // set lane to 0x00 if lane matches input value, or 0xff if not
+        uint8x16_t b = vmvnq_u8(vceqq_u8(a, value16));
+
+        // extract 4-bit nibble mask
         uint8x8_t mask = vshrn_n_u16(vreinterpretq_u16_u8(b), 4);
         uint64_t nibbles = vget_lane_u64(vreinterpret_u64_u8(mask), 0);
-        if (nibbles)
-        {
-            return offset + MEM_CTZ64(nibbles) / 4 + size - 16;
-        }
-        offset += size;
+
+        // get index of byte that does not match input value, or 16
+        size_t index = (nibbles ? MEM_CTZ64(nibbles) : 64) / 4;
+
+        // adjust index due to reused bytes in load
+        return offset + index + size - 16;
     }
 
-    return offset;
+    // all bytes are same as input value, return original size (current offset plus pending tail size)
+    return offset + size;
 }
 
 #endif // MEM_ARCH_ARM64
@@ -2564,6 +3649,33 @@ size_t MemFind_rvv(const void* ptr, size_t size, uint8_t value)
     return offset;
 }
 
+size_t MemFindNot_rvv(const void* ptr, size_t size, uint8_t value)
+{
+    const uint8_t* p = (const uint8_t*)ptr;
+
+    size_t offset = 0;
+    do
+    {
+        size_t vl = __riscv_vsetvl_e8m8(size);
+
+        vuint8m8_t a = __riscv_vle8_v_u8m8(p, vl);
+        vbool1_t m = __riscv_vmsne_vx_u8m8_b1(a, value, vl);
+
+        long index = __riscv_vfirst_m_b1(m, vl);
+        if (index >= 0)
+        {
+            return offset + (unsigned long)index;
+        }
+
+        offset += vl;
+        size -= vl;
+        p += vl;
+    }
+    while (size);
+
+    return offset;
+}
+
 #endif // MEM_ARCH_RVV
 
 
@@ -2639,6 +3751,277 @@ static int MemCPUID(void)
 #endif // MEM_ARCH_X64
 
 
+int MemCompare_generic(const void* ptr1, const void* ptr2, size_t size)
+{
+    const uint8_t* p1 = (const uint8_t*)ptr1;
+    const uint8_t* p2 = (const uint8_t*)ptr2;
+
+    while (size >= 8)
+    {
+        uint64_t a = MEM_PTR64U(p1);
+        uint64_t b = MEM_PTR64U(p2);
+        if (a != b)
+        {
+            a = MEM_BSWAP64(a);
+            b = MEM_BSWAP64(b);
+            return (a > b) - (a < b);
+        }
+
+        size -= 8;
+        p1 += 8;
+        p2 += 8;
+    }
+
+    if (size & 4) // 4 <= size < 8
+    {
+        uint64_t a0 = MEM_PTR32U(p1);
+        uint64_t b0 = MEM_PTR32U(p2);
+        uint64_t a1 = MEM_PTR32U(p1 + size - 4);
+        uint64_t b1 = MEM_PTR32U(p2 + size - 4);
+        uint64_t a = MEM_BSWAP64(a0 | (a1 << 32));
+        uint64_t b = MEM_BSWAP64(b0 | (b1 << 32));
+        return (a > b) - (a < b);
+    }
+
+    if (size & 2) // 2 <= size < 4
+    {
+        uint32_t a0 = MEM_PTR16U(p1);
+        uint32_t b0 = MEM_PTR16U(p2);
+        uint32_t a1 = MEM_PTR16U(p1 + size - 2);
+        uint32_t b1 = MEM_PTR16U(p2 + size - 2);
+        uint32_t a = MEM_BSWAP32(a0 | (a1 << 16));
+        uint32_t b = MEM_BSWAP32(b0 | (b1 << 16));
+        return (a > b) - (a < b);
+    }
+
+    if (size) // 1 <= size < 2
+    {
+        return p1[0] - p2[0];
+    }
+
+    return 0;
+}
+
+int MemCompareI_generic(const void* ptr1, const void* ptr2, size_t size)
+{
+    const uint8_t* p1 = (const uint8_t*)ptr1;
+    const uint8_t* p2 = (const uint8_t*)ptr2;
+
+    while (size >= 8)
+    {
+        uint64_t a = MemToLower8(MEM_PTR64U(p1));
+        uint64_t b = MemToLower8(MEM_PTR64U(p2));
+        if (a != b)
+        {
+            a = MEM_BSWAP64(a);
+            b = MEM_BSWAP64(b);
+            return (a > b) - (a < b);
+        }
+
+        size -= 8;
+        p1 += 8;
+        p2 += 8;
+    }
+
+    if (size & 4) // 4 <= size < 8
+    {
+        uint64_t a0 = MEM_PTR32U(p1);
+        uint64_t b0 = MEM_PTR32U(p2);
+        uint64_t a1 = MEM_PTR32U(p1 + size - 4);
+        uint64_t b1 = MEM_PTR32U(p2 + size - 4);
+        uint64_t a = MEM_BSWAP64(MemToLower8(a0 | (a1 << 32)));
+        uint64_t b = MEM_BSWAP64(MemToLower8(b0 | (b1 << 32)));
+        return (a > b) - (a < b);
+    }
+
+    if (size & 2) // 2 <= size < 4
+    {
+        uint64_t a0 = MEM_PTR16U(p1);
+        uint64_t b0 = MEM_PTR16U(p2);
+        uint64_t a1 = MEM_PTR16U(p1 + size - 2);
+        uint64_t b1 = MEM_PTR16U(p2 + size - 2);
+        uint64_t tmp = MEM_BSWAP64(MemToLower8(a0 | (a1 << 16) | (b0 << 32) | (b1 << 48)));
+        uint32_t a = (uint32_t)(tmp >> 32);
+        uint32_t b = (uint32_t)tmp;
+        return (a > b) - (a < b);
+    }
+
+    if (size) // 1 <= size < 2
+    {
+        return MemToLower1(p1[0]) - MemToLower1(p2[0]);
+    }
+
+    return 0;
+}
+
+bool MemIsEqual_generic(const void* ptr1, const void* ptr2, size_t size)
+{
+    const uint8_t* p1 = (const uint8_t*)ptr1;
+    const uint8_t* p2 = (const uint8_t*)ptr2;
+
+    while (size >= 8)
+    {
+        uint64_t a = MEM_PTR64U(p1);
+        uint64_t b = MEM_PTR64U(p2);
+        if (a != b)
+        {
+            return false;
+        }
+
+        size -= 8;
+        p1 += 8;
+        p2 += 8;
+    }
+
+    if (size & 4) // 4 <= size < 8
+    {
+        uint32_t a0 = MEM_PTR32U(p1);
+        uint32_t b0 = MEM_PTR32U(p2);
+        uint32_t a1 = MEM_PTR32U(p1 + size - 4);
+        uint32_t b1 = MEM_PTR32U(p2 + size - 4);
+        return (a0 == b0) & (a1 == b1);
+    }
+
+    if (size & 2) // 2 <= size < 4
+    {
+        uint16_t a0 = MEM_PTR16U(p1);
+        uint16_t b0 = MEM_PTR16U(p2);
+        uint16_t a1 = MEM_PTR16U(p1 + size - 2);
+        uint16_t b1 = MEM_PTR16U(p2 + size - 2);
+        return (a0 == b0) & (a1 == b1);
+    }
+
+    if (size) // 1 <= size < 2
+    {
+        return p1[0] == p2[0];
+    }
+
+    return true;
+}
+
+static inline uint64_t MemByteMask8(uint64_t value, uint8_t byte)
+{
+    const uint64_t splat = ~0ULL / 255;
+    const uint64_t msb = 0x80 * splat;
+    const uint64_t lsb = 0x01 * splat;
+
+    uint64_t x = value ^ (byte * splat);
+    return (x - lsb) & (~x) & msb;
+}
+
+size_t MemFind_generic(const void* ptr, size_t size, uint8_t value)
+{
+    const uint8_t* p = (const uint8_t*)ptr;
+
+    size_t offset = 0;
+
+    while (size >= 8)
+    {
+        uint64_t a = MEM_PTR64U(p);
+        uint64_t m = MemByteMask8(a, value);
+        if (m)
+        {
+            return offset + (MEM_CTZ64(m) / 8);
+        }
+
+        offset += 8;
+        size -= 8;
+        p += 8;
+    }
+
+    if (size & 4) // 4 <= size < 8
+    {
+        uint64_t a0 = MEM_PTR32U(p);
+        uint64_t a1 = MEM_PTR32U(p + size - 4);
+        uint64_t a = a0 | (a1 << 32);
+        uint64_t m = MemByteMask8(a, value);
+
+        size_t index = (m ? MEM_CTZ64(m) : 64) / 8;
+
+        // index = (index < 4) ? index : (index - 4) + (size - 4);
+        index += (index >= 4) * (size - 8);
+
+        return offset + index;
+    }
+    else if (size & 2) // 2 <= size < 4
+    {
+        uint32_t a0 = MEM_PTR16U(p);
+        uint32_t a1 = MEM_PTR16U(p + size - 2);
+        uint32_t a = a0 | (a1 << 16);
+        uint32_t m = (uint32_t)MemByteMask8(a, value);
+
+        size_t index = (m ? MEM_CTZ32(m) : 32) / 8;
+
+        // index = (index < 2) ? index : (index - 2) + (size - 2);
+        index += (index >= 2) * (size - 4);
+
+        return offset + index;
+    }
+    else if (size) // size == 1
+    {
+        return offset + (p[0] == value ? 0 : 1);
+    }
+
+    return offset + size;
+}
+
+size_t MemFindNot_generic(const void* ptr, size_t size, uint8_t value)
+{
+    const uint8_t* p = (const uint8_t*)ptr;
+
+    size_t offset = 0;
+
+    while (size >= 8)
+    {
+        uint64_t a = MEM_PTR64U(p);
+        uint64_t m = MemByteMask8(a, value) ^ 0x8080808080808080;
+        if (m)
+        {
+            return offset + (MEM_CTZ64(m) / 8);
+        }
+
+        offset += 8;
+        size -= 8;
+        p += 8;
+    }
+
+    if (size & 4) // 4 <= size < 8
+    {
+        uint64_t a0 = MEM_PTR32U(p);
+        uint64_t a1 = MEM_PTR32U(p + size - 4);
+        uint64_t a = a0 | (a1 << 32);
+        uint64_t m = MemByteMask8(a, value) ^ 0x8080808080808080;
+
+        size_t index = (m ? MEM_CTZ64(m) : 64) / 8;
+
+        // index = (index < 4) ? index : (index - 4) + (size - 4);
+        index += (index >= 4) * (size - 8);
+
+        return offset + index;
+    }
+    else if (size & 2) // 2 <= size < 4
+    {
+        uint32_t a0 = MEM_PTR16U(p);
+        uint32_t a1 = MEM_PTR16U(p + size - 2);
+        uint32_t a = a0 | (a1 << 16);
+        uint32_t m = (uint32_t)MemByteMask8(a, value) ^ 0x80808080;
+
+        size_t index = (m ? MEM_CTZ32(m) : 32) / 8;
+
+        // index = (index < 2) ? index : (index - 2) + (size - 2);
+        index += (index >= 2) * (size - 4);
+
+        return offset + index;
+    }
+    else if (size) // size == 1
+    {
+        return offset + (p[0] != value ? 0 : 1);
+    }
+
+    return offset + size;
+}
+
+
 int MemCompare(const void* ptr1, const void* ptr2, size_t size)
 {
 #if MEM_ARCH_X64
@@ -2653,11 +4036,11 @@ int MemCompare(const void* ptr1, const void* ptr2, size_t size)
     }
     return MemCompare_sse2(ptr1, ptr2, size);
 #elif MEM_ARCH_ARM64
-    return MemCompare_arm64(ptr1, ptr2, size);
+    return MemCompare_neon(ptr1, ptr2, size);
 #elif MEM_ARCH_RVV
     return MemCompare_rvv(ptr1, ptr2, size);
 #else
-#   error N/A
+    return MemCompare_generic(ptr1, ptr2, size);
 #endif
 }
 
@@ -2675,11 +4058,11 @@ int MemCompareI(const void* ptr1, const void* ptr2, size_t size)
     }
     return MemCompareI_sse2(ptr1, ptr2, size);
 #elif MEM_ARCH_ARM64
-    return MemCompareI_arm64(ptr1, ptr2, size);
+    return MemCompareI_neon(ptr1, ptr2, size);
 #elif MEM_ARCH_RVV
     return MemCompareI_rvv(ptr1, ptr2, size);
 #else
-#   error N/A
+    return MemCompareI_generic(ptr1, ptr2, size);
 #endif
 }
 
@@ -2697,11 +4080,11 @@ bool MemIsEqual(const void* ptr1, const void* ptr2, size_t size)
     }
     return MemIsEqual_sse2(ptr1, ptr2, size);
 #elif MEM_ARCH_ARM64
-    return MemIsEqual_arm64(ptr1, ptr2, size);
+    return MemIsEqual_neon(ptr1, ptr2, size);
 #elif MEM_ARCH_RVV
     return MemIsEqual_rvv(ptr1, ptr2, size);
 #else
-#   error N/A
+    return MemIsEqual_generic(ptr1, ptr2, size);
 #endif
 }
 
@@ -2719,11 +4102,33 @@ size_t MemFind(const void* ptr, size_t size, uint8_t value)
     }
     return MemFind_sse2(ptr, size, value);
 #elif MEM_ARCH_ARM64
-    return MemFind_arm64(ptr, size, value);
+    return MemFind_neon(ptr, size, value);
 #elif MEM_ARCH_RVV
     return MemFind_rvv(ptr, size, value);
 #else
-#   error N/A
+    return MemFind_generic(ptr, size, value);
+#endif
+}
+
+size_t MemFindNot(const void* ptr, size_t size, uint8_t value)
+{
+#if MEM_ARCH_X64
+    int cpuid = MemCPUID();
+    if (cpuid & MEM_CPUID_AVX512)
+    {
+        return MemFindNot_avx512(ptr, size, value);
+    }
+    else if (cpuid & MEM_CPUID_AVX2)
+    {
+        return MemFindNot_avx2(ptr, size, value);
+    }
+    return MemFindNot_sse2(ptr, size, value);
+#elif MEM_ARCH_ARM64
+    return MemFindNot_neon(ptr, size, value);
+#elif MEM_ARCH_RVV
+    return MemFindNot_rvv(ptr, size, value);
+#else
+    return MemFindNot_generic(ptr, size, value);
 #endif
 }
 
