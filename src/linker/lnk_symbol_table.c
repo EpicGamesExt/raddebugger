@@ -659,7 +659,8 @@ lnk_symbol_table_searchf(LNK_SymbolTable *symtab, char *fmt, ...)
 internal ISectOff
 lnk_sc_from_symbol(LNK_Symbol *symbol)
 {
-  COFF_ParsedSymbol parsed_symbol = lnk_parsed_from_symbol(symbol);
+  LNK_ObjSymbolRef ref = lnk_ref_from_symbol(symbol);
+  COFF_ParsedSymbol parsed_symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(ref.obj, ref.symbol_idx);
   ISectOff sc = { .isect = parsed_symbol.section_number, .off = parsed_symbol.value };
   return sc;
 }

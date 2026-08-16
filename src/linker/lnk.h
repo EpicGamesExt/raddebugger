@@ -32,6 +32,9 @@ typedef struct LNK_Input
 {
   String8           path;
   String8           data;
+  String8           compressed_data;
+  LNK_CompressedObj *compressed_obj;
+  U8                *compressed_eager_base;
   B32               disallow;
   B32               is_thin;
   B32               owns_file_map;

@@ -3,6 +3,8 @@
 
 #pragma once
 
+typedef struct LNK_CObjDecodeWindow LNK_CObjDecodeWindow;
+
 ////////////////////////////////
 // RRT
 
@@ -204,6 +206,7 @@ typedef struct
   LNK_CodeViewInput *input;
   String8Array      *raw_types; // [obj_count]
   CV_DebugT         *out_types; // [obj_count]
+  B32                is_debug_p;
 } LNK_ParseCvTypes;
 
 ////////////////////////////////
@@ -267,6 +270,7 @@ typedef struct
   LNK_LeafHashTable   leaf_ht_arr[CV_TypeIndexSource_COUNT];
   LNK_AssignedTiHash  assigned_ti_arr[CV_TypeIndexSource_COUNT];
   Arena             **fixed_arenas;
+  struct LNK_CObjDecodeWindow *decode_windows;
   CV_TypeIndexSource  ti_source;
   U32Array            indices;
   Rng1U64            *ranges;
@@ -304,6 +308,17 @@ typedef struct
   // fixup never dirties the copy-on-write input mapping)
   U64 *leaf_buffer_offsets; // [worker_count+1] per-lane byte offsets into leaf_buffer
   U8  *leaf_buffer;
+  U64 *materialize_obj_offsets[CV_TypeIndexSource_COUNT]; // [input->count+1], sorted-ref ranges
+
+  // Compressed winner payload prefetch. segment_offsets maps an OBJ-local segment index to a
+  // compact global bit/key index. Copy-present atomically claims segments as it discovers the
+  // winning leaves, so no later scan of the multi-million-entry winner arrays is needed.
+  U64 *winner_segment_offsets; // [input->obj_count+1]
+  U64 *winner_segment_bitmap;
+  U64 *winner_segment_worker_bitmaps; // [worker_count * winner_segment_word_count]
+  U64  winner_segment_word_count;
+  U64 *winner_segment_keys;    // obj_idx:32 | segment_idx:32
+  U64  winner_segment_key_count;
 
   // $S fixup journal build: per-worker arenas the LNK_DebugSPatch entry arrays land on
   // (must outlive the merge -- replay happens at module write)
@@ -427,10 +442,10 @@ internal B32             lnk_match_leaf_ref                  (LNK_CodeViewInput 
 internal void            lnk_notype_journal_push             (Arena *arena, LNK_NotypeJournal *journal, U32 leaf_idx, B32 kind_only, U64 bit_cap);
 internal B32             lnk_notype_journal_test             (LNK_NotypeJournal *journal, U64 leaf_idx);
 internal B32             lnk_notype_journal_find             (LNK_NotypeJournal *journal, U32 leaf_idx, B32 *kind_only_out);
-internal CV_Leaf         lnk_cv_leaf_from_leaf_ref           (LNK_CodeViewInput *input, U32 obj_idx, U32 leaf_idx);
+internal CV_Leaf         lnk_cv_leaf_from_leaf_ref           (Arena *arena, LNK_CObjDecodeWindow *decode_window, LNK_CodeViewInput *input, U32 obj_idx, U32 leaf_idx);
 internal U64             lnk_leaf_ref_materialize_meta       (LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
 internal U64             lnk_hash_cv_leaf                    (LNK_CodeViewInput *input, Arena *journal_arena, LNK_LeafRef leaf_ref, CV_Leaf leaf, CV_TiOffsets ti_offs, B32 discard_cycles);
-internal void            lnk_hash_cv_leaf_deep               (Arena *arena, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TiOffsets ti_offs);
+internal void            lnk_hash_cv_leaf_deep               (Arena *arena, LNK_CObjDecodeWindow *decode_window, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TiOffsets ti_offs);
 internal CV_TypeIndex    lnk_assigned_ti_hash_search          (LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
 internal LNK_MergedTypes lnk_merge_types                     (TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK_MergeTypeFlags merge_flags);
 internal void            lnk_apply_debug_s_fixups_for_obj    (LNK_CodeViewInput *cv, U64 obj_idx);

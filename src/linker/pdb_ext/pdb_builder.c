@@ -2388,6 +2388,7 @@ gsi_reserve(PDB_GsiContext *gsi, U64 bucket_idx, U64 additional)
 internal CV_Symbol *
 gsi_push_(PDB_GsiContext *gsi, U32 hash, CV_Symbol *symbol)
 {
+  Assert(gsi->bucket_count == PDB_GSI_V70_BUCKET_COUNT);
   U64            bucket_idx = hash & (PDB_GSI_V70_BUCKET_COUNT - 1);
   PDB_GsiSymbolBucket *bucket     = &gsi->bucket_arr[bucket_idx];
   if (bucket->count == bucket->cap) {
@@ -2463,6 +2464,7 @@ gsi_push_many_list(PDB_GsiContext *gsi, U64 count, U32 *hash_arr, CV_SymbolList 
 internal CV_Symbol *
 gsi_search(PDB_GsiContext *gsi, CV_Symbol *symbol)
 {
+  Assert(gsi->bucket_count == PDB_GSI_V70_BUCKET_COUNT);
   String8 name    = cv_name_from_symbol(symbol->kind, symbol->data);
   U32     hash    = gsi_hash(gsi, name);
   U64     ibucket = hash & (PDB_GSI_V70_BUCKET_COUNT - 1);

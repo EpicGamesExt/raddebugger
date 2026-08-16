@@ -236,6 +236,10 @@ typedef struct CV_DebugSProvNode
   U64 size;
   U32 sect_idx;
   B32 is_synthetic;
+  U32 module_symbol_size;
+  U32 gsi_candidate_count;
+  U32 proc_ref_count;
+  B32 symbol_summary_valid;
 } CV_DebugSProvNode;
 
 typedef struct CV_DebugSProvList
@@ -262,6 +266,20 @@ typedef struct CV_DebugT
   String8  data;
   U64      count;
   U32     *offsets;
+  // Optional container sidecar.  Keeping these as mapped arrays avoids both
+  // scanning compressed leaf bodies and privately allocating the index.
+  U16     *sidecar_sizes;
+  U16     *sidecar_kinds;
+  U32     *sidecar_packed_v2_offset_groups;
+  U8      *sidecar_packed_v2_offset_payload;
+  U16     *sidecar_packed_kind_dictionary;
+  U8      *sidecar_packed_kind_codes;
+  B8       sidecar_packed;
+  U8       sidecar_offset_checkpoint_shift;
+  U32      sidecar_leaf_bias;
+  U64      sidecar_raw_base;
+  U64     *sidecar_complete_udt_hashes;
+  U64      sidecar_complete_udt_hash_count;
 
   // type server
   U64     source_counts [CV_TypeIndexSource_COUNT];
@@ -435,9 +453,12 @@ internal CV_DebugT       cv_debug_t_from_data         (Arena *arena, String8 dat
 internal U64             cv_leaf_idx_from_ti          (CV_DebugT *debug_t, CV_TypeIndexSource source, CV_TypeIndex ti);
 internal CV_TypeIndex    cv_ti_from_leaf_idx          (CV_DebugT *debug_t, CV_TypeIndexSource source, U64 leaf_idx);
 internal CV_Leaf         cv_debug_t_get_leaf          (CV_DebugT *debug_t, U64 leaf_idx);
+internal U64             cv_debug_t_get_leaf_offset   (CV_DebugT *debug_t, U64 leaf_idx);
 internal CV_Leaf         cv_debug_t_get_leaf_from_ti  (CV_DebugT *debug_t, CV_TypeIndexSource source, CV_TypeIndex ti);
 internal String8         cv_debug_t_get_raw_leaf      (CV_DebugT *debug_t, U64 leaf_idx);
 internal CV_LeafHeader * cv_debug_t_get_leaf_header   (CV_DebugT *debug_t, U64 leaf_idx);
+internal CV_LeafKind     cv_debug_t_get_leaf_kind     (CV_DebugT *debug_t, U64 leaf_idx);
+internal U64             cv_debug_t_get_raw_leaf_size (CV_DebugT *debug_t, U64 leaf_idx);
 internal CV_TypeIndex    cv_debug_t_get_type_index    (CV_DebugT *debug_t, CV_TypeIndexSource ti_source, U64 leaf_idx);
 internal U64             cv_debug_t_get_leaf_index    (CV_DebugT *debug_t, CV_TypeIndexSource ti_source, CV_TypeIndex ti);
 internal B32             cv_debug_t_is_pch            (CV_DebugT *debug_t);

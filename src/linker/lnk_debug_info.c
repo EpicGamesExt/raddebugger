@@ -260,6 +260,38 @@ lnk_discard_cv_debug_info(LNK_CodeViewInput *input, U64 obj_idx)
   MemoryZeroStruct(cv_sub_section_prov_ptr_from_debug_s(&input->debug_s_arr[obj_idx], CV_C13SubSectionKind_InlineeLines));
 }
 
+// Build the same lightweight C13 lists/provenance as cv_debug_s_from_data without walking the
+// compressed logical section.  Payload pointers are intentionally not dereferenced here; later
+// consumers retain the exact original virtual addresses and fault/decode only if they truly need
+// record bytes.
+internal B32
+lnk_debug_s_from_compressed_index(Arena *arena, LNK_Obj *obj, U32 sect_idx, CV_DebugS *out)
+{
+  if (!obj->compressed_obj) { return 0; }
+  LNK_ObjSection section = lnk_obj_section_from_section_number(obj, sect_idx + 1);
+  LNK_CObjDebugSView view = {0};
+  if (!lnk_compressed_obj_debug_s_index(obj->compressed_obj, section.frange, &view)) { return 0; }
+  for EachIndex(i, view.count) {
+    LNK_CObjDebugSEntry *entry = &view.v[i];
+    U64 payload_min = entry->raw_payload_offset;
+    U64 payload_max = payload_min + entry->raw_payload_size;
+    if (payload_min < section.frange.min || payload_max > section.frange.max) { return 0; }
+    U64 idx = cv_c13_sub_section_idx_from_kind(entry->kind);
+    str8_list_push(arena, &out->data_list[idx], str8(obj->coff.data.str + payload_min, entry->raw_payload_size));
+    cv_debug_s_prov_list_push(arena, &out->prov_list[idx], payload_min - section.frange.min,
+                              entry->raw_payload_size, sect_idx, 0);
+    if (view.summaries && entry->kind == CV_C13SubSectionKind_Symbols) {
+      LNK_CObjDebugSSummary *summary = &view.summaries[i];
+      CV_DebugSProvNode *prov = out->prov_list[idx].last;
+      prov->module_symbol_size = summary->module_symbol_size;
+      prov->gsi_candidate_count = summary->gsi_candidate_count;
+      prov->proc_ref_count = summary->proc_ref_count;
+      prov->symbol_summary_valid = 1;
+    }
+  }
+  return 1;
+}
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
 {
@@ -275,8 +307,12 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
   U64 input_ordinal = 0;
   for (String8Node *n = sect_list.first; n != 0; n = n->next, input_ordinal += 1) {
     // parse & merge sub sections
-    CV_DebugS ds = cv_debug_s_from_data(arena, n->string);
-    cv_debug_s_tag_prov_sect(&ds, sect_indices.v[input_ordinal]);
+    U32 sect_idx = sect_indices.v[input_ordinal];
+    CV_DebugS ds = {0};
+    if (!lnk_debug_s_from_compressed_index(arena, task->obj_arr[obj_idx], sect_idx, &ds)) {
+      ds = cv_debug_s_from_data(arena, n->string);
+      cv_debug_s_tag_prov_sect(&ds, sect_idx);
+    }
     cv_debug_s_concat_in_place(debug_s, &ds);
 
     // make sure there is one string table
@@ -306,9 +342,12 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
     if (obj->icf_lines_only != 0) {
       for (U32 section_number = 1; section_number <= obj->coff.sections.count_no_null; section_number += 1) {
         if (!obj->icf_lines_only[section_number]) { continue; }
-        String8        raw_data = lnk_obj_section_data_from_number(obj, section_number);
-        CV_DebugS      ds       = cv_debug_s_from_data(arena, raw_data);
-        cv_debug_s_tag_prov_sect(&ds, section_number - 1); // merged from a different child section
+        CV_DebugS ds = {0};
+        if (!lnk_debug_s_from_compressed_index(arena, obj, section_number - 1, &ds)) {
+          String8 raw_data = lnk_obj_section_data_from_number(obj, section_number);
+          ds = cv_debug_s_from_data(arena, raw_data);
+          cv_debug_s_tag_prov_sect(&ds, section_number - 1); // merged from a different child section
+        }
         if (obj->icf_lines_only[section_number] == 2) {
           cv_debug_s_concat_in_place(debug_s, &ds);
         } else {
@@ -425,14 +464,123 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_t_task)
 {
   ProfBeginFunction();
   LNK_ParseCvTypes *task = raw_task;
-  if (task->out_types[task_id].offsets != 0) {
-    // giant obj, already parsed by lnk_parse_giant_debug_t
+  if (task->out_types[task_id].offsets != 0 || task->out_types[task_id].sidecar_packed) {
+    // Container sidecar or giant obj already supplied the index.
   } else if (task->raw_types[task_id].count > 0) {
     task->out_types[task_id] = cv_debug_t_from_data(arena, task->raw_types[task_id].v[0], CV_LeafAlign);
   } else {
     MemoryZeroStruct(&task->out_types[task_id]);
   }
   ProfEnd();
+}
+
+typedef struct LNK_BackgroundPrefetch
+{
+  U64 range_count;
+  Rng1U64 *ranges;
+} LNK_BackgroundPrefetch;
+
+internal void
+lnk_background_prefetch_thread(void *raw_task)
+{
+  LNK_BackgroundPrefetch *task = raw_task;
+  lnk_prefetch_ranges(0, 0, task->range_count, task->ranges);
+}
+
+#define LNK_WINNER_PREFETCH_WORKER_MAX 32
+typedef struct LNK_WinnerPrefetchFlight
+{
+  Thread threads[LNK_WINNER_PREFETCH_WORKER_MAX];
+  LNK_BackgroundPrefetch tasks[LNK_WINNER_PREFETCH_WORKER_MAX];
+  U32 worker_count;
+  U64 range_count;
+  U64 stored_bytes;
+  U64 begin_us;
+} LNK_WinnerPrefetchFlight;
+
+internal int
+lnk_prefetch_range_compare(const void *a, const void *b)
+{
+  Rng1U64 *ra = (Rng1U64 *)a;
+  Rng1U64 *rb = (Rng1U64 *)b;
+  return ra->min < rb->min ? -1 : ra->min > rb->min;
+}
+
+internal void
+lnk_winner_prefetch_start(LNK_WinnerPrefetchFlight *flight, U32 worker_count,
+                          U64 range_count, Rng1U64 *ranges, U64 stored_bytes)
+{
+  if (range_count == 0) { return; }
+  qsort(ranges, range_count, sizeof(*ranges), lnk_prefetch_range_compare);
+  flight->worker_count = Min(worker_count, range_count);
+  flight->range_count = range_count;
+  flight->stored_bytes = stored_bytes;
+  flight->begin_us = now_time_us();
+  for EachIndex(worker_idx, flight->worker_count) {
+    U64 min = range_count * worker_idx / flight->worker_count;
+    U64 max = range_count * (worker_idx + 1) / flight->worker_count;
+    flight->tasks[worker_idx] = (LNK_BackgroundPrefetch){max - min, ranges + min};
+    flight->threads[worker_idx] = thread_launch(lnk_background_prefetch_thread,
+                                                &flight->tasks[worker_idx]);
+  }
+}
+
+internal void
+lnk_winner_prefetch_join(LNK_WinnerPrefetchFlight *flight)
+{
+  for EachIndex(worker_idx, flight->worker_count) {
+    if (flight->threads[worker_idx].u64[0]) {
+      thread_join(flight->threads[worker_idx], max_U64);
+    }
+  }
+  if (flight->worker_count) {
+    lnk_log(LNK_Log_Timers, "[cobj prefetch] workers=%u ranges=%llu stored=%llu MiB elapsed=%.3fs",
+            flight->worker_count, flight->range_count, flight->stored_bytes / MB(1),
+            (F64)(now_time_us() - flight->begin_us) / 1e6);
+  }
+}
+
+// Install the mapped leaf index carried by a compressed-object container.
+// This replaces the full leaf-body chain walk with a compact kind scan; the
+// body bytes remain behind the bounded decoder until a real consumer asks for
+// a leaf.
+internal
+THREAD_POOL_TASK_FUNC(lnk_parse_debug_t_sidecar_task)
+{
+  LNK_ParseCvTypes *task = raw_task;
+  U64 obj_idx = task_id;
+  if (task->raw_types[obj_idx].count == 0) { return; }
+  LNK_Obj *obj = task->input->obj_arr[obj_idx];
+  U32 section_number = task->is_debug_p ? obj->coff.debug_p_section_number : obj->coff.debug_t_section_number;
+  if (!obj->compressed_obj || section_number == 0 || section_number > obj->coff.sections.count_no_null) { return; }
+  LNK_ObjSection sect = lnk_obj_section_from_section_number(obj, section_number);
+  Rng1U64 leaf_range = rng_1u64(sect.frange.min + sizeof(CV_Signature), sect.frange.max);
+  LNK_CObjTypeIndexView view = {0};
+  if (!lnk_compressed_obj_type_index(obj->compressed_obj, leaf_range, &view)) { return; }
+
+  CV_DebugT *out = &task->out_types[obj_idx];
+  out->data          = task->raw_types[obj_idx].v[0];
+  out->count         = view.count;
+  out->offsets       = view.offsets;
+  out->sidecar_sizes = view.sizes;
+  out->sidecar_kinds = view.kinds;
+  out->sidecar_packed_v2_offset_groups = view.packed_v2_offset_groups;
+  out->sidecar_packed_v2_offset_payload = view.packed_v2_offset_payload;
+  out->sidecar_packed_kind_dictionary = view.packed_kind_dictionary;
+  out->sidecar_packed_kind_codes = view.packed_kind_codes;
+  out->sidecar_packed = view.packed_sidecar;
+  out->sidecar_offset_checkpoint_shift = view.offset_checkpoint_shift;
+  out->sidecar_raw_base = leaf_range.min;
+  out->sidecar_complete_udt_hashes = view.complete_udt_hashes;
+  out->sidecar_complete_udt_hash_count = view.complete_udt_hash_count;
+  for EachIndex(i, view.count) {
+    out->source_counts[cv_type_index_source_from_leaf_kind(cv_debug_t_get_leaf_kind(out, i))] += 1;
+  }
+  for EachElement(i, out->ti_ranges) { out->ti_ranges[i] = r1u64(CV_MinComplexTypeIndex, CV_MinComplexTypeIndex + out->count); }
+  if (out->count && cv_debug_t_get_leaf_kind(out, 0) == CV_LeafKind_PRECOMP) {
+    CV_PrecompInfo precomp_info = cv_precomp_info_from_leaf(cv_debug_t_get_leaf(out, 0));
+    for EachElement(i, out->ti_ranges) { out->ti_ranges[i].max += precomp_info.leaf_count; }
+  }
 }
 
 // Giant .debug$T parse: a single SharedPCH-scale .debug$T is a multi-second
@@ -547,7 +695,8 @@ lnk_parse_giant_debug_t(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, 
   U64              giant_count = 0;
   LNK_GiantDebugT *giants      = push_array(scratch.arena, LNK_GiantDebugT, obj_count);
   for EachIndex(obj_idx, obj_count) {
-    if (parse->raw_types[obj_idx].count > 0 && parse->raw_types[obj_idx].v[0].size >= LNK_GIANT_DEBUG_T_SIZE) {
+    if (parse->out_types[obj_idx].offsets == 0 && !parse->out_types[obj_idx].sidecar_packed &&
+        parse->raw_types[obj_idx].count > 0 && parse->raw_types[obj_idx].v[0].size >= LNK_GIANT_DEBUG_T_SIZE) {
       giants[giant_count].obj_idx = obj_idx;
       giants[giant_count].data    = parse->raw_types[obj_idx].v[0];
       giant_count += 1;
@@ -1269,6 +1418,11 @@ THREAD_POOL_TASK_FUNC(lnk_ifc_complete_scan_task)
   LNK_IfcCompleteScanTask *task = raw_task;
   U64        obj_idx = task_id;
   CV_DebugT *dt      = &task->input->debug_t_arr[obj_idx];
+  if (dt->sidecar_complete_udt_hashes) {
+    task->out_hashes[obj_idx] = dt->sidecar_complete_udt_hashes;
+    task->out_counts[obj_idx] = dt->sidecar_complete_udt_hash_count;
+    return;
+  }
   U64       *hashes  = push_array_no_zero(arena, U64, dt->count ? dt->count : 1);
   U64        n       = 0;
   for EachIndex(leaf_idx, dt->count) {
@@ -1347,8 +1501,7 @@ THREAD_POOL_TASK_FUNC(lnk_ifc_scan_task)
   // count 0x1522 leaves first to size the per-obj record array
   U64 ifc_leaf_count = 0;
   for EachIndex(leaf_idx, debug_t->count) {
-    CV_LeafHeader *hdr = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
-    if (hdr->kind == 0x1522) { ifc_leaf_count += 1; }
+    if (cv_debug_t_get_leaf_kind(debug_t, leaf_idx) == 0x1522) { ifc_leaf_count += 1; }
   }
   if (ifc_leaf_count == 0) { task->out_recs[obj_idx] = 0; task->out_counts[obj_idx] = 0; return; }
 
@@ -1356,8 +1509,7 @@ THREAD_POOL_TASK_FUNC(lnk_ifc_scan_task)
   U64            n    = 0;
 
   for EachIndex(leaf_idx, debug_t->count) {
-    CV_LeafHeader *hdr = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
-    if (hdr->kind != 0x1522) { continue; }
+    if (cv_debug_t_get_leaf_kind(debug_t, leaf_idx) != 0x1522) { continue; }
 
     CV_Leaf       leaf = cv_debug_t_get_leaf(debug_t, leaf_idx);
     LNK_IfcRecord rec  = lnk_parse_ifc_record(leaf.data);
@@ -1776,6 +1928,14 @@ lnk_apply_ifc_debug_records(TP_Context *tp, TP_Arena *tp_arena, LNK_CodeViewInpu
       scan.out_hashes = push_array(scratch.arena, U64 *, nonblob_count);
       scan.out_counts = push_array(scratch.arena, U64,   nonblob_count);
       tp_for_parallel(tp, tp_arena, nonblob_count, lnk_ifc_complete_scan_task, &scan);
+      U64 scan_hash_count = 0;
+      U64 scan_sidecar_count = 0;
+      for EachIndex(obj_idx, nonblob_count) {
+        scan_hash_count += scan.out_counts[obj_idx];
+        scan_sidecar_count += (input->debug_t_arr[obj_idx].sidecar_complete_udt_hashes != 0);
+      }
+      lnk_log(LNK_Log_Timers, "[IFC] complete UDT scan: hashes=%llu sidecars=%llu/%llu",
+              scan_hash_count, scan_sidecar_count, nonblob_count);
       // parallel atomic-CAS merge (replaces the serial lnk_u64set_add loop): output-identical
       // because set membership is order-independent + idempotent (see lnk_u64set_add_atomic).
       LNK_IfcSetMergeTask merge = {0};
@@ -2056,7 +2216,25 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
   {
     // parse .debug$S
     input.debug_s_arr = push_array(tp_arena->v[0], CV_DebugS, input.obj_count);
+    lnk_compressed_obj_log_phase_stats("before parse $S");
     lnk_tp_for_parallel_capped_prof(tp, tp_arena, config->debug_worker_cap, obj_count, lnk_parse_debug_s_task, &input, "Parse .debug$S");
+    lnk_compressed_obj_log_phase_stats("after parse $S");
+    {
+      U64 bytes[CV_C13SubSectionIdxKind_COUNT] = {0};
+      U64 nodes[CV_C13SubSectionIdxKind_COUNT] = {0};
+      for EachIndex(obj_idx, obj_count) {
+        for EachElement(k, input.debug_s_arr[obj_idx].data_list) {
+          bytes[k] += input.debug_s_arr[obj_idx].data_list[k].total_size;
+          nodes[k] += input.debug_s_arr[obj_idx].data_list[k].node_count;
+        }
+      }
+      for EachIndex(k, CV_C13SubSectionIdxKind_COUNT) {
+        if (bytes[k] || nodes[k]) {
+          lnk_log(LNK_Log_Timers, "[debugS parsed] kind=%x bytes=%llu nodes=%llu",
+                  cv_c13_sub_section_kind_from_idx(k), bytes[k], nodes[k]);
+        }
+      }
+    }
 
     // collect .debug$P and .debug$T
     String8Array *raw_debug_p_arr = push_array(scratch.arena, String8Array, obj_count);
@@ -2083,14 +2261,18 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
     debug_p_arr = push_array(tp_arena->v[0], CV_DebugT, obj_count);
     parse_types.raw_types = raw_debug_p_arr;
     parse_types.out_types = debug_p_arr;
+    parse_types.is_debug_p = 1;
     lnk_tp_for_parallel_capped_prof(tp, 0,        config->debug_worker_cap, obj_count, lnk_strip_debug_t_sig_task, &parse_types, "Strip .debug$P");
+    lnk_tp_for_parallel_capped_prof(tp, 0,        config->debug_worker_cap, obj_count, lnk_parse_debug_t_sidecar_task, &parse_types, "Index .debug$P sidecars");
     lnk_tp_for_parallel_capped_prof(tp, tp_arena, config->debug_worker_cap, obj_count, lnk_parse_debug_t_task,     &parse_types, "Parse .debug$P");
 
     // parse .debug$T
     input.debug_t_arr     = push_array(tp_arena->v[0], CV_DebugT, obj_count);
     parse_types.raw_types = raw_debug_t_arr;
     parse_types.out_types = input.debug_t_arr;
+    parse_types.is_debug_p = 0;
     lnk_tp_for_parallel_capped_prof(tp, 0,        config->debug_worker_cap, obj_count, lnk_strip_debug_t_sig_task, &parse_types, "Strip .debug$T");
+    lnk_tp_for_parallel_capped_prof(tp, 0,        config->debug_worker_cap, obj_count, lnk_parse_debug_t_sidecar_task, &parse_types, "Index .debug$T sidecars");
     lnk_parse_giant_debug_t(tp, tp_arena, config, obj_count, &parse_types);
     lnk_tp_for_parallel_capped_prof(tp, tp_arena, config->debug_worker_cap, obj_count, lnk_parse_debug_t_task,     &parse_types, "Parse .debug$T");
 
@@ -2101,6 +2283,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
     }
   }
   ProfEnd();
+  lnk_compressed_obj_log_phase_stats("after parse CodeView");
 
   // sort objs based on type: PCH, /Zi (external), /Z7 (internal)
   input.debug_p_indices.v = push_array(tp_arena->v[0], U32, obj_count);
@@ -2377,7 +2560,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
 
       // remove CV_LeafKind_PRECOMP
       debug_t->count    -= 1;
-      debug_t->offsets  += 1;
+      debug_t->sidecar_leaf_bias += 1;
     }
 
     // remove LF_ENDPRECOMP from .debug$P -- P4: journal the NOTYPE rewrite instead of dirtying
@@ -2388,8 +2571,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
       CV_DebugT     *debug_p     = &input.debug_t_arr[debug_p_idx];
       for EachIndex(i, debug_p->count) {
         U64            lf_idx = debug_p->count - (i + 1);
-        CV_LeafHeader *lf     = cv_debug_t_get_leaf_header(debug_p, lf_idx);
-        if (lf->kind == CV_LeafKind_ENDPRECOMP) {
+        if (cv_debug_t_get_leaf_kind(debug_p, lf_idx) == CV_LeafKind_ENDPRECOMP) {
           lnk_notype_journal_push(tp_arena->v[0], &input.notype_journal[debug_p_idx], (U32)lf_idx, 0, debug_p->count);
           break;
         }
@@ -2489,6 +2671,7 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
     }
   }
   ProfEnd();
+  lnk_compressed_obj_log_phase_stats("after make symbol inputs");
 
   scratch_end(scratch);
   ProfEnd();
@@ -2582,10 +2765,26 @@ lnk_notype_journal_find(LNK_NotypeJournal *journal, U32 leaf_idx, B32 *kind_only
 // journaled view of the leaf to the hashers (identical to what the old in-place writes produced:
 // full rewrite => { kind=LF_NOTYPE, empty payload }; KIND_ONLY => kind=LF_NOTYPE, payload kept).
 internal CV_Leaf
-lnk_cv_leaf_from_leaf_ref(LNK_CodeViewInput *input, U32 obj_idx, U32 leaf_idx)
+lnk_cv_leaf_from_leaf_ref(Arena *arena, LNK_CObjDecodeWindow *decode_window,
+                          LNK_CodeViewInput *input, U32 obj_idx, U32 leaf_idx)
 {
   CV_DebugT *debug_t = &input->debug_t_arr[obj_idx];
-  CV_Leaf    leaf    = cv_debug_t_get_leaf(debug_t, leaf_idx);
+  CV_Leaf    leaf    = {0};
+  LNK_Obj   *obj     = obj_idx < input->obj_count ? input->obj_arr[obj_idx] : 0;
+  if (obj && obj->compressed_obj && (debug_t->sidecar_sizes || debug_t->sidecar_packed) && decode_window) {
+    U64 raw_size = cv_debug_t_get_raw_leaf_size(debug_t, leaf_idx);
+    U8 *raw_leaf = push_array_no_zero(arena, U8, raw_size);
+    U64 leaf_off = cv_debug_t_get_leaf_offset(debug_t, leaf_idx);
+    Rng1U64 raw_range = rng_1u64(debug_t->sidecar_raw_base + leaf_off,
+                                 debug_t->sidecar_raw_base + leaf_off + raw_size);
+    if (lnk_compressed_obj_copy_range(obj->compressed_obj, raw_range, raw_leaf, decode_window)) {
+      cv_read_leaf(str8(raw_leaf, raw_size), 0, 1, &leaf);
+    } else {
+      leaf = cv_debug_t_get_leaf(debug_t, leaf_idx);
+    }
+  } else {
+    leaf = cv_debug_t_get_leaf(debug_t, leaf_idx);
+  }
   // hot path: one bitmap test; journals are empty for ~all objs
   if (obj_idx < input->obj_count && lnk_notype_journal_test(&input->notype_journal[obj_idx], leaf_idx)) {
     B32 kind_only = 0;
@@ -2608,7 +2807,7 @@ lnk_leaf_ref_materialize_meta(LNK_CodeViewInput *input, LNK_LeafRef leaf_ref)
   U32        obj_idx  = lnk_leaf_ref_obj_idx(leaf_ref);
   U32        leaf_idx = lnk_leaf_ref_leaf_idx(leaf_ref);
   CV_DebugT *debug_t  = &input->debug_t_arr[obj_idx];
-  U64        raw_size = cv_debug_t_get_raw_leaf(debug_t, leaf_idx).size;
+  U64        raw_size = cv_debug_t_get_raw_leaf_size(debug_t, leaf_idx);
   U64        rewrite  = 0;
   if (obj_idx < input->obj_count && lnk_notype_journal_test(&input->notype_journal[obj_idx], leaf_idx)) {
     B32 kind_only = 0;
@@ -2782,7 +2981,7 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, Arena *journal_arena, LNK_LeafRef lea
       if (obj_idx < input->obj_count) {
         lnk_notype_journal_push(journal_arena, &input->notype_journal[obj_idx], leaf_idx, 0, debug_t->count);
       } else {
-        U8 *leaf_header = debug_t->data.str + debug_t->offsets[leaf_idx];
+        U8 *leaf_header = debug_t->data.str + cv_debug_t_get_leaf_offset(debug_t, leaf_idx);
         memory_write16(leaf_header + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
         memory_write16(leaf_header + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
       }
@@ -2809,7 +3008,7 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, Arena *journal_arena, LNK_LeafRef lea
       if (obj_idx < input->obj_count) {
         lnk_notype_journal_push(journal_arena, &input->notype_journal[obj_idx], leaf_idx, 0, debug_t->count);
       } else {
-        U8 *leaf_header = debug_t->data.str + debug_t->offsets[leaf_idx];
+        U8 *leaf_header = debug_t->data.str + cv_debug_t_get_leaf_offset(debug_t, leaf_idx);
         memory_write16(leaf_header + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
         memory_write16(leaf_header + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
       }
@@ -2847,6 +3046,13 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, Arena *journal_arena, LNK_LeafRef lea
              lnk_notype_journal_test(&input->notype_journal[obj_idx], leaf_idx)) {
     CV_LeafHeader leaf_header = { .size = (CV_LeafSize)(leaf.data.size + sizeof(CV_LeafKind)), .kind = leaf.kind };
     lnk_hasher_update_struct(&hasher, &leaf_header);
+  } else if (debug_t->sidecar_sizes || debug_t->sidecar_packed) {
+    // The sparse raw view deliberately leaves .debug$T bodies (including the
+    // four-byte leaf header) as holes.  The body above came from the bounded
+    // decode window; reconstruct the byte-identical header from its sidecar
+    // instead of mixing four zero bytes from the hole into the type hash.
+    CV_LeafHeader leaf_header = { .size = (CV_LeafSize)(cv_debug_t_get_raw_leaf_size(debug_t, leaf_idx) - sizeof(CV_LeafSize)), .kind = leaf.kind };
+    lnk_hasher_update_struct(&hasher, &leaf_header);
   } else {
     lnk_hasher_update_struct(&hasher, cv_debug_t_get_leaf_header(debug_t, leaf_idx));
   }
@@ -2864,6 +3070,7 @@ lnk_hash_cv_leaf(LNK_CodeViewInput *input, Arena *journal_arena, LNK_LeafRef lea
 
 internal void
 lnk_hash_cv_leaf_deep(Arena               *arena,
+                      LNK_CObjDecodeWindow *decode_window,
                       LNK_CodeViewInput   *input,
                       LNK_LeafRef          root_leaf_ref,
                       CV_TiOffsets         root_ti_offs)
@@ -2889,7 +3096,7 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
   root_frame->ti_offs      = root_ti_offs;
   root_frame->ti_next      = 0;
   root_frame->ti_count     = cv_ti_offsets_count(&root_ti_offs);
-  root_frame->leaf         = lnk_cv_leaf_from_leaf_ref(input, lnk_leaf_ref_obj_idx(root_leaf_ref), lnk_leaf_ref_leaf_idx(root_leaf_ref));
+  root_frame->leaf         = lnk_cv_leaf_from_leaf_ref(temp.arena, decode_window, input, lnk_leaf_ref_obj_idx(root_leaf_ref), lnk_leaf_ref_leaf_idx(root_leaf_ref));
   root_frame->ti_source    = cv_type_index_source_from_leaf_kind(root_frame->leaf.kind);
   root_frame->ti           = cv_ti_from_leaf_idx(root_debug_t, root_frame->ti_source, lnk_leaf_ref_leaf_idx(root_leaf_ref));
 
@@ -2918,7 +3125,7 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
       // recurse down to sub types
       HashStack *frame = push_array(temp.arena, HashStack, 1);
       frame->leaf_ref     = leaf_ref;
-      frame->leaf         = lnk_cv_leaf_from_leaf_ref(input, obj_idx, leaf_idx);
+      frame->leaf         = lnk_cv_leaf_from_leaf_ref(temp.arena, decode_window, input, obj_idx, leaf_idx);
       frame->ti_offs      = cv_leaf_ti_offsets(temp.arena, frame->leaf.kind, frame->leaf.data);
       frame->ti_next      = 0;
       frame->ti_count     = cv_ti_offsets_count(&frame->ti_offs);
@@ -2991,7 +3198,7 @@ THREAD_POOL_TASK_FUNC(lnk_hash_debug_t_task)
   CV_DebugT      *debug_t = &task->input->debug_t_arr[obj_idx];
   for EachIndex(leaf_idx, debug_t->count) {
     Temp         temp    = temp_begin(task->fixed_arenas[worker_id]);
-    CV_Leaf      leaf    = lnk_cv_leaf_from_leaf_ref(task->input, obj_idx, leaf_idx);
+    CV_Leaf      leaf    = lnk_cv_leaf_from_leaf_ref(temp.arena, &task->decode_windows[worker_id], task->input, obj_idx, leaf_idx);
     CV_TiOffsets ti_offs = cv_leaf_ti_offsets(temp.arena, leaf.kind, leaf.data);
     lnk_hash_cv_leaf(task->input, arena, lnk_leaf_ref_make(obj_idx, leaf_idx), leaf, ti_offs, 1);
     temp_end(temp);
@@ -3009,11 +3216,11 @@ THREAD_POOL_TASK_FUNC(lnk_hash_debug_t_deep_task)
   B32 is_ifc_blob = task->input->has_ifc_redirects && contains_1u64(task->input->ifc_obj_range, obj_idx);
   for EachIndex(leaf_idx, debug_t->count) {
     if (task->input->debug_h_arr[obj_idx].v[leaf_idx] != 0) { continue; }
-    if (is_ifc_blob && cv_debug_t_get_leaf_header(debug_t, leaf_idx)->kind == CV_LeafKind_NOTYPE) { continue; } // blob $T is arena-backed + mutated in place -- raw read is post-rewrite
+    if (is_ifc_blob && cv_debug_t_get_leaf_kind(debug_t, leaf_idx) == CV_LeafKind_NOTYPE) { continue; } // blob $T is arena-backed + mutated in place -- raw read is post-rewrite
     Temp         temp    = temp_begin(task->fixed_arenas[worker_id]);
-    CV_Leaf      leaf    = lnk_cv_leaf_from_leaf_ref(task->input, obj_idx, leaf_idx);
+    CV_Leaf      leaf    = lnk_cv_leaf_from_leaf_ref(temp.arena, &task->decode_windows[worker_id], task->input, obj_idx, leaf_idx);
     CV_TiOffsets ti_offs = cv_leaf_ti_offsets(temp.arena, leaf.kind, leaf.data);
-    lnk_hash_cv_leaf_deep(temp.arena, task->input, lnk_leaf_ref_make(obj_idx, leaf_idx), ti_offs);
+    lnk_hash_cv_leaf_deep(temp.arena, &task->decode_windows[worker_id], task->input, lnk_leaf_ref_make(obj_idx, leaf_idx), ti_offs);
     temp_end(temp);
   }
   ProfEnd();
@@ -3058,8 +3265,7 @@ THREAD_POOL_TASK_FUNC(lnk_estimate_unique_leaves_task)
     notype_cap = task->input->notype_journal[obj_idx].bit_cap;
   }
   for (U64 leaf_idx = 0; leaf_idx < debug_t->count; leaf_idx += LNK_ESTIMATE_SAMPLE_STRIDE) {
-    CV_LeafHeader *header = cv_debug_t_get_leaf_header(debug_t, leaf_idx);
-    CV_LeafKind    kind   = memory_read16(MemberFromPtr(CV_LeafHeader, header, kind));
+    CV_LeafKind    kind   = cv_debug_t_get_leaf_kind(debug_t, leaf_idx);
     if (notype_bm && leaf_idx < notype_cap && ((notype_bm[leaf_idx >> 6] >> (leaf_idx & 63)) & 1)) { kind = CV_LeafKind_NOTYPE; }
     if (is_ifc_blob && kind == CV_LeafKind_NOTYPE) { continue; }
     CV_TypeIndexSource leaf_source = cv_type_index_source_from_leaf_kind(kind);
@@ -3092,8 +3298,7 @@ THREAD_POOL_TASK_FUNC(lnk_populate_leaf_ht)
 
     // pop obj is a type-server pseudo obj: arena-backed, mutated in place, never journaled --
     // the raw header read is the post-rewrite kind (original code path)
-    CV_LeafHeader      *header      = cv_debug_t_get_leaf_header(debug_t, leaf_idx);             // leaf index -> leaf header
-    CV_LeafKind         kind        = memory_read16(MemberFromPtr(CV_LeafHeader, header, kind)); // leaf header -> leaf kind
+    CV_LeafKind         kind        = cv_debug_t_get_leaf_kind(debug_t, leaf_idx);
     CV_TypeIndexSource  leaf_source = cv_type_index_source_from_leaf_kind(kind);                 // leaf kind -> type stream
     LNK_LeafHashTable  *leaf_ht     = &task->leaf_ht_arr[leaf_source];                           // type stream -> hash table
     U64                 hash        = debug_h->v[leaf_idx];                                     // leaf ref -> hash
@@ -3150,12 +3355,11 @@ THREAD_POOL_TASK_FUNC(lnk_leaf_dedup_task)
     // another worker overflowed an estimate-sized table -- the whole dedup result is discarded
     // and retried with the total-based caps, so bail out early
     if (ins_atomic_u32_eval(&task->leaf_ht_overflow) != 0) { break; }
-    if (is_ifc_blob && cv_debug_t_get_leaf_header(debug_t, leaf_idx)->kind == CV_LeafKind_NOTYPE) { continue; }
     B32 is_inserted_or_updated = 1;
 
     LNK_LeafRef         leaf_ref    = lnk_leaf_ref_make(obj_idx, leaf_idx);
-    CV_LeafHeader      *header      = cv_debug_t_get_leaf_header(debug_t, leaf_idx);             // leaf index -> leaf header
-    CV_LeafKind         kind        = memory_read16(MemberFromPtr(CV_LeafHeader, header, kind)); // leaf header -> leaf kind
+    CV_LeafKind         kind        = cv_debug_t_get_leaf_kind(debug_t, leaf_idx);
+    if (is_ifc_blob && kind == CV_LeafKind_NOTYPE) { continue; }
     if (notype_bm && leaf_idx < notype_cap && ((notype_bm[leaf_idx >> 6] >> (leaf_idx & 63)) & 1)) { kind = CV_LeafKind_NOTYPE; }
     CV_TypeIndexSource  leaf_source = cv_type_index_source_from_leaf_kind(kind);                 // leaf kind -> type stream
     LNK_LeafHashTable  *leaf_ht     = &task->leaf_ht_arr[leaf_source];                           // type stream -> hash table
@@ -3235,7 +3439,35 @@ THREAD_POOL_TASK_FUNC(lnk_get_present_buckets_task)
 
   for EachInRange(bucket_idx, task->ranges[task_id]) {
     if (ht->bucket_arr[bucket_idx] != LNK_LEAF_REF_NULL) {
-      unique_leaf_refs.v[cursor++] = lnk_leaf_bucket_untag(ht->bucket_arr[bucket_idx]);
+      LNK_LeafRef ref = lnk_leaf_bucket_untag(ht->bucket_arr[bucket_idx]);
+      unique_leaf_refs.v[cursor++] = ref;
+
+      // TPI/IPI materialization is the next compressed-payload consumer. Claim each segment
+      // once while the winner is already hot in this extraction pass. A leaf can straddle a
+      // segment boundary, so claim the full raw range rather than only its first byte.
+      if (task->winner_segment_bitmap && task->ti_source != CV_TypeIndexSource_NULL &&
+          lnk_leaf_ref_obj_idx(ref) < task->input->obj_count) {
+        U32 obj_idx = lnk_leaf_ref_obj_idx(ref);
+        U32 leaf_idx = lnk_leaf_ref_leaf_idx(ref);
+        LNK_Obj *obj = task->input->obj_arr[obj_idx];
+        CV_DebugT *debug_t = &task->input->debug_t_arr[obj_idx];
+        U32 segment_size = lnk_compressed_obj_segment_size(obj->compressed_obj);
+        if (segment_size && (debug_t->sidecar_sizes || debug_t->sidecar_packed)) {
+          U64 raw_min = debug_t->sidecar_raw_base + cv_debug_t_get_leaf_offset(debug_t, leaf_idx);
+          U64 raw_max = raw_min + cv_debug_t_get_raw_leaf_size(debug_t, leaf_idx);
+          U32 first = (U32)(raw_min / segment_size);
+          U32 opl   = (U32)CeilIntegerDiv(raw_max, segment_size);
+          U32 count = lnk_compressed_obj_segment_count(obj->compressed_obj);
+          opl = Min(opl, count);
+          for (U32 segment_idx = first; segment_idx < opl; ++segment_idx) {
+            U64 global_idx = task->winner_segment_offsets[obj_idx] + segment_idx;
+            U64 *word = &task->winner_segment_worker_bitmaps[task_id * task->winner_segment_word_count +
+                                                              (global_idx >> 6)];
+            U64 bit = (U64)1 << (global_idx & 63);
+            *word |= bit;
+          }
+        }
+      }
     }
   }
 
@@ -3398,6 +3630,22 @@ THREAD_POOL_TASK_FUNC(lnk_journal_symbol_fixups_task)
   for EachInRange(i, range) {
     LNK_SymbolInput symbols = task->input->symbol_inputs[i];
 
+    // The journal builder makes two immediate linear passes over each Symbols subsection.
+    // Keeping those reads behind the shared faulting view lets concurrently scheduled objs
+    // evict one another between passes.  A subsection-local copy streams every compressed
+    // segment once through the worker's decode window, then both parser passes hit ordinary
+    // committed memory.  The fixed arena temp is rewound for every input, so peak storage is
+    // bounded by one Symbols subsection per active worker rather than the corpus size.
+    Temp symbols_temp = temp_begin(task->fixed_arenas[worker_id]);
+    LNK_Obj *obj = task->input->obj_arr[symbols.obj_idx];
+    if (obj->compressed_obj && symbols.raw_symbols.size) {
+      U8 *copy = push_array_no_zero(symbols_temp.arena, U8, symbols.raw_symbols.size);
+      if (lnk_compressed_obj_copy_string(obj->compressed_obj, symbols.raw_symbols, copy,
+                                         &task->decode_windows[worker_id])) {
+        symbols.raw_symbols = str8(copy, symbols.raw_symbols.size);
+      }
+    }
+
     // upper-bound pass: TI entries (exact) + kind rewrite / itype slots for *_ID records
     U64 cap = 0;
     for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
@@ -3495,6 +3743,7 @@ THREAD_POOL_TASK_FUNC(lnk_journal_symbol_fixups_task)
       }
     }
     Assert(journal->count <= cap);
+    temp_end(symbols_temp);
   }
   ProfEnd();
 }
@@ -3655,6 +3904,7 @@ lnk_obj_window_debug_s(Arena *arena, LNK_CodeViewInput *cv, U64 obj_idx, U64 ima
   LNK_Obj   *obj = cv->obj_arr[obj_idx];
   CV_DebugS *src = &cv->debug_s_arr[obj_idx];
   CV_DebugS  out = {0};
+  LNK_CObjDecodeWindow decode_window = {0};
 
   U64 idx_symbols  = cv_c13_sub_section_idx_from_kind(CV_C13SubSectionKind_Symbols);
   U64 idx_inlinees = cv_c13_sub_section_idx_from_kind(CV_C13SubSectionKind_InlineeLines);
@@ -3689,13 +3939,25 @@ lnk_obj_window_debug_s(Arena *arena, LNK_CodeViewInput *cv, U64 obj_idx, U64 ima
     if (sect_state[sect_idx] == 0) { continue; }
     U64            section_number = sect_idx + 1;
     LNK_ObjSection section        = lnk_obj_section_from_section_number(obj, section_number);
-    COFF_SectionHeader *raw_hdr   = &raw_section_table[sect_idx];
-    String8        raw            = str8_substr(obj->coff.data, r1u64s(raw_hdr->foff, raw_hdr->fsize)); // always start from the immutable raw view
+    String8        raw     = lnk_compressed_obj_direct_range(obj->compressed_obj, section.frange);
+    B32 explicitly_decoded = 0;
+    if (raw.size == 0 && obj->compressed_obj != 0) {
+      U8 *copy = push_array_no_zero(arena, U8, dim_1u64(section.frange));
+      if (lnk_compressed_obj_copy_range(obj->compressed_obj, section.frange, copy, &decode_window)) {
+        raw = str8(copy, dim_1u64(section.frange));
+        explicitly_decoded = 1;
+      }
+    }
+    if (raw.size == 0) { raw = str8_substr(obj->coff.data, section.frange); }
     if (sect_state[sect_idx] == 1) {
       sect_base[sect_idx] = raw.str;
+      if (explicitly_decoded) { window_size += raw.size; }
     } else {
-      U8 *copy = push_array_no_zero(arena, U8, raw.size);
-      MemoryCopy(copy, raw.str, raw.size);
+      U8 *copy = raw.str;
+      if (!explicitly_decoded) {
+        copy = push_array_no_zero(arena, U8, raw.size);
+        MemoryCopy(copy, raw.str, raw.size);
+      }
       lnk_obj_apply_relocs_to_buffer(obj, section_number, section.header, str8(copy, raw.size), image_base, image_section_table);
       sect_base[sect_idx] = copy;
       window_size += raw.size;
@@ -3768,6 +4030,7 @@ lnk_obj_window_debug_s(Arena *arena, LNK_CodeViewInput *cv, U64 obj_idx, U64 ima
     }
   }
 
+  lnk_compressed_obj_release_window(&decode_window);
   return out;
 }
 
@@ -3795,21 +4058,30 @@ THREAD_POOL_TASK_FUNC(lnk_count_unique_leaf_sizes_task)
 // pointed result.v into the input). result.v now points into the copy: identical bytes, identical
 // order, clean input pages.
 internal
-THREAD_POOL_TASK_FUNC(lnk_materialize_unique_leaves_task)
+THREAD_POOL_TASK_FUNC(lnk_assign_unique_leaf_destinations_task)
 {
-  ProfBeginFunction();
   LNK_MergeTypes *task        = raw_task;
   Rng1U64         range       = task->ranges[task_id];
-  Arena          *fixed_arena = task->fixed_arenas[task_id];
   U8             *cursor      = task->leaf_buffer + task->leaf_buffer_offsets[task_id];
   for EachInRange(i, range) {
-    LNK_LeafRef leaf_ref = task->unique_leaf_refs_arr[task->ti_source].v[i];
+    U64 meta = (U64)task->result.v[task->ti_source][i];
+    U64 raw_size = meta >> 2;
+    U64 rewrite = meta & 3;
+    Assert(((U64)cursor & 3) == 0);
+    task->result.v[task->ti_source][i] = (U8 *)((U64)cursor | rewrite);
+    cursor += raw_size;
+  }
+}
+
+internal void
+lnk_materialize_unique_leaf_to(LNK_MergeTypes *task, CV_TypeIndexSource source, U64 i,
+                               U8 *cursor, U64 raw_size, U64 rewrite,
+                               Arena *fixed_arena, LNK_CObjDecodeWindow *decode_window)
+{
+    LNK_LeafRef leaf_ref = task->unique_leaf_refs_arr[source].v[i];
     U32         obj_idx  = lnk_leaf_ref_obj_idx(leaf_ref);
     U32         leaf_idx = lnk_leaf_ref_leaf_idx(leaf_ref);
     CV_DebugT  *debug_t  = &task->input->debug_t_arr[obj_idx];
-    U64         meta     = (U64)task->result.v[task->ti_source][i];
-    U64         raw_size = meta >> 2;
-    U64         rewrite  = meta & 3;
 
     // copy raw leaf into the private buffer. Hot path = the ORIGINAL read+memcpy (one bitmap
     // test on top); journaled leaves replay the NOTYPE rewrite into the COPY (full rewrite =>
@@ -3819,24 +4091,93 @@ THREAD_POOL_TASK_FUNC(lnk_materialize_unique_leaves_task)
       memory_write16(cursor + OffsetOf(CV_LeafHeader, size), sizeof(CV_LeafKind));
       memory_write16(cursor + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
     } else {
-      U8 *raw_leaf = debug_t->data.str + debug_t->offsets[leaf_idx];
-      MemoryCopy(cursor, raw_leaf, raw_size);
+      LNK_Obj *obj = obj_idx < task->input->obj_count ? task->input->obj_arr[obj_idx] : 0;
+      B32 copied = 0;
+      if (obj && obj->compressed_obj && (debug_t->sidecar_sizes || debug_t->sidecar_packed)) {
+        U64 leaf_off = cv_debug_t_get_leaf_offset(debug_t, leaf_idx);
+        Rng1U64 raw_range = rng_1u64(debug_t->sidecar_raw_base + leaf_off,
+                                     debug_t->sidecar_raw_base + leaf_off + raw_size);
+        copied = lnk_compressed_obj_copy_range(obj->compressed_obj, raw_range, cursor, decode_window);
+      }
+      if (!copied) {
+        U8 *raw_leaf = debug_t->data.str + cv_debug_t_get_leaf_offset(debug_t, leaf_idx);
+        MemoryCopy(cursor, raw_leaf, raw_size);
+      }
       if (rewrite == LNK_LEAF_MATERIALIZE_KIND_NOTYPE) {
         memory_write16(cursor + OffsetOf(CV_LeafHeader, kind), CV_LeafKind_NOTYPE);
       }
     }
-    task->result.v[task->ti_source][i] = cursor;
-    cursor += raw_size;
+    task->result.v[source][i] = cursor;
 
     // fixup type indices on the copy (same math the in-place leaf patcher applied)
     Temp temp = temp_begin(fixed_arena);
     CV_Leaf leaf = {
-      .kind = memory_read16(task->result.v[task->ti_source][i] + OffsetOf(CV_LeafHeader, kind)),
-      .data = str8(task->result.v[task->ti_source][i] + sizeof(CV_LeafHeader), raw_size - sizeof(CV_LeafHeader)),
+      .kind = memory_read16(task->result.v[source][i] + OffsetOf(CV_LeafHeader, kind)),
+      .data = str8(task->result.v[source][i] + sizeof(CV_LeafHeader), raw_size - sizeof(CV_LeafHeader)),
     };
     CV_TiOffsets ti_offs = cv_leaf_ti_offsets(temp.arena, leaf.kind, leaf.data);
     lnk_fixup_cv_type_indices(task, obj_idx, leaf.data, ti_offs);
     temp_end(temp);
+}
+
+internal void
+lnk_materialize_tagged_unique_leaf(LNK_MergeTypes *task, CV_TypeIndexSource source, U64 i,
+                                   Arena *fixed_arena, LNK_CObjDecodeWindow *decode_window)
+{
+  LNK_LeafRef leaf_ref = task->unique_leaf_refs_arr[source].v[i];
+  U32 obj_idx = lnk_leaf_ref_obj_idx(leaf_ref);
+  U32 leaf_idx = lnk_leaf_ref_leaf_idx(leaf_ref);
+  CV_DebugT *debug_t = &task->input->debug_t_arr[obj_idx];
+  U64 tagged = (U64)task->result.v[source][i];
+  U64 rewrite = tagged & 3;
+  U8 *cursor = (U8 *)(tagged & ~(U64)3);
+  U64 raw_size = rewrite == LNK_LEAF_MATERIALIZE_FULL_NOTYPE ? sizeof(CV_LeafHeader) :
+                 cv_debug_t_get_raw_leaf_size(debug_t, leaf_idx);
+  lnk_materialize_unique_leaf_to(task, source, i, cursor, raw_size, rewrite, fixed_arena, decode_window);
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_materialize_unique_leaves_task)
+{
+  ProfBeginFunction();
+  LNK_MergeTypes *task = raw_task;
+  Rng1U64 range = task->ranges[task_id];
+  U8 *cursor = task->leaf_buffer + task->leaf_buffer_offsets[task_id];
+  for EachInRange(i, range) {
+    U64 meta = (U64)task->result.v[task->ti_source][i];
+    U64 raw_size = meta >> 2;
+    U64 rewrite = meta & 3;
+    lnk_materialize_unique_leaf_to(task, task->ti_source, i, cursor, raw_size, rewrite,
+                                   task->fixed_arenas[worker_id], &task->decode_windows[worker_id]);
+    cursor += raw_size;
+  }
+  ProfEnd();
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_materialize_fused_tpi_ipi_task)
+{
+  ProfBeginFunction();
+  LNK_MergeTypes *task = raw_task;
+  U64 tpi_i = task->materialize_obj_offsets[CV_TypeIndexSource_TPI][task_id];
+  U64 tpi_opl = task->materialize_obj_offsets[CV_TypeIndexSource_TPI][task_id + 1];
+  U64 ipi_i = task->materialize_obj_offsets[CV_TypeIndexSource_IPI][task_id];
+  U64 ipi_opl = task->materialize_obj_offsets[CV_TypeIndexSource_IPI][task_id + 1];
+  while (tpi_i < tpi_opl || ipi_i < ipi_opl) {
+    CV_TypeIndexSource source;
+    U64 i;
+    if (ipi_i >= ipi_opl ||
+        (tpi_i < tpi_opl &&
+         lnk_leaf_ref_leaf_idx(task->unique_leaf_refs_arr[CV_TypeIndexSource_TPI].v[tpi_i]) <
+         lnk_leaf_ref_leaf_idx(task->unique_leaf_refs_arr[CV_TypeIndexSource_IPI].v[ipi_i]))) {
+      source = CV_TypeIndexSource_TPI;
+      i = tpi_i++;
+    } else {
+      source = CV_TypeIndexSource_IPI;
+      i = ipi_i++;
+    }
+    lnk_materialize_tagged_unique_leaf(task, source, i, task->fixed_arenas[worker_id],
+                                       &task->decode_windows[worker_id]);
   }
   ProfEnd();
 }
@@ -3851,6 +4192,56 @@ THREAD_POOL_TASK_FUNC(lnk_unbucket_hashes_task)
     U32         obj_idx  = lnk_leaf_ref_obj_idx(leaf_ref);
     U32         leaf_idx = lnk_leaf_ref_leaf_idx(leaf_ref);
     task->result.hashes[task->ti_source][i] = task->input->debug_h_arr[obj_idx].v[leaf_idx];
+  }
+}
+
+internal void
+lnk_profile_cobj_winner_segments(LNK_MergeTypes *task)
+{
+  char *env = getenv("RAD_COBJ_PROFILE_WINNERS");
+  if (env == 0 || env[0] == '0') { return; }
+  enum { BucketCount = 16, SizeCount = 4 };
+  U64 segment_sizes[SizeCount] = { KB(128), KB(256), KB(512), MB(1) };
+  U64 touched[CV_TypeIndexSource_COUNT][BucketCount][SizeCount] = {0};
+  U64 leaf_counts[CV_TypeIndexSource_COUNT][BucketCount] = {0};
+  U64 leaf_bytes[CV_TypeIndexSource_COUNT][BucketCount] = {0};
+
+  for (U32 source = CV_TypeIndexSource_TPI; source <= CV_TypeIndexSource_IPI; ++source) {
+    U64 last_key[SizeCount] = { max_U64, max_U64, max_U64, max_U64 };
+    LNK_LeafRefArray refs = task->unique_leaf_refs_arr[source];
+    for EachIndex(i, refs.count) {
+      LNK_LeafRef ref = refs.v[i];
+      U32 obj_idx = lnk_leaf_ref_obj_idx(ref);
+      U32 leaf_idx = lnk_leaf_ref_leaf_idx(ref);
+      if (obj_idx >= task->input->obj_count) { continue; }
+      LNK_Obj *obj = task->input->obj_arr[obj_idx];
+      CV_DebugT *debug_t = &task->input->debug_t_arr[obj_idx];
+      if (!obj->compressed_obj || (!debug_t->sidecar_sizes && !debug_t->sidecar_packed)) { continue; }
+      U64 bucket = (U64)obj_idx * BucketCount / task->input->obj_count;
+      U64 raw_off = debug_t->sidecar_raw_base + cv_debug_t_get_leaf_offset(debug_t, leaf_idx);
+      leaf_counts[source][bucket] += 1;
+      leaf_bytes[source][bucket] += cv_debug_t_get_raw_leaf_size(debug_t, leaf_idx);
+      for (U32 s = 0; s < SizeCount; ++s) {
+        U64 key = ((U64)obj_idx << 32) | (raw_off / segment_sizes[s]);
+        if (key != last_key[s]) {
+          touched[source][bucket][s] += 1;
+          last_key[s] = key;
+        }
+      }
+    }
+  }
+
+  for (U32 source = CV_TypeIndexSource_TPI; source <= CV_TypeIndexSource_IPI; ++source) {
+    for (U32 bucket = 0; bucket < BucketCount; ++bucket) {
+      lnk_log(LNK_Log_Timers,
+              "[cobj winners] src=%u bucket=%u objs=%u-%u leaves=%llu leafMiB=%llu seg128=%llu seg256=%llu seg512=%llu seg1024=%llu",
+              source, bucket,
+              (task->input->obj_count * bucket) / BucketCount,
+              (task->input->obj_count * (bucket + 1)) / BucketCount - 1,
+              leaf_counts[source][bucket], leaf_bytes[source][bucket] / MB(1),
+              touched[source][bucket][0], touched[source][bucket][1],
+              touched[source][bucket][2], touched[source][bucket][3]);
+    }
   }
 }
 
@@ -3869,8 +4260,7 @@ THREAD_POOL_TASK_FUNC(lnk_build_obj_ti_map)
   U64  notype_cap = input->notype_journal[obj_idx].bit_cap;
 
   for EachIndex(leaf_idx, debug_t->count) {
-    CV_Leaf     leaf = cv_debug_t_get_leaf(debug_t, leaf_idx);
-    CV_LeafKind kind = leaf.kind;
+    CV_LeafKind kind = cv_debug_t_get_leaf_kind(debug_t, leaf_idx);
     if (notype_bm && leaf_idx < notype_cap && ((notype_bm[leaf_idx >> 6] >> (leaf_idx & 63)) & 1)) { kind = CV_LeafKind_NOTYPE; }
     CV_TypeIndexSource  source   = cv_type_index_source_from_leaf_kind(kind);
     LNK_LeafRef         leaf_ref = lnk_leaf_ref_make(obj_idx, leaf_idx);
@@ -3893,6 +4283,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
   // deep-hash stack frames; 2x the legacy per-node list bound keeps comfortable headroom
   U64 max_ti_list_size = 2 * sizeof(CV_TypeIndexInfo) * (max_U16 / sizeof(CV_TypeIndex));
   task.fixed_arenas = alloc_fixed_size_arena_array(scratch.arena, tp->worker_count, max_ti_list_size, max_ti_list_size);
+  task.decode_windows = push_array(scratch.arena, LNK_CObjDecodeWindow, tp->worker_count);
 
   ProfBegin("Produce Hashes");
   {
@@ -4153,6 +4544,35 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
 
   ProfBegin("Extract present buckets from the leaf hash tables");
 
+  B32 winner_prefetch_enabled = 0;
+  {
+    char *env = getenv("RAD_COBJ_PREFETCH_WINNERS");
+    winner_prefetch_enabled = (env == 0 || env[0] != '0');
+    if (winner_prefetch_enabled) {
+      task.winner_segment_offsets = push_array(scratch.arena, U64, input->obj_count + 1);
+      for EachIndex(obj_idx, input->obj_count) {
+        task.winner_segment_offsets[obj_idx + 1] = task.winner_segment_offsets[obj_idx] +
+          lnk_compressed_obj_segment_count(input->obj_arr[obj_idx]->compressed_obj);
+      }
+      U64 total_segments = task.winner_segment_offsets[input->obj_count];
+      if (total_segments) {
+        task.winner_segment_word_count = CeilIntegerDiv(total_segments, 64);
+        task.winner_segment_bitmap = push_array(scratch.arena, U64, task.winner_segment_word_count);
+        task.winner_segment_worker_bitmaps = push_array(scratch.arena, U64,
+                                                         task.winner_segment_word_count * tp->worker_count);
+        task.winner_segment_keys = push_array_no_zero(scratch.arena, U64, total_segments);
+      }
+    }
+  }
+
+  U32 winner_prefetch_worker_count = 8;
+  {
+    char *env = getenv("RAD_COBJ_PREFETCH_WORKERS");
+    if (env) { winner_prefetch_worker_count = Clamp(1, atoi(env), LNK_WINNER_PREFETCH_WORKER_MAX); }
+  }
+  LNK_WinnerPrefetchFlight winner_prefetch_flights[CV_TypeIndexSource_COUNT] = {0};
+  U64 winner_prefetch_key_cursor = 0;
+
   for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
     task.ti_source          = ti_source;
     task.counts[ti_source]  = push_array(scratch.arena, U64, tp->worker_count);
@@ -4168,6 +4588,49 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
             ti_source, task.unique_leaf_refs_arr[ti_source].count, task.leaf_ht_arr[ti_source].cap,
             task.leaf_ht_arr[ti_source].cap ? (F64)task.unique_leaf_refs_arr[ti_source].count / (F64)task.leaf_ht_arr[ti_source].cap : 0.0);
 
+    // Each type source gets an independent flight. TPI remains in flight while IPI is extracted
+    // and sorted, and IPI may join it; both are joined only immediately before materialization.
+    // Reduce lane-private bitmaps after extraction. The bitmap is only ~180k bits for UEFN;
+    // scanning it is negligible and avoids a contended atomic operation for every winning leaf.
+    if (task.winner_segment_bitmap && ti_source != CV_TypeIndexSource_NULL) {
+      U64 obj_idx = 0;
+      for EachIndex(word_idx, task.winner_segment_word_count) {
+        U64 merged = 0;
+        for EachIndex(lane, tp->worker_count) {
+          merged |= task.winner_segment_worker_bitmaps[lane * task.winner_segment_word_count + word_idx];
+        }
+        U64 new_bits = merged & ~task.winner_segment_bitmap[word_idx];
+        task.winner_segment_bitmap[word_idx] |= merged;
+        while (new_bits) {
+          U64 bit_idx = ctz64(new_bits);
+          U64 global_idx = word_idx * 64 + bit_idx;
+          while (obj_idx + 1 < input->obj_count &&
+                 global_idx >= task.winner_segment_offsets[obj_idx + 1]) {
+            obj_idx += 1;
+          }
+          U64 segment_idx = global_idx - task.winner_segment_offsets[obj_idx];
+          task.winner_segment_keys[task.winner_segment_key_count++] = (obj_idx << 32) | segment_idx;
+          new_bits &= new_bits - 1;
+        }
+      }
+    }
+    U64 key_opl = task.winner_segment_key_count;
+    if (key_opl > winner_prefetch_key_cursor) {
+      U64 count = key_opl - winner_prefetch_key_cursor;
+      Rng1U64 *ranges = push_array_no_zero(scratch.arena, Rng1U64, count);
+      U64 stored_bytes = 0;
+      for EachIndex(i, count) {
+        U64 key = task.winner_segment_keys[winner_prefetch_key_cursor + i];
+        U32 obj_idx = (U32)(key >> 32);
+        U32 segment_idx = (U32)key;
+        ranges[i] = lnk_compressed_obj_stored_segment_range(input->obj_arr[obj_idx]->compressed_obj, segment_idx);
+        stored_bytes += dim_1u64(ranges[i]);
+      }
+      winner_prefetch_key_cursor = key_opl;
+      lnk_winner_prefetch_start(&winner_prefetch_flights[ti_source], winner_prefetch_worker_count,
+                                count, ranges, stored_bytes);
+    }
+
     // sort output leaves based on { location index, leaf index } to guarantee determinism
     ProfScope("Radix Sort") {
       u64_array_sort_radix_parallel(tp, task.unique_leaf_refs_arr[ti_source].count, task.unique_leaf_refs_arr[ti_source].v);
@@ -4179,6 +4642,12 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
 #endif
     }
   }
+
+  for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
+    lnk_winner_prefetch_join(&winner_prefetch_flights[ti_source]);
+  }
+
+  lnk_profile_cobj_winner_segments(&task);
 
   // bucket_arr is fully consumed (copied into unique_leaf_refs / sorted) -- release the probe tables
   // now so this multi-GB working set is gone before the merge-types/PDB-build peak. Handed to a
@@ -4239,6 +4708,15 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     tp_for_parallel_prof(tp, 0, input->obj_count, lnk_build_obj_ti_map, &task, "Build TI Map");
   }
 
+  lnk_compressed_obj_log_phase_stats("before type materialize");
+  U64 materialize_begin_us = now_time_us();
+  B32 has_compressed_inputs = 0;
+  for EachIndex(obj_idx, input->obj_count) {
+    if (input->obj_arr[obj_idx]->compressed_obj) { has_compressed_inputs = 1; break; }
+  }
+  char *fuse_materialize_env = getenv("RAD_COBJ_FUSE_TYPE_MATERIALIZE");
+  B32 fuse_materialize = has_compressed_inputs &&
+                         (fuse_materialize_env == 0 || fuse_materialize_env[0] != '0');
   for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
     LNK_LeafRefArray unique_leaf_refs = task.unique_leaf_refs_arr[ti_source];
 
@@ -4272,9 +4750,45 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
         task.leaf_buffer = push_array_no_zero(tp_temp->v[0], U8, 1);
       }
     }
-    tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_materialize_unique_leaves_task, &task, "Materialize + Fixup Leaves");
+    if (fuse_materialize && ti_source != CV_TypeIndexSource_NULL) {
+      tp_for_parallel(tp, 0, tp->worker_count, lnk_assign_unique_leaf_destinations_task, &task);
+    } else {
+      // Exact original raw-OBJ path: count/meta and destination copy remain a
+      // single lane-balanced traversal with no tagged-pointer setup pass.
+      tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_materialize_unique_leaves_task, &task, "Materialize NULL Leaves");
+    }
+  }
 
-    if (merge_flags & LNK_MergeTypeFlag_ExportHashes) {
+  // TPI and IPI leaf kinds are interleaved in each .debug$T stream. Build an
+  // object range index for each sorted winner array, then merge the two ranges
+  // by leaf index inside one task. A compressed object's decode window now sees
+  // each physical segment once instead of once in the TPI pass and again in the
+  // IPI pass. Destination pointers were assigned above, so output order and
+  // bytes remain exactly the same as the separate passes.
+  if (fuse_materialize) {
+    for (U32 source = CV_TypeIndexSource_TPI; source <= CV_TypeIndexSource_IPI; ++source) {
+      LNK_LeafRefArray refs = task.unique_leaf_refs_arr[source];
+      U64 *offsets = task.materialize_obj_offsets[source] = push_array_no_zero(scratch.arena, U64, input->count + 1);
+      U64 cursor = 0;
+      for EachIndex(obj_idx, input->count) {
+        offsets[obj_idx] = cursor;
+        while (cursor < refs.count && lnk_leaf_ref_obj_idx(refs.v[cursor]) == obj_idx) { cursor += 1; }
+      }
+      offsets[input->count] = cursor;
+      Assert(cursor == refs.count);
+    }
+
+    tp_for_parallel_prof(tp, 0, input->count, lnk_materialize_fused_tpi_ipi_task, &task, "Materialize + Fixup TPI/IPI");
+  }
+  lnk_log(LNK_Log_Timers, "[cobj materialize] fused=%u time=%.3fs", fuse_materialize,
+          (F64)(now_time_us() - materialize_begin_us) / 1e6);
+  lnk_compressed_obj_log_phase_stats("after type materialize");
+
+  if (merge_flags & LNK_MergeTypeFlag_ExportHashes) {
+    for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
+      LNK_LeafRefArray unique_leaf_refs = task.unique_leaf_refs_arr[ti_source];
+      task.ti_source = ti_source;
+      task.ranges = tp_divide_work(scratch.arena, unique_leaf_refs.count, tp->worker_count);
       task.result.hashes[ti_source] = push_array_no_zero(tp_temp->v[0], U64, unique_leaf_refs.count);
       tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_unbucket_hashes_task, &task, "Export Hashes");
     }
@@ -4327,6 +4841,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     tp_for_parallel_prof(tp, 0, input->symbol_patch_task_count, lnk_journal_symbol_fixups_task, &task, "Journal Symbol Fixups");
     tp_for_parallel_prof(tp, 0, input->count,                   lnk_journal_inline_fixups_task, &task, "Journal Inline Fixups");
     input->has_debug_s_fixup_journal = 1;
+    lnk_compressed_obj_log_phase_stats("after journal $S fixups");
 
     if (lnk_get_log_status(LNK_Log_Debug)) {
       U64 entry_count = 0, entry_bytes = 0, wide_runs = 0;
@@ -4346,6 +4861,8 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     }
     ProfEnd();
   }
+
+  for EachIndex(i, tp->worker_count) { lnk_compressed_obj_release_window(&task.decode_windows[i]); }
 
   MemoryCopyTyped(task.result.min_type_indices, input->min_type_indices, CV_TypeIndexSource_COUNT);
 
@@ -4565,6 +5082,8 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
   LNK_BuildPdb   *task = raw_task;
   PDB_GsiContext *gsi  = task->pdb->gsi;
   PDB_PsiContext *psi  = task->pdb->psi;
+  Assert(gsi->bucket_count == PDB_GSI_V70_BUCKET_COUNT);
+  Assert(psi->gsi->bucket_count == PDB_GSI_V70_BUCKET_COUNT);
 
   ProfBegin("Global Symbols");
   {
@@ -4740,7 +5259,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
         for EachIndex(i, chunk->count) {
           LNK_Symbol        *symbol        = chunk->v[i].symbol;
           LNK_ObjSymbolRef   symbol_ref    = lnk_ref_from_symbol(symbol);
-          COFF_ParsedSymbol  symbol_parsed = lnk_parsed_from_symbol(symbol);
+          COFF_ParsedSymbol  symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(symbol_ref.obj, symbol_ref.symbol_idx);
 
           if (symbol_parsed.section_number == lnk_obj_get_removed_section_number(symbol_ref.obj)) { continue; }
           COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
@@ -4783,7 +5302,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
         for EachIndex(i, chunk->count) {
           LNK_Symbol        *symbol        = chunk->v[i].symbol;
           LNK_ObjSymbolRef   symbol_ref    = lnk_ref_from_symbol(symbol);
-          COFF_ParsedSymbol  symbol_parsed = lnk_parsed_from_symbol(symbol);
+          COFF_ParsedSymbol  symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(symbol_ref.obj, symbol_ref.symbol_idx);
 
           // discard removed and non-section symbols
           if (symbol_parsed.section_number == lnk_obj_get_removed_section_number(symbol_ref.obj)) { continue; }
@@ -4924,46 +5443,63 @@ lnk_write_debug_s_to_pdb_module(PDB_DbiModule *mod, CV_DebugS debug_s, String8No
     mod->sym_data_size += sig_size;
     mod_cursor         += sig_size;
 
-    // write symbols
-    U64 scope_depth = 0;
-    for EachNode(n, String8Node, symbols.first) {
-      U64 cand_depth  = 0;
-      B32 cand_active = 1;
-      for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
-        CV_Symbol symbol = {0};
-        TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
+    U64 symbols_idx = cv_c13_sub_section_idx_from_kind(CV_C13SubSectionKind_Symbols);
+    CV_DebugSProvList *symbol_prov = &debug_s.prov_list[symbols_idx];
+    B32 use_summary = (buf == 0 && pre != 0 && symbol_prov->count == symbols.node_count);
+    if (use_summary) {
+      for (CV_DebugSProvNode *prov = symbol_prov->first; prov != 0; prov = prov->next) {
+        if (!prov->symbol_summary_valid) { use_summary = 0; break; }
+      }
+    }
+    if (use_summary) {
+      for (CV_DebugSProvNode *prov = symbol_prov->first; prov != 0; prov = prov->next) {
+        mod_cursor += prov->module_symbol_size;
+        mod->sym_data_size += prov->module_symbol_size;
+        pre->cand_count += prov->gsi_candidate_count;
+        pre->procref_count += prov->proc_ref_count;
+      }
+    } else {
+      // write symbols
+      U64 scope_depth = 0;
+      for EachNode(n, String8Node, symbols.first) {
+        U64 cand_depth  = 0;
+        B32 cand_active = 1;
+        for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
+          CV_Symbol symbol = {0};
+          TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
 
-        if (pre != 0) {
-          if (cand_active && (cv_is_global_symbol(symbol.kind) || (cand_depth == 0 && cv_is_typedef(symbol.kind)))) {
-            pre->cand_count += 1;
-          }
-          if (symbol.kind == CV_SymKind_GPROC32    || symbol.kind == CV_SymKind_LPROC32 ||
-              symbol.kind == CV_SymKind_GPROC32_ID || symbol.kind == CV_SymKind_LPROC32_ID) {
-            pre->procref_count += 1;
-          }
-          if (cand_active) {
-            if (cv_is_scope_symbol(symbol.kind)) {
-              cand_depth += 1;
-            } else if (cv_is_end_symbol(symbol.kind)) {
-              if (cand_depth == 0) { Assert(0 && "malformed symbol stream"); cand_active = 0; }
-              else                 { cand_depth -= 1; }
+          if (pre != 0) {
+            if (cand_active && (cv_is_global_symbol(symbol.kind) || (cand_depth == 0 && cv_is_typedef(symbol.kind)))) {
+              pre->cand_count += 1;
+            }
+            if (symbol.kind == CV_SymKind_GPROC32    || symbol.kind == CV_SymKind_LPROC32 ||
+                symbol.kind == CV_SymKind_GPROC32_ID || symbol.kind == CV_SymKind_LPROC32_ID) {
+              pre->procref_count += 1;
+            }
+            if (cand_active) {
+              if (cv_is_scope_symbol(symbol.kind)) {
+                cand_depth += 1;
+              } else if (cv_is_end_symbol(symbol.kind)) {
+                if (cand_depth == 0) { Assert(0 && "malformed symbol stream"); cand_active = 0; }
+                else                 { cand_depth -= 1; }
+              }
             }
           }
+
+          if      (symbol.kind == CV_SymKind_SKIP)                 { continue; }
+          else if (cv_is_global_symbol(symbol.kind))               { continue; }
+          else if (cv_is_typedef(symbol.kind) && scope_depth == 0) { continue; }
+          else if (symbol.kind == 0x1176)                          { continue; }
+
+          if      (cv_is_scope_symbol(symbol.kind)) { scope_depth += 1; }
+          else if (cv_is_end_symbol(symbol.kind))   { scope_depth -= 1; }
+
+          String8 raw_symbol = cv_raw_from_symbol(cv_ptr_from_symbol(symbol));
+          U64 symbol_size = (raw_symbol.size & (PDB_SYMBOL_ALIGN - 1)) == 0 ? str8_buffer_write(buf, buf_pos, raw_symbol)
+                                                                           : cv_write_symbol_buf(buf, buf_pos, &symbol, PDB_SYMBOL_ALIGN);
+          mod_cursor         += symbol_size;
+          mod->sym_data_size += symbol_size;
         }
-
-        if      (symbol.kind == CV_SymKind_SKIP)                 { continue; }
-        else if (cv_is_global_symbol(symbol.kind))               { continue; }
-        else if (cv_is_typedef(symbol.kind) && scope_depth == 0) { continue; }
-        else if (symbol.kind == 0x1176)                          { continue; }
-
-        if      (cv_is_scope_symbol(symbol.kind)) { scope_depth += 1; }
-        else if (cv_is_end_symbol(symbol.kind))   { scope_depth -= 1; }
-
-        String8 raw_symbol = cv_raw_from_symbol(cv_ptr_from_symbol(symbol));
-        U64 symbol_size = (raw_symbol.size & (PDB_SYMBOL_ALIGN - 1)) == 0 ? str8_buffer_write(buf, buf_pos, raw_symbol)
-                                                                         : cv_write_symbol_buf(buf, buf_pos, &symbol, PDB_SYMBOL_ALIGN);
-        mod_cursor         += symbol_size;
-        mod->sym_data_size += symbol_size;
       }
     }
   }
@@ -5217,19 +5753,15 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
     String8List mod_data = msf_data_from_sn(temp.arena, task->pdb->msf, mod->sn);
 
     if (mod_data.node_count) {
-#if BUILD_DEBUG
       // raw-header sizing vs post-transform write must agree byte-for-byte
       U64 size_check[4] = { mod->sym_data_size, mod->c11_data_size, mod->c13_data_size, mod->globrefs_size };
-#endif
       String8Node buf = *mod_data.first;
       U64         pos = 0;
       lnk_write_debug_s_to_pdb_module(mod, debug_s, &buf, &pos, 0);
-#if BUILD_DEBUG
-      Assert(mod->sym_data_size == size_check[0]);
-      Assert(mod->c11_data_size == size_check[1]);
-      Assert(mod->c13_data_size == size_check[2]);
-      Assert(mod->globrefs_size == size_check[3]);
-#endif
+      AssertAlways(mod->sym_data_size == size_check[0]);
+      AssertAlways(mod->c11_data_size == size_check[1]);
+      AssertAlways(mod->c13_data_size == size_check[2]);
+      AssertAlways(mod->globrefs_size == size_check[3]);
 
       // sub range symbol data pages and patch symbol tree offsets
       if (mod->sym_data_size) {
@@ -5356,6 +5888,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
       if (task->output != 0) {
         lnk_pdb_output_enqueue_stream(task->output, task->pdb->msf, mod->sn);
       }
+
     }
     barrier_wait(tp->barrier);
   }
@@ -6139,6 +6672,7 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   pdb_strtab_add_cv_string_hash_table(&task.pdb->info->strtab, task.string_ht);
   ProfEnd();
   pdb_build_types(tp, task.pdb, &build_hooks);
+  lnk_compressed_obj_log_phase_stats("before write modules");
   lnk_pdb_output_log_mark(output_ptr, "after pdb_build_types (TPI/IPI sealed)");
 
   // merged leaf bytes are now in MSF pages (and on their way to disk); no consumer of
@@ -6194,6 +6728,7 @@ ProfScope("Write Modules")
 #endif
       tp_for_parallel_reserve(tp, 0, C, lnk_write_pdb_modules, &task); // BARRIER pass (path B): barrier_wait/tp_broadcast
       tp_barrier_end(tp);
+      lnk_compressed_obj_log_phase_stats("after write modules");
       lnk_log(LNK_Log_Timers, "[pdb] write modules in %.2f ms (cohort %u)", (F64)(now_time_us() - phase_begin_us) / 1000.0, C);
       lnk_pdb_output_log_mark(output_ptr, "after write modules");
       if (g_debug_s_window && lnk_get_log_status(LNK_Log_Debug)) {
@@ -6312,8 +6847,11 @@ ProfScope("Move Global Symbols")
       !(config->io_flags & LNK_IO_Flags_MemoryMapFilesReadWrite)) {
     ProfBegin("Release Input Views Early");
     U64 unmap_begin_us = now_time_us();
+    // All thread-pool consumers above have joined. Keep compressed-object teardown at this
+    // explicit quiescence point; per-object or background close can race lazy materialization.
     lnk_inputer_release_file_maps(tp, config->debug_worker_cap, inputer);
-    lnk_log(LNK_Log_Timers, "[pdb] early input-view release in %.2f ms", (F64)(now_time_us() - unmap_begin_us) / 1000.0);
+    lnk_log(LNK_Log_Timers, "[pdb] early input-view release in %.2f ms",
+            (F64)(now_time_us() - unmap_begin_us) / 1000.0);
     ProfEnd();
   }
 

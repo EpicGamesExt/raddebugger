@@ -120,12 +120,14 @@
 #include "lnk_lib.h"
 #include "codeview_ext/ifc.h"
 #include "lnk_debug_info.h"
+#include "lnk_compressed_obj.h"
 #include "lnk.h"
 
 #include "lnk_log.c"
 #include "lnk_timer.c"
 #include "lnk_hasher.c"
 #include "lnk_io.c"
+#include "lnk_compressed_obj.c"
 #include "lnk_cmd_line.c"
 #include "lnk_config.c"
 #include "lnk_symbol_table.c"
@@ -990,6 +992,49 @@ lnk_inputer_has_items(LNK_Inputer *inputer)
   return 0;
 }
 
+typedef struct LNK_InputOpenTask
+{
+  LNK_Input **inputs;
+  String8    *datas;
+} LNK_InputOpenTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_input_open_task)
+{
+  LNK_InputOpenTask *task = raw_task;
+  LNK_Input *input = task->inputs[task_id];
+  String8 data = task->datas[task_id];
+  if (!input->has_disk_read_failed) {
+    lnk_compressed_obj_open(input, data);
+  }
+}
+
+typedef struct LNK_InputClassifyTask
+{
+  String8    *datas;
+  U8         *tags;
+} LNK_InputClassifyTask;
+
+enum
+{
+  LNK_InputClassify_PortableCompressed = (1 << 0),
+};
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_input_classify_task)
+{
+  LNK_InputClassifyTask *task = raw_task;
+  String8 data = task->datas[task_id];
+
+  U8 tag = 0;
+  if (data.size >= sizeof(LNK_CObjHeader) && ((LNK_CObjHeader *)data.str)->magic == LNK_COBJ_MAGIC) {
+    if (((LNK_CObjHeader *)data.str)->flags & LNK_COBJ_FLAG_PORTABLE_RAW_MAP) {
+      tag |= LNK_InputClassify_PortableCompressed;
+    }
+  }
+  task->tags[task_id] = tag;
+}
+
 internal LNK_InputPtrArray
 lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Flags io_flags, LNK_InputList *all_inputs, LNK_InputList *new_inputs)
 {
@@ -1020,7 +1065,6 @@ lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Fla
   ProfEnd();
 
   ProfBegin("Load Inputs From Disk"); 
-
   B8           *thin_input_was_read = push_array(scratch.arena, B8, thin_input_paths.count);
   String8Array  thin_input_datas    = lnk_read_data_from_file_path_parallel(tp, inputer->arena, io_flags, thin_input_paths, thin_input_was_read);
   B32           is_mapped           = !!(io_flags & (LNK_IO_Flags_MemoryMapFilesReadWrite|LNK_IO_Flags_MemoryMapFilesReadOnly));
@@ -1031,6 +1075,29 @@ lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Fla
     thin_inputs[thin_input_idx]->data                 = thin_input_datas.v[thin_input_idx];
   }
 
+  // Keep the ordinary-object path as direct mmap followed by cheap first-page classification.
+  // Portable compressed objects have independent metadata and can be opened in parallel.
+  B32 has_portable_cobj = 0;
+  U8 *classify_tags = push_array_no_zero(scratch.arena, U8, thin_inputs_count);
+  LNK_InputClassifyTask classify_task = {thin_input_datas.v, classify_tags};
+  if (thin_inputs_count >= 64) {
+    lnk_tp_for_parallel_capped(tp, 0, 32, thin_inputs_count, lnk_input_classify_task, &classify_task);
+  } else {
+    for EachIndex(i, thin_inputs_count) { lnk_input_classify_task(0, 0, i, &classify_task, tp); }
+  }
+  for EachIndex(thin_input_idx, thin_inputs_count) {
+    has_portable_cobj |= !!(classify_tags[thin_input_idx] & LNK_InputClassify_PortableCompressed);
+  }
+  if (has_portable_cobj) {
+    LNK_InputOpenTask open_task = {thin_inputs, thin_input_datas.v};
+    // Reserving/splitting thousands of logical OBJ views contends on the Windows process VAD
+    // lock. Four lanes measured substantially faster than 8-64 on the UEFN corpus.
+    lnk_tp_for_parallel_capped(tp, 0, 4, thin_inputs_count, lnk_input_open_task, &open_task);
+  }
+  // Compressed inputs register their reserved address regions independently while the open tasks
+  // run. Sort once after all tasks have joined; sorting after every insertion serialized the
+  // parallel open and performed thousands of increasingly large qsorts.
+  lnk_compressed_obj_finalize_open();
   ProfEnd();
 
   ProfBegin("Disk Read Check");
@@ -1055,9 +1122,13 @@ THREAD_POOL_TASK_FUNC(lnk_release_file_map_task)
 {
   LNK_Input **mapped_inputs = raw_task;
   LNK_Input  *input         = mapped_inputs[task_id];
-  file_map_view_close((FileMap){0}, input->data.str, r1u64(0, input->data.size));
-  input->data          = str8_zero();
-  input->owns_file_map = 0;
+  if (input->compressed_obj) {
+    lnk_compressed_obj_close(input);
+  } else {
+    file_map_view_close((FileMap){0}, input->data.str, r1u64(0, input->data.size));
+    input->data          = str8_zero();
+    input->owns_file_map = 0;
+  }
 }
 
 internal void
@@ -4082,6 +4153,16 @@ lnk_icf_obj_file_chksms_scan(LNK_Obj *obj)
     if (~flags & LNK_SECTION_FLAG_DEBUG)    { continue; }
     if ( flags & COFF_SectionFlag_LnkCOMDAT) { continue; }
     if (!str8_match(lnk_obj_section_name_from_section_number(obj, it.v.section_number), str8_lit(".debug$S"), 0)) { continue; }
+    LNK_CObjDebugSView indexed = {0};
+    if (lnk_compressed_obj_debug_s_index(obj->compressed_obj, it.v.frange, &indexed)) {
+      for EachIndex(i, indexed.count) {
+        LNK_CObjDebugSEntry *entry = &indexed.v[i];
+        if (entry->kind == CV_C13SubSectionKind_FileChksms) {
+          return str8(obj->coff.data.str + entry->raw_payload_offset, entry->raw_payload_size);
+        }
+      }
+      continue;
+    }
     String8 raw = lnk_obj_section_data_from_number(obj, it.v.section_number);
     if (raw.size < sizeof(CV_Signature) || cv_signature_from_debug_s(raw) != CV_Signature_C13) { continue; }
     for (U64 cursor = sizeof(CV_Signature); cursor + sizeof(CV_C13SubSectionHeader) <= raw.size; ) {
@@ -4129,12 +4210,25 @@ lnk_icf_src_key_from_fn(Arena *scratch, LNK_Obj *obj, U32 fn_sn, String8 chksms)
   LNK_ICFSrcKey key = {0};
   U32 child_sn = lnk_icf_debug_s_child_from_section(obj, fn_sn);
   if (child_sn == 0 || chksms.size == 0) { return key; }
-  String8        raw  = lnk_obj_section_data_from_number(obj, child_sn);
-  CV_DebugS      ds   = cv_debug_s_from_data(scratch, raw);
-  cv_debug_s_tag_prov_sect(&ds, child_sn-1);
-  String8List    lines = cv_sub_section_from_debug_s(ds, CV_C13SubSectionKind_Lines);
-  if (lines.node_count == 0) { return key; }
-  String8 frag = lines.first->string;
+  LNK_ObjSection sect = lnk_obj_section_from_section_number(obj, child_sn);
+  String8 frag = {0};
+  LNK_CObjDebugSView indexed = {0};
+  if (lnk_compressed_obj_debug_s_index(obj->compressed_obj, sect.frange, &indexed)) {
+    for EachIndex(i, indexed.count) {
+      LNK_CObjDebugSEntry *entry = &indexed.v[i];
+      if (entry->kind == CV_C13SubSectionKind_Lines) {
+        frag = str8(obj->coff.data.str + entry->raw_payload_offset, entry->raw_payload_size);
+        break;
+      }
+    }
+  } else {
+    String8   raw   = lnk_obj_section_data_from_number(obj, child_sn);
+    CV_DebugS ds    = cv_debug_s_from_data(scratch, raw);
+    cv_debug_s_tag_prov_sect(&ds, child_sn-1);
+    String8List lines = cv_sub_section_from_debug_s(ds, CV_C13SubSectionKind_Lines);
+    if (lines.node_count) { frag = lines.first->string; }
+  }
+  if (frag.size == 0) { return key; }
   if (frag.size < sizeof(CV_C13SubSecLinesHeader) + sizeof(CV_C13File) + sizeof(CV_C13Line)) { return key; }
   CV_C13File *file = (CV_C13File *)(frag.str + sizeof(CV_C13SubSecLinesHeader));
   CV_C13Line *l0   = (CV_C13Line *)((U8 *)file + sizeof(CV_C13File));
@@ -4152,10 +4246,29 @@ lnk_icf_src_key_from_fn(Arena *scratch, LNK_Obj *obj, U32 fn_sn, String8 chksms)
 internal B32
 lnk_icf_debug_s_has_locals(Arena *scratch, LNK_Obj *obj, U32 child_sn)
 {
-  String8        raw  = lnk_obj_section_data_from_number(obj, child_sn);
-  CV_DebugS      ds   = cv_debug_s_from_data(scratch, raw);
-  cv_debug_s_tag_prov_sect(&ds, child_sn-1);
-  String8List    syms = cv_sub_section_from_debug_s(ds, CV_C13SubSectionKind_Symbols);
+  LNK_ObjSection sect = lnk_obj_section_from_section_number(obj, child_sn);
+  LNK_CObjDebugSView indexed = {0};
+  String8List syms = {0};
+  if (lnk_compressed_obj_debug_s_index(obj->compressed_obj, sect.frange, &indexed)) {
+    if (indexed.summaries) {
+      for EachIndex(i, indexed.count) {
+        if (indexed.v[i].kind == CV_C13SubSectionKind_Symbols &&
+            (indexed.summaries[i].flags & LNK_COBJ_DEBUG_S_SUMMARY_HAS_LOCALS)) { return 1; }
+      }
+      return 0;
+    }
+    for EachIndex(i, indexed.count) {
+      if (indexed.v[i].kind == CV_C13SubSectionKind_Symbols) {
+        str8_list_push(scratch, &syms, str8(obj->coff.data.str + indexed.v[i].raw_payload_offset,
+                                            indexed.v[i].raw_payload_size));
+      }
+    }
+  } else {
+    String8   raw = lnk_obj_section_data_from_number(obj, child_sn);
+    CV_DebugS ds  = cv_debug_s_from_data(scratch, raw);
+    cv_debug_s_tag_prov_sect(&ds, child_sn-1);
+    syms = cv_sub_section_from_debug_s(ds, CV_C13SubSectionKind_Symbols);
+  }
   for EachNode(n, String8Node, syms.first) {
     String8 s = n->string;
     for (U64 o = 0; o + 4 <= s.size; ) {
@@ -5537,6 +5650,42 @@ THREAD_POOL_TASK_FUNC(lnk_patch_section_symbols_task)
 }
 
 internal
+void
+lnk_gather_base_reloc_candidate(Arena *arena, LNK_BaseRelocsTask *task, LNK_Obj *obj,
+                                HashTable *page_ht, LNK_BaseRelocPageList *pages,
+                                U32 sect_idx, U32 apply_off, U32 isymbol, U64 is_addr)
+{
+  COFF_ParsedSymbol          symbol        = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, isymbol);
+  COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol);
+  if (symbol_interp == COFF_SymbolValueInterp_Abs) { return; }
+
+  U64                    reloc_voff = obj->coff.sections.headers[sect_idx + 1].voff + apply_off;
+  U64                    page_voff  = AlignDownPow2(reloc_voff, task->page_size);
+  LNK_BaseRelocPageNode *page       = hash_table_search_u64_raw(page_ht, page_voff);
+  if (page == 0) {
+    page         = push_array(arena, LNK_BaseRelocPageNode, 1);
+    page->v.voff = page_voff;
+    page->v.entries_addr32 = push_array(arena, U64List, 1);
+    page->v.entries_addr64 = push_array(arena, U64List, 1);
+    SLLQueuePush(pages->first, pages->last, page);
+    pages->count += 1;
+    hash_table_push_u64_raw(arena, page_ht, page_voff, page);
+  }
+
+  switch (is_addr) {
+  case 4: {
+    if (task->is_large_addr_aware) {
+      lnk_error_obj(LNK_Error_LargeAddrAwareRequired, obj, "found out of range ADDR32 relocation for '%S', link with /LARGEADDRESSAWARE:NO", lnk_symbol_name_from_coff_symbol_idx(obj, isymbol));
+    } else {
+      u64_list_push(arena, page->v.entries_addr32, reloc_voff);
+    }
+  } break;
+  case 8: { u64_list_push(arena, page->v.entries_addr64, reloc_voff); } break;
+  default: { InvalidPath; } break;
+  }
+}
+
+internal
 THREAD_POOL_TASK_FUNC(lnk_gather_base_reloc_pages_task)
 {
   LNK_BaseRelocsTask    *task       = raw_task;
@@ -5545,7 +5694,25 @@ THREAD_POOL_TASK_FUNC(lnk_gather_base_reloc_pages_task)
   LNK_Obj               *obj        = task->gather.objs[task_id];
 
   ProfBeginV("%S", obj->path);
+  LNK_CObjBaseRelocView compressed_index = {0};
+  if (lnk_compressed_obj_base_reloc_index(obj->compressed_obj, &compressed_index)) {
+    for EachIndex(i, compressed_index.count) {
+      LNK_CObjBaseRelocEntry *entry = &compressed_index.v[i];
+      if (entry->sect_idx >= obj->coff.sections.count_no_null || entry->isymbol >= obj->coff.header.symbol_count ||
+          (entry->addr_size != 4 && entry->addr_size != 8)) {
+        lnk_error_obj(LNK_Error_IllData, obj, "invalid compressed base relocation sidecar entry");
+        continue;
+      }
+      if (obj->coff.sections.headers[entry->sect_idx + 1].flags & COFF_SectionFlag_LnkRemove) { continue; }
+      lnk_gather_base_reloc_candidate(arena, task, obj, page_ht, pages, entry->sect_idx,
+                                      entry->apply_off, entry->isymbol, entry->addr_size);
+    }
+    ProfEnd();
+    return;
+  }
+
   for LNK_EachCoffSection(it, obj) {
+    U32                 sect_idx    = safe_cast_u32(it.v.section_number - 1);
     COFF_SectionHeader *sect_header = it.v.header;
     if (*it.v.flags & COFF_SectionFlag_LnkRemove) { continue; }
 
@@ -5553,44 +5720,10 @@ THREAD_POOL_TASK_FUNC(lnk_gather_base_reloc_pages_task)
     for EachIndex(reloc_idx, relocs.count) {
       COFF_Reloc *r = &relocs.v[reloc_idx];
 
-      COFF_ParsedSymbol          symbol        = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, r->isymbol);
-      COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol);
-      if (symbol_interp == COFF_SymbolValueInterp_Abs) { continue; }
-
       U64 is_addr = coff_is_addr_reloc(obj->coff.header.machine, r->type);
       if (is_addr == 0) { continue; }
-
-      U64                    reloc_voff = sect_header->voff + r->apply_off;
-      U64                    page_voff  = AlignDownPow2(reloc_voff, task->page_size);
-      LNK_BaseRelocPageNode *page       = hash_table_search_u64_raw(page_ht, page_voff);
-      if (page == 0) {
-        // fill out page
-        page         = push_array(arena, LNK_BaseRelocPageNode, 1);
-        page->v.voff = page_voff;
-        page->v.entries_addr32 = push_array(arena, U64List, 1);
-        page->v.entries_addr64 = push_array(arena, U64List, 1);
-
-        // push page
-        SLLQueuePush(pages->first, pages->last, page);
-        pages->count += 1;
-
-        // register page voff
-        hash_table_push_u64_raw(arena, page_ht, page_voff, page);
-      }
-
-      switch (is_addr) {
-      case 4: {
-        if (task->is_large_addr_aware) {
-          lnk_error_obj(LNK_Error_LargeAddrAwareRequired, obj, "found out of range ADDR32 relocation for '%S', link with /LARGEADDRESSAWARE:NO", lnk_symbol_name_from_coff_symbol_idx(obj, r->isymbol));
-        } else {
-          u64_list_push(arena, page->v.entries_addr32, reloc_voff);
-        }
-      } break;
-      case 8: {
-        u64_list_push(arena, page->v.entries_addr64, reloc_voff);
-      } break;
-      default: { InvalidPath; } break;
-      }
+      lnk_gather_base_reloc_candidate(arena, task, obj, page_ht, pages, (U32)sect_idx,
+                                      r->apply_off, r->isymbol, is_addr);
     }
 
   }
@@ -6095,7 +6228,6 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
       tp_barrier_end(tp);
       tp_temp_end(temp);
     }
-
     // ensure determinism by sorting section contribs in chunks by input index
     ProfScope("Sort Section Contribs")
     {
@@ -7497,6 +7629,11 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
       ProfEnd();
     }
 
+    // Type merging is the last bulk consumer of type payload pages. Apply the configured cache
+    // generation transition before PDB construction so type residency does not stack with the
+    // later GSI and module-stream allocations.
+    lnk_compressed_obj_trim_working_set();
+
     //
     // Debug Info
     //
@@ -7683,6 +7820,8 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   // Timers
   //
   {
+    lnk_compressed_obj_log_stats();
+    lnk_obj_log_compressed_census();
     char *phase_log_env = getenv("RADLINK_PHASE_LOG");
     if (lnk_get_log_status(LNK_Log_Timers) || (phase_log_env != 0 && phase_log_env[0] != 0)) {
       lnk_log_timers();

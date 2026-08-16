@@ -1,6 +1,25 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+typedef struct LNK_CompressedObjCensus
+{
+  U64 obj_count;
+  U64 raw_bytes;
+  U64 section_bytes;
+  U64 debug_s_bytes;
+  U64 debug_t_bytes;
+  U64 debug_p_bytes;
+  U64 debug_h_bytes;
+  U64 other_section_bytes;
+  U64 symbol_bytes;
+  U64 string_bytes;
+  U64 section_table_bytes;
+  U64 reloc_bytes;
+} LNK_CompressedObjCensus;
+
+global LNK_CompressedObjCensus g_lnk_compressed_obj_census;
+global B32 g_lnk_compressed_obj_census_enabled;
+
 internal String8
 lnk_loc_from_obj(Arena *arena, LNK_Obj *obj)
 {
@@ -107,12 +126,27 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   U32                 debug_p_section_number      = 0;
   U32                 debug_h_section_number      = 0;
   U32                 llvm_addrsig_section_number = 0;
+  U64                 census_section_bytes = 0;
+  U64                 census_debug_s_bytes = 0;
+  U64                 census_debug_t_bytes = 0;
+  U64                 census_debug_p_bytes = 0;
+  U64                 census_debug_h_bytes = 0;
+  U64                 census_reloc_bytes = 0;
   for EachIndex(sect_idx, header.section_count_no_null) {
     U64                 section_number    = sect_idx + 1;
     COFF_SectionHeader *coff_sect_header = &coff_section_table[sect_idx];
     COFF_SectionFlags  *section_flags    = &section_headers[section_number].flags;
     String8             sect_name        = coff_name_from_section_header(raw_coff_string_table, coff_sect_header);
     *section_flags = coff_sect_header->flags & ~3; // linker reserves low 2 bits for internal flags
+
+    if (g_lnk_compressed_obj_census_enabled) {
+      census_section_bytes += coff_sect_header->fsize;
+      census_reloc_bytes += (U64)coff_sect_header->reloc_count * sizeof(COFF_Reloc);
+      if (str8_match(sect_name, str8_lit(".debug$S"), 0)) { census_debug_s_bytes += coff_sect_header->fsize; }
+      if (str8_match(sect_name, str8_lit(".debug$T"), 0)) { census_debug_t_bytes += coff_sect_header->fsize; }
+      if (str8_match(sect_name, str8_lit(".debug$P"), 0)) { census_debug_p_bytes += coff_sect_header->fsize; }
+      if (str8_match(sect_name, str8_lit(".debug$H"), 0)) { census_debug_h_bytes += coff_sect_header->fsize; }
+    }
 
     if (str8_starts_with(sect_name, str8_lit(".debug$"))) {
       *section_flags |= LNK_SECTION_FLAG_DEBUG;
@@ -362,21 +396,44 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
         String8 name = str8_cstring_capped(sect_header->name, sect_header->name+sizeof(sect_header->name));
         if (str8_match(name, str8_lit(".debug$S"), 0)) {
           Temp temp = temp_begin(scratch.arena);
-          String8   debug_s_data = str8_substr(input->data, rng_1u64(sect_header->foff, sect_header->foff+sect_header->fsize));
-          CV_DebugS debug_s      = cv_debug_s_from_data(temp.arena, debug_s_data);
-          cv_debug_s_tag_prov_sect(&debug_s, (U32)sect_idx);
-          String8List symbols_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
-          for EachNode(symbols_n, String8Node, symbols_list.first) {
-            for (U64 cursor = 0, count = 0; cursor < symbols_n->string.size && count < 2; count += 1) {
-              CV_SymbolHeader symbol_header;
-              TryReadBreak(str8_deserial_read_struct(symbols_n->string, cursor, &symbol_header), cursor);
-              if (symbol_header.kind == CV_SymKind_COMPILE3) {
-                String8 raw_symbol = str8_substr(symbols_n->string, r1u64(cursor, cursor + symbol_header.size + sizeof(CV_SymSize)));
-                comp_symbol = cv_symbol_from_ptr(raw_symbol.str);
-                goto found_comp_symbol;
+          Rng1U64 debug_s_range = rng_1u64(sect_header->foff, sect_header->foff+sect_header->fsize);
+          LNK_CObjDebugSView indexed = {0};
+          if (lnk_compressed_obj_debug_s_index(input->compressed_obj, debug_s_range, &indexed)) {
+            // COMPILE3 is expected in the first two records of a Symbols payload.  The sidecar
+            // lets this early object-feature probe skip the otherwise full C13 header walk.
+            for EachIndex(entry_idx, indexed.count) {
+              LNK_CObjDebugSEntry *entry = &indexed.v[entry_idx];
+              if (entry->kind != CV_C13SubSectionKind_Symbols) { continue; }
+              String8 symbols = str8(input->data.str + entry->raw_payload_offset, entry->raw_payload_size);
+              for (U64 cursor = 0, count = 0; cursor < symbols.size && count < 2; count += 1) {
+                CV_SymbolHeader symbol_header;
+                TryReadBreak(str8_deserial_read_struct(symbols, cursor, &symbol_header), cursor);
+                if (symbol_header.kind == CV_SymKind_COMPILE3) {
+                  String8 raw_symbol = str8_substr(symbols, r1u64(cursor, cursor + symbol_header.size + sizeof(CV_SymSize)));
+                  comp_symbol = cv_symbol_from_ptr(raw_symbol.str);
+                  goto found_comp_symbol;
+                }
+                cursor += symbol_header.size + sizeof(CV_SymSize);
+                cursor  = AlignPow2(cursor, CV_SymbolAlign);
               }
-              cursor += symbol_header.size + sizeof(CV_SymSize);
-              cursor  = AlignPow2(cursor, CV_SymbolAlign);
+            }
+          } else {
+            String8   debug_s_data = str8_substr(input->data, debug_s_range);
+            CV_DebugS debug_s      = cv_debug_s_from_data(temp.arena, debug_s_data);
+            cv_debug_s_tag_prov_sect(&debug_s, (U32)sect_idx);
+            String8List symbols_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
+            for EachNode(symbols_n, String8Node, symbols_list.first) {
+              for (U64 cursor = 0, count = 0; cursor < symbols_n->string.size && count < 2; count += 1) {
+                CV_SymbolHeader symbol_header;
+                TryReadBreak(str8_deserial_read_struct(symbols_n->string, cursor, &symbol_header), cursor);
+                if (symbol_header.kind == CV_SymKind_COMPILE3) {
+                  String8 raw_symbol = str8_substr(symbols_n->string, r1u64(cursor, cursor + symbol_header.size + sizeof(CV_SymSize)));
+                  comp_symbol = cv_symbol_from_ptr(raw_symbol.str);
+                  goto found_comp_symbol;
+                }
+                cursor += symbol_header.size + sizeof(CV_SymSize);
+                cursor  = AlignPow2(cursor, CV_SymbolAlign);
+              }
             }
           }
           temp_end(temp);
@@ -411,10 +468,41 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     .llvm_addrsig_section_number = llvm_addrsig_section_number,
     .hotpatch                    = hotpatch,
   };
+  obj->compressed_obj          = input->compressed_obj;
   obj->path                    = push_str8_copy(arena, input->path);
   obj->exclude_from_debug_info = input->exclude_from_debug_info;
   obj->self                    = &task->objs[task_id];
   obj->link_member             = input->link_member;
+
+  if (input->compressed_obj != 0 && g_lnk_compressed_obj_census_enabled) {
+    U64 known_debug = census_debug_s_bytes + census_debug_t_bytes + census_debug_p_bytes + census_debug_h_bytes;
+    InterlockedIncrement64((volatile LONG64 *)&g_lnk_compressed_obj_census.obj_count);
+    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.raw_bytes, input->data.size);
+    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.section_bytes, census_section_bytes);
+    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.debug_s_bytes, census_debug_s_bytes);
+    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.debug_t_bytes, census_debug_t_bytes);
+    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.debug_p_bytes, census_debug_p_bytes);
+    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.debug_h_bytes, census_debug_h_bytes);
+    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.other_section_bytes, census_section_bytes - known_debug);
+    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.symbol_bytes, raw_coff_symbol_table.size);
+    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.string_bytes, raw_coff_string_table.size);
+    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.section_table_bytes, raw_coff_section_table.size);
+    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.reloc_bytes, census_reloc_bytes);
+  }
+}
+
+internal void
+lnk_obj_log_compressed_census(void)
+{
+  if (!g_lnk_compressed_obj_census_enabled || g_lnk_compressed_obj_census.obj_count == 0) { return; }
+  LNK_CompressedObjCensus *c = &g_lnk_compressed_obj_census;
+  lnk_log(LNK_Log_Timers,
+          "[cobj census] objs=%llu raw=%.2f GiB sections=%.2f GiB debugS=%.2f GiB debugT=%.2f GiB debugP=%.2f GiB debugH=%.2f GiB other=%.2f GiB symbols=%.2f GiB strings=%.2f GiB sect_headers=%.2f GiB relocs=%.2f GiB",
+          c->obj_count, (F64)c->raw_bytes/GB(1), (F64)c->section_bytes/GB(1),
+          (F64)c->debug_s_bytes/GB(1), (F64)c->debug_t_bytes/GB(1), (F64)c->debug_p_bytes/GB(1),
+          (F64)c->debug_h_bytes/GB(1), (F64)c->other_section_bytes/GB(1),
+          (F64)c->symbol_bytes/GB(1), (F64)c->string_bytes/GB(1),
+          (F64)c->section_table_bytes/GB(1), (F64)c->reloc_bytes/GB(1));
 }
 
 internal LNK_ObjNode *
@@ -422,6 +510,8 @@ lnk_obj_from_input_many(TP_Context *tp, TP_Arena *arena, LNK_Config *config, U64
 {
   LNK_ObjNode *objs = 0;
   if (inputs_count) {
+    char *census_env = getenv("RAD_COBJ_CENSUS");
+    g_lnk_compressed_obj_census_enabled = census_env != 0 && census_env[0] != 0 && census_env[0] != '0';
     objs = push_array(arena->v[0], LNK_ObjNode, inputs_count);
     LNK_ObjIniter task = {
       .inputs            = inputs,
@@ -701,7 +791,9 @@ lnk_obj_section_data_from_number(LNK_Obj *obj, U64 section_number)
   }
   COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->coff.data, obj->coff.header.section_table_range).str;
   COFF_SectionHeader *section       = &section_table[section_number-1];
-  return str8_substr(obj->coff.data, r1u64s(section->foff, section->fsize));
+  Rng1U64             range         = r1u64s(section->foff, section->fsize);
+  String8             direct        = lnk_compressed_obj_direct_range(obj->compressed_obj, range);
+  return direct.size ? direct : str8_substr(obj->coff.data, range);
 }
 
 internal U64

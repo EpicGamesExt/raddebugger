@@ -574,6 +574,10 @@ cv_debug_s_prov_list_push(Arena *arena, CV_DebugSProvList *list, U64 off, U64 si
   node->size         = size;
   node->sect_idx     = sect_idx;
   node->is_synthetic = is_synthetic;
+  node->module_symbol_size = 0;
+  node->gsi_candidate_count = 0;
+  node->proc_ref_count = 0;
+  node->symbol_summary_valid = 0;
   cv_debug_s_prov_list_push_node(list, node);
 }
 
@@ -1284,13 +1288,32 @@ store_stop:
   return debug_t;
 }
 
+internal U64
+cv_debug_t_get_leaf_offset(CV_DebugT *debug_t, U64 leaf_idx)
+{
+  Assert(leaf_idx < debug_t->count);
+  U64 actual_idx = leaf_idx + debug_t->sidecar_leaf_bias;
+  if (debug_t->sidecar_packed) {
+    U64 group_idx = actual_idx >> debug_t->sidecar_offset_checkpoint_shift;
+    U64 within = actual_idx & (((U64)1 << debug_t->sidecar_offset_checkpoint_shift) - 1);
+    U32 base = debug_t->sidecar_packed_v2_offset_groups[group_idx*2 + 0];
+    U32 descriptor = debug_t->sidecar_packed_v2_offset_groups[group_idx*2 + 1];
+    U32 width = (descriptor & 1) ? 3 : 2;
+    U8 *p = debug_t->sidecar_packed_v2_offset_payload + (descriptor & ~(U32)1) + within * width;
+    U32 delta = (U32)p[0] | ((U32)p[1] << 8);
+    if (width == 3) { delta |= (U32)p[2] << 16; }
+    return (U64)base + delta;
+  }
+  return debug_t->offsets[actual_idx];
+}
+
 internal CV_Leaf
 cv_debug_t_get_leaf(CV_DebugT *debug_t, U64 leaf_idx)
 {
   CV_Leaf leaf = {0};
   if (debug_t->count > 0) {
     Assert(leaf_idx < debug_t->count);
-    cv_read_leaf(debug_t->data, debug_t->offsets[leaf_idx], 1, &leaf);
+    cv_read_leaf(debug_t->data, cv_debug_t_get_leaf_offset(debug_t, leaf_idx), 1, &leaf);
     Assert(cv_header_struct_size_from_leaf_kind(leaf.kind) <= leaf.data.size);
   }
   return leaf;
@@ -1339,9 +1362,9 @@ internal String8
 cv_debug_t_get_raw_leaf(CV_DebugT *debug_t, U64 leaf_idx)
 {
   Assert(leaf_idx < debug_t->count);
-  U8          *leaf_ptr  = debug_t->data.str + debug_t->offsets[leaf_idx];
-  CV_LeafSize  leaf_size = memory_read16(leaf_ptr);
-  return str8(leaf_ptr, leaf_size + sizeof(leaf_size));
+  U8          *leaf_ptr  = debug_t->data.str + cv_debug_t_get_leaf_offset(debug_t, leaf_idx);
+  U64          leaf_size = cv_debug_t_get_raw_leaf_size(debug_t, leaf_idx);
+  return str8(leaf_ptr, leaf_size);
 }
 
 internal CV_LeafHeader *
@@ -1349,9 +1372,38 @@ cv_debug_t_get_leaf_header(CV_DebugT *debug_t, U64 leaf_idx)
 {
   CV_LeafHeader *header = 0;
   if (leaf_idx < debug_t->count) {
-    header = (CV_LeafHeader *)(debug_t->data.str + debug_t->offsets[leaf_idx]);
+    header = (CV_LeafHeader *)(debug_t->data.str + cv_debug_t_get_leaf_offset(debug_t, leaf_idx));
   }
   return header;
+}
+
+internal CV_LeafKind
+cv_debug_t_get_leaf_kind(CV_DebugT *debug_t, U64 leaf_idx)
+{
+  Assert(leaf_idx < debug_t->count);
+  U64 actual_idx = leaf_idx + debug_t->sidecar_leaf_bias;
+  if (debug_t->sidecar_packed_kind_codes) {
+    return debug_t->sidecar_packed_kind_dictionary[debug_t->sidecar_packed_kind_codes[actual_idx]];
+  }
+  if (debug_t->sidecar_kinds) { return debug_t->sidecar_kinds[actual_idx]; }
+  return cv_debug_t_get_leaf_header(debug_t, leaf_idx)->kind;
+}
+
+internal U64
+cv_debug_t_get_raw_leaf_size(CV_DebugT *debug_t, U64 leaf_idx)
+{
+  Assert(leaf_idx < debug_t->count);
+  U64 actual_idx = leaf_idx + debug_t->sidecar_leaf_bias;
+  if (debug_t->sidecar_packed) {
+    U64 offset = cv_debug_t_get_leaf_offset(debug_t, leaf_idx);
+    U64 total_count = debug_t->count + debug_t->sidecar_leaf_bias;
+    U64 next_offset = actual_idx + 1 < total_count ? cv_debug_t_get_leaf_offset(debug_t, leaf_idx + 1) : debug_t->data.size;
+    Assert(next_offset >= offset);
+    return next_offset - offset;
+  }
+  if (debug_t->sidecar_sizes) { return (U64)debug_t->sidecar_sizes[actual_idx] + sizeof(CV_LeafSize); }
+  U8 *leaf_ptr = debug_t->data.str + cv_debug_t_get_leaf_offset(debug_t, leaf_idx);
+  return (U64)memory_read16(leaf_ptr) + sizeof(CV_LeafSize);
 }
 
 internal CV_TypeIndex
@@ -1373,13 +1425,13 @@ cv_debug_t_get_leaf_index(CV_DebugT *debug_t, CV_TypeIndexSource ti_source, CV_T
 internal B32
 cv_debug_t_is_pch(CV_DebugT *debug_t)
 {
-  return cv_is_leaf_pch(cv_debug_t_get_leaf(debug_t, 0).kind);
+  return debug_t->count && cv_is_leaf_pch(cv_debug_t_get_leaf_kind(debug_t, 0));
 }
 
 internal B32
 cv_debug_t_is_type_server_ref(CV_DebugT *debug_t)
 {
-  return cv_is_leaf_type_server(cv_debug_t_get_leaf(debug_t, 0).kind);
+  return debug_t->count && cv_is_leaf_type_server(cv_debug_t_get_leaf_kind(debug_t, 0));
 }
 
 // $$Symbols

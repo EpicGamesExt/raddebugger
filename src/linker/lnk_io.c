@@ -340,6 +340,27 @@ THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
   scratch_end(scratch);
 }
 
+// Experimental lane cap for opening thousands of independent object mappings. Each lane pulls
+// file indices from a shared cursor, so this preserves the ordinary per-file mapping operation and
+// output ordering while letting us measure the Windows object-manager concurrency knee.
+typedef struct
+{
+  LNK_DiskReader *reader;
+  U64             item_count;
+  U64             cursor;
+} LNK_MemoryMapCappedTask;
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_memory_map_file_capped_task)
+{
+  LNK_MemoryMapCappedTask *task = raw_task;
+  for (;;) {
+    U64 item_idx = ins_atomic_u64_inc_eval(&task->cursor) - 1;
+    if (item_idx >= task->item_count) { break; }
+    lnk_memory_map_file_task(arena, worker_id, item_idx, task->reader, tp);
+  }
+}
+
 internal String8Array
 lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags io_flags, String8Array path_arr, B8 *was_read)
 {
@@ -352,7 +373,33 @@ lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags
     reader.data_arr.count = path_arr.count;
     reader.data_arr.v     = push_array(arena, String8, path_arr.count);
     reader.was_read       = was_read;
-    tp_for_parallel(tp, 0, path_arr.count, lnk_memory_map_file_task, &reader);
+    char *map_worker_env = getenv("RAD_COBJ_MAP_WORKERS");
+    U64 map_worker_cap = map_worker_env ? strtoull(map_worker_env, 0, 10) : 0;
+#if OS_WINDOWS
+    if (!map_worker_env && path_arr.count >= 64) {
+      // Standalone compressed objects expose a sparse raw COFF view. A small sample detects the
+      // homogeneous compressed corpus without opening or touching ordinary raw object contents.
+      // Raw links retain the original unrestricted tp_for_parallel call below.
+      Temp detect_scratch = scratch_begin(&arena, 1);
+      U64 sample_count = Min(path_arr.count, 32);
+      for EachIndex(i, sample_count) {
+        String16 path16 = str16_from_8(detect_scratch.arena, path_arr.v[i]);
+        DWORD attrs = GetFileAttributesW(path16.str);
+        if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_SPARSE_FILE)) {
+          map_worker_cap = 8;
+          break;
+        }
+      }
+      scratch_end(detect_scratch);
+    }
+#endif
+    if (map_worker_cap > 0 && map_worker_cap < path_arr.count) {
+      LNK_MemoryMapCappedTask map_task = { .reader = &reader, .item_count = path_arr.count };
+      tp_for_parallel(tp, 0, map_worker_cap, lnk_memory_map_file_capped_task, &map_task);
+    } else {
+      // Default/raw behavior remains the original unrestricted parallel-for.
+      tp_for_parallel(tp, 0, path_arr.count, lnk_memory_map_file_task, &reader);
+    }
   } else {
     Temp scratch = scratch_begin(&arena,1);
 

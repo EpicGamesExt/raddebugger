@@ -58,6 +58,7 @@ typedef struct LNK_Obj
   String8 path;
 
   LNK_ObjCoff coff;
+  struct LNK_CompressedObj *compressed_obj;
 
   // flags
   B8 exclude_from_debug_info;
@@ -313,6 +314,7 @@ internal force_inline B32 lnk_obj_symbol_iter_next(LNK_Obj *obj, LNK_ObjSymbolIt
 
 internal String8List * lnk_collect_obj_sections(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded, U32Array **sect_indices_out);
 internal B32           lnk_obj_is_before(void *raw_a, void *raw_b);
+internal void          lnk_obj_log_compressed_census(void);
 
 // --- Directive Parser --------------------------------------------------------
 
