@@ -6,7 +6,10 @@
 ////////////////////////////////
 // Runtime state
 
-#define LNK_COBJ_DEFAULT_CACHE_GIB          8u
+#define LNK_COBJ_MAX_INITIAL_CACHE_GIB      17u
+#define LNK_COBJ_MAX_POST_CACHE_GIB          6u
+#define LNK_COBJ_MAX_TOTAL_CACHE_GIB        (LNK_COBJ_MAX_INITIAL_CACHE_GIB + LNK_COBJ_MAX_POST_CACHE_GIB)
+#define LNK_COBJ_MIN_TOTAL_CACHE_GIB         4u
 #define LNK_COBJ_REGION_CAP                 (1u << 20)
 #define LNK_COBJ_DEFAULT_WRITE_GROUP_SLOTS  64u
 #define LNK_COBJ_FILE_MAPPING_GRANULARITY   KB(64)
@@ -109,15 +112,67 @@ typedef struct LNK_CObjCache
   U64 stored_bytes_read;
   U64 occupancy_hwm;
   U64 frozen_segments;
+  U64 raw_mapped_segments;
+  U64 input_compressed_bytes;
+  U64 input_raw_bytes;
+  U64 initial_cache_bytes;
+  U64 post_boundary_cache_bytes;
+  U64 decode_us;
+  U64 fault_us;
+  U64 eviction_us;
+  U64 freeze_us;
+  U64 trim_us;
+  U64 cleanup_us;
   B32 skip_cleanup;
 } LNK_CObjCache;
 
+typedef enum LNK_CObjPolicySource
+{
+  LNK_CObjPolicySource_Adaptive,
+  LNK_CObjPolicySource_Environment,
+  LNK_CObjPolicySource_CommandLine,
+} LNK_CObjPolicySource;
+
+typedef struct LNK_CObjPolicy
+{
+  U64 initial_cache_bytes;
+  U64 post_boundary_cache_bytes;
+  U32 trim_mode;
+  B32 freeze_generation;
+  B32 one_shot;
+  B32 configured;
+  LNK_CObjPolicySource initial_source;
+  LNK_CObjPolicySource post_source;
+  LNK_CObjPolicySource trim_source;
+  LNK_CObjPolicySource freeze_source;
+  LNK_CObjPolicySource one_shot_source;
+} LNK_CObjPolicy;
+
+typedef struct LNK_CObjDecoderScratch
+{
+  void *memory;
+  OO_SINTa size;
+  OodleLZ_Compressor compressor;
+  B32 configured;
+} LNK_CObjDecoderScratch;
+
 global LNK_CObjCache g_lnk_cobj_cache;
+global LNK_CObjPolicy g_lnk_cobj_policy;
+global U64 g_lnk_cobj_input_capacity_hint;
 global volatile LONG g_lnk_cobj_cache_init_state;
 
-global volatile LONG g_lnk_cobj_skip_cleanup_mode = -1;
+// Oodle otherwise creates and destroys decoder state through the process heap for every segment.
+// Links decode tens of thousands of independent segments concurrently, so those tiny allocations
+// serialize on the heap lock. One block per calling thread is sufficient because every decode is
+// unthreaded and synchronous. The container records its codec, so each block is sized for the
+// actual Kraken, Mermaid, or Selkie decoder instead of pessimistically reserving Oodle's maximum.
+global thread_static LNK_CObjDecoderScratch g_lnk_cobj_decoder_scratch;
+global U64 g_lnk_cobj_decoder_scratch_count;
+global U64 g_lnk_cobj_decoder_scratch_bytes;
+
 global U64 g_lnk_cobj_window_decodes;
 global U64 g_lnk_cobj_window_bytes;
+global U64 g_lnk_cobj_window_decoded_bytes;
 global B32 g_lnk_cobj_cache_shrunk;
 global U64 g_lnk_cobj_redecode_debug_s;
 global U64 g_lnk_cobj_redecode_types;
@@ -125,6 +180,196 @@ global U64 g_lnk_cobj_redecode_segment_zero;
 
 ////////////////////////////////
 // Configuration and diagnostics
+
+internal LNK_CObjDecoderScratch
+lnk_cobj_decoder_scratch(U32 compressor_value)
+{
+  OodleLZ_Compressor compressor = (OodleLZ_Compressor)compressor_value;
+  if (g_lnk_cobj_decoder_scratch.memory != 0 &&
+      g_lnk_cobj_decoder_scratch.configured &&
+      g_lnk_cobj_decoder_scratch.compressor == compressor) {
+    return g_lnk_cobj_decoder_scratch;
+  }
+
+  OO_S32 needed = OodleLZDecoder_MemorySizeNeeded(compressor, -1);
+  if (needed <= 0) {
+    compressor = OodleLZ_Compressor_Invalid;
+    needed = OodleLZDecoder_MemorySizeNeeded(compressor, -1);
+  }
+  if (needed > 0 && needed > g_lnk_cobj_decoder_scratch.size) {
+    void *memory = VirtualAlloc(0, (SIZE_T)needed, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+    if (memory != 0) {
+      void *old_memory = g_lnk_cobj_decoder_scratch.memory;
+      OO_SINTa old_size = g_lnk_cobj_decoder_scratch.size;
+      g_lnk_cobj_decoder_scratch.memory = memory;
+      g_lnk_cobj_decoder_scratch.size = needed;
+      if (old_memory == 0) {
+        InterlockedIncrement64((volatile LONG64 *)&g_lnk_cobj_decoder_scratch_count);
+      } else {
+        VirtualFree(old_memory, 0, MEM_RELEASE);
+      }
+      InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_decoder_scratch_bytes,
+                               needed - old_size);
+    }
+  }
+
+  if (needed > 0 &&
+      g_lnk_cobj_decoder_scratch.memory != 0 &&
+      g_lnk_cobj_decoder_scratch.size >= needed) {
+    g_lnk_cobj_decoder_scratch.compressor = compressor;
+    g_lnk_cobj_decoder_scratch.configured = 1;
+    return g_lnk_cobj_decoder_scratch;
+  }
+
+  // Preserve Oodle's existing internal-allocation fallback if caller memory could not be made.
+  LNK_CObjDecoderScratch fallback = {0};
+  return fallback;
+}
+
+internal OO_SINTa
+lnk_cobj_oodle_decompress(U32 compressor, const void *stored, OO_SINTa stored_size,
+                          void *raw, OO_SINTa raw_size)
+{
+  LNK_CObjDecoderScratch scratch = lnk_cobj_decoder_scratch(compressor);
+  return OodleLZ_Decompress(stored, stored_size, raw, raw_size,
+                            OodleLZ_FuzzSafe_Yes, OodleLZ_CheckCRC_No, OodleLZ_Verbosity_None,
+                            0, 0, 0, 0, scratch.memory, scratch.size,
+                            OodleLZ_Decode_Unthreaded);
+}
+
+internal char *
+lnk_cobj_policy_source_string(LNK_CObjPolicySource source)
+{
+  switch (source) {
+  case LNK_CObjPolicySource_CommandLine: return "command-line";
+  case LNK_CObjPolicySource_Environment: return "environment";
+  default:                               return "adaptive";
+  }
+}
+
+internal B32
+lnk_cobj_env_u64(char *name, U64 *value_out)
+{
+  char value[64];
+  DWORD len = GetEnvironmentVariableA(name, value, sizeof(value));
+  if (len == 0 || len >= sizeof(value)) { return 0; }
+  char *end = 0;
+  U64 value_u64 = strtoull(value, &end, 10);
+  if (end == value || *end != 0) { return 0; }
+  *value_out = value_u64;
+  return 1;
+}
+
+internal B32
+lnk_cobj_env_switch(char *name, B32 *enabled_out)
+{
+  char value[16];
+  DWORD len = GetEnvironmentVariableA(name, value, sizeof(value));
+  if (len == 0 || len >= sizeof(value)) { return 0; }
+  *enabled_out = value[0] != '0' && _stricmp(value, "no") != 0 && _stricmp(value, "false") != 0;
+  return 1;
+}
+
+internal void
+lnk_cobj_adaptive_capacities(U64 *initial_bytes_out, U64 *post_bytes_out)
+{
+  U64 total_gib = 8;
+  MEMORYSTATUSEX memory = { sizeof(memory) };
+  if (GlobalMemoryStatusEx(&memory)) {
+    U64 physical_gib = memory.ullTotalPhys / GB(1);
+    U64 commit_available_gib = memory.ullAvailPageFile / GB(1);
+    U64 physical_budget_gib = (physical_gib * 3) / 8;
+    U64 commit_budget_gib = commit_available_gib / 2;
+    total_gib = Clamp(LNK_COBJ_MIN_TOTAL_CACHE_GIB,
+                      Min(physical_budget_gib, commit_budget_gib),
+                      LNK_COBJ_MAX_TOTAL_CACHE_GIB);
+  }
+  U64 post_gib = Max(1, (total_gib * LNK_COBJ_MAX_POST_CACHE_GIB) / LNK_COBJ_MAX_TOTAL_CACHE_GIB);
+  *initial_bytes_out = (total_gib - post_gib) * GB(1);
+  *post_bytes_out = post_gib * GB(1);
+}
+
+internal void
+lnk_compressed_obj_configure(LNK_Config *config)
+{
+  LNK_CObjPolicy policy = {0};
+  lnk_cobj_adaptive_capacities(&policy.initial_cache_bytes, &policy.post_boundary_cache_bytes);
+  policy.freeze_generation = 1;
+  policy.trim_mode = 1;
+
+  U64 env_u64 = 0;
+  if (lnk_cobj_env_u64("RAD_COBJ_CACHE_GIB", &env_u64) && env_u64 > 0) {
+    policy.initial_cache_bytes = env_u64 * GB(1);
+    policy.initial_source = LNK_CObjPolicySource_Environment;
+  }
+  if (lnk_cobj_env_u64("RAD_COBJ_CACHE_MIB", &env_u64) && env_u64 > 0) {
+    policy.initial_cache_bytes = env_u64 * MB(1);
+    policy.initial_source = LNK_CObjPolicySource_Environment;
+  }
+  if (lnk_cobj_env_u64("RAD_COBJ_CACHE_SHRINK_GIB", &env_u64) && env_u64 > 0) {
+    policy.post_boundary_cache_bytes = env_u64 * GB(1);
+    policy.post_source = LNK_CObjPolicySource_Environment;
+  }
+
+  B32 env_switch = 0;
+  if (lnk_cobj_env_switch("RAD_COBJ_CACHE_FREEZE", &env_switch)) {
+    policy.freeze_generation = env_switch;
+    policy.freeze_source = LNK_CObjPolicySource_Environment;
+  }
+  if (lnk_cobj_env_u64("RAD_COBJ_TRIM_WS", &env_u64)) {
+    policy.trim_mode = (U32)Clamp(0, env_u64, 2);
+    policy.trim_source = LNK_CObjPolicySource_Environment;
+  }
+  if (lnk_cobj_env_switch("RAD_COBJ_SKIP_CLEANUP", &env_switch)) {
+    policy.one_shot = env_switch;
+    policy.one_shot_source = LNK_CObjPolicySource_Environment;
+  }
+
+  if (config != 0) {
+    if (config->cobj_cache_gib > 0) {
+      policy.initial_cache_bytes = config->cobj_cache_gib * GB(1);
+      policy.initial_source = LNK_CObjPolicySource_CommandLine;
+    }
+    if (config->cobj_cache_shrink_gib > 0) {
+      policy.post_boundary_cache_bytes = config->cobj_cache_shrink_gib * GB(1);
+      policy.post_source = LNK_CObjPolicySource_CommandLine;
+    }
+    if (config->cobj_cache_freeze != LNK_SwitchState_Null) {
+      policy.freeze_generation = config->cobj_cache_freeze == LNK_SwitchState_Yes;
+      policy.freeze_source = LNK_CObjPolicySource_CommandLine;
+    }
+    if (config->cobj_trim_ws != LNK_SwitchState_Null) {
+      policy.trim_mode = config->cobj_trim_ws == LNK_SwitchState_Yes;
+      policy.trim_source = LNK_CObjPolicySource_CommandLine;
+    }
+    if (config->cobj_one_shot != LNK_SwitchState_Null) {
+      policy.one_shot = config->cobj_one_shot == LNK_SwitchState_Yes;
+      policy.one_shot_source = LNK_CObjPolicySource_CommandLine;
+    }
+  }
+
+  policy.initial_cache_bytes = Max(MB(1), policy.initial_cache_bytes);
+  policy.post_boundary_cache_bytes = Max(MB(1), policy.post_boundary_cache_bytes);
+  policy.configured = 1;
+  g_lnk_cobj_policy = policy;
+}
+
+internal void
+lnk_compressed_obj_prepare_cache(String8 *mapped_files, U64 count)
+{
+  if (g_lnk_cobj_cache_init_state != 0) { return; }
+  U64 raw_bytes = 0;
+  for EachIndex(i, count) {
+    String8 mapped_file = mapped_files[i];
+    if (mapped_file.size < sizeof(LNK_CObjHeader)) { continue; }
+    LNK_CObjHeader *header = (LNK_CObjHeader *)mapped_file.str;
+    if (header->magic != LNK_COBJ_MAGIC || header->version != LNK_COBJ_VERSION) { continue; }
+    raw_bytes = header->raw_size > max_U64 - raw_bytes ? max_U64 : raw_bytes + header->raw_size;
+  }
+  if (raw_bytes > g_lnk_cobj_input_capacity_hint) {
+    g_lnk_cobj_input_capacity_hint = raw_bytes;
+  }
+}
 
 internal LNK_CompressedObj *lnk_cobj_region_from_address(U8 *address);
 
@@ -189,13 +434,7 @@ lnk_compressed_obj_log_phase_stats(char *tag)
 internal B32
 lnk_cobj_skip_cleanup_enabled(void)
 {
-  if (g_lnk_cobj_skip_cleanup_mode < 0) {
-    char value[8];
-    DWORD len = GetEnvironmentVariableA("RAD_COBJ_SKIP_CLEANUP", value, sizeof(value));
-    LONG enabled = len > 0 && len < sizeof(value) && value[0] != '0';
-    InterlockedCompareExchange(&g_lnk_cobj_skip_cleanup_mode, enabled, -1);
-  }
-  return g_lnk_cobj_skip_cleanup_mode != 0;
+  return g_lnk_cobj_policy.one_shot;
 }
 
 ////////////////////////////////
@@ -322,14 +561,15 @@ lnk_compressed_obj_copy_range(LNK_CompressedObj *obj, Rng1U64 range, void *raw_d
       if (entry->flags & LNK_COBJ_SEGMENT_RAW) {
         MemoryCopy(decode_dst, stored, entry->raw_size);
       } else {
-        OO_SINTa got = OodleLZ_Decompress(stored, entry->stored_size, decode_dst, entry->raw_size,
-                                          OodleLZ_FuzzSafe_Yes, OodleLZ_CheckCRC_No, OodleLZ_Verbosity_None,
-                                          0, 0, 0, 0, 0, 0, OodleLZ_Decode_Unthreaded);
+        OO_SINTa got = lnk_cobj_oodle_decompress(obj->header->compressor,
+                                                 stored, entry->stored_size,
+                                                 decode_dst, entry->raw_size);
         ok = got == entry->raw_size;
       }
       if (!ok) { return 0; }
       InterlockedIncrement64((volatile LONG64 *)&g_lnk_cobj_window_decodes);
       InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_window_bytes, entry->stored_size);
+      InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_window_decoded_bytes, entry->raw_size);
       if (decode_direct) {
         // Large $S and symbol-fixup walks consume complete interior segments once. Decode those
         // bytes into their final arena instead of filling the window and copying them again.
@@ -458,12 +698,12 @@ lnk_cobj_write_group_complete(U32 group_idx)
 internal void
 lnk_compressed_obj_trim_working_set(void)
 {
-  char *trim_env = getenv("RAD_COBJ_TRIM_WS");
-  if (trim_env == 0 || trim_env[0] == 0 || trim_env[0] == '0') { return; }
+  if (g_lnk_cobj_policy.trim_mode == 0) { return; }
 
   U64 begin_us = now_time_us();
-  if (trim_env[0] == '2') {
+  if (g_lnk_cobj_policy.trim_mode == 2) {
     SetProcessWorkingSetSize(GetCurrentProcess(), (SIZE_T)-1, (SIZE_T)-1);
+    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_cache.trim_us, now_time_us() - begin_us);
     lnk_log(LNK_Log_Timers, "[cobj trim] whole-process elapsed=%.2f ms",
             (F64)(now_time_us() - begin_us) / 1000.0);
     return;
@@ -478,18 +718,13 @@ lnk_compressed_obj_trim_working_set(void)
   U64 cache_view_count = 0;
   U64 cache_view_bytes = 0;
   U64 purged_count = 0;
-  U64 shrink_gib = 0;
-  {
-    char shrink_env[64];
-    DWORD shrink_env_len = GetEnvironmentVariableA("RAD_COBJ_CACHE_SHRINK_GIB", shrink_env, sizeof(shrink_env));
-    if (shrink_env_len > 0 && shrink_env_len < sizeof(shrink_env)) { shrink_gib = strtoull(shrink_env, 0, 10); }
-  }
-  if (shrink_gib > 0 && !g_lnk_cobj_cache_shrunk && g_lnk_cobj_cache.segment_size) {
-    U64 wanted_slots = Clamp(1, shrink_gib * GB(1) / g_lnk_cobj_cache.segment_size,
+  U64 post_boundary_cache_bytes = g_lnk_cobj_cache.post_boundary_cache_bytes;
+  if (post_boundary_cache_bytes > 0 && !g_lnk_cobj_cache_shrunk && g_lnk_cobj_cache.segment_size) {
+    U64 wanted_slots = Clamp(1, post_boundary_cache_bytes / g_lnk_cobj_cache.segment_size,
                              g_lnk_cobj_cache.slot_count);
-    char *freeze_env = getenv("RAD_COBJ_CACHE_FREEZE");
-    B32 freeze_generation = freeze_env != 0 && freeze_env[0] != 0 && freeze_env[0] != '0';
+    B32 freeze_generation = g_lnk_cobj_policy.freeze_generation;
     if (freeze_generation) {
+      U64 freeze_begin_us = now_time_us();
       // Preserve the complete first-generation mapping but never recycle one of its slots again.
       // Existing logical OBJ pointers therefore remain valid. PDB misses use a fresh, independently
       // evicting cache generation; this costs shrink_gib additional system commit but avoids the
@@ -548,8 +783,10 @@ lnk_compressed_obj_trim_working_set(void)
         CloseHandle(old_mapping);
         U64 trimmed_frozen = 0;
         U64 trim_calls = 0;
+        U64 frozen_trim_us = 0;
         char *freeze_trim_env = getenv("RAD_COBJ_CACHE_FREEZE_TRIM");
         if (freeze_trim_env != 0 && freeze_trim_env[0] != 0 && freeze_trim_env[0] != '0') {
+          U64 frozen_trim_begin_us = now_time_us();
           // Keep every view valid but offer its resident pages back to the OS. Later consumers
           // incur only soft page faults into the frozen pagefile section, never Oodle re-decodes.
           // This is deliberately optional: it trades some kernel fault work for a lower PDB-phase
@@ -598,11 +835,15 @@ lnk_compressed_obj_trim_working_set(void)
             }
             VirtualFree(trim_addresses, 0, MEM_RELEASE);
           }
+          frozen_trim_us = now_time_us() - frozen_trim_begin_us;
+          InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_cache.trim_us, frozen_trim_us);
         }
         VirtualFree(old_slots, 0, MEM_RELEASE);
+        U64 freeze_us = now_time_us() - freeze_begin_us;
+        InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_cache.freeze_us, freeze_us);
         lnk_log(LNK_Log_Timers, "[cobj freeze] retained=%llu trimmed=%llu trim-calls=%llu new-cache=%llu MiB elapsed=%.2f ms",
                 g_lnk_cobj_cache.frozen_segments, trimmed_frozen, trim_calls, new_mapping_size / MB(1),
-                (F64)(now_time_us() - begin_us) / 1000.0);
+                (F64)freeze_us / 1000.0);
         return;
       }
       ReleaseSRWLockExclusive(&g_lnk_cobj_cache.lock);
@@ -652,7 +893,7 @@ lnk_compressed_obj_trim_working_set(void)
     g_lnk_cobj_cache_shrunk = 1;
     ReleaseSRWLockExclusive(&g_lnk_cobj_cache.lock);
   }
-  if (shrink_gib == 0) {
+  if (post_boundary_cache_bytes == 0) {
     for EachIndex(region_idx, g_lnk_cobj_cache.region_count) {
       LNK_CompressedObj *region = g_lnk_cobj_cache.regions[region_idx];
       if (!region || !region->active) { continue; }
@@ -667,6 +908,7 @@ lnk_compressed_obj_trim_working_set(void)
       }
     }
   }
+  InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_cache.trim_us, now_time_us() - begin_us);
   lnk_log(LNK_Log_Timers, "[cobj trim] purged=%llu active=%llu MiB cache_views=%llu cache=%llu GiB elapsed=%.2f ms",
           purged_count, (g_lnk_cobj_cache.active_slot_count * g_lnk_cobj_cache.segment_size) / MB(1),
           cache_view_count, cache_view_bytes / GB(1),
@@ -728,7 +970,13 @@ lnk_cobj_evict_one_locked(U32 *slot_idx_out)
   }
 
   U8 *victim_address = victim->address;
-  if (victim_address == 0 || !g_lnk_cobj_cache.unmap_view_of_file_2(GetCurrentProcess(), victim_address, MEM_PRESERVE_PLACEHOLDER)) {
+  U64 eviction_begin_us = now_time_us();
+  B32 unmapped = victim_address != 0 &&
+                 g_lnk_cobj_cache.unmap_view_of_file_2(GetCurrentProcess(), victim_address,
+                                                       MEM_PRESERVE_PLACEHOLDER);
+  InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_cache.eviction_us,
+                           now_time_us() - eviction_begin_us);
+  if (!unmapped) {
     InterlockedExchange(&victim->state, LNK_CObjSegState_Ready);
     return 0;
   }
@@ -782,15 +1030,16 @@ lnk_cobj_materialize(LNK_CompressedObj *region, U32 seg_idx)
                                      (DWORD)(slot_off >> 32), (DWORD)slot_off, region->segment_size);
   }
   B32 ok = write_view != 0;
+  U64 decode_begin_us = now_time_us();
   if (ok) {
     U8 *stored = region->mapped_file.str + entry->file_offset;
     if (entry->flags & LNK_COBJ_SEGMENT_RAW) {
       MemoryCopy(write_view, stored, entry->raw_size);
       InterlockedIncrement64((volatile LONG64 *)&g_lnk_cobj_cache.raw_segments);
     } else {
-      OO_SINTa decoded = OodleLZ_Decompress(stored, entry->stored_size, write_view, entry->raw_size,
-                                           OodleLZ_FuzzSafe_Yes, OodleLZ_CheckCRC_No, OodleLZ_Verbosity_None,
-                                           0, 0, 0, 0, 0, 0, OodleLZ_Decode_Unthreaded);
+      OO_SINTa decoded = lnk_cobj_oodle_decompress(region->header->compressor,
+                                                   stored, entry->stored_size,
+                                                   write_view, entry->raw_size);
       ok = decoded == entry->raw_size;
     }
     if (ok && entry->raw_size < region->segment_size) {
@@ -798,6 +1047,8 @@ lnk_cobj_materialize(LNK_CompressedObj *region, U32 seg_idx)
     }
     if (temporary_write_view) { UnmapViewOfFile(write_view); }
   }
+  InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_cache.decode_us,
+                           now_time_us() - decode_begin_us);
   U8 *target = region->base + (U64)seg_idx * region->segment_size;
   if (ok) { ok = lnk_cobj_isolate_portable_segment(region, seg_idx); }
   if (ok) {
@@ -871,11 +1122,14 @@ lnk_cobj_veh(EXCEPTION_POINTERS *info)
     U8 *address = (U8 *)er->ExceptionInformation[1];
     LNK_CompressedObj *region = lnk_cobj_region_from_address(address);
     if (region != 0) {
+      U64 fault_begin_us = now_time_us();
       InterlockedIncrement64((volatile LONG64 *)&g_lnk_cobj_cache.faults);
       U32 seg_idx = (U32)((address - region->base) / region->segment_size);
       U64 access_kind = er->ExceptionInformation[0];
       if (access_kind == 0 && seg_idx < region->segment_count &&
           lnk_cobj_materialize(region, seg_idx)) {
+        InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_cache.fault_us,
+                                 now_time_us() - fault_begin_us);
         return EXCEPTION_CONTINUE_EXECUTION;
       }
       if (access_kind == 1 && seg_idx < region->segment_count &&
@@ -887,10 +1141,14 @@ lnk_cobj_veh(EXCEPTION_POINTERS *info)
           void *page = (void *)((UINT_PTR)address & ~(UINT_PTR)(KB(4) - 1));
           DWORD old_protect = 0;
           if (VirtualProtect(page, KB(4), PAGE_WRITECOPY, &old_protect)) {
+            InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_cache.fault_us,
+                                     now_time_us() - fault_begin_us);
             return EXCEPTION_CONTINUE_EXECUTION;
           }
         }
       }
+      InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_cache.fault_us,
+                               now_time_us() - fault_begin_us);
     }
   }
   return EXCEPTION_CONTINUE_SEARCH;
@@ -917,21 +1175,21 @@ lnk_cobj_cache_init(U32 segment_size)
     return 0;
   }
 
-  U64 cache_gib = LNK_COBJ_DEFAULT_CACHE_GIB;
-  char cache_env[64];
-  DWORD cache_env_len = GetEnvironmentVariableA("RAD_COBJ_CACHE_GIB", cache_env, sizeof(cache_env));
-  if (cache_env_len > 0 && cache_env_len < sizeof(cache_env)) {
-    U64 parsed = strtoull(cache_env, 0, 10);
-    if (parsed > 0) { cache_gib = parsed; }
-  }
-  U64 cache_bytes = cache_gib * GB(1);
-  char cache_mib_env[64];
-  DWORD cache_mib_env_len = GetEnvironmentVariableA("RAD_COBJ_CACHE_MIB", cache_mib_env, sizeof(cache_mib_env));
-  if (cache_mib_env_len > 0 && cache_mib_env_len < sizeof(cache_mib_env)) {
-    U64 parsed = strtoull(cache_mib_env, 0, 10);
-    if (parsed > 0) { cache_bytes = parsed * MB(1); }
+  if (!g_lnk_cobj_policy.configured) { lnk_compressed_obj_configure(0); }
+  U64 cache_bytes = g_lnk_cobj_policy.initial_cache_bytes;
+  U64 post_boundary_cache_bytes = g_lnk_cobj_policy.post_boundary_cache_bytes;
+  U64 segment_size_u64 = segment_size;
+  if (g_lnk_cobj_input_capacity_hint > 0) {
+    if (g_lnk_cobj_input_capacity_hint < cache_bytes) {
+      cache_bytes = AlignPow2(g_lnk_cobj_input_capacity_hint, segment_size_u64);
+    }
+    if (g_lnk_cobj_input_capacity_hint < post_boundary_cache_bytes) {
+      post_boundary_cache_bytes = AlignPow2(g_lnk_cobj_input_capacity_hint, segment_size_u64);
+    }
   }
   g_lnk_cobj_cache.skip_cleanup = lnk_cobj_skip_cleanup_enabled();
+  g_lnk_cobj_cache.initial_cache_bytes = cache_bytes;
+  g_lnk_cobj_cache.post_boundary_cache_bytes = post_boundary_cache_bytes;
   g_lnk_cobj_cache.slot_count = Max(1, cache_bytes / segment_size);
   g_lnk_cobj_cache.active_slot_count = g_lnk_cobj_cache.slot_count;
   g_lnk_cobj_cache.segment_size = segment_size;
@@ -1143,6 +1401,7 @@ lnk_cobj_open_portable(LNK_Input *input, String8 mapped_file)
   }
   LNK_CObjSegment *directory = (LNK_CObjSegment *)(mapped_file.str + header->directory_offset);
   B32 has_portable_raw_segments = 0;
+  U64 raw_mapped_segment_count = 0;
   for (U32 i = 0; i < header->segment_count; ++i) {
     LNK_CObjSegment *entry = &directory[i];
     U64 segment_raw_offset = (U64)i * header->segment_size;
@@ -1156,6 +1415,7 @@ lnk_cobj_open_portable(LNK_Input *input, String8 mapped_file)
       return 0;
     }
     has_portable_raw_segments |= !!(entry->flags & LNK_COBJ_SEGMENT_RAW);
+    raw_mapped_segment_count += !!(entry->flags & LNK_COBJ_SEGMENT_RAW);
   }
   U32 type_index_count = 0;
   LNK_CObjTypeIndex *type_indices = 0;
@@ -1378,6 +1638,9 @@ lnk_cobj_open_portable(LNK_Input *input, String8 mapped_file)
   AcquireSRWLockExclusive(&g_lnk_cobj_cache.lock);
   if (g_lnk_cobj_cache.region_count < g_lnk_cobj_cache.region_cap) {
     g_lnk_cobj_cache.regions[g_lnk_cobj_cache.region_count++] = region;
+    g_lnk_cobj_cache.raw_mapped_segments += raw_mapped_segment_count;
+    g_lnk_cobj_cache.input_compressed_bytes += mapped_file.size;
+    g_lnk_cobj_cache.input_raw_bytes += header->raw_size;
     registered = 1;
   }
   ReleaseSRWLockExclusive(&g_lnk_cobj_cache.lock);
@@ -1417,11 +1680,14 @@ lnk_compressed_obj_close(LNK_Input *input)
 {
   LNK_CompressedObj *region = input->compressed_obj;
   if (!region) { return; }
+  U64 cleanup_begin_us = now_time_us();
   if (g_lnk_cobj_cache.skip_cleanup) {
     // Benchmark/diagnostic mode: the process is about to exit and Windows tears the address
     // space down more efficiently than issuing one UnmapViewOfFile2 call per resident segment.
     // Useful for separating link work from explicit VAD teardown; not the bounded-cache path.
     input->owns_file_map = 0;
+    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_cache.cleanup_us,
+                             now_time_us() - cleanup_begin_us);
     return;
   }
   InterlockedExchange(&region->active, 0);
@@ -1465,6 +1731,8 @@ lnk_compressed_obj_close(LNK_Input *input)
   input->compressed_data = str8_zero();
   input->compressed_obj = 0;
   input->owns_file_map = 0;
+  InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_cache.cleanup_us,
+                           now_time_us() - cleanup_begin_us);
 }
 
 ////////////////////////////////
@@ -1478,16 +1746,40 @@ lnk_compressed_obj_log_stats(void)
     return;
   }
   U64 unique_decodes = g_lnk_cobj_cache.decodes - g_lnk_cobj_cache.redecodes;
-  U64 amp_x100 = unique_decodes ? (g_lnk_cobj_cache.decodes * 100) / unique_decodes : 0;
+  U64 total_decodes = g_lnk_cobj_cache.decodes + g_lnk_cobj_window_decodes;
+  U64 total_decoded_bytes = g_lnk_cobj_cache.decoded_bytes + g_lnk_cobj_window_decoded_bytes;
+  U64 total_stored_bytes = g_lnk_cobj_cache.stored_bytes_read + g_lnk_cobj_window_bytes;
   lnk_log(LNK_Log_Timers,
-          "[cobj] regions=%llu segment=%llu KiB cache=%llu MiB resident=%llu faults=%llu decodes=%llu unique=%llu redecodes=%llu amp=%llu.%02llux evictions=%llu decoded=%llu MiB stored=%llu MiB",
+          "[cobj] files=%llu input=%llu/%llu MiB segment=%llu KiB cache=%llu MiB(%s)->%llu MiB(%s) freeze=%u(%s) trim=%u(%s) one-shot=%u(%s) resident-hwm=%llu faults=%llu unique=%llu decodes=%llu decoded=%llu MiB read=%llu MiB evictions=%llu redecodes=%llu frozen=%llu/%llu MiB raw-mapped=%llu decoder-scratch=%llu/%llu KiB time-ms{decode=%.2f fault=%.2f evict=%.2f freeze=%.2f trim=%.2f cleanup=%.2f}\n",
           g_lnk_cobj_cache.region_count,
+          g_lnk_cobj_cache.input_compressed_bytes / MB(1),
+          g_lnk_cobj_cache.input_raw_bytes / MB(1),
           g_lnk_cobj_cache.segment_size / KB(1),
-          (g_lnk_cobj_cache.slot_count * g_lnk_cobj_cache.segment_size) / MB(1),
-          g_lnk_cobj_cache.occupancy_hwm, g_lnk_cobj_cache.faults, g_lnk_cobj_cache.decodes,
-          unique_decodes, g_lnk_cobj_cache.redecodes, amp_x100 / 100, amp_x100 % 100,
+          g_lnk_cobj_cache.initial_cache_bytes / MB(1),
+          lnk_cobj_policy_source_string(g_lnk_cobj_policy.initial_source),
+          g_lnk_cobj_cache.post_boundary_cache_bytes / MB(1),
+          lnk_cobj_policy_source_string(g_lnk_cobj_policy.post_source),
+          g_lnk_cobj_policy.freeze_generation,
+          lnk_cobj_policy_source_string(g_lnk_cobj_policy.freeze_source),
+          g_lnk_cobj_policy.trim_mode,
+          lnk_cobj_policy_source_string(g_lnk_cobj_policy.trim_source),
+          g_lnk_cobj_policy.one_shot,
+          lnk_cobj_policy_source_string(g_lnk_cobj_policy.one_shot_source),
+          g_lnk_cobj_cache.occupancy_hwm, g_lnk_cobj_cache.faults, unique_decodes, total_decodes,
+          total_decoded_bytes / MB(1), total_stored_bytes / MB(1),
           g_lnk_cobj_cache.evictions,
-          g_lnk_cobj_cache.decoded_bytes / MB(1), g_lnk_cobj_cache.stored_bytes_read / MB(1));
+          g_lnk_cobj_cache.redecodes,
+          g_lnk_cobj_cache.frozen_segments,
+          (g_lnk_cobj_cache.frozen_segments * g_lnk_cobj_cache.segment_size) / MB(1),
+          g_lnk_cobj_cache.raw_mapped_segments,
+          g_lnk_cobj_decoder_scratch_count,
+          g_lnk_cobj_decoder_scratch_bytes / KB(1),
+          (F64)g_lnk_cobj_cache.decode_us / 1000.0,
+          (F64)g_lnk_cobj_cache.fault_us / 1000.0,
+          (F64)g_lnk_cobj_cache.eviction_us / 1000.0,
+          (F64)g_lnk_cobj_cache.freeze_us / 1000.0,
+          (F64)g_lnk_cobj_cache.trim_us / 1000.0,
+          (F64)g_lnk_cobj_cache.cleanup_us / 1000.0);
   if (g_lnk_cobj_cache.frozen_segments) {
     lnk_log(LNK_Log_Timers, "[cobj frozen] segments=%llu", g_lnk_cobj_cache.frozen_segments);
   }
@@ -1503,6 +1795,8 @@ lnk_compressed_obj_log_stats(void)
 }
 
 #else
+internal void lnk_compressed_obj_configure(struct LNK_Config *config) { (void)config; }
+internal void lnk_compressed_obj_prepare_cache(String8 *mapped_files, U64 count) { (void)mapped_files; (void)count; }
 internal void lnk_compressed_obj_trim_working_set(void) {}
 internal String8 lnk_compressed_obj_direct_range(LNK_CompressedObj *obj, Rng1U64 range) { return str8_zero(); }
 internal B32 lnk_compressed_obj_type_index(LNK_CompressedObj *obj, Rng1U64 section_range, LNK_CObjTypeIndexView *out) { MemoryZeroStruct(out); return 0; }

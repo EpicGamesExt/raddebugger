@@ -48,7 +48,8 @@ struct LNK_CObjDecodeWindow
   U32  valid_size;
 };
 
-
+internal void lnk_compressed_obj_configure(struct LNK_Config *config);
+internal void lnk_compressed_obj_prepare_cache(String8 *mapped_files, U64 count);
 internal void lnk_compressed_obj_trim_working_set(void);
 internal String8 lnk_compressed_obj_direct_range(LNK_CompressedObj *obj, Rng1U64 range);
 internal B32  lnk_compressed_obj_type_index(LNK_CompressedObj *obj, Rng1U64 section_range, LNK_CObjTypeIndexView *out);

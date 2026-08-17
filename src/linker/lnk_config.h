@@ -102,6 +102,11 @@ typedef enum
 
   LNK_CmdSwitch_Rad_Age,
   LNK_CmdSwitch_Rad_BootMode,
+  LNK_CmdSwitch_Rad_CObjCacheGiB,
+  LNK_CmdSwitch_Rad_CObjCacheShrinkGiB,
+  LNK_CmdSwitch_Rad_CObjCacheFreeze,
+  LNK_CmdSwitch_Rad_CObjTrimWs,
+  LNK_CmdSwitch_Rad_CObjOneShot,
   LNK_CmdSwitch_Rad_BuildExp,
   LNK_CmdSwitch_Rad_BuildImpLib,
   LNK_CmdSwitch_Rad_BuildInfo,
@@ -350,6 +355,11 @@ typedef struct LNK_Config
   U64                         max_worker_count;
   U64                         debug_worker_cap;
   String8                     shared_thread_pool_name;
+  U64                         cobj_cache_gib;
+  U64                         cobj_cache_shrink_gib;
+  LNK_SwitchState             cobj_cache_freeze;
+  LNK_SwitchState             cobj_trim_ws;
+  LNK_SwitchState             cobj_one_shot;
   LNK_SwitchState             do_function_pad_min;
   B32                         infer_function_pad_min;
   U64                         function_pad_min;

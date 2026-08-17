@@ -1089,6 +1089,7 @@ lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Fla
     has_portable_cobj |= !!(classify_tags[thin_input_idx] & LNK_InputClassify_PortableCompressed);
   }
   if (has_portable_cobj) {
+    lnk_compressed_obj_prepare_cache(thin_input_datas.v, thin_input_datas.count);
     LNK_InputOpenTask open_task = {thin_inputs, thin_input_datas.v};
     // Reserving/splitting thousands of logical OBJ views contends on the Windows process VAD
     // lock. Four lanes measured substantially faster than 8-64 on the UEFN corpus.
@@ -8094,6 +8095,7 @@ entry_point(CmdLine *cmdline)
 
   // init config from the command line
   LNK_Config *config = lnk_config_init(cmdline->argc, cmdline->argv);
+  lnk_compressed_obj_configure(config);
 
   // Snapshot summary identity immediately after command-line parsing, before
   // pool initialization and later scratch allocations.

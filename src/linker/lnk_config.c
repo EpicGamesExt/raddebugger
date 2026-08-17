@@ -68,6 +68,11 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_WholeArchive,       0, LNK_CmdValueKind_Scalar, "WHOLEARCHIVE",         "[:LIBNAME]",                     "Force linker to pull in all objs from the specified lib."     },
 
   { LNK_CmdSwitch_Rad_Age,                          0, LNK_CmdValueKind_Scalar, "RAD_AGE",                              ":#",                   "Age embeded in EXE and PDB, used to validate incremental build. Default is 1."    },
+  { LNK_CmdSwitch_Rad_CObjCacheGiB,                 0, LNK_CmdValueKind_Scalar, "RAD_COBJ_CACHE_GIB",                   ":#",                   "Initial decoded compressed-OBJ cache capacity in GiB."                           },
+  { LNK_CmdSwitch_Rad_CObjCacheShrinkGiB,           0, LNK_CmdValueKind_Scalar, "RAD_COBJ_CACHE_SHRINK_GIB",            ":#",                   "Post-type-merge decoded compressed-OBJ cache capacity in GiB."                   },
+  { LNK_CmdSwitch_Rad_CObjCacheFreeze,              0, LNK_CmdValueKind_Scalar, "RAD_COBJ_CACHE_FREEZE",                "[:NO]",                "Retain the initial decoded generation when starting the post-boundary cache."    },
+  { LNK_CmdSwitch_Rad_CObjTrimWs,                   0, LNK_CmdValueKind_Scalar, "RAD_COBJ_TRIM_WS",                     "[:NO]",                "Trim decoded cache working-set pages at the type-merge boundary."                },
+  { LNK_CmdSwitch_Rad_CObjOneShot,                  0, LNK_CmdValueKind_Scalar, "RAD_COBJ_ONE_SHOT",                    "[:NO]",                "Use process-teardown cleanup for this one-shot linker invocation."               },
   //{ LNK_CmdSwitch_Rad_BuildExp,                     0, LNK_CmdValueKind_Scalar, "RAD_BUILD_EXP",                        "[:NO]",     "Build export data."                                                             },
   { LNK_CmdSwitch_Rad_BuildInfo,                    0, LNK_CmdValueKind_Null,   "RAD_BUILD_INFO",                       "",                     "Print build info and exit."                                                       },
   { LNK_CmdSwitch_Rad_BuildImpLib,                  0, LNK_CmdValueKind_Scalar, "RAD_BUILD_IMPLIB",                     "[:NO]",                "Build import library."                                                            },
@@ -1971,6 +1976,32 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
 
   case LNK_CmdSwitch_Rad_Age: {
     lnk_cmd_switch_parse_u32(obj, cmd_switch, value, &config->age, 0);
+  } break;
+
+  case LNK_CmdSwitch_Rad_CObjCacheGiB: {
+    if (lnk_cmd_switch_parse_u64(obj, cmd_switch, value, &config->cobj_cache_gib, 0) &&
+        config->cobj_cache_gib == 0) {
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "cache capacity must be greater than zero");
+    }
+  } break;
+
+  case LNK_CmdSwitch_Rad_CObjCacheShrinkGiB: {
+    if (lnk_cmd_switch_parse_u64(obj, cmd_switch, value, &config->cobj_cache_shrink_gib, 0) &&
+        config->cobj_cache_shrink_gib == 0) {
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "cache capacity must be greater than zero");
+    }
+  } break;
+
+  case LNK_CmdSwitch_Rad_CObjCacheFreeze: {
+    lnk_cmd_switch_parse_flag(obj, cmd_switch, value, &config->cobj_cache_freeze);
+  } break;
+
+  case LNK_CmdSwitch_Rad_CObjTrimWs: {
+    lnk_cmd_switch_parse_flag(obj, cmd_switch, value, &config->cobj_trim_ws);
+  } break;
+
+  case LNK_CmdSwitch_Rad_CObjOneShot: {
+    lnk_cmd_switch_parse_flag(obj, cmd_switch, value, &config->cobj_one_shot);
   } break;
 
   //case LNK_CmdSwitch_Rad_BuildExp: {
