@@ -203,9 +203,9 @@ THREAD_POOL_TASK_FUNC(lnk_data_from_file_path_task)
 {
   LNK_DiskReader *task = raw_task;
 
-  File handle      = task->handle_arr[task_id];
-  U64       buffer_size = task->size_arr[task_id];
-  U8       *buffer      = task->buffer + task->off_arr[task_id];
+  File  handle      = task->handle_arr[task_id];
+  U64   buffer_size = task->size_arr[task_id];
+  U8   *buffer      = task->buffer + task->off_arr[task_id];
 
   U64 read_size = lnk_read_file(&handle, buffer, buffer_size);
   Assert(read_size == buffer_size);
@@ -218,21 +218,30 @@ THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
 {
   LNK_DiskReader *task = raw_task;
   Temp scratch = scratch_begin(&arena, 1);
+
 #if OS_WINDOWS
-  String16 path16      = str16_from_8(scratch.arena, task->path_arr.v[task_id]);
+  String16 path16 = str16_from_8(scratch.arena, task->path_arr.v[task_id]);
+
+  // TODO: deprecate CoW file maps; they count against private byte space and * by design * do not allow over-commit;
+  // and if program's total file map size exceeds the cap, kernel terminates the whole process with an out-of-memory error;
+  // exception handler helpes us work-around this limitation but we stil cannot link on devices with small private byte space;
   if (task->io_flags & LNK_IO_Flags_MemoryMapFilesReadWrite) {
     HANDLE file_handle = CreateFileW(path16.str, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
+
     if (file_handle != INVALID_HANDLE_VALUE) {
       HANDLE mapping_handle = CreateFileMappingA(file_handle, 0, PAGE_READWRITE, 0, 0, 0);
       if (mapping_handle != INVALID_HANDLE_VALUE) {
         LARGE_INTEGER file_size = {0};
         GetFileSizeEx(file_handle, &file_size);
+
         void *file_data = MapViewOfFile(mapping_handle, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, file_size.QuadPart);
         if (file_data) {
           task->data_arr.v[task_id] = str8(file_data, file_size.QuadPart);
         }
+
         CloseHandle(mapping_handle);
       }
+
       CloseHandle(file_handle);
     }
   } else {
