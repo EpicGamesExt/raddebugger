@@ -476,18 +476,18 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
 
   if (input->compressed_obj != 0 && g_lnk_compressed_obj_census_enabled) {
     U64 known_debug = census_debug_s_bytes + census_debug_t_bytes + census_debug_p_bytes + census_debug_h_bytes;
-    InterlockedIncrement64((volatile LONG64 *)&g_lnk_compressed_obj_census.obj_count);
-    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.raw_bytes, input->data.size);
-    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.section_bytes, census_section_bytes);
-    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.debug_s_bytes, census_debug_s_bytes);
-    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.debug_t_bytes, census_debug_t_bytes);
-    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.debug_p_bytes, census_debug_p_bytes);
-    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.debug_h_bytes, census_debug_h_bytes);
-    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.other_section_bytes, census_section_bytes - known_debug);
-    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.symbol_bytes, raw_coff_symbol_table.size);
-    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.string_bytes, raw_coff_string_table.size);
-    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.section_table_bytes, raw_coff_section_table.size);
-    InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_compressed_obj_census.reloc_bytes, census_reloc_bytes);
+    ins_atomic_u64_inc_eval(&g_lnk_compressed_obj_census.obj_count);
+    ins_atomic_u64_add_eval(&g_lnk_compressed_obj_census.raw_bytes, input->data.size);
+    ins_atomic_u64_add_eval(&g_lnk_compressed_obj_census.section_bytes, census_section_bytes);
+    ins_atomic_u64_add_eval(&g_lnk_compressed_obj_census.debug_s_bytes, census_debug_s_bytes);
+    ins_atomic_u64_add_eval(&g_lnk_compressed_obj_census.debug_t_bytes, census_debug_t_bytes);
+    ins_atomic_u64_add_eval(&g_lnk_compressed_obj_census.debug_p_bytes, census_debug_p_bytes);
+    ins_atomic_u64_add_eval(&g_lnk_compressed_obj_census.debug_h_bytes, census_debug_h_bytes);
+    ins_atomic_u64_add_eval(&g_lnk_compressed_obj_census.other_section_bytes, census_section_bytes - known_debug);
+    ins_atomic_u64_add_eval(&g_lnk_compressed_obj_census.symbol_bytes, raw_coff_symbol_table.size);
+    ins_atomic_u64_add_eval(&g_lnk_compressed_obj_census.string_bytes, raw_coff_string_table.size);
+    ins_atomic_u64_add_eval(&g_lnk_compressed_obj_census.section_table_bytes, raw_coff_section_table.size);
+    ins_atomic_u64_add_eval(&g_lnk_compressed_obj_census.reloc_bytes, census_reloc_bytes);
   }
 }
 
