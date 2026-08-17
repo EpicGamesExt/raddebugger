@@ -7049,21 +7049,6 @@ entry_point(CmdLine *cmdline)
   TP_Context *tp       = tp_alloc(scratch.arena, config->worker_count, config->max_worker_count, config->shared_thread_pool_name);
   TP_Arena   *tp_arena = tp_arena_alloc(tp);
 
-  // detect type server from the environment
-  {
-    HashMap      env             = lnk_env_vars_from_process_info(scratch.arena, get_process_info(), LNK_EnvVarRule_Current);
-    LNK_EnvVar  *type_server_var = lnk_env_var_from_mapf(&env, "RAD_TYPE_SERVER");
-    if (type_server_var) {
-      U64 do_type_server  = 0;
-      if (lnk_env_var_to_u64(&env, type_server_var, &do_type_server)) {
-        if (do_type_server) {
-          lnk_config_pushf(config, "/RAD_TYPE_SERVER");
-          lnk_log(LNK_Log_Debug, "type server mode was enabled from the environment\n");
-        }
-      }
-    }
-  }
-
   if (lnk_get_log_status(LNK_Log_Debug)) {
     String8 full_cmd_line = str8_list_join(scratch.arena, &config->raw_cmd_line, &(StringJoin){ .sep = str8_lit_comp(" ") });
     lnk_fprintf(stderr, "--------------------------------------------------------------------------------\n");
