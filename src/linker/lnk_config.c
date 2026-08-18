@@ -2900,7 +2900,7 @@ lnk_config_init(U64 argc, char **argv)
   {
     LNK_EnvVar *link;
 
-    if (link = lnk_env_var_from_mapf(&env_vars, "LINK")) {
+    if ((link = lnk_env_var_from_mapf(&env_vars, "LINK"))) {
       String8List args = lnk_arg_list_parse_windows_rules(scratch.arena, link->raw_value);
       str8_list_concat_in_place(&user_args, &args);
     }
@@ -2909,7 +2909,7 @@ lnk_config_init(U64 argc, char **argv)
       str8_list_push(scratch.arena, &user_args, str8_cstring(argv[i]));
     }
 
-    if (link = lnk_env_var_from_mapf(&env_vars, "_LINK_")) {
+    if ((link = lnk_env_var_from_mapf(&env_vars, "_LINK_"))) {
       String8List args = lnk_arg_list_parse_windows_rules(scratch.arena, link->raw_value);
       str8_list_concat_in_place(&user_args, &args);
     }
