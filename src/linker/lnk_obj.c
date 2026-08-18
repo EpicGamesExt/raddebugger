@@ -881,7 +881,7 @@ lnk_parse_msvc_linker_directive(Arena *arena, LNK_Obj *obj, LNK_DirectiveInfo *d
     LNK_Directive *directive = push_array_no_zero(arena, LNK_Directive, 1);
     directive->next          = 0;
     directive->id            = str8_cstring(cmd_switch->name);
-    directive->value_list    = str8_list_copy(arena, &opt->value_strings);
+    directive->value         = push_str8_copy(arena, opt->value);
 
     LNK_DirectiveList *directive_list = &directive_info->v[cmd_switch->type];
     SLLQueuePush(directive_list->first, directive_list->last, directive);

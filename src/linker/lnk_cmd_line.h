@@ -7,7 +7,7 @@ typedef struct LNK_CmdOption
 {
   struct LNK_CmdOption *next;
   String8               string;
-  String8List           value_strings;
+  String8               value;
 } LNK_CmdOption;
 
 typedef struct LNK_CmdLine
@@ -50,7 +50,7 @@ internal String8List     lnk_arg_list_parse_windows_rules        (Arena *arena, 
 internal LNK_CmdLine     lnk_cmd_line_parse_windows_rules        (Arena *arena, String8List arg_list);
 internal LNK_CmdLine     lnk_cmd_line_from_stringfv_windows_rules(Arena *arena, char *fmt, va_list args);
 internal LNK_CmdLine     lnk_cmd_line_from_stringf_windows_rules (Arena *arena, char *fmt, ...);
-internal LNK_CmdOption * lnk_cmd_line_push_option_list           (Arena *arena, LNK_CmdLine *cmd_line, String8 string, String8List value_strings);
+internal LNK_CmdOption * lnk_cmd_line_push_option_string         (Arena *arena, LNK_CmdLine *cmd_line, String8 string, String8 value);
 internal LNK_CmdOption * lnk_cmd_line_push_option                (Arena *arena, LNK_CmdLine *cmd_line, char *string, char *value);
 internal LNK_CmdOption * lnk_cmd_line_push_option_if_not_present (Arena *arena, LNK_CmdLine *cmd_line, char *string, char *value);
 internal String8List     lnk_data_from_cmd_line                  (Arena *arena, LNK_CmdLine cmd_line);

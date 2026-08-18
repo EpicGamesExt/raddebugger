@@ -1233,7 +1233,7 @@ lnk_load_objs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *
     LNK_DirectiveInfo  directive_info = lnk_directive_info_from_raw_directives(scratch.arena, obj, raw_directives);
     for EachIndex(i, ArrayCount(directive_info.v)) {
       for (LNK_Directive *dir = directive_info.v[i].first; dir != 0; dir = dir->next) {
-        lnk_apply_cmd_option_to_config(config, dir->id, dir->value_list, obj);
+        lnk_apply_cmd_option_to_config(config, dir->id, dir->value, obj);
       }
     }
   }
@@ -6738,7 +6738,7 @@ lnk_run_type_server(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   {
     LNK_CmdLine default_line = lnk_cmd_line_from_stringf_windows_rules(scratch.arena, "/DEBUG:GHASH /NOD /RAD_WRITE_TEMP_FILES");
     for EachNode(cmd, LNK_CmdOption, default_line.first_option) {
-      lnk_apply_cmd_option_to_config(config, cmd->string, cmd->value_strings, &(LNK_Obj){0});
+      lnk_apply_cmd_option_to_config(config, cmd->string, cmd->value, &(LNK_Obj){0});
     }
   }
 

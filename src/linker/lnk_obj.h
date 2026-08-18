@@ -89,7 +89,7 @@ typedef struct LNK_Directive
 {
   struct LNK_Directive *next;
   String8               id;
-  String8List           value_list;
+  String8               value;
 } LNK_Directive;
 
 typedef struct LNK_DirectiveList
