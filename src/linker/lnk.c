@@ -2279,7 +2279,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
 
     String8List list = {0};
     for EachIndex(i, entry_points.count) { str8_list_push(scratch.arena, &list, entry_points.v[i]); }
-    String8 default_entries = str8_list_join(scratch.arena, &list, &(StringJoin){.sep = ", "});
+    String8 default_entries = str8_list_join(scratch.arena, &list, &(StringJoin){.sep = str8_lit(", ")});
 
     lnk_error(LNK_Error_EntryPoint,
               "failed to infer entry point symbol from the inputs\n"
@@ -3615,6 +3615,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
 #define X(ID) case LNK_ICF_Scope_##ID: scope_str = str8_lit(Stringify(ID)); break;
         LNK_ICF_Scope_XList
 #undef X
+        default: InvalidPath;
       }
 
       lnk_log(LNK_Log_Debug, "  %-9S: removed %M, %.*s sections; live %M, %.*s sections",
