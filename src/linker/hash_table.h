@@ -185,6 +185,7 @@ internal String8 * hash_map_search_path_string  (HashMap *hm, String8 key);
 internal void *    hash_map_search_path_raw     (HashMap *hm, String8 key);
 internal void *    hash_map_search_u64_raw      (HashMap *hm, U64     key);
 internal U64 *     hash_map_search_u64_u64      (HashMap *hm, U64     key);
+internal String8 * hash_map_search_u64_string   (HashMap *hm, U64     key);
 internal void *    hash_map_search_raw_raw      (HashMap *hm, void   *key);
 internal U64 *     hash_map_search_raw_u64      (HashMap *hm, void   *key);
 

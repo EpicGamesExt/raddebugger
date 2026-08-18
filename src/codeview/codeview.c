@@ -131,7 +131,6 @@ cv_map_encoded_base_pointer(CV_Arch arch, U32 encoded_frame_reg)
   return r;
 }
 
-
 ////////////////////////////////
 //~ rjf: Enum -> String
 
