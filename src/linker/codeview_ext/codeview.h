@@ -97,6 +97,7 @@ typedef struct CV_File
 
 typedef struct CV_C13LinesHeader
 {
+  U64 header_off;
   U64 sec_idx;
   U64 sec_off_lo;
   U64 sec_off_hi;

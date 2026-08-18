@@ -83,6 +83,69 @@ typedef struct LNK_ObjNodeArray
   LNK_ObjNode *v;
 } LNK_ObjNodeArray;
 
+// --- Maps --------------------------------------------------------------
+
+typedef struct LNK_SectionOffsetSymbol
+{
+  U64 key;
+  U32 symbol_idx;
+} LNK_SectionOffsetSymbol;
+
+typedef struct LNK_ObjSymbolMap
+{
+  U64                      count;
+  LNK_SectionOffsetSymbol *v;
+} LNK_ObjSymbolMap;
+
+typedef struct LNK_LineTableBlock
+{
+  String8            raw_lines;
+  CV_C13LinesHeader *header;
+} LNK_LineTableBlock;
+
+typedef struct LNK_LineTable
+{
+  U64            key_min;
+  U64            key_max;
+  U64            prefix_max;
+  U64            block_first;
+  U64            block_count;
+  CV_LinesAccel *accel;
+} LNK_LineTable;
+
+typedef struct LNK_InlineSite
+{
+  U32       parent_idx_plus_one;
+  U32       depth;
+  CV_ItemId inlinee;
+  String8   name;
+  U64       line_count;
+  CV_Line  *lines;
+} LNK_InlineSite;
+
+typedef struct LNK_InlineRange
+{
+  U64 key_min;
+  U64 key_max;
+  U64 prefix_max;
+  U32 site_idx;
+} LNK_InlineRange;
+
+typedef struct LNK_ObjLineMap
+{
+  Arena              *arena;
+  String8             debug_checksums;
+  String8             debug_strings;
+  U64                 line_table_block_count;
+  LNK_LineTableBlock *line_table_blocks;
+  U64                 table_count;
+  LNK_LineTable      *tables;
+  U64                 inline_site_count;
+  LNK_InlineSite     *inline_sites;
+  U64                 inline_range_count;
+  LNK_InlineRange    *inline_ranges;
+} LNK_ObjLineMap;
+
 // --- Directive Parser --------------------------------------------------------
 
 typedef struct LNK_Directive
@@ -112,8 +175,6 @@ typedef struct
   LNK_ObjNode       *objs;
   U64                obj_id_base;
   U32                machine;
-  B32                find_debug_t;
-  B32                find_llvm_addrsig;
 } LNK_ObjIniter;
 
 typedef struct
@@ -157,10 +218,11 @@ internal U32List          lnk_obj_collect_associated_sections(Arena *arena, LNK_
 
 // --- Symbol & Section Helpers ------------------------------------------------
 
-internal COFF_SectionHeader * lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number);
 internal force_inline COFF_ParsedSymbol lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
 internal force_inline COFF_ParsedSymbol lnk_parsed_symbol_from_coff_symbol_idx_no_name(LNK_Obj *obj, U64 symbol_idx);
 internal force_inline String8           lnk_symbol_name_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
+
+internal COFF_SectionHeader * lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number);
 internal U64                  lnk_obj_sect_idx_from_section_number(LNK_Obj *obj, U64 section_number);
 internal U64                  lnk_obj_section_number_from_sect_idx(LNK_Obj *obj, U64 sect_idx);
 internal String8              lnk_obj_section_name_from_section_number(LNK_Obj *obj, U64 section_number);
@@ -183,6 +245,15 @@ internal void              lnk_parse_msvc_linker_directive(Arena *arena, LNK_Obj
 internal String8List       lnk_raw_directives_from_obj(Arena *arena, LNK_Obj *obj);
 internal LNK_DirectiveInfo lnk_directive_info_from_raw_directives(Arena *arena, LNK_Obj *obj, String8List raw_directives);
 
-// --- Debug Info --------------------------------------------------------------
+// --- Maps ---------------------------------------------------------------------
 
-internal CV_DebugS lnk_debug_s_from_obj(Arena *arena, LNK_Obj *obj);
+// COFF map
+internal LNK_ObjSymbolMap * lnk_symbol_map_from_obj(Arena *arena, LNK_Obj *obj);
+internal U32                lnk_symbol_from_section_offset(LNK_ObjSymbolMap *map, U32 section_number, U32 offset);
+
+// CodeView map
+internal LNK_ObjLineMap * lnk_line_map_from_obj(Arena *arena, LNK_Obj *obj);
+internal CV_Line *        lnk_lines_from_section_offset(LNK_ObjLineMap *map, U32 section_number, U32 offset, U64 *line_count_out);
+internal LNK_InlineSite * lnk_inline_site_from_section_offset(LNK_ObjLineMap *map, U32 section_number, U32 offset);
+internal CV_Line *        lnk_line_from_inline_site(LNK_InlineSite *site, U32 offset);
+

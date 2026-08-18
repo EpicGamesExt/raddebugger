@@ -232,7 +232,7 @@ coff_pick_reloc_value_x64(COFF_Reloc_X64 type,
       reloc_value = safe_cast_s32(symbol_virtual_offset - reloc_virtual_offset - (4 + 5));
     } break;
     case COFF_Reloc_X64_Section: {
-      reloc_value_size = 4;
+      reloc_value_size = 2;
       reloc_value      = symbol_section_number;
     } break;
     case COFF_Reloc_X64_SecRel: {

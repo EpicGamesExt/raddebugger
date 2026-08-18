@@ -841,6 +841,13 @@ hash_map_search_u64_u64(HashMap *hm, U64 key)
   return n ? &n->v.value.value_u64 : 0;
 }
 
+internal String8 *
+hash_map_search_u64_string(HashMap *hm, U64 key)
+{
+  HashMapNode *n = hash_map_search(hm, hash_map_hasher(str8_struct(&key)), (HashMapKey){ .key_u64 = key }, hash_map_match_u64);
+  return n ? &n->v.value.value_string : 0;
+}
+
 internal void *
 hash_map_search_raw_raw(HashMap *hm, void *key)
 {

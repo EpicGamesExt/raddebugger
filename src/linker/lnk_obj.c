@@ -118,17 +118,16 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
         str8_ends_with(sect_name, str8_lit("$fo_bdd$"), 0)) {
       section_flags[sect_idx] |= COFF_SectionFlag_LnkInfo;
     }
-    if (task->find_debug_t) {
-      if (str8_match(sect_name, str8_lit(".debug$T"), 0)) {
-        debug_t_sect_idx = sect_idx;
-      } else if (str8_match(sect_name, str8_lit(".debug$P"), 0)) {
-        debug_p_sect_idx = sect_idx;
-      } else if (str8_match(sect_name, str8_lit(".debug$H"), 0)) {
-        debug_h_sect_idx = sect_idx;
-      }
+
+    if (str8_match(sect_name, str8_lit(".debug$T"), 0)) {
+      debug_t_sect_idx = sect_idx;
+    } else if (str8_match(sect_name, str8_lit(".debug$P"), 0)) {
+      debug_p_sect_idx = sect_idx;
+    } else if (str8_match(sect_name, str8_lit(".debug$H"), 0)) {
+      debug_h_sect_idx = sect_idx;
     }
-    if (task->find_llvm_addrsig && llvm_addrsig_sect_idx == max_U32 &&
-        str8_match(sect_name, str8_lit(".llvm_addrsig"), 0)) {
+
+    if (llvm_addrsig_sect_idx == max_U32 && str8_match(sect_name, str8_lit(".llvm_addrsig"), 0)) {
       llvm_addrsig_sect_idx = sect_idx;
     }
 
@@ -394,8 +393,6 @@ lnk_obj_from_input_many(TP_Context *tp, TP_Arena *arena, LNK_Config *config, U64
       .inputs            = inputs,
       .objs              = objs,
       .machine           = config->machine,
-      .find_debug_t      = lnk_do_debug_info(config),
-      .find_llvm_addrsig = config->opt_icf == LNK_SwitchState_Yes,
     };
     tp_for_parallel(tp, arena, inputs_count, lnk_obj_initer, &task);
   }
@@ -929,6 +926,74 @@ lnk_directive_info_from_raw_directives(Arena *arena, LNK_Obj *obj, String8List r
   return directive_info;
 }
 
+force_inline int
+lnk_section_offset_symbol_is_before(void *raw_a, void *raw_b)
+{
+  LNK_SectionOffsetSymbol *a = raw_a, *b = raw_b;
+  if (a->key == b->key) {
+    return a->symbol_idx < b->symbol_idx;
+  }
+  return a->key < b->key;
+}
+
+internal LNK_ObjSymbolMap *
+lnk_symbol_map_from_obj(Arena *arena, LNK_Obj *obj)
+{
+  // count functions
+  U64 count = 0;
+  COFF_ParsedSymbol symbol;
+  for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += 1 + symbol.aux_symbol_count) {
+    symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, symbol_idx);
+    if (coff_interp_from_parsed_symbol(symbol) == COFF_SymbolValueInterp_Regular && COFF_SymbolType_IsFunc(symbol.type)) {
+      count += 1;
+    }
+  }
+
+  LNK_ObjSymbolMap *map = push_array(arena, LNK_ObjSymbolMap, 1);
+  map->v = push_array_no_zero(arena, LNK_SectionOffsetSymbol, count);
+
+  U64 map_idx = 0;
+  for (U64 symbol_idx = 0; symbol_idx < obj->header.symbol_count; symbol_idx += 1 + symbol.aux_symbol_count) {
+    symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, symbol_idx);
+    if (coff_interp_from_parsed_symbol(symbol) == COFF_SymbolValueInterp_Regular && COFF_SymbolType_IsFunc(symbol.type)) {
+      LNK_SectionOffsetSymbol *entry = &map->v[map->count++];
+      entry->key                     = Compose64Bit(symbol.section_number, symbol.value);
+      entry->symbol_idx              = safe_cast_u32(symbol_idx);
+    }
+  }
+  Assert(map->count == count);
+
+  radsort(map->v, map->count, lnk_section_offset_symbol_is_before);
+
+  return map;
+}
+
+internal U32
+lnk_symbol_from_section_offset(LNK_ObjSymbolMap *map, U32 section_number, U32 offset)
+{
+  U64 key = Compose64Bit(section_number, offset);
+
+  U64 min = 0;
+  U64 opl = map->count;
+  while (min < opl) {
+    U64 mid = min + (opl - min) / 2;
+    if (map->v[mid].key <= key) {
+      min = mid + 1;
+    } else {
+      opl = mid;
+    }
+  }
+
+  U32 symbol_idx = max_U32;
+  if (min > 0) {
+    LNK_SectionOffsetSymbol *entry = &map->v[min - 1];
+    if (entry->key >> 32 == section_number) {
+      symbol_idx = entry->symbol_idx;
+    }
+  }
+  return symbol_idx;
+}
+
 internal CV_DebugS
 lnk_debug_s_from_obj(Arena *arena, LNK_Obj *obj)
 {
@@ -970,3 +1035,453 @@ lnk_debug_s_from_obj(Arena *arena, LNK_Obj *obj)
   scratch_end(scratch);
   return debug_s;
 }
+
+force_inline int
+lnk_line_table_block_is_before(void *raw_a, void *raw_b)
+{
+  LNK_LineTableBlock *a = raw_a, *b = raw_b;
+  U64 key_a = Compose64Bit(a->header->sec_idx, a->header->sec_off_lo);
+  U64 key_b = Compose64Bit(b->header->sec_idx, b->header->sec_off_lo);
+  if (key_a == key_b) { return a->header->sec_off_hi < b->header->sec_off_hi; }
+  return key_a < key_b;
+}
+
+force_inline int
+lnk_inline_range_is_before(void *raw_a, void *raw_b)
+{
+  LNK_InlineRange *a = raw_a, *b = raw_b;
+  if (a->key_min != b->key_min) { return a->key_min < b->key_min; }
+  return a->site_idx < b->site_idx;
+}
+
+internal LNK_ObjLineMap *
+lnk_line_map_from_obj(Arena *arena, LNK_Obj *obj)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  //
+  // build .debug$S section file offset -> relocation value
+  //
+#define DebugRelocValueFromFileOffset(foff) hash_map_search_u64_u64(&debug_reloc_hm, foff)
+  HashMap debug_reloc_hm = {0};
+  for EachIndex(sect_idx, obj->header.section_count_no_null) {
+    LNK_ObjSection section = lnk_obj_section_from_sect_idx(obj, sect_idx);
+    if (!str8_match(lnk_obj_section_name_from_sect_idx(obj, sect_idx), str8_lit(".debug$S"), 0)) { continue; }
+
+    String8         section_data = str8_substr(obj->data, section.frange);
+    COFF_RelocArray relocs       = lnk_coff_relocs_from_section_header(obj, section.header);
+    for EachIndex(reloc_idx, relocs.count) {
+      COFF_Reloc       *reloc = &relocs.v[reloc_idx];
+      COFF_ParsedSymbol symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, reloc->isymbol);
+      if (coff_interp_from_parsed_symbol(symbol) != COFF_SymbolValueInterp_Regular) { continue; }
+
+      U64 reloc_size  = 0;
+      U64 reloc_value = 0;
+      if ((obj->header.machine == COFF_MachineType_X64 && reloc->type == COFF_Reloc_X64_Section) ||
+          (obj->header.machine == COFF_MachineType_X86 && reloc->type == COFF_Reloc_X86_Section)) {
+        reloc_size  = sizeof(U16);
+        reloc_value = symbol.section_number;
+      } else if ((obj->header.machine == COFF_MachineType_X64 && reloc->type == COFF_Reloc_X64_SecRel) ||
+                 (obj->header.machine == COFF_MachineType_X86 && reloc->type == COFF_Reloc_X86_SecRel)) {
+        reloc_size  = sizeof(U32);
+        reloc_value = symbol.value;
+      }
+
+      if (reloc_size > 0 && reloc->apply_off + reloc_size <= section_data.size) {
+        U64 addend = 0;
+        str8_deserial_read(section_data, reloc->apply_off, &addend, reloc_size, 1);
+        U64 foff  = section.frange.min + reloc->apply_off;
+        U64 value = reloc_value + extend_sign64(addend, reloc_size);
+        U64 *existing = hash_map_search_u64_u64(&debug_reloc_hm, foff);
+        if (existing) {
+          *existing = value;
+        } else {
+          hash_map_push_u64_u64(scratch.arena, &debug_reloc_hm, foff, value);
+        }
+      }
+    }
+  }
+
+  CV_DebugS   debug_s        = lnk_debug_s_from_obj(scratch.arena, obj);
+  String8List raw_lines_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Lines);
+  String8List raw_checksums  = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
+  String8List raw_strings    = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable);
+
+  //
+  // estimate requried line table block capacity
+  //
+  U64 line_table_blocks_cap = 0;
+  for EachNode(raw_lines_node, String8Node, raw_lines_list.first) {
+    Temp temp = temp_begin(scratch.arena);
+    CV_C13LinesHeaderList parsed_list = cv_c13_lines_from_sub_sections(temp.arena, raw_lines_node->string, rng_1u64(0, raw_lines_node->string.size));
+    line_table_blocks_cap += parsed_list.count;
+    temp_end(temp);
+  }
+
+  LNK_ObjLineMap *map = push_array(arena, LNK_ObjLineMap, 1);
+  map->arena             = arena;
+  map->debug_checksums   = str8_list_first(&raw_checksums);
+  map->debug_strings     = str8_list_first(&raw_strings);
+  map->line_table_blocks = push_array(arena, LNK_LineTableBlock, line_table_blocks_cap);
+  map->tables            = push_array(arena, LNK_LineTable, line_table_blocks_cap);
+
+  for EachNode(raw_lines_node, String8Node, raw_lines_list.first) {
+    Temp temp = temp_begin(scratch.arena);
+    String8               raw_lines   = raw_lines_node->string;
+    CV_C13LinesHeaderList parsed_list = cv_c13_lines_from_sub_sections(temp.arena, raw_lines, rng_1u64(0, raw_lines.size));
+    for EachNode(header_node, CV_C13LinesHeaderNode, parsed_list.first) {
+      if (header_node->v.line_count == 0) { continue; }
+      LNK_LineTableBlock *block = &map->line_table_blocks[map->line_table_block_count++];
+      block->raw_lines          = raw_lines;
+      block->header             = push_array(arena, CV_C13LinesHeader, 1);
+      *block->header = header_node->v;
+
+      // resovle lines header
+      {
+        CV_C13LinesHeader *header      = block->header;
+        U64                header_foff = (U64)(raw_lines.str - obj->data.str) + header->header_off;
+
+        U64 *sec_off = DebugRelocValueFromFileOffset(header_foff + OffsetOf(CV_C13SubSecLinesHeader, sec_off));
+        if (sec_off) {
+          U64 len            = header->sec_off_hi - header->sec_off_lo;
+          header->sec_off_lo = *sec_off;
+          header->sec_off_hi = *sec_off + len;
+        }
+
+        U64 *sec = DebugRelocValueFromFileOffset(header_foff + OffsetOf(CV_C13SubSecLinesHeader, sec));
+        if (sec) {
+          header->sec_idx = *sec;
+        }
+      }
+    }
+    temp_end(temp);
+  }
+  Assert(map->line_table_block_count <= line_table_blocks_cap);
+  radsort(map->line_table_blocks, map->line_table_block_count, lnk_line_table_block_is_before);
+
+  for (U64 block_idx = 0; block_idx < map->line_table_block_count;) {
+    LNK_LineTableBlock *block   = &map->line_table_blocks[block_idx];
+    U64                 key_min = Compose64Bit(block->header->sec_idx, block->header->sec_off_lo);
+    U64                 key_max = Compose64Bit(block->header->sec_idx, block->header->sec_off_hi);
+
+    U64 block_opl = block_idx + 1;
+    for (; block_opl < map->line_table_block_count; block_opl += 1) {
+      LNK_LineTableBlock *next = &map->line_table_blocks[block_opl];
+      if (next->header->sec_idx    != block->header->sec_idx ||
+          next->header->sec_off_lo != block->header->sec_off_lo ||
+          next->header->sec_off_hi != block->header->sec_off_hi) {
+        break;
+      }
+    }
+
+    LNK_LineTable *table = &map->tables[map->table_count++];
+    table->key_min       = key_min;
+    table->key_max       = key_max;
+    table->prefix_max    = map->table_count > 1 ? Max(map->tables[map->table_count - 2].prefix_max, key_max) : key_max;
+    table->block_first   = block_idx;
+    table->block_count   = block_opl - block_idx;
+
+    block_idx = block_opl;
+  }
+
+  //
+  // build inlinee id -> inlinee name
+  //
+  HashMap inlinee_hm = {0};
+  if (obj->debug_t_sect_idx < obj->header.section_count_no_null) {
+    LNK_ObjSection debug_t_section = lnk_obj_section_from_sect_idx(obj, obj->debug_t_sect_idx);
+    String8        raw_debug_t     = str8_substr(obj->data, debug_t_section.frange);
+    CV_Signature   debug_t_sig     = cv_signature_from_debug_s(raw_debug_t);
+    if (debug_t_sig == CV_Signature_C13) {
+      CV_DebugT debug_t = cv_debug_t_from_data(scratch.arena, str8_skip(raw_debug_t, sizeof(CV_Signature)), CV_LeafAlign);
+
+      for EachIndex(leaf_idx, debug_t.count) {
+        CV_Leaf leaf = cv_debug_t_get_leaf(&debug_t, leaf_idx);
+
+        String8 name = str8_zero();
+        if (leaf.kind == CV_LeafKind_FUNC_ID) {
+          String8 data = str8_substr(leaf.data, r1u64(sizeof(CV_LeafFuncId), leaf.data.size));
+          name = str8_cstring_capped(data.str, data.str + data.size);
+        } else if (leaf.kind == CV_LeafKind_MFUNC_ID) {
+          String8 data = str8_substr(leaf.data, r1u64(sizeof(CV_LeafMFuncId), leaf.data.size));
+          name = str8_cstring_capped(data.str, data.str + data.size);
+        }
+
+        if (name.size) {
+          U64 inlinee_itype = CV_MinComplexTypeIndex + leaf_idx;
+          hash_map_push_u64_string(scratch.arena, &inlinee_hm, inlinee_itype, name);
+        }
+      }
+    }
+  }
+
+  //
+  // build inlinee lines accelerator
+  //
+  String8List                   raw_inlinee_lines   = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_InlineeLines);
+  CV_C13InlineeLinesParsedList  inlinee_lines       = cv_c13_inlinee_lines_from_sub_sections(scratch.arena, raw_inlinee_lines);
+  CV_InlineeLinesAccel         *inlinee_lines_accel = cv_c13_make_inlinee_lines_accel(scratch.arena, inlinee_lines);
+
+  //
+  // estimate required inline site capacity
+  //
+  String8List raw_symbols     = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
+  U64         inline_site_cap = 0;
+  for EachNode(raw_symbols_node, String8Node, raw_symbols.first) {
+    for (U64 cursor = 0; cursor < raw_symbols_node->string.size;) {
+      CV_Symbol symbol = {0};
+      TryReadBreak(cv_read_symbol(raw_symbols_node->string, cursor, CV_SymbolAlign, &symbol), cursor);
+      inline_site_cap += symbol.kind == CV_SymKind_INLINESITE || symbol.kind == CV_SymKind_INLINESITE2;
+    }
+  }
+
+  //
+  // extract inline site info from the .debug$S sections
+  //
+  typedef struct LNK_InlineRangeNode LNK_InlineRangeNode;
+  struct LNK_InlineRangeNode {
+    LNK_InlineRangeNode *next;
+    LNK_InlineRange      v;
+  };
+  LNK_InlineRangeNode *range_first = 0, *range_last = 0;
+  map->inline_sites = push_array(arena, LNK_InlineSite, inline_site_cap);
+  for EachNode(raw_symbols_node, String8Node, raw_symbols.first) {
+    U32  proc_section            = 0;
+    U32  proc_offset             = 0;
+    U64  inline_site_stack_count = 0;
+    U32 *inline_site_stack       = push_array_no_zero(scratch.arena, U32, inline_site_cap);
+    for (U64 cursor = 0; cursor < raw_symbols_node->string.size;) {
+      CV_Symbol symbol = {0};
+      TryReadBreak(cv_read_symbol(raw_symbols_node->string, cursor, CV_SymbolAlign, &symbol), cursor);
+
+      if (CV_IsProc32(symbol.kind)) {
+        CV_SymProc32 *proc = str8_deserial_get_raw_ptr(symbol.data, 0, sizeof(*proc));
+        if (proc) {
+          U64  proc_foff = IntFromPtr(symbol.data.str - obj->data.str);
+          U64 *off_reloc = DebugRelocValueFromFileOffset(proc_foff + OffsetOf(CV_SymProc32, off));
+          U64 *sec_reloc = DebugRelocValueFromFileOffset(proc_foff + OffsetOf(CV_SymProc32, sec));
+          proc_offset             = off_reloc ? safe_cast_u32(*off_reloc) : proc->off;
+          proc_section            = sec_reloc ? safe_cast_u32(*sec_reloc) : proc->sec;
+          inline_site_stack_count = 0;
+        }
+      } else if (symbol.kind == CV_SymKind_INLINESITE || symbol.kind == CV_SymKind_INLINESITE2) {
+        U64 header_size = symbol.kind == CV_SymKind_INLINESITE ? sizeof(CV_SymInlineSite) : sizeof(CV_SymInlineSite2);
+        if (proc_section && symbol.data.size >= header_size) {
+          CV_ItemId  inlinee         = symbol.kind == CV_SymKind_INLINESITE ? ((CV_SymInlineSite *)symbol.data.str)->inlinee : ((CV_SymInlineSite2 *)symbol.data.str)->inlinee;
+          String8    raw_annots      = str8_skip(symbol.data, header_size);
+          String8   *inlinee_name    = hash_map_search_u64_string(&inlinee_hm, inlinee);
+          U32        inline_site_idx = safe_cast_u32(map->inline_site_count++);
+
+          LNK_InlineSite *inline_site     = &map->inline_sites[inline_site_idx];
+          inline_site->parent_idx_plus_one = inline_site_stack_count ? inline_site_stack[inline_site_stack_count - 1] + 1 : 0;
+          inline_site->depth               = inline_site->parent_idx_plus_one ? map->inline_sites[inline_site->parent_idx_plus_one - 1].depth + 1 : 1;
+          inline_site->inlinee             = inlinee;
+          inline_site->name                = inlinee_name ? *inlinee_name : str8_zero();
+          inline_site_stack[inline_site_stack_count++] = inline_site_idx;
+
+          CV_C13InlineeLinesParsed *inlinee_info = cv_c13_inlinee_lines_accel_find(inlinee_lines_accel, inlinee);
+          if (inlinee_info) {
+            //
+            // decode inline site line table
+            //
+            typedef struct LNK_InlineLineNode LNK_InlineLineNode;
+            struct LNK_InlineLineNode {
+              LNK_InlineLineNode *next;
+              CV_Line             v;
+            };
+            LNK_InlineLineNode      *line_first       = 0;
+            LNK_InlineLineNode      *line_last        = 0;
+            LNK_InlineRangeNode     *last_site_range  = 0;
+            U32                      current_file_off = inlinee_info->file_off;
+            CV_C13InlineSiteDecoder  decoder          = cv_c13_inline_site_decoder_init(inlinee_info->file_off, inlinee_info->first_source_ln, proc_offset);
+            for (;;) {
+              U64 old_cursor = decoder.cursor;
+
+              CV_C13InlineSiteDecoderStep step = cv_c13_inline_site_decoder_step(&decoder, raw_annots);
+              if (step.flags == 0 || decoder.cursor <= old_cursor) { break; }
+              if (step.flags & CV_C13InlineSiteDecoderStepFlag_EmitFile) {
+                current_file_off = step.file_off;
+              }
+
+              if (step.range.min < step.range.max) {
+                if ((step.flags & CV_C13InlineSiteDecoderStepFlag_EmitRange) ||
+                    ((step.flags & CV_C13InlineSiteDecoderStepFlag_ExtendLastRange) && last_site_range == 0)) {
+                  LNK_InlineRangeNode *node = push_array(scratch.arena, LNK_InlineRangeNode, 1);
+                  node->v.key_min  = Compose64Bit(proc_section, step.range.min);
+                  node->v.key_max  = Compose64Bit(proc_section, step.range.max);
+                  node->v.site_idx = inline_site_idx;
+                  SLLQueuePush(range_first, range_last, node);
+                  last_site_range = node;
+                  map->inline_range_count += 1;
+                }
+              }
+
+              if ((step.flags & CV_C13InlineSiteDecoderStepFlag_ExtendLastRange) && last_site_range) {
+                last_site_range->v.key_max = Compose64Bit(proc_section, step.range.max);
+              }
+
+              if (step.flags & CV_C13InlineSiteDecoderStepFlag_EmitLine) {
+                LNK_InlineLineNode *node = push_array(scratch.arena, LNK_InlineLineNode, 1);
+                node->v.voff     = step.line_voff;
+                node->v.file_off = current_file_off;
+                node->v.line_num = step.ln;
+                SLLQueuePush(line_first, line_last, node);
+                inline_site->line_count += 1;
+              }
+            }
+
+            // line list -> sorted line array
+            inline_site->lines = push_array_no_zero(arena, CV_Line, inline_site->line_count);
+            U64 line_idx = 0;
+            for EachNode(line, LNK_InlineLineNode, line_first) { inline_site->lines[line_idx++] = line->v; }
+            radsort(inline_site->lines, inline_site->line_count, cv_c13_voff_map_is_before);
+          }
+        }
+      } else if (symbol.kind == CV_SymKind_INLINESITE_END) {
+        if (inline_site_stack_count > 0) {
+          inline_site_stack_count -= 1;
+        }
+      } else if (symbol.kind == CV_SymKind_END || symbol.kind == CV_SymKind_PROC_ID_END) {
+        proc_section            = 0;
+        proc_offset             = 0;
+        inline_site_stack_count = 0;
+      }
+    }
+  }
+
+  //
+  // fill out & sort inline site ranges
+  //
+  {
+    map->inline_ranges = push_array_no_zero(arena, LNK_InlineRange, map->inline_range_count);
+    U64 range_idx = 0;
+    for EachNode(range, LNK_InlineRangeNode, range_first) {
+      map->inline_ranges[range_idx++] = range->v;
+    }
+    radsort(map->inline_ranges, map->inline_range_count, lnk_inline_range_is_before);
+
+    for EachIndex(i, map->inline_range_count) {
+      map->inline_ranges[i].prefix_max = i ?
+        Max(map->inline_ranges[i - 1].prefix_max, map->inline_ranges[i].key_max) :
+        map->inline_ranges[i].key_max;
+    }
+  }
+
+#undef DebugRelocValueFromFileOff
+  scratch_end(scratch);
+  return map;
+}
+
+internal CV_Line *
+lnk_lines_from_section_offset(LNK_ObjLineMap *map, U32 section_number, U32 offset, U64 *line_count_out)
+{
+  U64 key = Compose64Bit(section_number, offset);
+
+  // upper bound search
+  U64 min = 0;
+  U64 opl = map->table_count;
+  while (min < opl) {
+    U64 mid = min + (opl - min) / 2;
+    if (map->tables[mid].key_min <= key) {
+      min = mid + 1;
+    } else {
+      opl = mid;
+    }
+  }
+
+  // backward search until containing interval is found
+  LNK_LineTable *table = 0;
+  while (min > 0) {
+    LNK_LineTable *candidate = &map->tables[--min];
+    if (key < candidate->key_max) {
+      table = candidate;
+      break;
+    }
+    if (min == 0 || map->tables[min - 1].prefix_max <= key) {
+      break;
+    }
+  }
+
+  CV_Line *lines      = 0;
+  U64      line_count = 0;
+  if (table) {
+    if (table->accel == 0) {
+      Temp scratch = scratch_begin(&map->arena, 1);
+
+      // unpack lines from line table blocks
+      CV_LineArray *line_arrays = push_array_no_zero(scratch.arena, CV_LineArray, table->block_count);
+      for EachIndex(i, table->block_count) {
+        LNK_LineTableBlock *block = &map->line_table_blocks[table->block_first + i];
+        CV_C13LinesHeader header = *block->header;
+        header.sec_off_hi -= header.sec_off_lo;
+        header.sec_off_lo = 0;
+        line_arrays[i] = cv_c13_line_array_from_data(scratch.arena, block->raw_lines, 0, header);
+      }
+
+      // cache line table accel
+      table->accel = cv_c13_make_lines_accel(map->arena, table->block_count, line_arrays);
+
+      scratch_end(scratch);
+    }
+
+    // match (section, offset) => lines
+    U32 table_offset = safe_cast_u32(key - table->key_min);
+    lines = cv_line_from_voff(table->accel, table_offset, &line_count);
+  }
+
+  if (line_count_out) {
+    *line_count_out = line_count;
+  }
+
+  return lines;
+}
+
+internal LNK_InlineSite *
+lnk_inline_site_from_section_offset(LNK_ObjLineMap *map, U32 section_number, U32 offset)
+{
+  U64 key = Compose64Bit(section_number, offset);
+
+  U64 min = 0;
+  U64 opl = map->inline_range_count;
+  while (min < opl) {
+    U64 mid = min + (opl - min) / 2;
+    if (map->inline_ranges[mid].key_min <= key) {
+      min = mid + 1;
+    } else {
+      opl = mid;
+    }
+  }
+
+  LNK_InlineSite *site = 0;
+  while (min > 0) {
+    LNK_InlineRange *range = &map->inline_ranges[--min];
+    if (key < range->key_max) {
+      LNK_InlineSite *candidate = &map->inline_sites[range->site_idx];
+      if (site == 0 || site->depth < candidate->depth) {
+        site = candidate;
+      }
+    }
+    if (min == 0 || map->inline_ranges[min - 1].prefix_max <= key) {
+      break;
+    }
+  }
+
+  return site;
+}
+
+internal CV_Line *
+lnk_line_from_inline_site(LNK_InlineSite *site, U32 offset)
+{
+  U64 min = 0;
+  U64 opl = site->line_count;
+  while (min < opl) {
+    U64 mid = min + (opl - min) / 2;
+    if (site->lines[mid].voff <= offset) {
+      min = mid + 1;
+    } else {
+      opl = mid;
+    }
+  }
+  return min > 0 ? &site->lines[min - 1] : 0;
+}
+
