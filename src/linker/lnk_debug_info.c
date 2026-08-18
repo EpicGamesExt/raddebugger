@@ -195,7 +195,17 @@ THREAD_POOL_TASK_FUNC(lnk_read_type_servers_task)
   } break;
   case LNK_TypeServerKind_PDB: {
     // read PDB from disk
-    String8 msf_data = lnk_read_data_from_file_path(scratch.arena, task->config->io_flags, ts->ts_path);
+    B8      msf_data_read = 0;
+    String8 msf_data      = lnk_read_data_from_file_path(scratch.arena, task->config->io_flags, ts->ts_path, &msf_data_read);
+
+    if ( ! msf_data_read) {
+      LNK_Obj *dep_obj = 0;
+      if (ts->obj_indices.count) {
+        dep_obj = task->obj_arr[ts->obj_indices.first->data];
+      }
+      lnk_error_obj(LNK_Error_UnableToOpenTypeServer, dep_obj, "failed to read type server from path: %S", ts->ts_path);
+      goto exit;
+    }
 
     // check magic
     if (!msf_check_magic_70(msf_data) && msf_check_magic_20(msf_data)) { goto exit; }
@@ -632,9 +642,10 @@ lnk_rrt_array_from_config(Arena *arena, LNK_Config *config)
   ProfBegin("Parse RRT");
   LNK_RRT_Array rrt_arr = { .v = push_array(arena, LNK_RRT, config->input_list[LNK_Input_RRT].node_count) };
   for EachNode(n, String8Node, config->input_list[LNK_Input_RRT].first) {
-    String8 rrt_path = n->string;
-    String8 raw_rrt  = lnk_read_data_from_file_path(arena, config->io_flags, rrt_path);
-    if (raw_rrt.size == 0) {
+    B8      was_rrt_read = 0;
+    String8 rrt_path     = n->string;
+    String8 raw_rrt      = lnk_read_data_from_file_path(arena, config->io_flags, rrt_path, &was_rrt_read);
+    if (raw_rrt.size == 0 || was_rrt_read == 0) {
       lnk_error(LNK_Error_IllData, "ERROR: failed to open \"%S\"", rrt_path);
       continue;
     }
@@ -3392,15 +3403,16 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   if (builder_flags & LNK_PDB_BuilderFlag_NATVIS) {
     ProfBegin("Build NatVis");
     {
-      String8Array natvis_file_path_arr = str8_array_from_list(scratch.arena, &config->natvis_list);
-      String8Array natvis_file_data_arr = lnk_read_data_from_file_path_parallel(tp, scratch.arena, config->io_flags, natvis_file_path_arr);
+      String8Array  natvis_file_path_arr = str8_array_from_list(scratch.arena, &config->natvis_list);
+      B8           *natvis_was_read      = push_array(scratch.arena, B8, natvis_file_path_arr.count);
+      String8Array  natvis_file_data_arr = lnk_read_data_from_file_path_parallel(tp, scratch.arena, config->io_flags, natvis_file_path_arr, natvis_was_read);
 
       for EachIndex(i, natvis_file_data_arr.count) {
         String8 natvis_file_path = natvis_file_path_arr.v[i];
         String8 natvis_file_data = natvis_file_data_arr.v[i];
 
         // did we read the file?
-        if (natvis_file_data.size == 0) {
+        if (natvis_was_read[i] == 0 || natvis_file_data.size == 0) {
           lnk_error(LNK_Warning_FileNotFound, "unable to open natvis file \"%S\"", natvis_file_path);
           continue;
         }

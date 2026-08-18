@@ -130,171 +130,6 @@
 
 // -----------------------------------------------------------------------------
 
-internal LNK_CmdLine
-lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
-{
-  Temp scratch = scratch_begin(&arena, 1);
-  LNK_CmdLine cmd_line = {0};
-
-  char *default_opts[] = {
-    "/ALIGN:4096",
-    "/DEBUG:none",
-    "/FILEALIGN:512",
-    "/HIGHENTROPYVA",
-    "/MANIFESTUAC:\"level='asInvoker' uiAccess='false'\"",
-    "/NXCOMPAT",
-    "/LARGEADDRESSAWARE",
-    "/PDBALTPATH:%_RAD_PDB_PATH%",
-    "/PDBPAGESIZE:4096",
-    (char*)str8f(scratch.arena, "/HEAP:%llu,%llu", MB(1), KB(4)).str,
-    (char*)str8f(scratch.arena, "/STACK:%llu,%llu", MB(1), KB(4)).str,
-
-    "/RAD_BOOT_MODE:LINKER",
-    //"/RAD_BUILD_EXP",
-    "/RAD_BUILD_IMPLIB",
-    "/RAD_AGE:1",
-    "/RAD_CHECK_UNUSED_DELAY_LOAD_DLL",
-    "/RAD_DO_MERGE",
-    "/RAD_ENV_LIB",
-    "/RAD_EXE",
-    "/RAD_GUID:imageblake3",
-    "/RAD_LARGE_PAGES:no",
-    "/RAD_LINK_VER:14.0",
-    "/RAD_OS_VER:6.0",
-    "/RAD_PAGE_SIZE:4096",
-    "/RAD_PATH_STYLE:system",
-    "/RAD_PDB_HASH_TYPE_NAMES:NONE",
-    "/RAD_PDB_HASH_TYPE_NAME_LENGTH:8",
-    "/RAD_DEBUGALTPATH:%_RAD_RDI_PATH%",
-    "/RAD_MEMORY_MAP_FILES",
-    "/RAD_MAP_LINES_FOR_UNRESOLVED_SYMBOLS",
-    "/RAD_UNRESOLVED_SYMBOL_LIMIT:1000",
-    "/RAD_UNRESOLVED_SYMBOL_REF_LIMIT:10",
-    "/RAD_SORT_IMPORTS",
-    (char*)str8f(scratch.arena, "/RAD_MT_PATH:%s",        LNK_MANIFEST_MERGE_TOOL_NAME).str,
-    (char*)str8f(scratch.arena, "/RAD_DATA_DIR_COUNT:%u", PE_DataDirectoryIndex_COUNT).str,
-
-    // Set BLAKE3 as the default to match the LLVM default.
-    //
-    // When hash kinds conflict, radlink discards any .debug$H sections
-    // whose hash kind does not match the selected default.
-    "/RAD_DEBUG_TYPE_HASH:BLAKE3",
-
-    // Use LLVM significant addresses hints for the /OPT:ICF.
-    "/LLVM_ADDRSIG",
-
-    // By default keep full type names, override when TPI/IPI streams overflow.
-    "/RAD_PDB_HASH_TYPE_NAMES:NONE",
-
-    // TODO: The ICF algorithm requires a cryptographic hash to establish
-    // equivalence. With xxHash and similar non-cryptographic hashes,
-    // the algorithm must compare each section property before
-    // deciding whether sections are truly identical.
-    "/RAD_ICF_HASH_KIND:BLAKE3",
-  };
-
-  char *push_opts[] = {
-    "/MERGE:.xdata=.rdata",
-    "/MERGE:.00cfg=.rdata",
-    // TODO: .tls must be always first contribution in .data section because compiler generates TLS relative movs
-    //"/MERGE:.tls=.data",
-    "/MERGE:.idata=.data",
-    "/MERGE:.didat=.data",
-    "/MERGE:.edata=.rdata",
-    "/MERGE:.RAD_LINK_PE_DEBUG_DIR=.rdata",
-    "/MERGE:.RAD_LINK_PE_DEBUG_DATA=.rdata",
-
-    "/RAD_REMOVE_SECTION:.debug",
-    "/RAD_REMOVE_SECTION:.gehcont",
-    "/RAD_REMOVE_SECTION:.gfids",
-    "/RAD_REMOVE_SECTION:.gxfg",
-
-    (char*)str8f(scratch.arena, "/RAD_WORKERS:%u", get_system_info()->logical_processor_count).str,
-
-    // errors that are too verbose in release build
-    (char*)str8f(scratch.arena, "/RAD_IGNORE:%d", LNK_Warning_UnknownSwitch    * (BUILD_DEBUG ? -1 : 1)).str,
-    (char*)str8f(scratch.arena, "/RAD_IGNORE:%d", LNK_Warning_UnknownDirective * (BUILD_DEBUG ? -1 : 1)).str,
-    (char*)str8f(scratch.arena, "/RAD_IGNORE:%d", LNK_Error_InvalidTypeIndex   * (BUILD_DEBUG ? -1 : 1)).str,
-
-    #if BUILD_DEBUG
-    "/RAD_LOG:debug",
-    "/RAD_LOG:io_write",
-    #else
-    (char*)str8f(scratch.arena, "/RAD_IGNORE:%u", LNK_Error_InvalidTypeIndex).str,
-    #endif
-  };
-
-#define DefaultOpt(...) do {                                                                     \
-  LNK_CmdLine parsed_cmd_line = lnk_cmd_line_from_stringf_windows_rules(arena, __VA_ARGS__);     \
-  for EachNode(cmd, LNK_CmdOption, parsed_cmd_line.first_option) {                               \
-    if (!lnk_cmd_line_has_switch(user_cmd_line, lnk_cmd_switch_type_from_string(cmd->string))) { \
-      String8List value_strings = str8_list_copy(arena, &cmd->value_strings);                    \
-      lnk_cmd_line_push_option_list(arena, &cmd_line, cmd->string, value_strings);               \
-    }                                                                                            \
-  }                                                                                              \
-} while (0)
-
-#define PushOpt(...) do {                                                                    \
-  LNK_CmdLine parsed_cmd_line = lnk_cmd_line_from_stringf_windows_rules(arena, __VA_ARGS__); \
-  lnk_cmd_line_concat_in_place(&cmd_line, &parsed_cmd_line);                                 \
-} while (0)
-
-  if (lnk_cmd_line_has_switch(user_cmd_line, LNK_CmdSwitch_Dll)) {
-    DefaultOpt("/SUBSYSTEM:%S", pe_string_from_subsystem(PE_WindowsSubsystem_WINDOWS_GUI));
-  }
-  if (!lnk_cmd_line_has_switch(user_cmd_line, LNK_CmdSwitch_Brepro)) {
-    DefaultOpt("/RAD_TIME_STAMP:%u", get_process_start_time_unix());
-  }
-  for EachIndex(i, ArrayCount(default_opts)) {
-    DefaultOpt("%s", default_opts[i]);
-  }
-
-  for EachIndex(i, ArrayCount(push_opts)) {
-    PushOpt("%s", push_opts[i]);
-  }
-
-  // when /FORCE is specified on the command line, do not stop on these errors
-  if (lnk_cmd_line_has_switch(user_cmd_line, LNK_CmdSwitch_Force)) {
-    g_error_mode_arr[LNK_Error_UnresolvedSymbol] = LNK_ErrorMode_Continue;
-    g_error_mode_arr[LNK_Error_RelocationAgainstRemovedSection] = LNK_ErrorMode_Continue;
-  }
-
-#undef DefaultOpt
-#undef PushOpt
-  scratch_end(scratch);
-  return cmd_line;
-}
-
-internal LNK_Config *
-lnk_config_from_argcv(CmdLine *cmdline)
-{
-  Temp scratch = scratch_begin(0,0);
-
-  String8List raw_cmd_line = {0};
-  for (U64 i = 1; i < cmdline->argc; i += 1) { str8_list_push(scratch.arena, &raw_cmd_line, str8_cstring(cmdline->argv[i])); }
-
-#if PROFILE_TELEMETRY
-  tmMessage(0, TMMF_ICON_NOTE, "Command Line: %.*s", str8_varg(str8_list_join(scratch.arena, &raw_cmd_line, &(StringJoin){ .sep = str8_lit_comp(" ") })));
-#endif
-
-  // make command line
-  LNK_CmdLine cmd_line_msvc = {0};
-  {
-    String8List unwrapped_cmd_line = lnk_unwrap_rsp(scratch.arena, raw_cmd_line);
-    LNK_CmdLine user_cmd_line      = lnk_cmd_line_parse_windows_rules(scratch.arena, unwrapped_cmd_line);
-    user_cmd_line.raw_cmd_line     = raw_cmd_line;
-    LNK_CmdLine default_cmd_line   = lnk_make_default_cmd_line(scratch.arena, user_cmd_line);
-    lnk_cmd_line_concat_in_place(&cmd_line_msvc, &default_cmd_line);
-    lnk_cmd_line_concat_in_place(&cmd_line_msvc, &user_cmd_line);
-  }
-
-  // init config
-  LNK_Config *config = lnk_config_init(cmd_line_msvc);
-
-  scratch_end(scratch);
-  return config;
-}
-
 internal String8
 lnk_make_full_path(Arena *arena, PathStyle system_path_style, String8 work_dir, String8 path)
 {
@@ -500,8 +335,9 @@ lnk_manifest_from_inputs(Arena       *arena,
     lnk_merge_manifest_files(mt_path, merged_manifest_path, unique_input_manifest_paths);
 
     // read mt.exe output from disk
-    manifest_data = lnk_read_data_from_file_path(arena, io_flags, merged_manifest_path);
-    if (manifest_data.size == 0) {
+    B8 was_manifest_read;
+    manifest_data = lnk_read_data_from_file_path(arena, io_flags, merged_manifest_path, &was_manifest_read);
+    if (was_manifest_read == 0) {
       lnk_error(LNK_Error_Mt, "unable to find mt.exe output manifest on disk, expected path \"%S\"", merged_manifest_path);
     }
 
@@ -1228,13 +1064,17 @@ lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Fla
   ProfEnd();
 
   ProfBegin("Load Inputs From Disk"); 
-  String8Array thin_input_datas  = lnk_read_data_from_file_path_parallel(tp, inputer->arena, io_flags, thin_input_paths);
-  B32 is_mapped = !!(io_flags & (LNK_IO_Flags_MemoryMapFilesReadWrite|LNK_IO_Flags_MemoryMapFilesReadOnly));
+
+  B8           *thin_input_was_read = push_array(scratch.arena, B8, thin_input_paths.count);
+  String8Array  thin_input_datas    = lnk_read_data_from_file_path_parallel(tp, inputer->arena, io_flags, thin_input_paths, thin_input_was_read);
+  B32           is_mapped           = !!(io_flags & (LNK_IO_Flags_MemoryMapFilesReadWrite|LNK_IO_Flags_MemoryMapFilesReadOnly));
+
   for EachIndex(thin_input_idx, thin_inputs_count) {
-    thin_inputs[thin_input_idx]->has_disk_read_failed = thin_input_datas.v[thin_input_idx].size == 0;
-    thin_inputs[thin_input_idx]->owns_file_map         = is_mapped && !thin_inputs[thin_input_idx]->has_disk_read_failed;
+    thin_inputs[thin_input_idx]->has_disk_read_failed = !thin_input_was_read[thin_input_idx];
+    thin_inputs[thin_input_idx]->owns_file_map        = is_mapped && !thin_inputs[thin_input_idx]->has_disk_read_failed;
     thin_inputs[thin_input_idx]->data                 = thin_input_datas.v[thin_input_idx];
   }
+
   ProfEnd();
 
   ProfBegin("Disk Read Check");
@@ -2328,18 +2168,21 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
     }
     
     ProfBegin("Load .res files from disk");
-    for (String8Node *node = config->input_list[LNK_Input_Res].first; node != 0; node = node->next) {
-      String8 res_data = lnk_read_data_from_file_path(scratch.arena, config->io_flags, node->string);
-      if (res_data.size > 0) {
-        if (pe_is_res(res_data)) {
-          str8_list_push(scratch.arena, &res_data_list, res_data);
-          String8 stable_res_path = lnk_make_full_path(scratch.arena, config->path_style, config->work_dir, node->string);
-          str8_list_push(scratch.arena, &res_path_list, stable_res_path);
-        } else {
-          lnk_error(LNK_Error_LoadRes, "file is not of RES format: %S", node->string);
-        }
-      } else {
+    for EachNode(node, String8Node, config->input_list[LNK_Input_Res].first) {
+      B8      was_read = 0;
+      String8 res_data = lnk_read_data_from_file_path(scratch.arena, config->io_flags, node->string, &was_read);
+
+      if (was_read == 0) {
         lnk_error(LNK_Error_LoadRes, "unable to open res file: %S", node->string);
+        continue;
+      }
+
+      if (pe_is_res(res_data)) {
+        str8_list_push(scratch.arena, &res_data_list, res_data);
+        String8 stable_res_path = lnk_make_full_path(scratch.arena, config->path_style, config->work_dir, node->string);
+        str8_list_push(scratch.arena, &res_path_list, stable_res_path);
+      } else {
+        lnk_error(LNK_Error_LoadRes, "file is not of RES format: %S", node->string);
       }
     }
     ProfEnd();
@@ -2357,8 +2200,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
     {
       ProfBegin("Build * Linker * Obj");
       String8 obj_name     = str8_lit("* Linker *");
-      String8 raw_cmd_line = str8_list_join(scratch.arena, &config->raw_cmd_line, &(StringJoin){ str8_lit_comp(""),  str8_lit_comp(" "), str8_lit_comp("") });
-      String8 obj_data     = lnk_make_linker_coff_obj(arena->v[0], config->time_stamp, config->machine, config->work_dir, lnk_get_image_name(config), config->pdb_name, raw_cmd_line, obj_name);
+      String8 obj_data     = lnk_make_linker_coff_obj(arena->v[0], config->time_stamp, config->machine, config->work_dir, lnk_get_image_name(config), config->pdb_name, config->raw_cmd_line, obj_name);
       lnk_inputer_push_obj_linkgen(inputer, 0, obj_name, obj_data);
       ProfEnd();
     }
@@ -6893,9 +6735,12 @@ lnk_run_type_server(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   Temp scratch = scratch_begin(arena->v, arena->count);
 
   // push default type-server switches
-  lnk_config_pushf(config, "/DEBUG:GHASH");
-  lnk_config_pushf(config, "/NOD");
-  lnk_config_pushf(config, "/RAD_WRITE_TEMP_FILES");
+  {
+    LNK_CmdLine default_line = lnk_cmd_line_from_stringf_windows_rules(scratch.arena, "/DEBUG:GHASH /NOD /RAD_WRITE_TEMP_FILES");
+    for EachNode(cmd, LNK_CmdOption, default_line.first_option) {
+      lnk_apply_cmd_option_to_config(config, cmd->string, cmd->value_strings, &(LNK_Obj){0});
+    }
+  }
 
   // load objs
   U64       objs_count = 0;
@@ -7045,18 +6890,21 @@ entry_point(CmdLine *cmdline)
   Temp scratch = scratch_begin(0,0);
   lnk_log_begin();
 
-  LNK_Config *config   = lnk_config_from_argcv(cmdline);
-  TP_Context *tp       = tp_alloc(scratch.arena, config->worker_count, config->max_worker_count, config->shared_thread_pool_name);
-  TP_Arena   *tp_arena = tp_arena_alloc(tp);
+  // init config from the command line
+  LNK_Config *config = lnk_config_init(cmdline->argc, cmdline->argv);
 
   if (lnk_get_log_status(LNK_Log_Debug)) {
-    String8 full_cmd_line = str8_list_join(scratch.arena, &config->raw_cmd_line, &(StringJoin){ .sep = str8_lit_comp(" ") });
     lnk_fprintf(stderr, "--------------------------------------------------------------------------------\n");
-    lnk_fprintf(stderr, "Command Line: %.*s\n", str8_varg(full_cmd_line));
-    lnk_fprintf(stderr, "Work Dir    : %.*s\n", str8_varg(config->work_dir));
+    lnk_fprintf(stderr, "Command Line: %S\n", config->raw_cmd_line);
+    lnk_fprintf(stderr, "Work Dir    : %S\n", config->work_dir);
     lnk_fprintf(stderr, "--------------------------------------------------------------------------------\n");
   }
 
+  // init thread pool
+  TP_Context *tp       = tp_alloc(scratch.arena, config->worker_count, config->max_worker_count, config->shared_thread_pool_name);
+  TP_Arena   *tp_arena = tp_arena_alloc(tp);
+
+  // pick entry point
   switch (config->boot_mode) {
   case LNK_BootMode_Linker:     lnk_run_linker     (tp, tp_arena, config); break;
   case LNK_BootMode_TypeServer: lnk_run_type_server(tp, tp_arena, config); break;

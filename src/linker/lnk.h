@@ -332,10 +332,6 @@ typedef struct
   String8            image_data;
 } LNK_P2R;
 
-// --- Config -----------------------------------------------------------------
-
-internal LNK_Config * lnk_config_from_cmdline(CmdLine *cmdline);
-
 // --- Entry Point -------------------------------------------------------------
 
 internal void lnk_run(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config);

@@ -59,6 +59,7 @@ typedef struct
   LNK_RRT           *rrt;
   CV_DebugH         *debug_h;
 } LNK_TypeServer;
+
 typedef struct LNK_TypeServerNode  { LNK_TypeServer v; struct LNK_TypeServerNode *next; } LNK_TypeServerNode;
 typedef struct LNK_TypeServerList  { U64 count; LNK_TypeServerNode *first, *last;       } LNK_TypeServerList;
 typedef struct LNK_TypeServerArray { U64 count; LNK_TypeServer *v;                      } LNK_TypeServerArray;

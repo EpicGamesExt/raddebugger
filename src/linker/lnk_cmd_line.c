@@ -129,9 +129,11 @@ internal void
 lnk_cmd_line_concat_in_place(LNK_CmdLine *list, LNK_CmdLine *to_concat)
 {
   if (list->option_count > 0) {
-    list->option_count += to_concat->option_count;
-    list->last_option->next = to_concat->first_option;
-    list->last_option = to_concat->last_option;
+    if (to_concat->option_count > 0) {
+      list->option_count      += to_concat->option_count;
+      list->last_option->next  = to_concat->first_option;
+      list->last_option        = to_concat->last_option;
+    }
     str8_list_concat_in_place(&list->input_list, &to_concat->input_list);
     str8_list_concat_in_place(&list->raw_cmd_line, &to_concat->raw_cmd_line);
   } else {
@@ -147,11 +149,9 @@ lnk_cmd_line_parse_windows_rules(Arena *arena, String8List arg_list)
   LNK_CmdLine cmd_line = {0};
   cmd_line.raw_cmd_line = str8_list_copy(arena, &arg_list);
 
-  for (String8Node *arg_node = arg_list.first; arg_node != 0; arg_node = arg_node->next) {
+  for EachNode(arg_node, String8Node, arg_list.first) {
     String8 arg = arg_node->string;
-    B32 is_option = str8_match_lit("/", arg, StringMatchFlag_RightSideSloppy) ||
-                    str8_match_lit("-", arg, StringMatchFlag_RightSideSloppy);
-    if (is_option) {
+    if (str8_starts_with(arg, str8_lit("/")) || str8_starts_with(arg, str8_lit("-"))) {
       U64 param_start_pos = str8_find_needle(arg, 0, str8_lit(":"), 0);
       String8 option_name = str8_chop(arg, arg.size - param_start_pos);
 
@@ -162,12 +162,14 @@ lnk_cmd_line_parse_windows_rules(Arena *arena, String8List arg_list)
       String8 value_string = str8_skip(arg, param_start_pos + 1);
 
       // make value list
-      String8List value_list_unowned = str8_split_by_string_chars(scratch.arena, value_string, str8_lit(","), 0);
-      String8List value_list = str8_list_copy(arena, &value_list_unowned);
+      String8List value_list_temp = str8_split_by_string_chars(scratch.arena, value_string, str8_lit(","), 0);
+      String8List value_list      = str8_list_copy(arena, &value_list_temp);
 
       // push command
       option_name = push_str8_copy(arena, option_name);
       lnk_cmd_line_push_option_list(arena, &cmd_line, option_name, value_list);
+    } else if (str8_starts_with(arg, str8_lit("@"))) {
+      lnk_cmd_line_push_option_list(arena, &cmd_line, push_str8_copy(arena, arg), (String8List){0});
     } else {
       str8_list_push(arena, &cmd_line.input_list, push_str8_copy(arena, arg));
     }

@@ -171,11 +171,11 @@ lnk_log_read(String8 path, U64 size)
 }
 
 internal String8
-lnk_read_data_from_file_path(Arena *arena, LNK_IO_Flags io_flags, String8 path)
+lnk_read_data_from_file_path(Arena *arena, LNK_IO_Flags io_flags, String8 path, B8 *was_read_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
   TP_Context *single_thread_ctx = tp_alloc(scratch.arena, 1, 1, str8_zero());
-  String8Array data_arr = lnk_read_data_from_file_path_parallel(single_thread_ctx, arena, io_flags, (String8Array){ .count = 1, .v = &path });
+  String8Array data_arr = lnk_read_data_from_file_path_parallel(single_thread_ctx, arena, io_flags, (String8Array){ .count = 1, .v = &path }, was_read_out);
   scratch_end(scratch);
   return data_arr.v[0];
 }
@@ -201,16 +201,20 @@ THREAD_POOL_TASK_FUNC(lnk_data_size_from_file_path_task)
 internal
 THREAD_POOL_TASK_FUNC(lnk_data_from_file_path_task)
 {
-  LNK_DiskReader *task = raw_task;
+  LNK_DiskReader *task   = raw_task;
+  File            handle = task->handle_arr[task_id];
+  if ( ! MemoryIsZeroStruct(&handle)) {
+    U64  buffer_size = task->size_arr[task_id];
+    U8  *buffer      = task->buffer + task->off_arr[task_id];
+    U64  read_size   = lnk_read_file(&handle, buffer, buffer_size);
+    AssertAlways(read_size == buffer_size); // TODO: handle partial loads as invalid
 
-  File  handle      = task->handle_arr[task_id];
-  U64   buffer_size = task->size_arr[task_id];
-  U8   *buffer      = task->buffer + task->off_arr[task_id];
+    task->data_arr.v[task_id] = str8(buffer, read_size);
 
-  U64 read_size = lnk_read_file(&handle, buffer, buffer_size);
-  Assert(read_size == buffer_size);
-
-  task->data_arr.v[task_id] = str8(buffer, read_size);
+    if (task->was_read) {
+      task->was_read[task_id] = 1;
+    }
+  }
 }
 
 internal
@@ -237,6 +241,9 @@ THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
         void *file_data = MapViewOfFile(mapping_handle, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, file_size.QuadPart);
         if (file_data) {
           task->data_arr.v[task_id] = str8(file_data, file_size.QuadPart);
+          if (task->was_read) {
+            task->was_read[task_id] = 1;
+          }
         }
 
         CloseHandle(mapping_handle);
@@ -254,6 +261,9 @@ THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
         void *file_data = MapViewOfFile(mapping_handle, FILE_MAP_COPY, 0, 0, file_size.QuadPart);
         if (file_data) {
           task->data_arr.v[task_id] = str8(file_data, file_size.QuadPart);
+          if (task->was_read) {
+            task->was_read[task_id] = 1;
+          }
         }
         CloseHandle(mapping_handle);
       }
@@ -268,6 +278,9 @@ THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
       void *file_data = mmap(0, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
       if (file_data != MAP_FAILED) {
         task->data_arr.v[task_id] = str8(file_data, st.st_size);
+        if (task->was_read) {
+          task->was_read[task_id] = 1;
+        }
       }
     }
     close(fd);
@@ -279,7 +292,7 @@ THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
 }
 
 internal String8Array
-lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags io_flags, String8Array path_arr)
+lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags io_flags, String8Array path_arr, B8 *was_read)
 {
   ProfBeginFunction();
   LNK_DiskReader reader = {0};
@@ -289,13 +302,15 @@ lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags
     reader.path_arr       = path_arr;
     reader.data_arr.count = path_arr.count;
     reader.data_arr.v     = push_array(arena, String8, path_arr.count);
+    reader.was_read       = was_read;
     tp_for_parallel(tp, 0, path_arr.count, lnk_memory_map_file_task, &reader);
   } else {
     Temp scratch = scratch_begin(&arena,1);
 
-    reader.path_arr       = path_arr;
-    reader.handle_arr     = push_array_no_zero(scratch.arena, File, path_arr.count);
-    reader.size_arr       = push_array_no_zero(scratch.arena, U64, path_arr.count);
+    reader.path_arr   = path_arr;
+    reader.handle_arr = push_array_no_zero(scratch.arena, File, path_arr.count);
+    reader.size_arr   = push_array_no_zero(scratch.arena, U64, path_arr.count);
+    reader.was_read   = was_read;
 
     // open handles and get sizes
     tp_for_parallel(tp, 0, path_arr.count, lnk_data_size_from_file_path_task, &reader);

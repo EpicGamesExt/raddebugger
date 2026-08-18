@@ -360,7 +360,7 @@ typedef struct LNK_Config
   String8                     out_path;
   String8                     image_alt_path;
   String8                     imp_lib_name;
-  String8List                 raw_cmd_line;
+  String8                     raw_cmd_line;
   String8                     pdb_name;
   String8                     pdb_alt_path;
   String8                     pdb_stripped_name;
@@ -614,6 +614,6 @@ internal void lnk_whole_archive(LNK_Config *config, String8 lib_name);
 // --- Config ------------------------------------------------------------------
 
 internal void lnk_apply_cmd_option_to_config(LNK_Config *config, String8 name, String8List value_list, struct LNK_Obj *obj);
-internal void lnk_config_pushf(LNK_Config *config, char *fmt, ...);
 
-internal LNK_Config * lnk_config_init(LNK_CmdLine cmd_line);
+internal LNK_Config * lnk_config_init(U64 argc, char **argv);
+

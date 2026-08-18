@@ -16,6 +16,7 @@ typedef struct
   U64         *size_arr;
   U64         *off_arr;
   U8          *buffer;
+  B8          *was_read;
 } LNK_DiskReader;
 
 typedef struct
@@ -50,8 +51,8 @@ internal File      lnk_file_open_with_rename_permissions(String8 path);
 internal B32       lnk_file_set_delete_on_close(File handle, B32 delete_file);
 internal B32       lnk_file_rename(File handle, String8 new_name);
 
-internal String8      lnk_read_data_from_file_path(Arena *arena, LNK_IO_Flags io_flags, String8 path);
-internal String8Array lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags io_flags, String8Array path_arr);
+internal String8      lnk_read_data_from_file_path(Arena *arena, LNK_IO_Flags io_flags, String8 path, B8 *was_read_out);
+internal String8Array lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags io_flags, String8Array path_arr, B8 *was_read);
 
 internal void lnk_write_data_list_to_file_path(String8 path, String8 temp_path, String8List list);
 internal void lnk_write_data_to_file_path(String8 path, String8 temp_path, String8 data);
