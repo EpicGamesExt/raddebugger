@@ -1354,6 +1354,40 @@ lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer
     lnk_push_obj_symbols(tp, arena, symtab, new_objs_count, new_objs);
   }
 
+  // TODO: This works around function override metadata pulled in from archives.
+  // We need a BDD merger to implement the overrides. For now, create a weak
+  // symbol for the function override to prevent all arch specific functions
+  // from being pulled in from archives.
+  {
+    B32 has_function_overrides = 0;
+
+    for EachNode(alt_name_n, LNK_AltNameNode, config->alt_name_list.first) {
+      LNK_AltName alt_name = alt_name_n->v;
+      if ( ! str8_ends_with(alt_name.from, str8_lit("$fo$"), 0)) {
+        continue;
+      }
+
+      LNK_Symbol *symbol = lnk_symbol_table_search(symtab, alt_name.from);
+      if (symbol && lnk_interp_from_symbol(symbol) == COFF_SymbolValueInterp_Undefined) {
+        COFF_ObjWriter *obj_writer = coff_obj_writer_alloc(0, COFF_MachineType_Unknown);
+        COFF_ObjSymbol *to_symbol  = coff_obj_writer_push_symbol_undef(obj_writer, alt_name.to);
+        coff_obj_writer_push_symbol_weak(obj_writer, alt_name.from, COFF_WeakExt_SearchAlias, to_symbol);
+        String8 obj_data = coff_obj_writer_serialize(arena->v[0], obj_writer);
+        coff_obj_writer_release(&obj_writer);
+
+        LNK_Obj *obj = alt_name.obj;
+        lnk_inputer_push_obj_linkgen(inputer, obj ? obj->link_member : 0,
+                                              obj ? obj->path : str8_lit("RADLINK"), obj_data);
+
+        has_function_overrides = 1;
+      }
+    }
+
+    if (has_function_overrides) {
+      lnk_load_inputs(tp, arena, config, inputer, symtab, link);
+    }
+  }
+
   // input default libraries
   for (; *link->last_default_lib; link->last_default_lib = &(*link->last_default_lib)->next) {
     lnk_inputer_push_lib_thin(inputer, config, LNK_InputSource_Default, (*link->last_default_lib)->string);
