@@ -10,8 +10,13 @@ ifc_file_read(Arena *arena, String8 path, String8 *error_out)
   IFC_File ifc = {0};
   ifc.path = push_str8_copy(arena, path);
 
-  String8 data = lnk_read_data_from_file_path(arena, 0, path);
+  B8      was_read = 0;
+  String8 data     = lnk_read_data_from_file_path(arena, 0, path, &was_read);
   ifc.data = data;
+  if ( ! was_read) {
+    *error_out = push_str8f(arena, "unable to read IFC '%S'", path);
+    return ifc;
+  }
   if (data.size < 4) {
     *error_out = push_str8f(arena, "IFC '%S' is too small (%llu bytes)", path, data.size);
     return ifc;

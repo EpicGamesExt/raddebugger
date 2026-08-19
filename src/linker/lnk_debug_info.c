@@ -1154,8 +1154,9 @@ lnk_build_ifc_map(Arena *arena, LNK_Config *config)
   HashMap hm = {0};
   Temp scratch = scratch_begin(&arena, 1);
   for EachNode(n, String8Node, config->ifc_map_list.first) {
-    String8 toml = lnk_read_data_from_file_path(scratch.arena, 0, n->string);
-    if (toml.size == 0) {
+    B8      was_read = 0;
+    String8 toml     = lnk_read_data_from_file_path(scratch.arena, 0, n->string, &was_read);
+    if ( ! was_read || toml.size == 0) {
       lnk_error(LNK_Error_Cmdl, "/ifcMap: unable to read TOML '%S'", n->string);
       continue;
     }

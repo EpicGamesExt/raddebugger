@@ -2332,7 +2332,7 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
 
   case LNK_CmdSwitch_Rad_DebugWorkers: {
     U64 cap;
-    if (lnk_cmd_switch_parse_u64(obj, cmd_switch, value_strings, &cap, 0)) {
+    if (lnk_cmd_switch_parse_u64(obj, cmd_switch, value, &cap, 0)) {
       config->debug_worker_cap = cap;
     }
   } break;
@@ -2367,12 +2367,14 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
   } break;
   case LNK_CmdSwitch_IfcMap: {
     // collect .toml paths (header-unit -> .ifc); parsed lazily during debug-info build
-    String8List copy = str8_list_copy(config->arena, &value_strings);
-    str8_list_concat_in_place(&config->ifc_map_list, &copy);
+    String8 path = {0};
+    if (lnk_cmd_switch_parse_string(obj, cmd_switch, value, &path)) {
+      str8_list_push(config->arena, &config->ifc_map_list, push_str8_copy(config->arena, path));
+    }
   } break;
   case LNK_CmdSwitch_IfcDebugRecords: {
     LNK_SwitchState state = LNK_SwitchState_Null;
-    if (lnk_cmd_switch_parse_flag(obj, cmd_switch, value_strings, &state)) {
+    if (lnk_cmd_switch_parse_flag(obj, cmd_switch, value, &state)) {
       config->ifc_debug_records = state;
     }
   } break;
