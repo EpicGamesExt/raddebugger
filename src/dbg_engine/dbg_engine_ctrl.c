@@ -823,7 +823,14 @@ internal DI_Key
 d_dbgi_key_from_module(D_Entity *module)
 {
   D_Entity *debug_info_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
-  DI_Key dbgi_key = di_key_from_path_timestamp(debug_info_path->string, debug_info_path->timestamp);
+  DI_Key dbgi_key = d_dbgi_key_from_debug_info_path(debug_info_path);
+  return dbgi_key;
+}
+
+internal DI_Key
+d_dbgi_key_from_debug_info_path(D_Entity *dbg_path)
+{
+  DI_Key dbgi_key = di_key_from_path_timestamp(dbg_path->string, dbg_path->timestamp);
   return dbgi_key;
 }
 

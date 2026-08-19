@@ -1856,7 +1856,7 @@ path_absolute_dst_from_relative_dst_src(Arena *arena, String8 dst, String8 src)
   if(dst.size != 0 && dst_style == PathStyle_Relative)
   {
     Temp scratch = scratch_begin(&arena, 1);
-    String8 dst_from_src_absolute = push_str8f(scratch.arena, "%S/%S", src, dst);
+    String8 dst_from_src_absolute = str8f(scratch.arena, "%S/%S", src, dst);
     String8List dst_from_src_absolute_parts = str8_split_path(scratch.arena, dst_from_src_absolute);
     PathStyle dst_from_src_absolute_style = path_style_from_str8(src);
     str8_path_list_resolve_dots_in_place(&dst_from_src_absolute_parts, dst_from_src_absolute_style);
@@ -3081,15 +3081,15 @@ str8_compar(String8 a, String8 b, B32 ignore_case)
 {
   U64 size = Min(a.size, b.size);
   int cmp = ignore_case ? MemCompareI(a.str, b.str, size) : MemCompare(a.str, b.str, size);
-
+  
   // normalize compar result
   cmp = cmp > 0 ? 1 : cmp < 0 ? -1 : 0;
-
+  
   // shorter prefix must precede longer prefixes
   if (cmp == 0)
   {
     cmp = a.size < b.size ? -1 :
-          a.size > b.size ? +1 : 0;
+    a.size > b.size ? +1 : 0;
   }
   
   return cmp;

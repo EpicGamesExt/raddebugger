@@ -488,6 +488,7 @@ internal D_Entity *d_entity_ancestor_from_kind(D_Entity *entity, D_EntityKind ki
 internal D_Entity *d_process_from_entity(D_Entity *entity);
 internal D_Entity *d_module_from_process_vaddr(D_Entity *process, U64 vaddr);
 internal DI_Key d_dbgi_key_from_module(D_Entity *module);
+internal DI_Key d_dbgi_key_from_debug_info_path(D_Entity *dbg_path);
 internal D_Entity *d_module_from_thread_candidates(D_Entity *thread, D_EntityList *candidates);
 internal U64 d_vaddr_from_voff(D_Entity *module, U64 voff);
 internal U64 d_voff_from_vaddr(D_Entity *module, U64 vaddr);

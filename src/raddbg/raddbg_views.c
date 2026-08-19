@@ -563,9 +563,11 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
         U64 last_inst_on_unwound_rip_vaddr = rip_vaddr - !!unwind_count;
         D_Entity *module = d_module_from_process_vaddr(process, last_inst_on_unwound_rip_vaddr);
+        D_Entity *dbg_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
         U64 rip_voff = d_voff_from_vaddr(module, last_inst_on_unwound_rip_vaddr);
-        DI_Key dbgi_key = d_dbgi_key_from_module(module);
-        D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, rip_voff);
+        String8 dbgi_path = dbg_path->string;
+        DI_Key dbgi_key = d_dbgi_key_from_debug_info_path(dbg_path);
+        D_LineList lines = d_lines_from_dbgi_key_path_voff(scratch.arena, dbgi_key, dbgi_path, rip_voff);
         String8 file_checksums[RDI_ChecksumKind_COUNT] = {0};
         for(D_LineNode *n = lines.first; n != 0; n = n->next)
         {
@@ -715,14 +717,16 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
     if(dasm_lines)
     {
       D_Entity *module = d_module_from_process_vaddr(process, dasm_vaddr_range.min);
-      DI_Key dbgi_key = d_dbgi_key_from_module(module);
+      D_Entity *dbg_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
+      String8 dbgi_path = dbg_path->string;
+      DI_Key dbgi_key = d_dbgi_key_from_debug_info_path(dbg_path);
       for(S64 line_num = visible_line_num_range.min; line_num < visible_line_num_range.max; line_num += 1)
       {
         U64 vaddr = dasm_vaddr_range.min + dasm_line_array_code_off_from_idx(dasm_lines, line_num-1);
         U64 voff = d_voff_from_vaddr(module, vaddr);
         U64 slice_idx = line_num-visible_line_num_range.min;
         code_slice_params.line_vaddrs[slice_idx] = vaddr;
-        code_slice_params.line_infos[slice_idx] = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, voff);
+        code_slice_params.line_infos[slice_idx] = d_lines_from_dbgi_key_path_voff(scratch.arena, dbgi_key, dbgi_path, voff);
       }
     }
     
@@ -2731,6 +2735,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
   D_Entity *space_entity = rd_ctrl_entity_from_eval_space(space);
   D_Entity *dasm_module = &d_entity_nil;
   DI_Key dbgi_key = {0};
+  String8 dbgi_path = {0};
   U64 base_vaddr = 0;
   switch(space_entity->kind)
   {
@@ -2739,8 +2744,10 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
     {
       if(arch == Arch_Null) { arch = space_entity->arch; }
       dasm_module = d_module_from_process_vaddr(space_entity, range.min);
-      dbgi_key    = d_dbgi_key_from_module(dasm_module);
-      base_vaddr  = dasm_module->vaddr_range.min;
+      D_Entity *dbg_path = d_entity_child_from_kind(dasm_module, D_EntityKind_DebugInfoPath);
+      dbgi_path = dbg_path->string;
+      dbgi_key = d_dbgi_key_from_debug_info_path(dbg_path);
+      base_vaddr = dasm_module->vaddr_range.min;
     }break;
   }
   DASM_StyleFlags style_flags = 0;
@@ -2835,7 +2842,7 @@ RD_VIEW_UI_FUNCTION_DEF(disasm)
     rd_regs()->vaddr = range.min+off;
     rd_regs()->vaddr_range = r1u64(range.min+off, range.min+off);
     rd_regs()->voff_range = d_voff_range_from_vaddr_range(dasm_module, rd_regs()->vaddr_range);
-    rd_regs()->lines = d_lines_from_dbgi_key_voff(rd_frame_arena(), dbgi_key, rd_regs()->voff_range.min);
+    rd_regs()->lines = d_lines_from_dbgi_key_path_voff(rd_frame_arena(), dbgi_key, dbgi_path, rd_regs()->voff_range.min);
   }
   
   //////////////////////////////

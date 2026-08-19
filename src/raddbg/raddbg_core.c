@@ -4846,11 +4846,11 @@ rd_view_ui(Rng2F32 rect)
                             // rjf: try to unpack debug info from type
                             E_TypeKey type_key = e_type_key_unwrap(cell->eval.irtree.type_key, E_TypeUnwrapFlag_All);
                             DI_Key dbgi_key = {0};
-                            String8 base_folder = {0};
+                            String8 dbgi_path = {0};
                             {
                               E_DbgInfo *dbg_info = e_dbg_info_from_type_key(type_key);
                               dbgi_key = dbg_info->dbgi_key;
-                              base_folder = str8_chop_last_slash(dbg_info->name);
+                              dbgi_path = dbg_info->name;
                             }
                             
                             // rjf: if this is a vaddr evaluation, then unpack voff/vaddr & switch to module's debug info
@@ -4864,11 +4864,10 @@ rd_view_ui(Rng2F32 rect)
                               module = d_module_from_process_vaddr(process, vaddr);
                               voff = d_voff_from_vaddr(module, vaddr);
                               dbgi_key = d_dbgi_key_from_module(module);
-                              base_folder = str8_chop_last_slash(module->string);
                             }
                             
                             // rjf: voff * debug info -> lines
-                            D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, voff);
+                            D_LineList lines = d_lines_from_dbgi_key_path_voff(scratch.arena, dbgi_key, dbgi_path, voff);
                             
                             // rjf: snap to line
                             if(lines.first != 0)
@@ -10652,10 +10651,12 @@ rd_gather_auto_exprs(Arena *arena)
       D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
       U64 thread_ip_vaddr = d_cached_ip_from_thread(thread_handle);
       D_Entity *module = d_module_from_process_vaddr(process, thread_ip_vaddr);
-      DI_Key dbgi_key = d_dbgi_key_from_module(module);
+      D_Entity *dbg_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
+      String8 dbgi_path = dbg_path->string;
+      DI_Key dbgi_key = d_dbgi_key_from_debug_info_path(dbg_path);
       RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
       U64 thread_ip_voff = d_voff_from_vaddr(module, thread_ip_vaddr);
-      D_LineList thread_ip_lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, thread_ip_voff);
+      D_LineList thread_ip_lines = d_lines_from_dbgi_key_path_voff(scratch.arena, dbgi_key, dbgi_path, thread_ip_voff);
       
       //- rjf: gather all relevant code vaddr ranges
       Rng1U64List code_vaddr_ranges = {0};
@@ -13644,8 +13645,10 @@ rd_frame(void)
               D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
               D_Entity *module = d_module_from_process_vaddr(process, vaddr);
               U64 voff = d_voff_from_vaddr(module, vaddr);
-              DI_Key dbgi_key = d_dbgi_key_from_module(module);
-              D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, voff);
+              D_Entity *dbg_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
+              String8 dbgi_path = dbg_path->string;
+              DI_Key dbgi_key = d_dbgi_key_from_debug_info_path(dbg_path);
+              D_LineList lines = d_lines_from_dbgi_key_path_voff(scratch.arena, dbgi_key, dbgi_path, voff);
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " lines:\n {\n");
               for EachNode(n, D_LineNode, lines.first)
               {
@@ -13732,8 +13735,10 @@ rd_frame(void)
             D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
             D_Entity *module = d_module_from_process_vaddr(process, vaddr);
             U64 voff = d_voff_from_vaddr(module, vaddr);
-            DI_Key dbgi_key = d_dbgi_key_from_module(module);
-            D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, voff);
+            D_Entity *dbg_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
+            String8 dbgi_path = dbg_path->string;
+            DI_Key dbgi_key = d_dbgi_key_from_debug_info_path(dbg_path);
+            D_LineList lines = d_lines_from_dbgi_key_path_voff(scratch.arena, dbgi_key, dbgi_path, voff);
             str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "lines:\n{\n");
             for EachNode(n, D_LineNode, lines.first)
             {
@@ -15399,10 +15404,12 @@ rd_frame(void)
             U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_index);
             D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
             D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
-            DI_Key dbgi_key = d_dbgi_key_from_module(module);
+            D_Entity *dbg_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
+            String8 dbgi_path = dbg_path->string;
+            DI_Key dbgi_key = d_dbgi_key_from_debug_info_path(dbg_path);
             RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
             U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
-            D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, rip_voff);
+            D_LineList lines = d_lines_from_dbgi_key_path_voff(scratch.arena, dbgi_key, dbgi_path, rip_voff);
             D_Line line = {0};
             {
               U64 idx = 0;
@@ -15482,6 +15489,7 @@ rd_frame(void)
               // rjf: try to resolve name as a symbol
               U64 voff = 0;
               DI_Key voff_dbgi_key = {0};
+              String8 voff_dbgi_path = {0};
               if(!name_resolved)
               {
                 DI_Match match = {0};
@@ -15502,6 +15510,14 @@ rd_frame(void)
                     RDI_Symbol *procedure = rdi_element_from_name_idx(rdi, Procedures, match.idx);
                     voff = rdi_first_voff_from_procedure(rdi, procedure);
                     voff_dbgi_key = match.key;
+                    for EachIndex(idx, e_base_ctx->dbg_infos_count)
+                    {
+                      if(di_key_match(e_base_ctx->dbg_infos[idx].dbgi_key, voff_dbgi_key))
+                      {
+                        voff_dbgi_path = e_base_ctx->dbg_infos[idx].name;
+                        break;
+                      }
+                    }
                   }
                   access_close(access);
                 }
@@ -15562,7 +15578,7 @@ rd_frame(void)
               // rjf: name resolved to voff * dbg info
               if(name_resolved && voff != 0)
               {
-                D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, voff_dbgi_key, voff);
+                D_LineList lines = d_lines_from_dbgi_key_path_voff(scratch.arena, voff_dbgi_key, voff_dbgi_path, voff);
                 if(lines.first != 0)
                 {
                   D_Entity *process = &d_entity_nil;
@@ -15658,14 +15674,6 @@ rd_frame(void)
               {
                 require_disasm_snap = 1;
               }
-            }
-            
-            //- rjf: absolutify file path
-            {
-              String8 base_folder = {0};
-              if(base_folder.size == 0) { base_folder = str8_chop_last_slash(e_base_ctx->primary_dbg_info->name); }
-              if(base_folder.size == 0) { base_folder = str8_chop_last_slash(e_base_ctx->primary_module->name); }
-              file_path = path_absolute_dst_from_relative_dst_src(scratch.arena, file_path, base_folder);
             }
             
             //- rjf: if transient tabs are turned off, always prefer new tab

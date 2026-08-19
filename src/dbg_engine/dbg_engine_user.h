@@ -433,7 +433,7 @@ internal D_TrapNet d_trap_net_from_thread__step_to_exit(Arena *arena, D_Entity *
 //~ rjf: Debug Info Lookups
 
 //- rjf: voff -> line info
-internal D_LineList d_lines_from_dbgi_key_voff(Arena *arena, DI_Key dbgi_key, U64 voff);
+internal D_LineList d_lines_from_dbgi_key_path_voff(Arena *arena, DI_Key dbgi_key, String8 dbgi_path, U64 voff);
 
 //- rjf: file:line -> line info
 // TODO(rjf): this depends on file path maps, needs to move

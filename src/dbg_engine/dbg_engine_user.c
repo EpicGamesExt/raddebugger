@@ -345,7 +345,9 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
   U64 ip_vaddr = d_cached_ip_from_thread(thread->handle);
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   D_Entity *module = d_module_from_process_vaddr(process, ip_vaddr);
-  DI_Key dbgi_key = d_dbgi_key_from_module(module);
+  D_Entity *dbg_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
+  String8 dbgi_path = dbg_path->string;
+  DI_Key dbgi_key = d_dbgi_key_from_debug_info_path(dbg_path);
   log_infof("ip_vaddr: 0x%I64x\n", ip_vaddr);
   log_infof("dbgi_key: {0x%I64x, 0x%I64x}\n", dbgi_key.u64[0], dbgi_key.u64[1]);
   
@@ -355,7 +357,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
   Rng1U64 line_vaddr_rng = {0};
   {
     U64 ip_voff = d_voff_from_vaddr(module, ip_vaddr);
-    D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, ip_voff);
+    D_LineList lines = d_lines_from_dbgi_key_path_voff(scratch.arena, dbgi_key, dbgi_path, ip_voff);
     Rng1U64 line_voff_rng = {0};
     if(lines.first != 0)
     {
@@ -404,7 +406,7 @@ d_trap_net_from_thread__step_over_line(Arena *arena, D_Entity *thread)
   // is enabled. This is enabled by default normally.
   {
     U64 opl_line_voff_rng = d_voff_from_vaddr(module, line_vaddr_rng.max);
-    D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, opl_line_voff_rng);
+    D_LineList lines = d_lines_from_dbgi_key_path_voff(scratch.arena, dbgi_key, dbgi_path, opl_line_voff_rng);
     if(lines.first != 0 && (lines.first->v.pt.line == 0xf00f00 || lines.first->v.pt.line == 0xfeefee))
     {
       line_vaddr_rng.max = d_vaddr_from_voff(module, lines.first->v.voff_range.max);
@@ -583,7 +585,9 @@ d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread)
   U64 ip_vaddr = d_cached_ip_from_thread(thread->handle);
   D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
   D_Entity *module = d_module_from_process_vaddr(process, ip_vaddr);
-  DI_Key dbgi_key = d_dbgi_key_from_module(module);
+  D_Entity *dbg_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
+  String8 dbgi_path = dbg_path->string;
+  DI_Key dbgi_key = d_dbgi_key_from_debug_info_path(dbg_path);
   
   // rjf: ip => line info
   String8 file_path = {0};
@@ -591,7 +595,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread)
   Rng1U64 line_vaddr_rng = {0};
   {
     U64 ip_voff = d_voff_from_vaddr(module, ip_vaddr);
-    D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, ip_voff);
+    D_LineList lines = d_lines_from_dbgi_key_path_voff(scratch.arena, dbgi_key, dbgi_path, ip_voff);
     Rng1U64 line_voff_rng = {0};
     if(lines.first != 0)
     {
@@ -623,7 +627,7 @@ d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread)
   // is enabled. This is enabled by default normally.
   {
     U64 opl_line_voff_rng = d_voff_from_vaddr(module, line_vaddr_rng.max);
-    D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, dbgi_key, opl_line_voff_rng);
+    D_LineList lines = d_lines_from_dbgi_key_path_voff(scratch.arena, dbgi_key, dbgi_path, opl_line_voff_rng);
     if(lines.first != 0 && (lines.first->v.pt.line == 0xf00f00 || lines.first->v.pt.line == 0xfeefee))
     {
       line_vaddr_rng.max = d_vaddr_from_voff(module, lines.first->v.voff_range.max);
@@ -686,8 +690,10 @@ d_trap_net_from_thread__step_into_line(Arena *arena, D_Entity *thread)
       U64 jump_dest_vaddr = point->jump_dest_vaddr;
       D_Entity *jump_dest_module = d_module_from_process_vaddr(process, jump_dest_vaddr);
       U64 jump_dest_voff = d_voff_from_vaddr(jump_dest_module, jump_dest_vaddr);
-      DI_Key jump_dest_dbgi_key = d_dbgi_key_from_module(jump_dest_module);
-      D_LineList lines = d_lines_from_dbgi_key_voff(scratch.arena, jump_dest_dbgi_key, jump_dest_voff);
+      D_Entity *jump_dest_dbg_path = d_entity_child_from_kind(jump_dest_module, D_EntityKind_DebugInfoPath);
+      String8 jump_dest_dbgi_path = jump_dest_dbg_path->string;
+      DI_Key jump_dest_dbgi_key = d_dbgi_key_from_debug_info_path(jump_dest_dbg_path);
+      D_LineList lines = d_lines_from_dbgi_key_path_voff(scratch.arena, jump_dest_dbgi_key, jump_dest_dbgi_path, jump_dest_voff);
       if(lines.count == 0)
       {
         add = 0;
@@ -996,7 +1002,7 @@ d_trap_net_from_thread__step_to_exit(Arena *arena, D_Entity *thread)
 //- rjf: voff -> line info
 
 internal D_LineList
-d_lines_from_dbgi_key_voff(Arena *arena, DI_Key dbgi_key, U64 voff)
+d_lines_from_dbgi_key_path_voff(Arena *arena, DI_Key dbgi_key, String8 dbgi_path, U64 voff)
 {
   Temp scratch = scratch_begin(&arena, 1);
   Access *access = access_open();
@@ -1064,12 +1070,18 @@ d_lines_from_dbgi_key_voff(Arena *arena, DI_Key dbgi_key, U64 voff)
         StringJoin join = {0};
         join.sep = str8_lit("/");
         String8 file_normalized_full_path = str8_list_join(arena, &path_parts, &join);
+        String8 file_normalized_full_path_absolute = file_normalized_full_path;
+        if(dbgi_path.size != 0)
+        {
+          String8 dbgi_path_folder = str8_chop_last_slash(dbgi_path);
+          file_normalized_full_path_absolute = path_absolute_dst_from_relative_dst_src(arena, file_normalized_full_path, dbgi_path_folder);
+        }
         D_LineNode *n = push_array(arena, D_LineNode, 1);
         SLLQueuePush(result.first, result.last, n);
         result.count += 1;
-        if(line->file_idx != 0 && file_normalized_full_path.size != 0)
+        if(line->file_idx != 0 && file_normalized_full_path_absolute.size != 0)
         {
-          n->v.file_path = file_normalized_full_path;
+          n->v.file_path = file_normalized_full_path_absolute;
         }
         n->v.pt = txt_pt(line->line_num, column ? column->col_first : 1);
         n->v.voff_range = r1u64(parsed_line_table.voffs[line_info_idx], parsed_line_table.voffs[line_info_idx+1]);
