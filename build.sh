@@ -77,3 +77,8 @@ then
   echo "[WARNING] no valid build target specified; must use build target names as arguments to this script, like \`./build.sh raddbg\` or \`./build.sh radlink\`."
   exit 1
 fi
+
+# --- Warn On Debug Builds (if debug not explicitly specified) ----------------
+if [[ ! -v debug && ! -v release ]] then
+  echo "[INFO] Debug build complete. For a faster build, call this script with the \`release\` argument (this will take significantly longer than a debug build)."
+fi
