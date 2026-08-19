@@ -2511,7 +2511,9 @@ d_ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, D_EvalScope *e
   D_Entity *module_entity = d_entity_from_handle(module);
   D_Entity *debug_info_path_entity = d_entity_child_from_kind(module_entity, D_EntityKind_DebugInfoPath);
   DMN_Handle process_dmn = d_dmn_from_handle(process);
-  DI_Key dbgi_key = d_dbgi_key_from_module(module_entity);
+  String8 dbgi_path = debug_info_path_entity->string;
+  String8 module_path = module_entity->string;
+  DI_Key dbgi_key = d_dbgi_key_from_debug_info_path(debug_info_path_entity);
   RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
   U64 base_vaddr = module_entity->vaddr_range.min;
   for(D_BreakpointNode *n = user_bps->first; n != 0; n = n->next)
@@ -2524,12 +2526,22 @@ d_ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, D_EvalScope *e
       // rjf: unpack & normalize
       TxtPt pt = bp->pt;
       String8 filename = bp->file_path;
-      String8 filename_normalized = push_str8_copy(scratch.arena, filename);
+      String8 filename_normalized = str8_copy(scratch.arena, filename);
       for(U64 idx = 0; idx < filename_normalized.size; idx += 1)
       {
         filename_normalized.str[idx] = lower_from_char(filename_normalized.str[idx]);
         filename_normalized.str[idx] = correct_slash_from_char(filename_normalized.str[idx]);
       }
+      
+      // rjf: gather filename candidates - the path passed down by the frontend *may*
+      // exactly match what the debug info stores, but it may be absolute whereas our
+      // debug info stores relative paths. so we'll try both.
+      String8 filename_candidates[] =
+      {
+        filename_normalized,
+        path_relative_dst_from_absolute_dst_src(scratch.arena, filename_normalized, str8_chop_last_slash(dbgi_path)),
+        path_relative_dst_from_absolute_dst_src(scratch.arena, filename_normalized, str8_chop_last_slash(module_path)),
+      };
       
       // rjf: filename -> src_id
       U32 src_id = 0;
@@ -2539,14 +2551,21 @@ d_ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, D_EvalScope *e
         {
           RDI_ParsedNameMap map = {0};
           rdi_parsed_from_name_map(rdi, mapptr, &map);
-          RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, filename_normalized.str, filename_normalized.size);
-          if(node != 0)
+          for EachElement(idx, filename_candidates)
           {
-            U32 id_count = 0;
-            U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
-            if(id_count > 0)
+            RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, filename_candidates[idx].str, filename_candidates[idx].size);
+            if(node != 0)
             {
-              src_id = ids[0];
+              U32 id_count = 0;
+              U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+              if(id_count > 0)
+              {
+                src_id = ids[0];
+              }
+            }
+            if(src_id != 0)
+            {
+              break;
             }
           }
         }
