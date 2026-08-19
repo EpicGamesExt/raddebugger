@@ -4171,6 +4171,12 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     // sort output leaves based on { location index, leaf index } to guarantee determinism
     ProfScope("Radix Sort") {
       u64_array_sort_radix_parallel(tp, task.unique_leaf_refs_arr[ti_source].count, task.unique_leaf_refs_arr[ti_source].v);
+#if BUILD_DEBUG
+      LNK_LeafRefArray arr = task.unique_leaf_refs_arr[ti_source];
+      for (U64 i = 1; i < arr.count; ++i) {
+        AssertAlways(lnk_leaf_ref_compare(arr.v[i-1], arr.v[i]) <= 0);
+      }
+#endif
     }
   }
 
