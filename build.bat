@@ -31,7 +31,7 @@ cd /D "%~dp0"
 :: --- Unpack Arguments -------------------------------------------------------
 for %%a in (%*) do set "%%~a=1"
 if not "%msvc%"=="1" if not "%clang%"=="1" set msvc=1
-if not "%release%"=="1" set debug=1
+if not "%release%"=="1" set debug=1&& set debug_implicit=1
 if "%debug%"=="1"   set release=0 && echo [debug mode]
 if "%release%"=="1" set debug=0 && echo [release mode]
 if "%msvc%"=="1"    set clang=0 && echo [msvc compile]
@@ -186,4 +186,9 @@ if "%pgo_run%"=="1" (
     popd
   )
   goto restart
+)
+
+:: --- Warn On Debug Builds (if debug not explicitly specified) ---------------
+if "%debug_implicit%"=="1" (
+  echo [INFO] Debug build complete. For a faster build, call this script with the `release` argument (this will take significantly longer than a debug build).
 )
