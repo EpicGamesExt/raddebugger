@@ -190,5 +190,5 @@ if "%pgo_run%"=="1" (
 
 :: --- Warn On Debug Builds (if debug not explicitly specified) ---------------
 if "%debug_implicit%"=="1" (
-  echo [INFO] Debug build complete. For a faster build, call this script with the `release` argument (this will take significantly longer than a debug build).
+  echo [INFO] Debug build complete. For a faster build, call this script with the `release` argument; this will take significantly longer than a debug build.
 )
