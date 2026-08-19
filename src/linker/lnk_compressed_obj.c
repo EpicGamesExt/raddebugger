@@ -991,6 +991,8 @@ lnk_cobj_evict_one_locked(U32 *slot_idx_out)
   return 1;
 }
 
+internal B32 lnk_cobj_isolate_portable_segment(LNK_CompressedObj *region, U32 seg_idx);
+
 internal B32
 lnk_cobj_materialize(LNK_CompressedObj *region, U32 seg_idx)
 {

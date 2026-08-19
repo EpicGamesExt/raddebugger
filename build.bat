@@ -170,13 +170,15 @@ if "%oodle%"=="1" if "%OODLE_SDK_DIR%"=="" (
   echo OODLE_SDK_DIR must name an Oodle SDK when building radlink with oodle
   exit /b 1
 )
-if "%oodle%"=="1" set radlink_oodle_flags=/I"%OODLE_SDK_DIR%\include" -DLNK_OODLE=1
+if "%oodle%"=="1" if "%msvc%"=="1"  set radlink_oodle_flags=/I"%OODLE_SDK_DIR%\include" -DLNK_OODLE=1
+if "%oodle%"=="1" if "%clang%"=="1" set radlink_oodle_flags=-I"%OODLE_SDK_DIR%\include" -DLNK_OODLE=1
 if "%oodle%"=="1" set radlink_oodle_lib="%OODLE_SDK_DIR%\lib\Win64\oo2core_win64.lib"
 if "%rad_obj_compress%"=="1" if "%OODLE_SDK_DIR%"=="" (
   echo OODLE_SDK_DIR must name an Oodle SDK when building rad_obj_compress
   exit /b 1
 )
-if "%rad_obj_compress%"=="1" set rad_obj_compress_oodle_flags=/I"%OODLE_SDK_DIR%\include"
+if "%rad_obj_compress%"=="1" if "%msvc%"=="1"  set rad_obj_compress_oodle_flags=/I"%OODLE_SDK_DIR%\include"
+if "%rad_obj_compress%"=="1" if "%clang%"=="1" set rad_obj_compress_oodle_flags=-I"%OODLE_SDK_DIR%\include"
 if "%rad_obj_compress%"=="1" set rad_obj_compress_oodle_lib="%OODLE_SDK_DIR%\lib\Win64\oo2core_win64.lib"
 if "%radlink%"=="1"                    set didbuild=1 && %compile% %radlink_oodle_flags% ..\src\linker\lnk.c %radlink_oodle_lib% %compile_link% %linker% /NOIMPLIB %linker% /NATVIS:"%~dp0\src\linker\linker.natvis" %out%radlink.exe || exit /b 1
 if "%rad_obj_compress%"=="1"           set didbuild=1 && %compile% %rad_obj_compress_oodle_flags% ..\src\linker\rad_obj_compress.c %rad_obj_compress_oodle_lib% %compile_link% %out%rad_obj_compress.exe || exit /b 1
