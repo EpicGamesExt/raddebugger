@@ -291,7 +291,9 @@ cv_c13_inline_site_decoder_step(CV_C13InlineSiteDecoder *decoder, String8 binary
       } break;
       case CV_InlineBinaryAnnotation_CodeOffset: {
         decoder->cursor += cv_decode_inline_annot_u32(binary_annots, decoder->cursor, &decoder->code_offset);
-        decoder->code_offset_changed = 1;
+        decoder->code_offset_lo         = decoder->code_offset;
+        decoder->code_offset_lo_changed = 1;
+        decoder->code_offset_changed    = 1;
       } break;
       case CV_InlineBinaryAnnotation_ChangeCodeOffsetBase: {
         AssertAlways(!"TODO: test case");
