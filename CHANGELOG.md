@@ -14,6 +14,11 @@
 - Fixed DBI section-contribution image-section range mapping.
 - Improved debug logging for `/OPT:REF` liveness stats and unresolved symbols
   referenced by `.llvm_addrsig`.
+- Improved diagnostics for unresolved symbols: radlink now identifies functions
+  that reference undefined symbols, even if the function was inlined (provided
+  the object file was compiled with debug info)
+- Reduced memory usage for large links.
+- Fixed forwarder export detection when the symbol name contains dots and has no alias.
 
 # v0.9.27-alpha
 
