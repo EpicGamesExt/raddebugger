@@ -13,7 +13,6 @@
 #define LNK_COBJ_REGION_CAP                 (1u << 20)
 #define LNK_COBJ_DEFAULT_WRITE_GROUP_SLOTS  64u
 #define LNK_COBJ_FILE_MAPPING_GRANULARITY   KB(64)
-#define LNK_COBJ_STALL_REPORT_US            5000000ull
 #define LNK_COBJ_STALL_ABORT_US            30000000ull
 #define LNK_COBJ_KNOWN_HEADER_FLAGS (LNK_COBJ_FLAG_TYPE_INDEX               | \
                                      LNK_COBJ_FLAG_UDT_HASH_INDEX           | \
@@ -129,19 +128,6 @@ typedef struct LNK_CObjCache
   U64 cleanup_us;
   B32 skip_cleanup;
 } LNK_CObjCache;
-
-typedef struct LNK_CObjStallStats
-{
-  U64 free_slots;
-  U64 empty_state_slots;
-  U64 loading_slots;
-  U64 ready_slots;
-  U64 pinned_slots;
-  U64 evicting_slots;
-  U64 unsealed_groups;
-  U64 incomplete_group_slots;
-  U64 open_group_views;
-} LNK_CObjStallStats;
 
 typedef enum LNK_CObjPolicySource
 {
@@ -375,16 +361,21 @@ internal void
 lnk_compressed_obj_prepare_cache(String8 *mapped_files, U64 count)
 {
   if (g_lnk_cobj_cache_init_state != 0) { return; }
-  U64 raw_bytes = 0;
+  U64 segment_capacity = 0;
   for EachIndex(i, count) {
     String8 mapped_file = mapped_files[i];
     if (mapped_file.size < sizeof(LNK_CObjHeader)) { continue; }
     LNK_CObjHeader *header = (LNK_CObjHeader *)mapped_file.str;
     if (header->magic != LNK_COBJ_MAGIC || header->version != LNK_COBJ_VERSION) { continue; }
-    raw_bytes = header->raw_size > max_U64 - raw_bytes ? max_U64 : raw_bytes + header->raw_size;
+    // Every OBJ consumes an integral number of cache slots. Summing raw byte counts before
+    // aligning underestimates capacity badly for targets containing many small OBJs: sixty-four
+    // 20 KiB OBJs need sixty-four slots, not three slots for their ~1.25 MiB byte sum.
+    U64 obj_capacity = (U64)header->segment_count * header->segment_size;
+    segment_capacity = obj_capacity > max_U64 - segment_capacity ? max_U64 :
+                       segment_capacity + obj_capacity;
   }
-  if (raw_bytes > g_lnk_cobj_input_capacity_hint) {
-    g_lnk_cobj_input_capacity_hint = raw_bytes;
+  if (segment_capacity > g_lnk_cobj_input_capacity_hint) {
+    g_lnk_cobj_input_capacity_hint = segment_capacity;
   }
 }
 
@@ -963,60 +954,6 @@ lnk_cobj_region_from_address(U8 *address)
   return 0;
 }
 
-// This runs only after an impossible multi-second cache-allocation stall. Keep it independent of
-// the linker logger: materialization can run inside the access-violation handler, where taking the
-// logger mutex could deadlock if the interrupted code already owns it.
-internal void
-lnk_cobj_report_stall_locked(LNK_CompressedObj *region, U32 seg_idx, U64 elapsed_us, B32 aborting)
-{
-  LNK_CObjStallStats stats = {0};
-  for EachIndex(slot_idx, g_lnk_cobj_cache.active_slot_count) {
-    LNK_CObjRuntimeSegment *segment = g_lnk_cobj_cache.slot_segments[slot_idx];
-    if (!segment) {
-      stats.free_slots += 1;
-      continue;
-    }
-    switch (segment->state) {
-    case LNK_CObjSegState_Empty:    stats.empty_state_slots += 1; break;
-    case LNK_CObjSegState_Loading:  stats.loading_slots  += 1; break;
-    case LNK_CObjSegState_Ready:    stats.ready_slots    += 1; break;
-    case LNK_CObjSegState_Pinned:   stats.pinned_slots   += 1; break;
-    case LNK_CObjSegState_Evicting: stats.evicting_slots += 1; break;
-    }
-  }
-  for EachIndex(group_idx, g_lnk_cobj_cache.write_group_count) {
-    LNK_CObjWriteGroup *group = &g_lnk_cobj_cache.write_groups[group_idx];
-    LONG sealed = InterlockedCompareExchange(&group->sealed, 0, 0);
-    if (!sealed) {
-      U32 completed_count = (U32)InterlockedCompareExchange(&group->completed_count, 0, 0);
-      stats.unsealed_groups += 1;
-      stats.incomplete_group_slots += group->slot_count - Min(completed_count, group->slot_count);
-      stats.open_group_views += InterlockedCompareExchangePointer((void *volatile *)&group->view, 0, 0) != 0;
-    }
-  }
-
-  char message[1024];
-  U64 message_size = raddbg_snprintf(
-    message, sizeof(message),
-    "[radlink cobj stall] %s elapsed=%.1fs target=%p/%u cache=%llu/%llu "
-    "slots{free=%llu empty-state=%llu loading=%llu ready=%llu pinned=%llu evicting=%llu} "
-    "groups{unsealed=%llu incomplete=%llu open=%llu} "
-    "unmap-failures=%llu last-error=%u\n",
-    aborting ? "aborting" : "waiting",
-    (F64)elapsed_us / 1000000.0,
-    region->base, seg_idx,
-    g_lnk_cobj_cache.resident_count, g_lnk_cobj_cache.active_slot_count,
-    stats.free_slots, stats.empty_state_slots, stats.loading_slots, stats.ready_slots,
-    stats.pinned_slots, stats.evicting_slots,
-    stats.unsealed_groups, stats.incomplete_group_slots, stats.open_group_views,
-    g_lnk_cobj_cache.eviction_failures, g_lnk_cobj_cache.last_eviction_error);
-  HANDLE stderr_handle = GetStdHandle(STD_ERROR_HANDLE);
-  if (stderr_handle && stderr_handle != INVALID_HANDLE_VALUE) {
-    DWORD written = 0;
-    WriteFile(stderr_handle, message, (DWORD)Min(message_size, sizeof(message) - 1), &written, 0);
-  }
-}
-
 internal B32
 lnk_cobj_evict_one_locked(U32 *slot_idx_out)
 {
@@ -1085,19 +1022,13 @@ lnk_cobj_materialize(LNK_CompressedObj *region, U32 seg_idx)
 
   U32 slot_idx = max_U32;
   U64 stall_begin_us = now_time_us();
-  B32 stall_reported = 0;
   AcquireSRWLockExclusive(&g_lnk_cobj_cache.lock);
   while (!lnk_cobj_evict_one_locked(&slot_idx)) {
     ReleaseSRWLockExclusive(&g_lnk_cobj_cache.lock);
     SwitchToThread();
     AcquireSRWLockExclusive(&g_lnk_cobj_cache.lock);
     U64 elapsed_us = now_time_us() - stall_begin_us;
-    if (!stall_reported && elapsed_us >= LNK_COBJ_STALL_REPORT_US) {
-      lnk_cobj_report_stall_locked(region, seg_idx, elapsed_us, 0);
-      stall_reported = 1;
-    }
     if (elapsed_us >= LNK_COBJ_STALL_ABORT_US) {
-      lnk_cobj_report_stall_locked(region, seg_idx, elapsed_us, 1);
       ReleaseSRWLockExclusive(&g_lnk_cobj_cache.lock);
       InterlockedExchange(&runtime->state, LNK_CObjSegState_Empty);
       InterlockedExchange(&g_lnk_cobj_cache.failed, 1);
@@ -1277,12 +1208,20 @@ lnk_cobj_cache_init(U32 segment_size)
   U64 cache_bytes = g_lnk_cobj_policy.initial_cache_bytes;
   U64 post_boundary_cache_bytes = g_lnk_cobj_policy.post_boundary_cache_bytes;
   U64 segment_size_u64 = segment_size;
-  if (g_lnk_cobj_input_capacity_hint > 0) {
-    if (g_lnk_cobj_input_capacity_hint < cache_bytes) {
-      cache_bytes = AlignPow2(g_lnk_cobj_input_capacity_hint, segment_size_u64);
+  U64 input_capacity_hint = g_lnk_cobj_input_capacity_hint;
+  if (g_lnk_cobj_policy.initial_source == LNK_CObjPolicySource_Adaptive) {
+    // Keep at least one first-generation slot per write-group lane. This is only 32 MiB for
+    // 512 KiB segments, avoids serializing a wave of parallel first faults on tiny targets,
+    // and does not override explicit cache-size experiments.
+    input_capacity_hint = Max(input_capacity_hint,
+                              segment_size_u64 * LNK_COBJ_DEFAULT_WRITE_GROUP_SLOTS);
+  }
+  if (input_capacity_hint > 0) {
+    if (input_capacity_hint < cache_bytes) {
+      cache_bytes = AlignPow2(input_capacity_hint, segment_size_u64);
     }
-    if (g_lnk_cobj_input_capacity_hint < post_boundary_cache_bytes) {
-      post_boundary_cache_bytes = AlignPow2(g_lnk_cobj_input_capacity_hint, segment_size_u64);
+    if (input_capacity_hint < post_boundary_cache_bytes) {
+      post_boundary_cache_bytes = AlignPow2(input_capacity_hint, segment_size_u64);
     }
   }
   g_lnk_cobj_cache.skip_cleanup = lnk_cobj_skip_cleanup_enabled();
