@@ -2377,21 +2377,28 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
             }
           }
 
-          for EachIndex(sect_idx, obj->header.section_count_no_null) {
-            if (obj->section_flags[sect_idx] & LNK_SECTION_FLAG_DEBUG)     { continue; }
-            if (obj->section_flags[sect_idx] & COFF_SectionFlag_LnkRemove) { continue; }
+          COFF_SectionFlags sect_filter = 0;
+          sect_filter |= COFF_SectionFlag_LnkRemove; // skip sections that are discarded from the output
+          if ( ! lnk_do_debug_info(config)) { sect_filter |= LNK_SECTION_FLAG_DEBUG; } // on /DEBUG:NONE linker never invokes the debug info machinery
 
+          for EachIndex(sect_idx, obj->header.section_count_no_null) {
+            if (obj->section_flags[sect_idx] & sect_filter) { continue; }
+
+            // unpack section and relocations
             COFF_SectionHeader *section_header = &section_table[sect_idx];
             String8             section_name   = coff_name_from_section_header(string_table, section_header);
             U64                 section_number = sect_idx+1;
             COFF_RelocArray     relocs         = lnk_coff_relocs_from_section_header(obj, section_header);
 
+            // scan for undefined target symbols in relocations
             for EachIndex(reloc_idx, relocs.count) {
+              // cap number of the diagnostic messages per symbol
               if (ref_messages.node_count > config->unresolved_symbol_ref_limit) {
                 str8_list_pushf(scratch.arena, &ref_messages, "too many unresolved symbol references reported, stopping now");
                 goto next_undefined_symbol;
               }
 
+              // skip relocations that do not reference the unresolved symbol
               COFF_Reloc *reloc = &relocs.v[reloc_idx];
               if (reloc->isymbol != ref->symbol_idx) { continue; }
 
