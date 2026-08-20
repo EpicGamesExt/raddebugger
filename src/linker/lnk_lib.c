@@ -185,7 +185,7 @@ THREAD_POOL_TASK_FUNC(lnk_lib_initer)
     U64 valid_lib_idx = ins_atomic_u64_inc_eval(&task->valid_libs_count)-1;
     task->valid_libs[valid_lib_idx] = lib_node;
   } else {
-    U64 invalid_lib_idx = ins_atomic_u64_inc_eval(&task->invalid_libs_count);
+    U64 invalid_lib_idx = ins_atomic_u64_inc_eval(&task->invalid_libs_count)-1;
     task->invalid_libs[invalid_lib_idx] = lib_node;
   }
 }
@@ -228,7 +228,7 @@ lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, U
   radsort(task.invalid_libs, task.invalid_libs_count, lnk_lib_node_ptr_is_before);
   for EachIndex(i, task.invalid_libs_count) {
     U64 input_idx = task.invalid_libs[i]->data.input_idx;
-    lnk_error(LNK_Error_InvalidLib, "%S: failed to parse library", inputs[input_idx]->path);
+    lnk_error(LNK_Error_InvalidLib, "%S: failed to parse library", inputs[input_idx - lib_id_base]->path);
   }
 
   // push parsed libs
