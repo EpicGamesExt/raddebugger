@@ -13,6 +13,8 @@
 #define LNK_COBJ_REGION_CAP                 (1u << 20)
 #define LNK_COBJ_DEFAULT_WRITE_GROUP_SLOTS  64u
 #define LNK_COBJ_FILE_MAPPING_GRANULARITY   KB(64)
+#define LNK_COBJ_STALL_REPORT_US            5000000ull
+#define LNK_COBJ_STALL_ABORT_US            30000000ull
 #define LNK_COBJ_KNOWN_HEADER_FLAGS (LNK_COBJ_FLAG_TYPE_INDEX               | \
                                      LNK_COBJ_FLAG_UDT_HASH_INDEX           | \
                                      LNK_COBJ_FLAG_BASE_RELOC_INDEX         | \
@@ -76,7 +78,7 @@ typedef struct LNK_CObjWriteGroup
 {
   SRWLOCK lock;
   U8 *view;
-  U32 completed_count;
+  volatile LONG completed_count;
   U32 slot_count;
   volatile LONG sealed;
 } LNK_CObjWriteGroup;
@@ -107,6 +109,8 @@ typedef struct LNK_CObjCache
   U64 decodes;
   U64 redecodes;
   U64 evictions;
+  U64 eviction_failures;
+  U32 last_eviction_error;
   U64 raw_segments;
   U64 decoded_bytes;
   U64 stored_bytes_read;
@@ -125,6 +129,19 @@ typedef struct LNK_CObjCache
   U64 cleanup_us;
   B32 skip_cleanup;
 } LNK_CObjCache;
+
+typedef struct LNK_CObjStallStats
+{
+  U64 free_slots;
+  U64 empty_state_slots;
+  U64 loading_slots;
+  U64 ready_slots;
+  U64 pinned_slots;
+  U64 evicting_slots;
+  U64 unsealed_groups;
+  U64 incomplete_group_slots;
+  U64 open_group_views;
+} LNK_CObjStallStats;
 
 typedef enum LNK_CObjPolicySource
 {
@@ -664,18 +681,23 @@ lnk_cobj_write_group_acquire(U32 slot_idx, U32 *group_idx_out)
   U32 group_idx = slot_idx / g_lnk_cobj_cache.write_group_slot_count;
   LNK_CObjWriteGroup *group = &g_lnk_cobj_cache.write_groups[group_idx];
   AcquireSRWLockExclusive(&group->lock);
-  if (!group->sealed && !group->view) {
-    U64 group_off = (U64)group_idx * g_lnk_cobj_cache.write_group_slot_count *
-                    g_lnk_cobj_cache.segment_size;
-    U64 group_size = (U64)group->slot_count * g_lnk_cobj_cache.segment_size;
-    group->view = MapViewOfFile(g_lnk_cobj_cache.slot_mapping, FILE_MAP_WRITE,
-                                (DWORD)(group_off >> 32), (DWORD)group_off, group_size);
-  }
   U8 *result = 0;
-  if (!group->sealed && group->view) {
-    U32 in_group_idx = slot_idx % g_lnk_cobj_cache.write_group_slot_count;
-    result = group->view + (U64)in_group_idx * g_lnk_cobj_cache.segment_size;
+  if (!group->sealed) {
+    // Return the group index even when the large write view cannot be mapped. The caller can
+    // populate this slot through a temporary per-slot view, but must still count it complete;
+    // otherwise the group never seals and none of its slots can ever be recycled.
     *group_idx_out = group_idx;
+    if (!group->view) {
+      U64 group_off = (U64)group_idx * g_lnk_cobj_cache.write_group_slot_count *
+                      g_lnk_cobj_cache.segment_size;
+      U64 group_size = (U64)group->slot_count * g_lnk_cobj_cache.segment_size;
+      group->view = MapViewOfFile(g_lnk_cobj_cache.slot_mapping, FILE_MAP_WRITE,
+                                  (DWORD)(group_off >> 32), (DWORD)group_off, group_size);
+    }
+    if (group->view) {
+      U32 in_group_idx = slot_idx % g_lnk_cobj_cache.write_group_slot_count;
+      result = group->view + (U64)in_group_idx * g_lnk_cobj_cache.segment_size;
+    }
   }
   ReleaseSRWLockExclusive(&group->lock);
   return result;
@@ -686,9 +708,9 @@ lnk_cobj_write_group_complete(U32 group_idx)
 {
   LNK_CObjWriteGroup *group = &g_lnk_cobj_cache.write_groups[group_idx];
   AcquireSRWLockExclusive(&group->lock);
-  group->completed_count += 1;
-  if (group->completed_count == group->slot_count) {
-    UnmapViewOfFile(group->view);
+  LONG completed_count = InterlockedIncrement(&group->completed_count);
+  if (completed_count == group->slot_count) {
+    if (group->view) { UnmapViewOfFile(group->view); }
     group->view = 0;
     InterlockedExchange(&group->sealed, 1);
   }
@@ -941,6 +963,60 @@ lnk_cobj_region_from_address(U8 *address)
   return 0;
 }
 
+// This runs only after an impossible multi-second cache-allocation stall. Keep it independent of
+// the linker logger: materialization can run inside the access-violation handler, where taking the
+// logger mutex could deadlock if the interrupted code already owns it.
+internal void
+lnk_cobj_report_stall_locked(LNK_CompressedObj *region, U32 seg_idx, U64 elapsed_us, B32 aborting)
+{
+  LNK_CObjStallStats stats = {0};
+  for EachIndex(slot_idx, g_lnk_cobj_cache.active_slot_count) {
+    LNK_CObjRuntimeSegment *segment = g_lnk_cobj_cache.slot_segments[slot_idx];
+    if (!segment) {
+      stats.free_slots += 1;
+      continue;
+    }
+    switch (segment->state) {
+    case LNK_CObjSegState_Empty:    stats.empty_state_slots += 1; break;
+    case LNK_CObjSegState_Loading:  stats.loading_slots  += 1; break;
+    case LNK_CObjSegState_Ready:    stats.ready_slots    += 1; break;
+    case LNK_CObjSegState_Pinned:   stats.pinned_slots   += 1; break;
+    case LNK_CObjSegState_Evicting: stats.evicting_slots += 1; break;
+    }
+  }
+  for EachIndex(group_idx, g_lnk_cobj_cache.write_group_count) {
+    LNK_CObjWriteGroup *group = &g_lnk_cobj_cache.write_groups[group_idx];
+    LONG sealed = InterlockedCompareExchange(&group->sealed, 0, 0);
+    if (!sealed) {
+      U32 completed_count = (U32)InterlockedCompareExchange(&group->completed_count, 0, 0);
+      stats.unsealed_groups += 1;
+      stats.incomplete_group_slots += group->slot_count - Min(completed_count, group->slot_count);
+      stats.open_group_views += InterlockedCompareExchangePointer((void *volatile *)&group->view, 0, 0) != 0;
+    }
+  }
+
+  char message[1024];
+  U64 message_size = raddbg_snprintf(
+    message, sizeof(message),
+    "[radlink cobj stall] %s elapsed=%.1fs target=%p/%u cache=%llu/%llu "
+    "slots{free=%llu empty-state=%llu loading=%llu ready=%llu pinned=%llu evicting=%llu} "
+    "groups{unsealed=%llu incomplete=%llu open=%llu} "
+    "unmap-failures=%llu last-error=%u\n",
+    aborting ? "aborting" : "waiting",
+    (F64)elapsed_us / 1000000.0,
+    region->base, seg_idx,
+    g_lnk_cobj_cache.resident_count, g_lnk_cobj_cache.active_slot_count,
+    stats.free_slots, stats.empty_state_slots, stats.loading_slots, stats.ready_slots,
+    stats.pinned_slots, stats.evicting_slots,
+    stats.unsealed_groups, stats.incomplete_group_slots, stats.open_group_views,
+    g_lnk_cobj_cache.eviction_failures, g_lnk_cobj_cache.last_eviction_error);
+  HANDLE stderr_handle = GetStdHandle(STD_ERROR_HANDLE);
+  if (stderr_handle && stderr_handle != INVALID_HANDLE_VALUE) {
+    DWORD written = 0;
+    WriteFile(stderr_handle, message, (DWORD)Min(message_size, sizeof(message) - 1), &written, 0);
+  }
+}
+
 internal B32
 lnk_cobj_evict_one_locked(U32 *slot_idx_out)
 {
@@ -977,6 +1053,8 @@ lnk_cobj_evict_one_locked(U32 *slot_idx_out)
   InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_cache.eviction_us,
                            now_time_us() - eviction_begin_us);
   if (!unmapped) {
+    g_lnk_cobj_cache.eviction_failures += 1;
+    g_lnk_cobj_cache.last_eviction_error = GetLastError();
     InterlockedExchange(&victim->state, LNK_CObjSegState_Ready);
     return 0;
   }
@@ -1006,11 +1084,26 @@ lnk_cobj_materialize(LNK_CompressedObj *region, U32 seg_idx)
   InterlockedExchange(&runtime->state, LNK_CObjSegState_Loading);
 
   U32 slot_idx = max_U32;
+  U64 stall_begin_us = now_time_us();
+  B32 stall_reported = 0;
   AcquireSRWLockExclusive(&g_lnk_cobj_cache.lock);
   while (!lnk_cobj_evict_one_locked(&slot_idx)) {
     ReleaseSRWLockExclusive(&g_lnk_cobj_cache.lock);
     SwitchToThread();
     AcquireSRWLockExclusive(&g_lnk_cobj_cache.lock);
+    U64 elapsed_us = now_time_us() - stall_begin_us;
+    if (!stall_reported && elapsed_us >= LNK_COBJ_STALL_REPORT_US) {
+      lnk_cobj_report_stall_locked(region, seg_idx, elapsed_us, 0);
+      stall_reported = 1;
+    }
+    if (elapsed_us >= LNK_COBJ_STALL_ABORT_US) {
+      lnk_cobj_report_stall_locked(region, seg_idx, elapsed_us, 1);
+      ReleaseSRWLockExclusive(&g_lnk_cobj_cache.lock);
+      InterlockedExchange(&runtime->state, LNK_CObjSegState_Empty);
+      InterlockedExchange(&g_lnk_cobj_cache.failed, 1);
+      ReleaseSRWLockExclusive(&runtime->lock);
+      return 0;
+    }
   }
   g_lnk_cobj_cache.slot_segments[slot_idx] = runtime;
   runtime->slot_idx = slot_idx;
@@ -1025,13 +1118,13 @@ lnk_cobj_materialize(LNK_CompressedObj *region, U32 seg_idx)
   U64 slot_off = (U64)slot_idx * region->segment_size;
   U32 write_group_idx = max_U32;
   U8 *write_view = lnk_cobj_write_group_acquire(slot_idx, &write_group_idx);
-  B32 grouped_write_view = write_view != 0 && write_group_idx != max_U32;
   B32 temporary_write_view = write_view == 0;
   if (temporary_write_view) {
     write_view = (U8 *)MapViewOfFile(g_lnk_cobj_cache.slot_mapping, FILE_MAP_WRITE,
                                      (DWORD)(slot_off >> 32), (DWORD)slot_off, region->segment_size);
   }
   B32 ok = write_view != 0;
+  B32 slot_written = 0;
   U64 decode_begin_us = now_time_us();
   if (ok) {
     U8 *stored = region->mapped_file.str + entry->file_offset;
@@ -1047,6 +1140,7 @@ lnk_cobj_materialize(LNK_CompressedObj *region, U32 seg_idx)
     if (ok && entry->raw_size < region->segment_size) {
       MemoryZero(write_view + entry->raw_size, region->segment_size - entry->raw_size);
     }
+    slot_written = ok;
     if (temporary_write_view) { UnmapViewOfFile(write_view); }
   }
   InterlockedExchangeAdd64((volatile LONG64 *)&g_lnk_cobj_cache.decode_us,
@@ -1059,7 +1153,9 @@ lnk_cobj_materialize(LNK_CompressedObj *region, U32 seg_idx)
                                                        PAGE_READONLY, 0, 0);
     ok = mapped == target;
   }
-  if (grouped_write_view) { lnk_cobj_write_group_complete(write_group_idx); }
+  if (slot_written && write_group_idx != max_U32) {
+    lnk_cobj_write_group_complete(write_group_idx);
+  }
   if (!ok) {
     AcquireSRWLockExclusive(&g_lnk_cobj_cache.lock);
     if (g_lnk_cobj_cache.slot_segments[slot_idx] == runtime) {
