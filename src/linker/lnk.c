@@ -2238,6 +2238,15 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
     for EachIndex(i, entry_points.count) { str8_list_push(scratch.arena, &list, entry_points.v[i]); }
     String8 default_entries = str8_list_join(scratch.arena, &list, &(StringJoin){.sep = str8_lit(", ")});
 
+    StringJoin comma_join = {.sep = str8_lit(", ")};
+    String8 obj_default_libs = str8_list_join(scratch.arena, &config->input_obj_lib_list, &comma_join);
+    String8 cmd_default_libs = str8_list_join(scratch.arena, &config->input_default_lib_list, &comma_join);
+    String8List loaded_lib_list = {0};
+    for EachNode(lib_n, LNK_LibNode, link->libs.first) {
+      str8_list_push(scratch.arena, &loaded_lib_list, str8_skip_last_slash(lib_n->data.path));
+    }
+    String8 loaded_libs = str8_list_join(scratch.arena, &loaded_lib_list, &comma_join);
+
     lnk_error(LNK_Error_EntryPoint,
               "failed to infer entry point symbol from the inputs\n"
               "  Machine:         %S\n"
@@ -2248,7 +2257,10 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
               "  Default Entries: %S\n"
               "  User Entry:      \"%S\"\n"
               "  Input Obj Count: %S\n"
-              "  Input Lib Count: %S",
+              "  Input Lib Count: %S\n"
+              "  Obj Default Libs: %S\n"
+              "  Cmd Default Libs: %S\n"
+              "  Loaded Libs:      %S",
               machine_str.size   ? machine_str   : str8_lit("Unknown"),                         // Machine
               subsystem_str.size ? subsystem_str : str8_lit("Unknown"),                         // Version
               config->subsystem_ver.major, config->subsystem_ver.minor,                         // Subsystem
@@ -2257,7 +2269,10 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
               default_entries.size ? default_entries : str8_lit("None"),                        // Default Entry Points
               config->entry_point_name,                                                         // /ENTRY
               str8_from_count(scratch.arena, config->input_list[LNK_Input_Obj].node_count),     // Input Objects Count
-              str8_from_count(scratch.arena, config->input_list[LNK_Input_Lib].node_count)      // Input Libs Count
+              str8_from_count(scratch.arena, config->input_list[LNK_Input_Lib].node_count),     // Input Libs Count
+              obj_default_libs.size ? obj_default_libs : str8_lit("None"),
+              cmd_default_libs.size ? cmd_default_libs : str8_lit("None"),
+              loaded_libs.size ? loaded_libs : str8_lit("None")
               );
   }
 
