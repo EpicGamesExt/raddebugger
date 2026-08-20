@@ -687,7 +687,17 @@ lnk_parse_export_directive_ex(Arena *arena, String8List directive, LNK_Obj *obj,
   export_out->is_ordinal_assigned = ordinal.size > 0;
   export_out->is_noname_present   = noname_flag.size > 0;
   export_out->is_private          = private_flag.size > 0;
-  export_out->is_forwarder        = str8_find_needle(name, 0, str8_lit("."), 0) < name.size;
+  // A dotted export target denotes a PE forwarder only in the alias form:
+  //
+  //   /EXPORT:exported_name=other_dll.exported_name
+  //
+  // Plain export names may also contain dots. LLVM's AutoRTFM pass, for example,
+  // emits directives like "/EXPORT:__RTFM.autortfm_is_context_status". MS link
+  // treats these as ordinary exports that must resolve to a COFF symbol, not as
+  // forwarders. If we classify every dotted name as a forwarder, pe_name_from_export_parse
+  // returns the empty alias for these plain exports; all such exports then collapse
+  // to one unnamed export and the DLL misses the requested entry points.
+  export_out->is_forwarder        = alias.size != 0 && str8_find_needle(name, 0, str8_lit("."), 0) < name.size;
 
   is_parsed = 1;
   
