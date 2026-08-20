@@ -1195,6 +1195,18 @@ lnk_line_map_from_obj(Arena *arena, LNK_Obj *obj)
     if (debug_t_sig == CV_Signature_C13) {
       CV_DebugT debug_t = cv_debug_t_from_data(scratch.arena, str8_skip(raw_debug_t, sizeof(CV_Signature)), CV_LeafAlign);
 
+      CV_TypeIndex ti_base = CV_MinComplexTypeIndex;
+      if (cv_debug_t_is_pch(&debug_t)) {
+        CV_Leaf        precomp_leaf = cv_debug_t_get_leaf(&debug_t, 0);
+        CV_PrecompInfo precomp      = cv_precomp_info_from_leaf(precomp_leaf);
+
+        // discard LF_PRECOMP
+        debug_t.offsets += 1;
+        debug_t.count   -= 1;
+
+        ti_base = precomp.start_index + precomp.leaf_count;
+      }
+
       for EachIndex(leaf_idx, debug_t.count) {
         CV_Leaf leaf = cv_debug_t_get_leaf(&debug_t, leaf_idx);
 
@@ -1208,7 +1220,7 @@ lnk_line_map_from_obj(Arena *arena, LNK_Obj *obj)
         }
 
         if (name.size) {
-          U64 inlinee_itype = CV_MinComplexTypeIndex + leaf_idx;
+          U64 inlinee_itype = ti_base + leaf_idx;
           hash_map_push_u64_string(scratch.arena, &inlinee_hm, inlinee_itype, name);
         }
       }
