@@ -687,7 +687,7 @@ lnk_parse_export_directive_ex(Arena *arena, String8List directive, LNK_Obj *obj,
   export_out->is_ordinal_assigned = ordinal.size > 0;
   export_out->is_noname_present   = noname_flag.size > 0;
   export_out->is_private          = private_flag.size > 0;
-  export_out->is_forwarder        = str8_find_needle(name, 0, str8_lit("."), 0) < name.size;
+  export_out->is_forwarder        = alias.size && str8_find_needle(name, 0, str8_lit("."), 0) < name.size;
 
   is_parsed = 1;
   
