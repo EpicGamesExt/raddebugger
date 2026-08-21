@@ -5678,7 +5678,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
       // Preserve each source section's contribution range across the merge.
       ProfBegin("Sort Sections");
       for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-        lnk_sort_section_contribs(&sect_n->data);
+        lnk_sort_section_contribs(&sect_n->data, 0);
       }
       ProfEnd();
 
@@ -5689,7 +5689,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
       ProfBegin("Sort Merged Sections");
       for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-        lnk_sort_section_contribs(&sect_n->data);
+        lnk_sort_section_contribs(&sect_n->data, 1);
       }
       ProfEnd();
 
@@ -6190,7 +6190,7 @@ lnk_map_push_symbol_line(Arena *arena, String8List *map, LNK_MapSymbol *symbol)
 }
 
 internal String8List
-lnk_build_map(Arena *arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, U64 objs_count, LNK_Obj **objs)
+lnk_build_map(Arena *arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_SectionTable *sectab, U64 objs_count, LNK_Obj **objs)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
@@ -6212,31 +6212,33 @@ lnk_build_map(Arena *arena, String8 image_data, LNK_Config *config, LNK_SymbolTa
   str8_list_pushf(arena, &map, " Start         Length     Name                   Class\r\n");
 
   U64 section_cap = 0;
-  for EachIndex(obj_idx, objs_count) { section_cap += objs[obj_idx]->coff.sections.count_no_null; }
+  for EachNode(sect_n, LNK_SectionNode, sectab->list.first) { section_cap += sect_n->data.contribs.chunk_count; }
   LNK_MapSection *sections = push_array(scratch.arena, LNK_MapSection, section_cap);
   U64             section_count = 0;
   HashMap        *section_maps = push_array(scratch.arena, HashMap, pe.section_count + 1);
-  for EachIndex(obj_idx, objs_count) {
-    LNK_Obj *obj = objs[obj_idx];
-    for LNK_EachCoffSection(it, obj) {
-      COFF_SectionFlags flags = *it.v.flags;
-      if (flags & (COFF_SectionFlag_LnkRemove | COFF_SectionFlag_LnkInfo | LNK_SECTION_FLAG_DEBUG)) { continue; }
+  for EachNode(sect_n, LNK_SectionNode, sectab->list.first) {
+    LNK_Section *image_section = &sect_n->data;
+    U32 image_section_number = safe_cast_u32(image_section->sect_idx + 1);
+    if (image_section_number > pe.section_count) { continue; }
 
-      U32 image_section_number = lnk_map_image_section_number_from_voff(image_section_table, pe.section_count, it.v.header->voff);
-      if (image_section_number == 0) { continue; }
+    for EachNode(chunk, LNK_SectionContribChunk, image_section->contribs.first) {
+      String8 name = chunk->sort_idx;
+      if (name.size == 0) { continue; }
 
-      String8 name = lnk_obj_section_name_from_section_number(obj, it.v.section_number);
       LNK_MapSection *section = hash_map_search_string_raw(&section_maps[image_section_number], name);
-      U32 off = safe_cast_u32(it.v.header->voff - image_section_table[image_section_number]->voff);
-      U32 end = off + it.v.header->vsize;
-      if (section == 0) {
-        Assert(section_count < section_cap);
-        section = &sections[section_count++];
-        *section = (LNK_MapSection){ name, image_section_number, off, end, !!(flags & COFF_SectionFlag_CntCode) };
-        hash_map_push_string_raw(scratch.arena, &section_maps[image_section_number], name, section);
-      } else {
-        section->off = Min(section->off, off);
-        section->end = Max(section->end, end);
+      for EachIndex(sc_idx, chunk->count) {
+        LNK_SectionContrib *sc = chunk->v[sc_idx];
+        U32 off = sc->u.off;
+        U32 end = off + safe_cast_u32(lnk_size_from_section_contrib(sc));
+        if (section == 0) {
+          Assert(section_count < section_cap);
+          section = &sections[section_count++];
+          *section = (LNK_MapSection){ name, image_section_number, off, end, !!(image_section->flags & COFF_SectionFlag_CntCode) };
+          hash_map_push_string_raw(scratch.arena, &section_maps[image_section_number], name, section);
+        } else {
+          section->off = Min(section->off, off);
+          section->end = Max(section->end, end);
+        }
       }
     }
   }
@@ -6489,7 +6491,7 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   // Map
   //
   if (config->map == LNK_SwitchState_Yes) {
-    String8List map = lnk_build_map(scratch.arena, image_ctx.image_data, config, symtab, objs_count, objs);
+    String8List map = lnk_build_map(scratch.arena, image_ctx.image_data, config, symtab, image_ctx.sectab, objs_count, objs);
     lnk_write_data_list_to_file_path(config->map_name, config->temp_map_name, map);
   }
 

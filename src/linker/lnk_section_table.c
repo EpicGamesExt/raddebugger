@@ -331,14 +331,27 @@ lnk_section_contrib_chunk_is_before(void *raw_a, void *raw_b)
   return str8_is_before_case_sensitive(&(*a)->sort_idx, &(*b)->sort_idx);
 }
 
+internal int
+lnk_merged_section_contrib_chunk_is_before(void *raw_a, void *raw_b)
+{
+  LNK_SectionContribChunk **a = raw_a, **b = raw_b;
+  U64 a_rank = str8_starts_with((*a)->sort_idx, str8_lit(".idata$5")) ? 0 : str8_starts_with((*a)->sort_idx, str8_lit(".idata$")) ? 2 : 1;
+  U64 b_rank = str8_starts_with((*b)->sort_idx, str8_lit(".idata$5")) ? 0 : str8_starts_with((*b)->sort_idx, str8_lit(".idata$")) ? 2 : 1;
+  if (a_rank != b_rank) {
+    return a_rank < b_rank;
+  }
+  return str8_is_before_case_sensitive(&(*a)->sort_idx, &(*b)->sort_idx);
+}
+
 internal void
-lnk_sort_section_contribs(LNK_Section *sect)
+lnk_sort_section_contribs(LNK_Section *sect, B32 is_merged_output)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0,0);
 
   LNK_SectionContribChunk **chunks = lnk_array_from_section_contrib_chunk_list(scratch.arena, sect->contribs);
-  radsort(chunks, sect->contribs.chunk_count, lnk_section_contrib_chunk_is_before);
+  radsort(chunks, sect->contribs.chunk_count,
+          is_merged_output ? lnk_merged_section_contrib_chunk_is_before : lnk_section_contrib_chunk_is_before);
 
   // repopulate chunk list in sorted order
   sect->contribs.first = 0;

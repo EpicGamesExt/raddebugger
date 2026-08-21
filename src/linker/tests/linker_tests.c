@@ -2312,6 +2312,9 @@ TEST(section_sort)
   T_Ok(t_write_def_obj("data.obj", (T_COFF_DefObj){
     .machine = T_COFF_DefSetMachine(X64),
     .sections = (T_COFF_DefSection[]){
+      { "idata_2", ".idata$2", str8_lit("last"), .flags = "rw:data@1" },
+      { "idata_5", ".idata$5", str8_lit("first"), .flags = "rw:data@1" },
+      { "rdata", ".rdata", str8_lit("middle"), .flags = "r:data@1" },
       { "data_z", ".data$z", str8_lit("five"), .raw_flags = data_flags },
       { "data_a", ".data$a", str8_lit("three"), .raw_flags = data_flags },
       { "data_bbbbb", ".data$bbbbb", str8_lit("four"), .raw_flags = data_flags },
@@ -2347,6 +2350,12 @@ TEST(section_sort)
   String8 data = str8_substr(exe, rng_1u64(data_section->foff, data_section->foff + data_section->vsize));
   String8 expected_data = str8_lit("onetwothreefourfive");
   T_Ok(str8_match(data, expected_data, 0));
+
+  COFF_SectionHeader *rdata_section = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".rdata"));
+  T_Ok(rdata_section);
+
+  String8 rdata = str8_substr(exe, rng_1u64(rdata_section->foff, rdata_section->foff + 15));
+  T_Ok(str8_match(rdata, str8_lit("firstmiddlelast"), 0));
 }
 
 TEST(flag_conf)
