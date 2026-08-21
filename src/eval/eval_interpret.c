@@ -402,8 +402,10 @@ e_interpret(String8 bytecode)
       
       case RDI_EvalOp_ConstString:
       {
-        MemoryCopy(&nval, ptr, imm.u64);
-        ptr += imm.u64;
+        U64 src_size = imm.u64;
+        U64 dst_size = Min(sizeof(nval), src_size);
+        MemoryCopy(&nval, ptr, dst_size);
+        ptr += src_size;
       }break;
       
       case RDI_EvalOp_Abs:

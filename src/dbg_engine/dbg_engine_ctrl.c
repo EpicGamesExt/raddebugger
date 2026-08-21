@@ -3031,15 +3031,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
               Access *access = access_open();
               D_Handle process_handle = d_handle_from_dmn(D_MachineID_Local, ev->process);
               D_Entity *process = d_entity_from_handle(process_handle);
-              D_Entity *module = &d_entity_nil;
-              for(D_Entity *child = process->first; child != &d_entity_nil; child = child->next)
-              {
-                if(child->kind == D_EntityKind_Module)
-                {
-                  module = child;
-                  break;
-                }
-              }
+              D_Entity *module = d_module_from_process_vaddr(process, ev->instruction_pointer);
               if(module != &d_entity_nil)
               {
                 // rjf: determine base address of asan shadow space
