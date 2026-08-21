@@ -331,6 +331,7 @@ pe_make_import_dll_obj_static(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mach
 
   String8 dll_name_cstr = push_cstr(obj_writer->arena, dll_name);
   COFF_ObjSection *dll_name_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$6"), PE_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes, dll_name_cstr);
+  str8_list_push_aligner(obj_writer->arena, &dll_name_sect->data, 0, 2);
   COFF_ObjSection *debug_sect    = coff_obj_writer_push_section(obj_writer, str8_lit(".debug$S"), PE_DEBUG_SECTION_FLAGS|COFF_SectionFlag_Align1Bytes, debug_symbols);
   COFF_ObjSymbol *dll_name_symbol = coff_obj_writer_push_symbol_static(obj_writer, dll_name_sect->name, 0, dll_name_sect);
 
