@@ -212,14 +212,14 @@ lnk_make_linker_manifest(Arena      *arena,
   String8List srl = {0};
   str8_serial_begin(scratch.arena, &srl);
   str8_serial_push_string(scratch.arena, &srl, str8_lit(
-                                                "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n"
-                                                "<assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\" manifestVersion=\"1.0\">\r\n"));
+                                                "<?xml version='1.0' encoding='UTF-8' standalone='yes'?>\r\n"
+                                                "<assembly xmlns='urn:schemas-microsoft-com:asm.v1' manifestVersion='1.0'>\r\n"));
   if (manifest_uac) {
     String8 uac = push_str8f(scratch.arena,
                              "  <trustInfo xmlns=\"urn:schemas-microsoft-com:asm.v3\">\r\n"
                              "    <security>\r\n"
                              "      <requestedPrivileges>\r\n"
-                             "        <requestedExecutionLevel level=%S uiAccess=%S></requestedExecutionLevel>\r\n"
+                             "        <requestedExecutionLevel level=%S uiAccess=%S />\r\n"
                              "      </requestedPrivileges>\r\n"
                              "    </security>\r\n"
                              "  </trustInfo>\r\n",
@@ -231,7 +231,7 @@ lnk_make_linker_manifest(Arena      *arena,
     String8 dep = push_str8f(scratch.arena, 
                              "  <dependency>\r\n"
                              "    <dependentAssembly>\r\n"
-                             "      <assemblyIdentity %S></assemblyIdentity>\r\n"
+                             "      <assemblyIdentity %S />\r\n"
                              "    </dependentAssembly>\r\n"
                              "  </dependency>\r\n",
                              node->string);
@@ -400,156 +400,117 @@ lnk_serialize_pe_resource_tree(COFF_ObjWriter *obj_writer, PE_ResourceDir *root_
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   
-  struct Stack {
-    struct Stack          *next;
-    U64                    arr_idx;
-    U64                    res_idx[2];
-    PE_ResourceArray       res_arr[2];
-    COFF_ResourceDirEntry *coff_entry_arr[2];
+  struct QueueNode {
+    struct QueueNode      *next;
+    PE_Resource           *res;
+    COFF_ResourceDirEntry *coff_entry;
   };
-  struct Stack *stack = push_array(scratch.arena, struct Stack, 1);
-  // init stack
-  {
-    PE_Resource *root_wrapper = push_array(scratch.arena, PE_Resource, 1);
-    root_wrapper->id.type     = COFF_ResourceIDType_Number;
-    root_wrapper->id.u.number = 0;
-    root_wrapper->kind        = PE_ResDataKind_DIR;
-    root_wrapper->u.dir       = root_dir;
+  struct QueueNode *queue_first = 0;
+  struct QueueNode *queue_last  = 0;
 
-    COFF_ResourceDirEntry *root_dir = push_array(scratch.arena, COFF_ResourceDirEntry, 1);
+  PE_Resource *root_wrapper = push_array(scratch.arena, PE_Resource, 1);
+  root_wrapper->id.type     = COFF_ResourceIDType_Number;
+  root_wrapper->id.u.number = 0;
+  root_wrapper->kind        = PE_ResDataKind_DIR;
+  root_wrapper->u.dir       = root_dir;
 
-    stack->res_arr[0].count = 1;
-    stack->res_arr[0].v     = root_wrapper;
-
-    stack->coff_entry_arr[0] = root_dir;
-    stack->coff_entry_arr[1] = 0;
-  }
+  COFF_ResourceDirEntry *root_entry = push_array(scratch.arena, COFF_ResourceDirEntry, 1);
+  struct QueueNode *root_node       = push_array(scratch.arena, struct QueueNode, 1);
+  root_node->res                     = root_wrapper;
+  root_node->coff_entry              = root_entry;
+  SLLQueuePush(queue_first, queue_last, root_node);
 
   COFF_ObjSection *rsrc1 = coff_obj_writer_push_section(obj_writer, str8_lit(".rsrc$01"), PE_RSRC1_SECTION_FLAGS, str8_zero());
   COFF_ObjSection *rsrc2 = coff_obj_writer_push_section(obj_writer, str8_lit(".rsrc$02"), PE_RSRC2_SECTION_FLAGS, str8_zero());
   
-  for (; stack; ) {
-    for (; stack->arr_idx < ArrayCount(stack->res_arr); stack->arr_idx += 1) {
-      for (; stack->res_idx[stack->arr_idx] < stack->res_arr[stack->arr_idx].count; ) {
-        U64          res_idx = stack->res_idx[stack->arr_idx]++;
-        PE_Resource *res     = &stack->res_arr[stack->arr_idx].v[res_idx];
+  for (struct QueueNode *node = queue_first; node != 0; node = queue_first) {
+    SLLQueuePop(queue_first, queue_last);
+    PE_Resource *res = node->res;
 
-        {
-          COFF_ResourceDirEntry *coff_entry = &stack->coff_entry_arr[stack->arr_idx][res_idx];
-
-          // assign entry data offset
-          coff_entry->id.data_entry_offset = safe_cast_u32(rsrc1->data.total_size);
-
-          // set directory flag
-          if (res->kind == PE_ResDataKind_DIR) {
-            coff_entry->id.data_entry_offset |= COFF_Resource_SubDirFlag;
-          }
-        }
-
-        switch (res->kind) {
-        case PE_ResDataKind_DIR: {
-          // fill out directory header
-          COFF_ResourceDirTable *dir_header = push_array(obj_writer->arena, COFF_ResourceDirTable, 1);
-          dir_header->characteristics       = res->u.dir->characteristics;
-          dir_header->time_stamp            = res->u.dir->time_stamp;
-          dir_header->major_version         = res->u.dir->major_version;
-          dir_header->minor_version         = res->u.dir->minor_version;
-          dir_header->name_entry_count      = res->u.dir->named_list.count;
-          dir_header->id_entry_count        = res->u.dir->id_list.count;
-
-          // sort input resources
-          PE_ResourceArray named_array;
-          PE_ResourceArray id_array;
-          {
-            Temp scratch2 = scratch_begin(&scratch.arena, 1);
-
-            named_array = pe_resource_list_to_array(scratch2.arena, &res->u.dir->named_list);
-            id_array    = pe_resource_list_to_array(scratch2.arena, &res->u.dir->id_list);
-
-            PE_ResourcePtrArray named_ptr_array = pe_resource_ptr_from_array(scratch2.arena, named_array);
-            PE_ResourcePtrArray id_ptr_array    = pe_resource_ptr_from_array(scratch2.arena, id_array);
-
-            radsort(named_ptr_array.v, named_ptr_array.count, lnk_res_string_id_is_before);
-            radsort(id_ptr_array.v,    id_ptr_array.count,    lnk_res_number_id_is_before);
-
-            named_array = pe_resource_from_ptr_array(scratch.arena, named_ptr_array);
-            id_array    = pe_resource_from_ptr_array(scratch.arena, id_ptr_array);
-
-            scratch_end(scratch2);
-          }
-
-          // allocate COFF entries
-          COFF_ResourceDirEntry *named_entries = push_array(obj_writer->arena, COFF_ResourceDirEntry, named_array.count);
-          COFF_ResourceDirEntry *id_entries    = push_array(obj_writer->arena, COFF_ResourceDirEntry, id_array.count);
-
-          // push header and entries
-          str8_list_push(obj_writer->arena, &rsrc1->data, str8_struct(dir_header));
-          str8_list_push(obj_writer->arena, &rsrc1->data, str8_array(named_entries, named_array.count));
-          str8_list_push(obj_writer->arena, &rsrc1->data, str8_array(id_entries, id_array.count));
-
-          // fill out named ids
-          for (U64 i = 0; i < named_array.count; i += 1) {
-            PE_Resource            src = named_array.v[i];
-            COFF_ResourceDirEntry *dst = &named_entries[i];
-
-            // append resource name
-            U32     res_name_off = safe_cast_u32(rsrc1->data.total_size);
-            String8 res_name     = coff_resource_string_from_str8(obj_writer->arena, res->id.u.string);
-            str8_list_push(obj_writer->arena, &rsrc1->data, res_name);
-
-            // not sure why high bit has to be turned on here since number id and string id entries are
-            // in separate arrays but windows doesn't treat name offset like string without this bit.
-            dst->name.offset = (1 << 31) | res_name_off;
-          }
-
-          // fill out number ids
-          for (U64 i = 0; i < id_array.count; i += 1) {
-            PE_Resource            src = id_array.v[i];
-            COFF_ResourceDirEntry *dst = &id_entries[i];
-            dst->name.id = src.id.u.number;
-          }
-
-          // fill out sub directory stack frame
-          struct Stack *frame      = push_array(scratch.arena, struct Stack, 1);
-          frame->res_arr[0]        = named_array;
-          frame->res_arr[1]        = id_array;
-          frame->coff_entry_arr[0] = named_entries;
-          frame->coff_entry_arr[1] = id_entries;
-          SLLStackPush(stack, frame);
-        } goto yield; // recurse to sub directory
-
-        case PE_ResDataKind_COFF_RESOURCE: {
-          // fill out resource header
-          COFF_ResourceDataEntry *coff_res = push_array(obj_writer->arena, COFF_ResourceDataEntry, 1);
-          coff_res->data_size = res->u.coff_res.data.size;
-          coff_res->data_voff = 0; // relocated
-          coff_res->code_page = 0; // TODO: whats this for?
-
-          if (res->u.coff_res.data.size >= sizeof(U32)) {
-            // emit symbol for resource data
-            U32             resdat_off = safe_cast_u32(rsrc2->data.total_size);
-            COFF_ObjSymbol *resdat     = coff_obj_writer_push_symbol_static(obj_writer, str8_lit("resdat"), resdat_off, rsrc2);
-
-            // emit reloc for 'data_voff'
-            U64 apply_off   = rsrc1->data.total_size + OffsetOf(COFF_ResourceDataEntry, data_voff);
-            U32 apply_off32 = safe_cast_u32(apply_off);
-            coff_obj_writer_section_push_reloc_voff(obj_writer, rsrc1, apply_off32, resdat);
-          }
-
-          // push resource entry & data
-          str8_list_push(obj_writer->arena, &rsrc1->data, str8_struct(coff_res));
-          str8_list_push(obj_writer->arena, &rsrc2->data, res->u.coff_res.data);
-        } break;
-
-        case PE_ResDataKind_NULL: break;
-
-        // we must not have this resource node here, it is used to represent on-disk version of entry
-        case PE_ResDataKind_COFF_LEAF: InvalidPath;
-        }
-      }
+    node->coff_entry->id.data_entry_offset = safe_cast_u32(rsrc1->data.total_size);
+    if (res->kind == PE_ResDataKind_DIR) {
+      node->coff_entry->id.data_entry_offset |= COFF_Resource_SubDirFlag;
     }
-    SLLStackPop(stack);
-    yield:;
+
+    switch (res->kind) {
+    case PE_ResDataKind_DIR: {
+      COFF_ResourceDirTable *dir_header = push_array(obj_writer->arena, COFF_ResourceDirTable, 1);
+      dir_header->characteristics       = res->u.dir->characteristics;
+      dir_header->time_stamp            = res->u.dir->time_stamp;
+      dir_header->major_version         = res->u.dir->major_version;
+      dir_header->minor_version         = res->u.dir->minor_version;
+      dir_header->name_entry_count      = res->u.dir->named_list.count;
+      dir_header->id_entry_count        = res->u.dir->id_list.count;
+
+      PE_ResourceArray named_array;
+      PE_ResourceArray id_array;
+      {
+        Temp scratch2 = scratch_begin(&scratch.arena, 1);
+        named_array = pe_resource_list_to_array(scratch2.arena, &res->u.dir->named_list);
+        id_array    = pe_resource_list_to_array(scratch2.arena, &res->u.dir->id_list);
+
+        PE_ResourcePtrArray named_ptr_array = pe_resource_ptr_from_array(scratch2.arena, named_array);
+        PE_ResourcePtrArray id_ptr_array    = pe_resource_ptr_from_array(scratch2.arena, id_array);
+        radsort(named_ptr_array.v, named_ptr_array.count, lnk_res_string_id_is_before);
+        radsort(id_ptr_array.v,    id_ptr_array.count,    lnk_res_number_id_is_before);
+
+        named_array = pe_resource_from_ptr_array(scratch.arena, named_ptr_array);
+        id_array    = pe_resource_from_ptr_array(scratch.arena, id_ptr_array);
+        scratch_end(scratch2);
+      }
+
+      COFF_ResourceDirEntry *named_entries = push_array(obj_writer->arena, COFF_ResourceDirEntry, named_array.count);
+      COFF_ResourceDirEntry *id_entries    = push_array(obj_writer->arena, COFF_ResourceDirEntry, id_array.count);
+      str8_list_push(obj_writer->arena, &rsrc1->data, str8_struct(dir_header));
+      str8_list_push(obj_writer->arena, &rsrc1->data, str8_array(named_entries, named_array.count));
+      str8_list_push(obj_writer->arena, &rsrc1->data, str8_array(id_entries, id_array.count));
+
+      for (U64 i = 0; i < named_array.count; i += 1) {
+        PE_Resource            *child = &named_array.v[i];
+        COFF_ResourceDirEntry *entry = &named_entries[i];
+        U32                     name_off = safe_cast_u32(rsrc1->data.total_size);
+        String8                 name = coff_resource_string_from_str8(obj_writer->arena, child->id.u.string);
+        str8_list_push(obj_writer->arena, &rsrc1->data, name);
+        entry->name.offset = COFF_Resource_SubDirFlag | name_off;
+
+        struct QueueNode *child_node = push_array(scratch.arena, struct QueueNode, 1);
+        child_node->res              = child;
+        child_node->coff_entry       = entry;
+        SLLQueuePush(queue_first, queue_last, child_node);
+      }
+      for (U64 i = 0; i < id_array.count; i += 1) {
+        PE_Resource            *child = &id_array.v[i];
+        COFF_ResourceDirEntry *entry = &id_entries[i];
+        entry->name.id = child->id.u.number;
+
+        struct QueueNode *child_node = push_array(scratch.arena, struct QueueNode, 1);
+        child_node->res              = child;
+        child_node->coff_entry       = entry;
+        SLLQueuePush(queue_first, queue_last, child_node);
+      }
+    } break;
+
+    case PE_ResDataKind_COFF_RESOURCE: {
+      COFF_ResourceDataEntry *coff_res = push_array(obj_writer->arena, COFF_ResourceDataEntry, 1);
+      coff_res->data_size = res->u.coff_res.data.size;
+      coff_res->data_voff = 0;
+      coff_res->code_page = 0;
+
+      if (res->u.coff_res.data.size >= sizeof(U32)) {
+        U32             resdat_off = safe_cast_u32(rsrc2->data.total_size);
+        COFF_ObjSymbol *resdat     = coff_obj_writer_push_symbol_static(obj_writer, str8_lit("resdat"), resdat_off, rsrc2);
+        U64             apply_off  = rsrc1->data.total_size + OffsetOf(COFF_ResourceDataEntry, data_voff);
+        coff_obj_writer_section_push_reloc_voff(obj_writer, rsrc1, safe_cast_u32(apply_off), resdat);
+      }
+
+      str8_list_push(obj_writer->arena, &rsrc1->data, str8_struct(coff_res));
+      str8_list_push(obj_writer->arena, &rsrc2->data, res->u.coff_res.data);
+      str8_list_push_aligner(obj_writer->arena, &rsrc2->data, 0, 8);
+    } break;
+
+    case PE_ResDataKind_NULL: break;
+    case PE_ResDataKind_COFF_LEAF: InvalidPath;
+    }
   }
   
   scratch_end(scratch);
