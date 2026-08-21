@@ -212,45 +212,32 @@ lnk_make_linker_manifest(Arena      *arena,
   String8List srl = {0};
   str8_serial_begin(scratch.arena, &srl);
   str8_serial_push_string(scratch.arena, &srl, str8_lit(
-                                                "<?xml version=\"1.0\" standalone=\"yes\"?>\n"
-                                                "<assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\"\n"
-                                                "          manifestVersion=\"1.0\">\n"));
+                                                "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n"
+                                                "<assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\" manifestVersion=\"1.0\">\r\n"));
   if (manifest_uac) {
-#if 1
     String8 uac = push_str8f(scratch.arena,
-                             "   <trustInfo>\n"
-                             "     <security>\n"
-                             "       <requestedPrivileges>\n"
-                             "         <requestedExecutionLevel level=%S uiAccess=%S/>\n"
-                             "       </requestedPrivileges>\n"
-                             "     </security>\n"
-                             "   </trustInfo>\n",
+                             "  <trustInfo xmlns=\"urn:schemas-microsoft-com:asm.v3\">\r\n"
+                             "    <security>\r\n"
+                             "      <requestedPrivileges>\r\n"
+                             "        <requestedExecutionLevel level=%S uiAccess=%S></requestedExecutionLevel>\r\n"
+                             "      </requestedPrivileges>\r\n"
+                             "    </security>\r\n"
+                             "  </trustInfo>\r\n",
                              manifest_level,
                              manifest_ui_access);
-#else
-    String8 uac = push_str8f(scratch.arena,
-        	"<ms_asmv2:trustInfo xmlns:ms_asmv2="urn:schemas-microsoft-com:asm.v2" xmlns="urn:schemas-microsoft-com:asm.v3">\n"
-		        "<ms_asmv2:security>"
-			        "<ms_asmv2:requestedPrivileges>"
-				        "<ms_asmv2:requestedExecutionLevel level=%S uiAccess=%S>"
-                "</ms_asmv2:requestedExecutionLevel>"
-			        "</ms_asmv2:requestedPrivileges>"
-		        "</ms_asmv2:security>"
-	        "</ms_asmv2:trustInfo>", manifest_level, manifest_ui_access);
-#endif
     str8_serial_push_string(scratch.arena, &srl, uac);
   }
   for (String8Node *node = manifest_dependency_list.first; node != 0; node = node->next) {
     String8 dep = push_str8f(scratch.arena, 
-                             " <dependency>\n"
-                             "   <dependentAssembly>\n"
-                             "     <assemblyIdentity %S/>\n"
-                             "   </dependentAssembly>\n"
-                             " </dependency>\n",
+                             "  <dependency>\r\n"
+                             "    <dependentAssembly>\r\n"
+                             "      <assemblyIdentity %S></assemblyIdentity>\r\n"
+                             "    </dependentAssembly>\r\n"
+                             "  </dependency>\r\n",
                              node->string);
     str8_serial_push_string(scratch.arena, &srl, dep);
   }
-  str8_serial_push_string(scratch.arena, &srl, str8_lit("</assembly>\n"));
+  str8_serial_push_string(scratch.arena, &srl, str8_lit("</assembly>\r\n"));
 
   String8 result = str8_list_join(arena, &srl, 0);
 
