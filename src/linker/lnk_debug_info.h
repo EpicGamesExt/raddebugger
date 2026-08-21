@@ -237,7 +237,7 @@ typedef struct
   Rng1U64Array         image_section_virt_ranges;
   Rng1U64Array         image_section_file_ranges;
   U64                 *image_section_file_section_numbers;
-  PDB_DbiSCList       *sc_list; // [obj_count]
+  PDB_DbiSCArray      *sc_arrays; // [obj_count]
 } LNK_BuildPdb;
 
 typedef struct

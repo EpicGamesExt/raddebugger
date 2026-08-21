@@ -2521,27 +2521,17 @@ psi_push(PDB_PsiContext *psi, CV_Pub32Flags flags, U32 offset, U16 isect, String
 
 ////////////////////////////////
 
-internal void
-dbi_sec_contrib_list_push_node(PDB_DbiSCList *list, PDB_DbiSCNode *node)
+internal PDB_DbiSC *
+dbi_sec_contrib_array_push(Arena *arena, PDB_DbiSCArray *array)
 {
-  node->next = 0;
-  SLLQueuePush(list->first, list->last, node);
-  list->count += 1;
-}
-
-internal PDB_DbiSCNode *
-dbi_sec_contrib_list_push(Arena *arena, PDB_DbiSCList *list)
-{
-  PDB_DbiSCNode *node = push_array_no_zero(arena, PDB_DbiSCNode, 1);
-  node->next = 0;
-  dbi_sec_contrib_list_push_node(list, node);
-  return node;
-}
-
-internal void
-dbi_sec_list_concat_arr(PDB_DbiSCList *list, U64 count, PDB_DbiSCList *to_concat)
-{
-  SLLConcatInPlaceArray(list, to_concat, count);
+  if (array->count >= array->cap) {
+    U64        new_cap = Max(16, array->cap * 2);
+    PDB_DbiSC *new_v   = push_array_no_zero(arena, PDB_DbiSC, new_cap);
+    MemoryCopyTyped(new_v, array->v, array->count);
+    array->v   = new_v;
+    array->cap = new_cap;
+  }
+  return &array->v[array->count++];
 }
 
 internal PDB_DbiContext *
@@ -2664,12 +2654,12 @@ dbi_open_module_info(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_Db
   return list;
 }
 
-internal PDB_DbiSCList
+internal PDB_DbiSCArray
 dbi_open_sec_contrib(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_DbiHeader *dbi_header)
 {
   ProfBeginFunction();
   
-  PDB_DbiSCList sec_contrib = {0};
+  PDB_DbiSCArray sec_contribs = {0};
   
   if (dbi_header->sec_con_size > sizeof(PDB_DbiSC)) {
     Temp scratch = scratch_begin(&arena, 1);
@@ -2686,16 +2676,11 @@ dbi_open_sec_contrib(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_Db
     switch (version) {
     case PDB_DbiSCVersion_1: {
       U64 contrib_count = dbi_header->sec_con_size / sizeof(PDB_DbiSC);
-      PDB_DbiSC *src_contrib_array = push_array(scratch.arena, PDB_DbiSC, contrib_count);
-      MSF_UInt sec_con_read = msf_stream_read_array(msf, sn, &src_contrib_array[0], contrib_count);
-      Assert(sec_con_read == sizeof(src_contrib_array[0]) * contrib_count);
-      
-      PDB_DbiSCNode *dst_contrib_array = push_array_no_zero(arena, PDB_DbiSCNode, contrib_count);
-      for (U64 icontrib = 0; icontrib < contrib_count; icontrib += 1) {
-        dst_contrib_array[icontrib].next = 0;
-        dst_contrib_array[icontrib].data = src_contrib_array[icontrib];
-        dbi_sec_contrib_list_push_node(&sec_contrib, &dst_contrib_array[icontrib]);
-      }
+      sec_contribs.v     = push_array_no_zero(arena, PDB_DbiSC, contrib_count);
+      sec_contribs.count = contrib_count;
+      sec_contribs.cap   = contrib_count;
+      MSF_UInt sec_con_read = msf_stream_read_array(msf, sn, sec_contribs.v, contrib_count);
+      Assert(sec_con_read == sizeof(sec_contribs.v[0]) * contrib_count);
     } break;
     case PDB_DbiSCVersion_2: {
       NotImplemented;
@@ -2709,7 +2694,7 @@ dbi_open_sec_contrib(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_Db
   }
   
   ProfEnd();
-  return sec_contrib;
+  return sec_contribs;
 }
 
 internal void
@@ -3138,21 +3123,18 @@ dbi_build_sec_con(Arena *arena, TP_Context *tp, PDB_DbiContext *dbi)
   *version = PDB_DbiSCVersion_1;
   
   // push section contribs V1
-  ProfBegin("Push sect contribs [Count %llu]", dbi->sec_contrib_list.count);
-  PDB_DbiSC *sc_array = push_array_no_zero(arena, PDB_DbiSC, dbi->sec_contrib_list.count);
-  PDB_DbiSC *dst = &sc_array[0];
-  for (PDB_DbiSCNode *src = dbi->sec_contrib_list.first; src != 0; src = src->next, dst += 1) {
-    *dst = src->data;
-  }
+  ProfBegin("Push sect contribs [Count %llu]", dbi->sec_contribs.count);
+  PDB_DbiSC *sc_array = push_array_no_zero(arena, PDB_DbiSC, dbi->sec_contribs.count);
+  MemoryCopyTyped(sc_array, dbi->sec_contribs.v, dbi->sec_contribs.count);
   ProfEnd();
 
   // sort section contribs so they are binary searchable
-  lnk_radix_sort_dbi_sc_array(tp, sc_array, dbi->sec_contrib_list.count, dbi->section_list.count + 1);
+  lnk_radix_sort_dbi_sc_array(tp, sc_array, dbi->sec_contribs.count, dbi->section_list.count + 1);
 
   // DBI contribution maps an address range to its module, so adjacent same-module runs can share one record
   ProfBegin("Coalesce sect contribs");
   U64 sc_count = 0;
-  for EachIndex(read_idx, dbi->sec_contrib_list.count) {
+  for EachIndex(read_idx, dbi->sec_contribs.count) {
     PDB_DbiSC *current = &sc_array[read_idx];
     if (sc_count > 0) {
       PDB_DbiSC *previous = &sc_array[sc_count - 1];
@@ -3363,9 +3345,7 @@ dbi_module_push_section_contrib(PDB_DbiContext *dbi,
   sc.data_crc     = data_crc;
   sc.reloc_crc    = reloc_crc;
 
-  PDB_DbiSCNode *node = push_array_no_zero(dbi->arena, PDB_DbiSCNode, 1);
-  node->data = sc;
-  dbi_sec_contrib_list_push_node(&dbi->sec_contrib_list, node);
+  *dbi_sec_contrib_array_push(dbi->arena, &dbi->sec_contribs) = sc;
   
   // Mod1::fUpdateSecContrib
   if (mod->first_sc.base.mod == 0) {

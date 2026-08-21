@@ -3082,8 +3082,6 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
 internal
 THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
 {
-  // TODO: use chunked lists for SC
-  // TODO: put back unused sc nodes
   // TODO: compute CRC for relocations
 
   U64            obj_idx = task_id;
@@ -3091,8 +3089,9 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   PDB_DbiModule *mod     = task->mod_arr    [obj_idx];
   LNK_Obj       *obj     = task->cv->obj_arr[obj_idx];
 
-  PDB_DbiSCNode *sc_arr   = push_array_no_zero(arena, PDB_DbiSCNode, obj->header.section_count_no_null);
-  U64            sc_count = 0;
+  PDB_DbiSCArray *sc_array = &task->sc_arrays[obj_idx];
+  sc_array->v   = push_array_no_zero(arena, PDB_DbiSC, obj->header.section_count_no_null);
+  sc_array->cap = obj->header.section_count_no_null;
 
   for EachIndex(sect_idx, obj->header.section_count_no_null) {
 
@@ -3127,23 +3126,22 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
     U64 range_idx = search_result - 1;
 
     // fill out & push section contribution
-    PDB_DbiSCNode *sc = sc_arr + sc_count++;
-    sc->data.base.sec     = (U16)(is_virt ? range_idx : task->image_section_file_section_numbers[range_idx]);
-    sc->data.base.pad0    = 0;
-    sc->data.base.sec_off = section_range.min - image_ranges->v[range_idx].min;
-    sc->data.base.size    = dim_1u64(section_range);
-    sc->data.base.flags   = *section.flags;
-    sc->data.base.mod     = mod->imod;
-    sc->data.base.pad1    = 0;
-    sc->data.data_crc     = is_virt ? 0 : crc32_from_string(str8_substr(task->image_data, section_range));
-    sc->data.reloc_crc    = 0;
-    dbi_sec_contrib_list_push_node(&task->sc_list[obj_idx], sc);
+    PDB_DbiSC *sc = &sc_array->v[sc_array->count++];
+    sc->base.sec     = (U16)(is_virt ? range_idx : task->image_section_file_section_numbers[range_idx]);
+    sc->base.pad0    = 0;
+    sc->base.sec_off = section_range.min - image_ranges->v[range_idx].min;
+    sc->base.size    = dim_1u64(section_range);
+    sc->base.flags   = *section.flags;
+    sc->base.mod     = mod->imod;
+    sc->base.pad1    = 0;
+    sc->data_crc     = is_virt ? 0 : crc32_from_string(str8_substr(task->image_data, section_range));
+    sc->reloc_crc    = 0;
   }
 
   // find first code section contribution for the Mod1::fUpdateSecContrib
-  for EachIndex(i, sc_count) {
-    if (sc_arr[i].data.base.flags & COFF_SectionFlag_CntCode) {
-      mod->first_sc = sc_arr[i].data;
+  for EachIndex(i, sc_array->count) {
+    if (sc_array->v[i].base.flags & COFF_SectionFlag_CntCode) {
+      mod->first_sc = sc_array->v[i];
       break;
     }
   }
@@ -3393,9 +3391,25 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
         task.image_section_virt_ranges.v[i] = rng_1u64(sect_header->voff, sect_header->voff + sect_header->vsize);
       }
 
-      task.sc_list = push_array(scratch.arena, PDB_DbiSCList, cv->obj_count);
+      task.sc_arrays = push_array(scratch.arena, PDB_DbiSCArray, cv->obj_count);
       tp_for_parallel(tp, tp_arena, cv->obj_count, lnk_push_dbi_sec_contrib_task, &task);
-      dbi_sec_list_concat_arr(&task.pdb->dbi->sec_contrib_list, cv->obj_count, task.sc_list);
+
+      PDB_DbiSCArray *sec_contribs = &task.pdb->dbi->sec_contribs;
+      U64             new_count    = sec_contribs->count;
+      for EachIndex(obj_idx, cv->obj_count) {
+        new_count += task.sc_arrays[obj_idx].count;
+      }
+      PDB_DbiSC *new_v = push_array_no_zero(task.pdb->dbi->arena, PDB_DbiSC, new_count);
+      MemoryCopyTyped(new_v, sec_contribs->v, sec_contribs->count);
+      U64 cursor = sec_contribs->count;
+      for EachIndex(obj_idx, cv->obj_count) {
+        PDB_DbiSCArray *src = &task.sc_arrays[obj_idx];
+        MemoryCopyTyped(new_v + cursor, src->v, src->count);
+        cursor += src->count;
+      }
+      sec_contribs->v     = new_v;
+      sec_contribs->count = new_count;
+      sec_contribs->cap   = new_count;
     }
     ProfEnd();
   }

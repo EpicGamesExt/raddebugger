@@ -255,18 +255,12 @@ typedef struct PDB_DbiModuleList
   U64            count;
 } PDB_DbiModuleList;
 
-typedef struct PDB_DbiSCNode
+typedef struct PDB_DbiSCArray
 {
-  struct PDB_DbiSCNode *next;
-  PDB_DbiSC data;
-} PDB_DbiSCNode;
-
-typedef struct PDB_DbiSCList
-{
-  PDB_DbiSCNode *first;
-  PDB_DbiSCNode *last;
-  U64                        count;
-} PDB_DbiSCList;
+  PDB_DbiSC *v;
+  U64        count;
+  U64        cap;
+} PDB_DbiSCArray;
 
 typedef struct PDB_DbiSectionNode
 {
@@ -290,7 +284,7 @@ typedef struct PDB_DbiContext
   MSF_StreamNumber      publics_sn;
   MSF_StreamNumber      symbols_sn;
   PDB_DbiModuleList     module_list;
-  PDB_DbiSCList sec_contrib_list;
+  PDB_DbiSCArray sec_contribs;
   PDB_DbiSectionList    section_list;
   PDB_StringTable       ec_names;
   MSF_StreamNumber      dbg_streams[PDB_DbiStream_COUNT];
@@ -403,7 +397,7 @@ internal String8            dbi_module_read_c13_data(Arena *arena, MSF_Context *
 internal void               dbi_module_push_section_contrib(PDB_DbiContext *dbi, PDB_DbiModule *mod, ISectOff isect_off, U32 size,  U32 data_crc, U32 reloc_crc, COFF_SectionFlags flags);
 internal String8List *      dbi_open_file_info(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_DbiHeader *dbi_header);
 internal PDB_DbiModuleList  dbi_open_module_info(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_DbiHeader *dbi_header, String8List *file_info);
-internal PDB_DbiSCList      dbi_open_sec_contrib(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_DbiHeader *dbi_header);
+internal PDB_DbiSCArray     dbi_open_sec_contrib(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_DbiHeader *dbi_header);
 internal PDB_StringTable    dbi_open_ec_names(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn, PDB_DbiHeader *dbi_header);
 internal void               dbi_open_dbg_streams(MSF_StreamNumber *dbg_streams, MSF_Context *msf, MSF_StreamNumber sn, PDB_DbiHeader *dbi_header);
 internal PDB_DbiSectionList dbi_open_section_headers(Arena *arena, MSF_Context *msf, MSF_StreamNumber sn);
