@@ -1,11 +1,36 @@
 # v0.9.28-alpha
 
+## Debugger Changes
+- First pass (will only work for simple cases currently) of watch expressions
+  locks, allowing the same address (with the same type) to be evaluated after
+  the expression goes out of scope.
+- Improved disassembly snapping behavior when not viewing disassembly. Now, if
+  you do not have disassembly open, the debugger will prefer snapping to a call
+  stack frame which has line info.	
+- Added some visual and discoverability improvements to the UI.
+- Fixed a crash in the new (as of 0.9.27) unwinder. (#893, #882, #877, #869,
+  #867, #865, #857, #848, #855, #824, #823)
+- Fixed a number of memory leaks, causing out-of-control memory usage in some
+  cases. (#850)
+- Fixed certain cases of location information being incorrectly generated
+  (notably in optimized builds, and functions with large stack usage). (#864)
+- Fixed incorrect session start logic (debug string clearing, breakpoint hit
+  count resets) in multi-process debugging scenarios.
+- Fixed rare issues with call stack computation reliability.
+- Fixed cursor trails not being toggled by the `Animations` setting.
+- Fixed cursor trails being incorrectly rendered when a cursor is first
+  scrolled into view.
+- Fixed line edits embedded in cells (e.g. in the Palette) not correctly
+  clipping and scrolling longer strings. (#873)
+- Fixed behavior of setting the project path when that would overwrite a file
+  which is not a debugger project file. (#875)
+
 ## Linker Changes
 - Implemented `/OPT:ICF` identical COMDAT folding.
 - Added DEF, and SECTION configuration support.
 - Improved COMDAT handling for weak symbols, ICF, and zero-sized COMDAT
-  anchors, and stopped emitting empty marker sections that could produce invalid
-  PE images.
+  anchors, and stopped emitting empty marker sections that could produce
+  invalid PE images.
 - Fixed import/export edge cases, including import data-directory bounds and
   archive member handling for `__imp_*` symbols.
 - Accepted duplicate identical weak search aliases without reporting multiply
@@ -18,7 +43,8 @@
   that reference undefined symbols, even if the function was inlined (provided
   the object file was compiled with debug info)
 - Reduced memory usage for large links.
-- Fixed forwarder export detection when the symbol name contains dots and has no alias.
+- Fixed forwarder export detection when the symbol name contains dots and has
+  no alias.
 
 # v0.9.27-alpha
 
