@@ -5,14 +5,6 @@
 
 // --- Input -------------------------------------------------------------------
 
-typedef U32 LNK_ObjSymbolPatchFlags;
-enum
-{
-  LNK_ObjSymbolPatch_Value        = (1 << 0),
-  LNK_ObjSymbolPatch_Section      = (1 << 1),
-  LNK_ObjSymbolPatch_StorageClass = (1 << 2),
-};
-
 typedef struct LNK_ObjSymbolArray
 {
   U64                   count;
@@ -245,7 +237,7 @@ internal U32List          lnk_obj_collect_associated_sections(Arena *arena, LNK_
 internal force_inline COFF_ParsedSymbol lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
 internal force_inline COFF_ParsedSymbol lnk_parsed_symbol_from_coff_symbol_idx_no_name(LNK_Obj *obj, U64 symbol_idx);
 internal force_inline String8           lnk_symbol_name_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
-internal void                           lnk_obj_symbol_patch(LNK_Obj *obj, U64 symbol_idx, COFF_ParsedSymbol patch, LNK_ObjSymbolPatchFlags flags);
+internal force_inline U64               lnk_obj_primary_symbol_idx_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx);
 
 internal COFF_SectionHeader * lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number);
 internal String8              lnk_obj_section_data_from_sect_idx(LNK_Obj *obj, U64 sect_idx);

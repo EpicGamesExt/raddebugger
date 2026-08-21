@@ -857,21 +857,6 @@ lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx)
   return result;
 }
 
-internal void
-lnk_obj_symbol_patch(LNK_Obj *obj, U64 symbol_idx, COFF_ParsedSymbol patch, LNK_ObjSymbolPatchFlags flags)
-{
-  U64 primary_idx = lnk_obj_primary_symbol_idx_from_coff_symbol_idx(obj, symbol_idx);
-  if (flags & LNK_ObjSymbolPatch_Value) {
-    obj->coff.symbols.values[primary_idx] = patch.value;
-  }
-  if (flags & LNK_ObjSymbolPatch_Section) {
-    obj->coff.symbols.section_numbers[primary_idx] = patch.section_number;
-  }
-  if (flags & LNK_ObjSymbolPatch_StorageClass) {
-    obj->coff.symbols.storage_classes[primary_idx] = patch.storage_class;
-  }
-}
-
 internal
 THREAD_POOL_TASK_FUNC(lnk_collect_obj_chunks_task)
 {
