@@ -506,7 +506,7 @@ w32_wm_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       case WM_CHAR:
       {
         U32 character = wParam;
-        if((character >= 32 && character != 127) || character == '\n' || character == '\r')
+        if((character >= 32 && character != 127) || character == '\r')
         {
           WM_Event *event = w32_wm_push_event(WM_EventKind_Text, window);
           if(lParam & bit29)

@@ -32,9 +32,3 @@ target:
   executable: "build/ryan_scratch.exe"
   working_directory: build
 }
-target:
-{
-  executable: "build/radbin.exe"
-  working_directory: build
-  arguments: "--rdi raddbg"
-}

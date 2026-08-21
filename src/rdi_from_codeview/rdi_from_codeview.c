@@ -591,7 +591,7 @@ internal RDIM_Location
 cv2r_location_from_addr_reg_off(Arena *arena, RDI_Arch arch, RDI_RegCode reg_code, U32 reg_byte_size, U32 reg_byte_pos, S64 offset, B32 extra_indirection)
 {
   RDIM_Location result = {0};
-  if(0 <= offset && offset <= (S64)max_U16)
+  if(min_S16 <= offset && offset <= max_S16)
   {
     if(extra_indirection)
     {
