@@ -3899,7 +3899,7 @@ THREAD_POOL_TASK_FUNC(lnk_gather_sections_task)
         String8                  defn_name_with_flags = lnk_make_name_with_flags(sectab->arena, sect_defn->name, sect_defn->flags);
         LNK_SectionContribChunk *contrib_chunk        = hash_table_search_string_raw(task->contribs_ht, defn_name_with_flags);
         if (!contrib_chunk) {
-          contrib_chunk = lnk_section_contrib_chunk_list_push_chunk(main_arena, &sect->contribs, sect_defn->contribs_count, sort_idx);
+          contrib_chunk = lnk_section_contrib_chunk_list_push_chunk(main_arena, &sect->contribs, sect_defn->contribs_count, sect_defn->name);
           hash_table_push_string_raw(sectab->arena, task->contribs_ht, defn_name_with_flags, contrib_chunk);
         }
 
@@ -5654,7 +5654,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
         }
 
         // append common block's contribution
-        LNK_SectionContribChunk *common_block_chunk = lnk_section_contrib_chunk_list_push_chunk(sectab->arena, &common_block_sect->contribs, 1, str8(0,0));
+        LNK_SectionContribChunk *common_block_chunk = lnk_section_contrib_chunk_list_push_chunk(sectab->arena, &common_block_sect->contribs, 1, str8_lit(".bss"));
         LNK_SectionContrib      *common_block_sc    = lnk_section_contrib_chunk_push(common_block_chunk, 1);
         common_block_sc->u.obj_idx              = max_U32;
         common_block_sc->u.obj_section_number   = 0;
@@ -5675,6 +5675,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
       // Grouped Sections (PE Format)
       //  "All contributions with the same object-section name are allocated contiguously in the image,
       //  and the blocks of contributions are sorted in lexical order by object-section name." 
+      // Preserve each source section's contribution range across the merge.
       ProfBegin("Sort Sections");
       for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
         lnk_sort_section_contribs(&sect_n->data);
@@ -5685,6 +5686,12 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
       if (config->flags & LNK_ConfigFlag_Merge) {
         lnk_section_table_merge(sectab, config->merge_list);
       }
+
+      ProfBegin("Sort Merged Sections");
+      for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
+        lnk_sort_section_contribs(&sect_n->data);
+      }
+      ProfEnd();
 
       if (config->do_function_pad_min == LNK_SwitchState_Yes) {
         tp_for_parallel_prof(tp, arena, objs_count, lnk_flag_hotpatch_contribs_task, &task, "Flag Hotpatch Section Contribs");

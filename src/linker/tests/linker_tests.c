@@ -728,6 +728,29 @@ TEST(merge)
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.qwe=.test entry.obj test.obj");
   T_Ok(g_last_exit_code == 0);
 
+  // merged contribution groups retain lexical order
+  {
+    T_Ok(t_write_def_obj("order.obj", (T_COFF_DefObj){
+      .machine = T_COFF_DefSetMachine(X64),
+      .sections = (T_COFF_DefSection[]){
+        { "a", ".a$m", str8_lit_comp("a"), .flags = "rw:data@1" },
+        { "z", ".z$m", str8_lit_comp("z"), .flags = "rw:data@1" },
+        {0}
+      }
+    }));
+
+    t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.a=.z entry.obj order.obj");
+    T_Ok(g_last_exit_code == 0);
+
+    String8             exe           = t_read_file(arena, str8_lit("a.exe"));
+    PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+    COFF_SectionHeader *sect          = coff_section_header_from_name(exe, section_table, pe.section_count, str8_lit(".z"));
+    T_Ok(sect != 0);
+    String8 data = str8_substr(exe, rng_1u64(sect->foff, sect->foff + 2));
+    T_Ok(str8_match(data, str8_lit("az"), 0));
+  }
+
   // merge .test -> .qwe -> .data
   {
     t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.test=.qwe /merge:.qwe=.data entry.obj test.obj");
