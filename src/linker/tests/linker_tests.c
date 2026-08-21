@@ -4783,21 +4783,55 @@ TEST(import_kernel32)
           {0},
         }
       },
+      {
+        "dead", ".text$dead", str8(0, 4),
+        .flags = "rx:code@1",
+        .raw_flags = COFF_SectionFlag_LnkCOMDAT,
+        .relocs = (T_COFF_DefReloc[]){
+          T_COFF_DefReloc(X64_Addr32Nb, 0, "__imp_CompareStringW"),
+          {0},
+        }
+      },
       {0},
     },
     .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("dead", COFF_ComdatSelect_Any),
       T_COFF_DefSymbol_Extern("test", "data", 0),
       T_COFF_DefSymbol_Extern("entry", "text", 0),
+      T_COFF_DefSymbol_ExternFunc("dead", "dead", 0),
       T_COFF_DefSymbol_Undef("__imp_CreateFileA"),
       T_COFF_DefSymbol_Undef("__imp_CloseHandle"),
+      T_COFF_DefSymbol_Undef("__imp_CompareStringW"),
       {0},
     }
   }));
 
-  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /fixed import.obj kernel32.lib");
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /fixed /opt:ref import.obj kernel32.lib");
   T_Ok(g_last_exit_code == 0);
 
   {
+    String8             exe           = t_read_file(arena, str8_lit("a.exe"));
+    PE_BinInfo          pe            = pe_bin_info_from_data(arena, exe);
+    COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+    PE_ParsedStaticImportTable imports = pe_static_imports_from_data(arena, pe.is_pe32, pe.section_count, section_table, exe, pe.data_dir_franges[PE_DataDirectoryIndex_IMPORT]);
+    B32 found_create = 0;
+    B32 found_close  = 0;
+    B32 found_dead   = 0;
+    for EachIndex(dll_idx, imports.count) {
+      PE_ParsedStaticDLLImport *dll = &imports.v[dll_idx];
+      for EachIndex(import_idx, dll->import_count) {
+        PE_ParsedImport *import = &dll->imports[import_idx];
+        if (import->type == PE_ParsedImport_Name) {
+          found_create |= str8_match(import->u.name.string, str8_lit("CreateFileA"), 0);
+          found_close  |= str8_match(import->u.name.string, str8_lit("CloseHandle"), 0);
+          found_dead   |= str8_match(import->u.name.string, str8_lit("CompareStringW"), 0);
+        }
+      }
+    }
+    T_Ok(found_create);
+    T_Ok(found_close);
+    T_Ok(!found_dead);
+
     String8 test_file_path = push_str8f(arena, "%S/test", g_wdir);
     delete_file_at_path(test_file_path);
 
