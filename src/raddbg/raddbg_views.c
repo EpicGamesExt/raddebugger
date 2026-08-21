@@ -158,7 +158,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       UI_TxtOp single_line_op = ui_single_line_txt_op_from_event(scratch.arena, evt, line, line_range, *cursor, *mark);
       
       //- TODO(rjf): skip replace-ranges for now
-      if(single_line_op.replace.size != 0)
+      if(single_line_op.replace.size != 0 || evt->flags & UI_EventFlag_Delete)
       {
         continue;
       }
