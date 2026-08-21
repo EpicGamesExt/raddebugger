@@ -354,7 +354,7 @@ internal String8 lnk_manifest_from_inputs(Arena *arena, LNK_IO_Flags io_flags, S
 
 internal String8 lnk_make_null_obj(Arena *arena);
 internal String8 lnk_make_res_obj(Arena *arena, String8List res_file_list, String8List res_path_list, COFF_MachineType machine, U32 time_stamp, String8 work_dir, PathStyle system_path_style, String8 obj_name);
-internal String8 lnk_make_linker_obj(Arena *arena, LNK_Config *config);
+internal String8 lnk_make_linker_obj(Arena *arena, LNK_Config *config, MSCRT_FeatFlags feat_flags);
 
 // --- Inputer -----------------------------------------------------------------
 

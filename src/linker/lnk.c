@@ -784,7 +784,7 @@ lnk_make_linker_coff_obj(Arena            *arena,
 }
 
 internal String8
-lnk_make_linker_obj(Arena *arena, LNK_Config *config)
+lnk_make_linker_obj(Arena *arena, LNK_Config *config, MSCRT_FeatFlags feat_flags)
 {
   ProfBeginFunction();
 
@@ -808,7 +808,7 @@ lnk_make_linker_obj(Arena *arena, LNK_Config *config)
     // TODO: investigate IMAGE_ENCLAVE_CONFIG 32/64
     coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_ENCLAVE_CONFIG_SYMBOL_NAME), 0, COFF_SymStorageClass_External);
     
-    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_FLAGS_SYMBOL_NAME)        , 0, COFF_SymStorageClass_External);
+    coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_FLAGS_SYMBOL_NAME)        , feat_flags & MSCRT_FeatFlag_GUARD_STACK, COFF_SymStorageClass_External);
     coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_FIDS_TABLE_SYMBOL_NAME)   , 0, COFF_SymStorageClass_External);
     coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_FIDS_COUNT_SYMBOL_NAME)   , 0, COFF_SymStorageClass_External);
     coff_obj_writer_push_symbol_abs(obj_writer, str8_lit(MSCRT_GUARD_IAT_TABLE_SYMBOL_NAME)    , 0, COFF_SymStorageClass_External);
@@ -2003,9 +2003,17 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
   // link inputer
   lnk_link_inputs(tp, arena, config, inputer, symtab, link);
 
+  MSCRT_FeatFlags image_feat_flags = 0;
+  for EachNode(obj_n, LNK_ObjNode, link->objs.first) {
+    image_feat_flags |= lnk_obj_get_features(&obj_n->data);
+  }
+  if (image_feat_flags & MSCRT_FeatFlag_GUARD_STACK) {
+    lnk_include_symbol(config, str8_lit(MSCRT_LOAD_CONFIG_SYMBOL_NAME), 0);
+  }
+
   {
     ProfBegin("Push Linker Symbols");
-    String8 linker_symbols_obj = lnk_make_linker_obj(arena->v[0], config);
+    String8 linker_symbols_obj = lnk_make_linker_obj(arena->v[0], config, image_feat_flags);
     lnk_inputer_push_obj_linkgen(inputer, 0, str8_lit("* Linker Symbols *"), linker_symbols_obj);
     ProfEnd();
   }
@@ -2105,7 +2113,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
       for (String8Node *dll_name_n = static_dll_names.first; dll_name_n != 0; dll_name_n = dll_name_n->next) {
         PE_MakeImportList *imports              = hash_map_search_path_raw(&static_imports_hm, dll_name_n->string);
         String8            import_debug_symbols = lnk_make_dll_import_debug_symbols(scratch.arena, config->machine, dll_name_n->string);
-        String8            import_obj           = pe_make_import_dll_obj_static(arena->v[0], time_stamp, config->machine, dll_name_n->string, import_debug_symbols, *imports);
+        String8            import_obj           = pe_make_import_dll_obj_static(arena->v[0], time_stamp, config->machine, dll_name_n->string, import_debug_symbols, *imports, dll_name_n->next != 0);
         lnk_inputer_push_obj(inputer, 0, str8f(inputer->arena, "Import:%S", dll_name_n->string), import_obj);
       }
 
@@ -2723,6 +2731,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_ref_task)
       // push tasks for each root symbol
       for EachNode(root_n, LNK_IncludeSymbolNode, config->include_symbol_list.first) {
         LNK_Symbol       *root     = lnk_symbol_table_search(symtab, root_n->v.name);
+        if (root == 0) { continue; }
         LNK_ObjSymbolRef  root_ref = lnk_ref_from_symbol(root);
 
         LNK_RelocRefs r = {0};
