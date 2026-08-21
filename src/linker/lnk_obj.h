@@ -33,6 +33,7 @@ typedef struct LNK_Obj
   String8 data;
 
   COFF_FileHeaderInfo header;
+  COFF_SectionHeader *section_headers;
   COFF_SectionFlags  *section_flags;
   LNK_ObjSymbolArray symbols;
 

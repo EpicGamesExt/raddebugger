@@ -71,23 +71,19 @@ lnk_lib_from_data(Arena *arena, String8 data, String8 path, U64 input_idx, LNK_L
     
     symbol_count = first_member.symbol_count;
     
-    // convert big endian offsets
-    for (U32 offset_idx = 0; offset_idx < symbol_count; offset_idx += 1) {
-      first_member.member_offsets[offset_idx] = from_be_u32(first_member.member_offsets[offset_idx]);
-    }
-
     // compress member offsets to match those from the second header
     {
       HashTable *member_off_ht = hash_table_init(scratch.arena, (U64)((F64)first_member.symbol_count * 1.3));
       for EachIndex(symbol_idx, symbol_count) {
-        if (!hash_table_search_u32_u32(member_off_ht, first_member.member_offsets[symbol_idx], 0)) {
-          hash_table_push_u32_u32(scratch.arena, member_off_ht, first_member.member_offsets[symbol_idx], member_off_ht->count);
+        U32 member_off = from_be_u32(first_member.member_offsets[symbol_idx]);
+        if (!hash_table_search_u32_u32(member_off_ht, member_off, 0)) {
+          hash_table_push_u32_u32(scratch.arena, member_off_ht, member_off, member_off_ht->count);
         }
       }
 
       symbol_indices = push_array(arena, U16, first_member.symbol_count);
       for EachIndex(symbol_idx, first_member.symbol_count) {
-        U32 member_off = first_member.member_offsets[symbol_idx];
+        U32 member_off = from_be_u32(first_member.member_offsets[symbol_idx]);
         U32 member_off_idx = 0;
         if (!hash_table_search_u32_u32(member_off_ht, member_off, &member_off_idx)) {
           InvalidPath;

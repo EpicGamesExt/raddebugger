@@ -93,6 +93,9 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     lnk_error_input_obj(LNK_Error_IllData, input, "corrupted file, unable to read string table");
   }
 
+  COFF_SectionHeader *section_headers = push_array_no_zero(arena, COFF_SectionHeader, header.section_count_no_null);
+  MemoryCopy(section_headers, raw_coff_section_table.str, raw_coff_section_table.size);
+
   //
   // section table pass
   //  - error check headers fields
@@ -381,6 +384,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   obj->data                    = input->data;
   obj->path                    = push_str8_copy(arena, input->path);
   obj->header                  = header;
+  obj->section_headers         = section_headers;
   obj->section_flags           = section_flags;
   obj->symbols                 = symbols;
   obj->comdats                 = comdats;
@@ -670,7 +674,7 @@ lnk_obj_get_comdat_symlink(LNK_Obj *obj, U64 section_number, LNK_ObjSymbolRef *s
 internal COFF_SectionHeader *
 lnk_coff_section_table_from_obj(LNK_Obj *obj)
 {
-  return (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
+  return obj->section_headers;
 }
 
 internal U64
@@ -773,8 +777,7 @@ lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
 {
   Assert(section_number > 0);
   U64 sect_idx = section_number - 1;
-  COFF_SectionHeader *section_table = str8_deserial_get_raw_ptr(obj->data, obj->header.section_table_range.min, dim_1u64(obj->header.section_table_range));
-  return &section_table[sect_idx];
+  return &obj->section_headers[sect_idx];
 }
 
 internal force_inline U64

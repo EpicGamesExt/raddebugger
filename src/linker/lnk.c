@@ -4940,7 +4940,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_virtual_offsets_and_sizes_in_obj_section_headers
   LNK_Obj            *obj     = task->objs[obj_idx];
 
   ProfBeginV("Patch Virtual Offset And Size In Section Headers [%S]", obj->path);
-  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
+  COFF_SectionHeader *section_table = lnk_coff_section_table_from_obj(obj);
   for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
     COFF_SectionHeader *sect_header = &section_table[sect_idx];
     if (~obj->section_flags[sect_idx] & COFF_SectionFlag_LnkRemove) {
@@ -4961,7 +4961,7 @@ THREAD_POOL_TASK_FUNC(lnk_patch_file_offsets_and_sizes_in_obj_section_headers_ta
   LNK_Obj            *obj     = task->objs[obj_idx];
 
   ProfBeginV("Patch File Offsets And Sizes In Obj Section Headers [%S]", obj->path);
-  COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->data, obj->header.section_table_range).str;
+  COFF_SectionHeader *section_table = lnk_coff_section_table_from_obj(obj);
   for (U64 sect_idx = 0; sect_idx < obj->header.section_count_no_null; sect_idx += 1) {
     COFF_SectionHeader *sect_header = &section_table[sect_idx];
     COFF_SectionFlags   sect_flags  = obj->section_flags[sect_idx];
