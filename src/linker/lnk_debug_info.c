@@ -76,8 +76,8 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_h_task)
   LNK_CodeViewInput *task    = raw_task;
 
   LNK_Obj *obj = task->obj_arr[obj_idx];
-  if (obj->coff.debug_h_sect_idx < obj->coff.sections.count) {
-    String8    raw_debug_h     = lnk_obj_section_data_from_sect_idx(obj, obj->coff.debug_h_sect_idx);
+  if (obj->coff.debug_h_section_number > 0) {
+    String8    raw_debug_h     = lnk_obj_section_data_from_number(obj, obj->coff.debug_h_section_number);
     CV_DebugH *debug_h         = &task->debug_h_arr[obj_idx];
     LLVM_GHash ghash           = {0};
     U64        ghash_read_size = str8_deserial_read_struct(raw_debug_h, 0, &ghash);
@@ -699,9 +699,9 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
     if (rrt->obj_time_stamps[rrt_obj_idx] != obj_file_props.modified) { continue; }
 
     // invalidate debug section pointers
-    obj->coff.debug_t_sect_idx = ~0;
-    obj->coff.debug_p_sect_idx = ~0;
-    obj->coff.debug_h_sect_idx = ~0;
+    obj->coff.debug_t_section_number = 0;
+    obj->coff.debug_p_section_number = 0;
+    obj->coff.debug_h_section_number = 0;
 
     // apply type index map 
     obj->ti_range = rrt->obj_ti_ranges[rrt_obj_idx];
@@ -733,15 +733,15 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
 
       for EachNode(n, String8Node, input.debug_s_list_arr[obj_idx].first) { total_debug_s_size += n->string.size; }
 
-      if (obj->coff.debug_t_sect_idx < obj->coff.sections.count) {
-        total_debug_t_size += lnk_obj_section_from_sect_idx(obj, obj->coff.debug_t_sect_idx).header->fsize;
+      if (obj->coff.debug_t_section_number > 0) {
+        total_debug_t_size += lnk_coff_section_header_from_section_number(obj, obj->coff.debug_t_section_number)->fsize;
       }
-      if (obj->coff.debug_p_sect_idx < obj->coff.sections.count) {
-        total_debug_p_size += lnk_obj_section_from_sect_idx(obj, obj->coff.debug_p_sect_idx).header->fsize;
+      if (obj->coff.debug_p_section_number > 0) {
+        total_debug_p_size += lnk_coff_section_header_from_section_number(obj, obj->coff.debug_p_section_number)->fsize;
       }
       if (config->ghash) {
-        if (obj->coff.debug_h_sect_idx < obj->coff.sections.count) {
-          total_debug_h_size += lnk_obj_section_from_sect_idx(obj, obj->coff.debug_h_sect_idx).header->fsize;
+        if (obj->coff.debug_h_section_number > 0) {
+          total_debug_h_size += lnk_coff_section_header_from_section_number(obj, obj->coff.debug_h_section_number)->fsize;
         }
       }
     }
@@ -783,16 +783,16 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
     for EachIndex(obj_idx, obj_count) {
       LNK_Obj *obj = obj_arr[obj_idx];
 
-      if (obj->coff.debug_t_sect_idx < obj->coff.sections.count) {
+      if (obj->coff.debug_t_section_number > 0) {
         raw_debug_t_arr[obj_idx].count = 1;
         raw_debug_t_arr[obj_idx].v     = push_array(scratch.arena, String8, 1);
-        raw_debug_t_arr[obj_idx].v[0]  = lnk_obj_section_data_from_sect_idx(obj, obj->coff.debug_t_sect_idx);
+        raw_debug_t_arr[obj_idx].v[0]  = lnk_obj_section_data_from_number(obj, obj->coff.debug_t_section_number);
       }
 
-      if (obj->coff.debug_p_sect_idx < obj->coff.sections.count) {
+      if (obj->coff.debug_p_section_number > 0) {
         raw_debug_p_arr[obj_idx].count = 1;
         raw_debug_p_arr[obj_idx].v     = push_array(scratch.arena, String8, 1);
-        raw_debug_p_arr[obj_idx].v[0]  = lnk_obj_section_data_from_sect_idx(obj, obj->coff.debug_p_sect_idx);
+        raw_debug_p_arr[obj_idx].v[0]  = lnk_obj_section_data_from_number(obj, obj->coff.debug_p_section_number);
       }
     }
 
@@ -2849,20 +2849,19 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   LNK_Obj       *obj     = task->cv->obj_arr[obj_idx];
 
   PDB_DbiSCArray *sc_array = &task->sc_arrays[obj_idx];
-  sc_array->v   = push_array_no_zero(arena, PDB_DbiSC, obj->coff.sections.count);
-  sc_array->cap = obj->coff.sections.count;
+  sc_array->v   = push_array_no_zero(arena, PDB_DbiSC, obj->coff.sections.count_no_null);
+  sc_array->cap = obj->coff.sections.count_no_null;
 
-  for EachIndex(sect_idx, obj->coff.sections.count) {
-
+  for LNK_EachCoffSection(it, obj) {
     // filter by section flags
-    if (obj->coff.sections.headers[sect_idx].flags & (COFF_SectionFlag_LnkInfo | COFF_SectionFlag_LnkRemove | LNK_SECTION_FLAG_DEBUG)) { continue; }
+    if (*it.v.flags & (COFF_SectionFlag_LnkInfo | COFF_SectionFlag_LnkRemove | LNK_SECTION_FLAG_DEBUG)) { continue; }
 
     // skip unwind info for the section contribution
-    String8 section_name = lnk_obj_section_name_from_sect_idx(obj, sect_idx);
+    String8 section_name = lnk_obj_section_name_from_section_number(obj, it.v.section_number);
     if (str8_match(section_name, str8_lit(".pdata"), 0)) { continue; }
 
     // load section and determine its type
-    LNK_ObjSection  section = lnk_obj_section_from_sect_idx(obj, sect_idx);
+    LNK_ObjSection  section = it.v;
     B32             is_virt = !!(*section.flags & COFF_SectionFlag_CntUninitializedData);
 
     // pick section range

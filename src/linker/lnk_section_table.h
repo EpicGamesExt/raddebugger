@@ -10,8 +10,8 @@ typedef struct LNK_SectionContrib
   union {
     // used to sort sections to get deterministic output
     struct {
-      U32 obj_idx;      // index of the input obj that contributes to the image section
-      U32 obj_sect_idx; // index into contributing obj's section table
+      U32 obj_idx;             // index of the input obj that contributes to the image section
+      U32 obj_section_number;  // COFF section number in the contributing obj
     };
 
     // used after section layout is finalized

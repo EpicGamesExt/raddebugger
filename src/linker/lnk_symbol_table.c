@@ -342,8 +342,8 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
         case COFF_ComdatSelect_ExactMatch: {
           LNK_ObjSection dst_section = lnk_obj_section_from_section_number(dst_obj, dst_parsed.section_number);
           LNK_ObjSection src_section = lnk_obj_section_from_section_number(src_obj, src_parsed.section_number);
-          String8        dst_data    = lnk_obj_section_data_from_sect_idx(dst_obj, dst_section.sect_idx);
-          String8        src_data    = lnk_obj_section_data_from_sect_idx(src_obj, src_section.sect_idx);
+          String8        dst_data    = lnk_obj_section_data_from_number(dst_obj, dst_section.section_number);
+          String8        src_data    = lnk_obj_section_data_from_number(src_obj, src_section.section_number);
 
           B32 is_exact_match = 0;
           if (dst_check_sum != 0 && src_check_sum != 0) {
@@ -396,7 +396,7 @@ lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
     *dst_section.flags |= COFF_SectionFlag_LnkRemove;
 
     // remove associated sections from the output
-    for (U32Node *associated_section = dst_ref.obj->coff.sections.associations[dst_parsed.section_number];
+    for (U32Node *associated_section = dst_ref.obj->coff.sections.associated_section_numbers[dst_parsed.section_number];
         associated_section != 0;
         associated_section = associated_section->next) {
       LNK_ObjSection section = lnk_obj_section_from_section_number(dst_ref.obj, associated_section->data);
@@ -773,7 +773,7 @@ lnk_resolve_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_ObjSymb
   switch (symbol_interp) {
   case COFF_SymbolValueInterp_Regular: { 
     LNK_ObjSymbolRef symlink = {0};
-    *symbol_out = lnk_obj_get_comdat_symlink(symbol.obj, symbol_parsed.section_number, &symlink) ? symlink : symbol;
+    *symbol_out = lnk_obj_get_comdat_symlink_from_section_number(symbol.obj, symbol_parsed.section_number, &symlink) ? symlink : symbol;
   } break;
   case COFF_SymbolValueInterp_Weak: {
     LNK_Symbol                 *defn        = lnk_symbol_table_search(symtab, lnk_symbol_name_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx));

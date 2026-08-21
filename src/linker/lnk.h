@@ -130,7 +130,7 @@ typedef struct LNK_SectionDefinition
   COFF_SectionFlags flags;
   U64               contribs_count;
   struct LNK_Obj   *obj;
-  U64               obj_sect_idx;
+  U64               obj_section_number;
 } LNK_SectionDefinition;
 
 typedef struct LNK_CommonBlockContrib
