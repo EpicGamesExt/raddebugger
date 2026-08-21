@@ -73,6 +73,7 @@ typedef enum
   LNK_CmdSwitch_Lib,
   LNK_CmdSwitch_LibPath,
   LNK_CmdSwitch_Machine,
+  LNK_CmdSwitch_Map,
   LNK_CmdSwitch_Manifest,
   LNK_CmdSwitch_ManifestDependency,
   LNK_CmdSwitch_ManifestFile,
@@ -121,7 +122,6 @@ typedef enum
   LNK_CmdSwitch_Rad_LinkVer, 
   LNK_CmdSwitch_Rad_Log,
   LNK_CmdSwitch_Rad_Logo,
-  LNK_CmdSwitch_Rad_Map,
   LNK_CmdSwitch_Rad_MapLinesForUnresolvedSymbols,
   LNK_CmdSwitch_Rad_MemoryMapFiles,
   LNK_CmdSwitch_Rad_Mode,
@@ -388,8 +388,8 @@ typedef struct LNK_Config
   String8                     manifest_ui_access;
   String8List                 manifest_dependency_list;
   LNK_SwitchState             rad_debug;
-  LNK_SwitchState             rad_chunk_map;
-  String8                     rad_chunk_map_name;
+  LNK_SwitchState             map;
+  String8                     map_name;
   String8                     rad_debug_name;
   String8                     rad_debug_alt_path;
   LNK_IncludeSymbolList       include_symbol_list;
@@ -403,7 +403,7 @@ typedef struct LNK_Config
   String8                     temp_out_path;
   String8                     temp_pdb_name;
   String8                     temp_rad_debug_name;
-  String8                     temp_rad_chunk_map_name;
+  String8                     temp_map_name;
   String8                     temp_type_server_name;
   String8                     delay_load_helper_name;
   String8List                 remove_sections;

@@ -6106,216 +6106,232 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
   return image_ctx;
 }
 
-internal PairU32 *
-lnk_obj_section_numbers_from_section(Arena *arena, U64 objs_count, LNK_Obj **objs, LNK_Section *sect, LNK_Config *config, U64 *obj_section_numbers_count_out)
+typedef struct LNK_MapSection
 {
-  U64 max_contribs = 0;
-  for (LNK_SectionContribChunk *chunk = sect->contribs.first; chunk != 0; chunk = chunk->next) {
-    max_contribs += chunk->count;
-  }
+  String8 name;
+  U32     section_number;
+  U32     off;
+  U32     end;
+  B32     is_code;
+} LNK_MapSection;
 
-  U64      obj_section_numbers_count = 0;
-  PairU32 *obj_section_numbers       = push_array(arena, PairU32, max_contribs);
-  for (U64 obj_idx = 0; obj_idx < objs_count; obj_idx += 1) {
-    LNK_Obj *obj = objs[obj_idx];
-    String8             string_table  = str8_substr(obj->coff.data, obj->coff.header.string_table_range);
-    for LNK_EachCoffSection(it, obj) {
-      COFF_SectionHeader *section_header    = it.v.header;
-      String8             full_section_name = coff_name_from_section_header(string_table, section_header);
-      String8             section_name, section_postfix;
-      coff_parse_section_name(full_section_name, &section_name, &section_postfix);
-
-      if (*it.v.flags & COFF_SectionFlag_LnkRemove) { continue; }
-      if (section_header->fsize == 0)                         { continue; }
-      if (lnk_is_section_removed(config, section_name))       { continue; }
-
-      if (sect->voff <= section_header->voff && section_header->voff < sect->voff + sect->vsize) {
-        Assert(obj_section_numbers_count < max_contribs);
-        obj_section_numbers[obj_section_numbers_count].v0 = obj_idx;
-        obj_section_numbers[obj_section_numbers_count].v1 = it.v.section_number;
-        obj_section_numbers_count += 1;
-      }
-    }
-  }
-
-  U64 pop_size = (max_contribs - obj_section_numbers_count) * sizeof(obj_section_numbers[0]);
-  arena_pop(arena, pop_size);
-
-  *obj_section_numbers_count_out = obj_section_numbers_count;
-
-  return obj_section_numbers;
-}
-
-internal COFF_SectionHeader *
-lnk_coff_section_header_from_obj_section_number_pair(LNK_Obj **objs, PairU32 p)
+typedef struct LNK_MapSymbol
 {
-  return lnk_coff_section_header_from_section_number(objs[p.v0], p.v1);
-}
+  String8 name;
+  String8 source;
+  U64     va;
+  U32     section_number;
+  U32     off;
+  B32     is_func;
+} LNK_MapSymbol;
 
-global LNK_Obj **g_rad_map_objs;
+internal U32
+lnk_map_image_section_number_from_voff(COFF_SectionHeader **section_table, U64 section_count, U64 voff)
+{
+  for (U32 section_number = 1; section_number <= section_count; section_number += 1) {
+    COFF_SectionHeader *header = section_table[section_number];
+    if (voff == header->voff) { return section_number; }
+  }
+  for (U32 section_number = 1; section_number <= section_count; section_number += 1) {
+    COFF_SectionHeader *header = section_table[section_number];
+    U64 section_size = Max(header->vsize, header->fsize);
+    if (header->voff < voff && voff <= header->voff + section_size) { return section_number; }
+  }
+  return 0;
+}
 
 internal int
-lnk_obj_section_number_is_before(void *raw_a, void *raw_b)
+lnk_map_section_is_before(void *raw_a, void *raw_b)
 {
-  PairU32 *a = raw_a, *b = raw_b;
-  COFF_SectionHeader *section_header_a = lnk_coff_section_header_from_obj_section_number_pair(g_rad_map_objs, *a);
-  COFF_SectionHeader *section_header_b = lnk_coff_section_header_from_obj_section_number_pair(g_rad_map_objs, *b);
-  return section_header_a->voff < section_header_b->voff;
+  LNK_MapSection *a = raw_a, *b = raw_b;
+  if (a->section_number != b->section_number) { return a->section_number < b->section_number; }
+  if (a->off != b->off)                       { return a->off < b->off; }
+  return str8_is_before_case_sensitive(&a->name, &b->name);
 }
 
-internal U64
-lnk_pair_u32_nearest_section(PairU32 *arr, U64 count, LNK_Obj **objs, U32 voff)
+internal int
+lnk_map_symbol_is_before(void *raw_a, void *raw_b)
 {
-  U64 result = max_U64;
+  LNK_MapSymbol *a = *(LNK_MapSymbol **)raw_a, *b = *(LNK_MapSymbol **)raw_b;
+  if (a->va != b->va)                         { return a->va < b->va; }
+  if (a->section_number != b->section_number) { return a->section_number < b->section_number; }
+  if (a->off != b->off)                       { return a->off < b->off; }
+  return str8_is_before_case_sensitive(&a->name, &b->name);
+}
 
-  if (count > 0) {
-    COFF_SectionHeader *first = lnk_coff_section_header_from_obj_section_number_pair(objs, arr[0]);
-    if (first->voff == voff) {
-      return 0;
-    }
-
-    COFF_SectionHeader *last = lnk_coff_section_header_from_obj_section_number_pair(objs, arr[count-1]);
-    if (last->voff <= voff) {
-      return count - 1;
-    }
-
-    if (first->voff <= voff && voff < last->voff + last->vsize) {
-      U64 l = 0;
-      U64 r = count - 1;
-      for (; l <= r; ) {
-        U64 m = l + (r - l) / 2;
-        COFF_SectionHeader *s = lnk_coff_section_header_from_obj_section_number_pair(objs, arr[m]);
-        if (s->voff == voff) {
-          return m;
-        } else if (s->voff < voff) {
-          l = m + 1;
-        } else {
-          r = m - 1;
-        }
-      }
-      result = l - 1;
-    }
+internal String8
+lnk_map_source_from_obj(Arena *arena, LNK_Obj *obj)
+{
+  if (obj == 0 || str8_starts_with(obj->path, str8_lit("*"))) {
+    return str8_lit("<linker-defined>");
   }
+  String8 obj_name = str8_skip_last_slash(obj->path);
+  LNK_Lib *lib = lnk_obj_get_lib(obj);
+  if (lib) {
+    String8 lib_name = str8_chop_last_dot(str8_skip_last_slash(lib->path));
+    return push_str8f(arena, "%S:%S", lib_name, obj_name);
+  }
+  return obj_name;
+}
 
-  return result;
+internal void
+lnk_map_push_symbol_line(Arena *arena, String8List *map, LNK_MapSymbol *symbol)
+{
+  String8 function_marker = symbol->is_func ? str8_lit("f") : str8_lit(" ");
+  str8_list_pushf(arena, map, " %04x:%08x       %-26S %016llx %S   %S\r\n",
+                  symbol->section_number, symbol->off, symbol->name, symbol->va, function_marker, symbol->source);
 }
 
 internal String8List
-lnk_build_rad_map(Arena *arena, String8 image_data, LNK_Config *config, U64 objs_count, LNK_Obj **objs, U64 libs_count, LNK_Lib **libs, LNK_SectionTable *sectab)
+lnk_build_map(Arena *arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, U64 objs_count, LNK_Obj **objs)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena, 1);
 
   PE_BinInfo           pe                  = pe_bin_info_from_data(scratch.arena, image_data);
   COFF_SectionHeader **image_section_table = coff_section_table_from_data(scratch.arena, image_data, pe.section_table_range);
+  String8List          map                 = {0};
 
-  String8List map = {0};
+  String8 image_name = str8_chop_last_dot(str8_skip_last_slash(config->out_path));
+  DateTime universal_time = date_time_from_unix_time(config->time_stamp);
+  DateTime local_time     = local_from_universal_time(&universal_time);
+  String8 week_day        = string_from_week_day(local_time.week_day);
+  String8 month           = string_from_month(local_time.month);
 
-  ProfBegin("SECTIONS");
-  str8_list_pushf(arena, &map, "# SECTIONS\n");
-  for (LNK_SectionNode *sect_n = sectab->list.first; sect_n != 0; sect_n = sect_n->next) {
-    LNK_Section *sect = &sect_n->data;
+  str8_list_pushf(arena, &map, " %S\r\n\r\n", image_name);
+  str8_list_pushf(arena, &map, " Timestamp is %08x (%S %S %02u %02u:%02u:%02u %04u)\r\n\r\n",
+                  config->time_stamp, week_day, month, local_time.day, local_time.hour, local_time.min, local_time.sec, local_time.year);
+  str8_list_pushf(arena, &map, " Preferred load address is %016llx\r\n\r\n", pe.image_base);
+  str8_list_pushf(arena, &map, " Start         Length     Name                   Class\r\n");
 
-    str8_list_pushf(arena, &map, "%S\n", sect->name);
-    str8_list_pushf(arena, &map, "%-4s %-8s %-8s %-8s %-8s %-16s %-4s %s\n", "No.", "VirtOff", "VirtSize", "FileOff", "FileSize", "Blake3", "Algn", "SC");
-
-    U64      obj_section_numbers_count = 0;
-    PairU32 *obj_section_numbers       = lnk_obj_section_numbers_from_section(scratch.arena, objs_count, objs, sect, config, &obj_section_numbers_count);
-    g_rad_map_objs = objs;
-    radsort(obj_section_numbers, obj_section_numbers_count, lnk_obj_section_number_is_before);
-
-    U64 global_sc_idx = 0;
-    for (LNK_SectionContribChunk *sc_chunk = sect->contribs.first; sc_chunk != 0; sc_chunk = sc_chunk->next) {
-      for (U64 sc_idx = 0; sc_idx < sc_chunk->count; sc_idx += 1, global_sc_idx += 1) {
-        Temp temp = temp_begin(scratch.arena);
-        LNK_SectionContrib *sc = sc_chunk->v[sc_idx];
-
-        U64        file_off   = image_section_table[sc->u.sect_idx+1]->foff + sc->u.off;
-        U64        virt_off   = image_section_table[sc->u.sect_idx+1]->voff + sc->u.off;
-        U64        virt_size  = lnk_size_from_section_contrib(sc);
-        U64        file_size  = lnk_size_from_section_contrib(sc);
-        String8    sc_data    = str8_substr(image_data, rng_1u64(file_off, file_off + virt_size));
-
-        LNK_Obj *obj      = 0;
-        U32      section_number = 0;
-        U64 obj_section_number_idx = lnk_pair_u32_nearest_section(obj_section_numbers, obj_section_numbers_count, objs, virt_off);
-        if (obj_section_number_idx < obj_section_numbers_count) {
-          obj            = objs[obj_section_numbers[obj_section_number_idx].v0];
-          section_number = obj_section_numbers[obj_section_number_idx].v1;
-        }
-
-        U128 sc_hash = {0};
-        if (~sect->flags & COFF_SectionFlag_CntUninitializedData) {
-          blake3_hasher hasher; blake3_hasher_init(&hasher);
-          blake3_hasher_update(&hasher, sc_data.str, sc_data.size);
-          blake3_hasher_finalize(&hasher, (U8 *)&sc_hash, sizeof(sc_hash));
-        }
-
-        String8 sc_idx_str    = push_str8f(temp.arena, "%4llx",      global_sc_idx);
-        String8 virt_size_str = push_str8f(temp.arena, "%08x",       virt_size);
-        String8 sc_hash_str   = (~sect->flags & COFF_SectionFlag_CntUninitializedData) ? push_str8f(temp.arena, "%08x%08x",   sc_hash.u64[0], sc_hash.u64[1]) : str8_lit("--------");
-        String8 file_off_str  = (~sect->flags & COFF_SectionFlag_CntUninitializedData) ? push_str8f(temp.arena, "%08x", file_off)  : str8_lit("--------");
-        String8 file_size_str = (~sect->flags & COFF_SectionFlag_CntUninitializedData) ? push_str8f(temp.arena, "%08x", file_size) : str8_lit("--------");
-        String8 virt_off_str  = push_str8f(temp.arena, "%08x",       virt_off);
-        String8 align_str     = push_str8f(temp.arena, "%4x",        sc->align);
-        String8 contrib_str;
-        {
-          String8List source_list = {0};
-          if (obj) {
-            COFF_SectionHeader *section_header = lnk_coff_section_header_from_section_number(obj, section_number);
-            String8             string_table   = str8_substr(obj->coff.data, obj->coff.header.string_table_range);
-            String8             section_name   = coff_name_from_section_header(string_table, section_header);
-            LNK_Lib            *lib            = lnk_obj_get_lib(obj);
-            if (lib) {
-              String8 lib_name = str8_chop_last_dot(str8_skip_last_slash(lib->path));
-              String8 obj_name = str8_skip_last_slash(obj->path);
-              str8_list_pushf(temp.arena, &source_list, "%S(%S) SECT%X (%S)", lib_name, obj_name, section_number, section_name);
-            } else {
-              str8_list_pushf(temp.arena, &source_list, "%S SECT%X (%S)", obj->path, section_number, section_name);
-            }
-          } else {
-            str8_list_pushf(temp.arena, &source_list, "<no_loc>");
-          }
-          contrib_str = str8_list_join(temp.arena, &source_list, &(StringJoin){.sep=str8_lit(" ")});
-        }
-
-        str8_list_pushf(arena, &map, "%S %S %S %S %S %S %S %S\n", sc_idx_str, virt_off_str, virt_size_str, file_off_str, file_size_str, sc_hash_str, align_str, contrib_str);
-
-        temp_end(temp);
-      }
-    }
-    str8_list_pushf(arena, &map, "\n");
-  }
-  ProfEnd();
-
-  str8_list_pushf(arena, &map, "# DEBUG\n");
-  for (U64 obj_idx = 0; obj_idx < objs_count; obj_idx += 1) {
+  U64 section_cap = 0;
+  for EachIndex(obj_idx, objs_count) { section_cap += objs[obj_idx]->coff.sections.count_no_null; }
+  LNK_MapSection *sections = push_array(scratch.arena, LNK_MapSection, section_cap);
+  U64             section_count = 0;
+  HashMap        *section_maps = push_array(scratch.arena, HashMap, pe.section_count + 1);
+  for EachIndex(obj_idx, objs_count) {
     LNK_Obj *obj = objs[obj_idx];
     for LNK_EachCoffSection(it, obj) {
-      COFF_SectionFlags section_flags = *it.v.flags;
-      if (~section_flags & COFF_SectionFlag_LnkRemove && section_flags & LNK_SECTION_FLAG_DEBUG) {
-        LNK_Lib *lib = lnk_obj_get_lib(obj);
-        if (lib) {
-          String8 lib_name = str8_chop_last_dot(str8_skip_last_slash(lib->path));
-          String8 obj_name = str8_skip_last_slash(obj->path);
-          str8_list_pushf(arena, &map, "%S(%S) SECT%X\n", lib_name, obj_name, it.v.section_number);
-        } else {
-          str8_list_pushf(arena, &map, "%S SECT%X\n", obj->path, it.v.section_number);
-        }
+      COFF_SectionFlags flags = *it.v.flags;
+      if (flags & (COFF_SectionFlag_LnkRemove | COFF_SectionFlag_LnkInfo | LNK_SECTION_FLAG_DEBUG)) { continue; }
+
+      U32 image_section_number = lnk_map_image_section_number_from_voff(image_section_table, pe.section_count, it.v.header->voff);
+      if (image_section_number == 0) { continue; }
+
+      String8 name = lnk_obj_section_name_from_section_number(obj, it.v.section_number);
+      LNK_MapSection *section = hash_map_search_string_raw(&section_maps[image_section_number], name);
+      U32 off = safe_cast_u32(it.v.header->voff - image_section_table[image_section_number]->voff);
+      U32 end = off + it.v.header->vsize;
+      if (section == 0) {
+        Assert(section_count < section_cap);
+        section = &sections[section_count++];
+        *section = (LNK_MapSection){ name, image_section_number, off, end, !!(flags & COFF_SectionFlag_CntCode) };
+        hash_map_push_string_raw(scratch.arena, &section_maps[image_section_number], name, section);
+      } else {
+        section->off = Min(section->off, off);
+        section->end = Max(section->end, end);
       }
     }
   }
-  str8_list_pushf(arena, &map, "\n");
+  if (section_count > 1) { radsort(sections, section_count, lnk_map_section_is_before); }
+  for EachIndex(i, section_count) {
+    LNK_MapSection *section = &sections[i];
+    str8_list_pushf(arena, &map, " %04x:%08x %08xH %-22S %s\r\n",
+                    section->section_number, section->off, section->end - section->off,
+                    section->name, section->is_code ? "CODE" : "DATA");
+  }
 
-  ProfBegin("LIBS");
-  if (libs_count) {
-    str8_list_pushf(arena, &map, "# LIBS\n");
-    for EachIndex(i, libs_count) {
-      str8_list_pushf(arena, &map, "%S\n", libs[i]->path);
+  str8_list_pushf(arena, &map, "\r\n  Address         Publics by Value              Rva+Base               Lib:Object\r\n\r\n");
+
+  U64 public_cap = 0;
+  for EachIndex(worker_idx, symtab->arena->count) {
+    for EachNode(chunk, LNK_SymbolHashTrieChunk, symtab->chunks[worker_idx].first) { public_cap += chunk->count; }
+  }
+  LNK_MapSymbol *publics = push_array(scratch.arena, LNK_MapSymbol, public_cap);
+  U64 public_count = 0;
+  for EachIndex(worker_idx, symtab->arena->count) {
+    for EachNode(chunk, LNK_SymbolHashTrieChunk, symtab->chunks[worker_idx].first) {
+      for EachIndex(i, chunk->count) {
+        LNK_Symbol *symbol = chunk->v[i].symbol;
+        if (symbol == 0 || str8_match(symbol->name, str8_lit(LNK_NULL_SYMBOL), 0) || str8_match(symbol->name, str8_lit(LNK_IMPORT_STUB), 0)) { continue; }
+
+        LNK_ObjSymbolRef  ref    = lnk_ref_from_symbol(symbol);
+        COFF_ParsedSymbol parsed = lnk_parsed_from_symbol(symbol);
+        COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(parsed);
+        LNK_MapSymbol map_symbol = { .name = symbol->name, .is_func = COFF_SymbolType_IsFunc(parsed.type) };
+
+        if (interp == COFF_SymbolValueInterp_Regular) {
+          if (parsed.section_number == lnk_obj_get_removed_section_number(ref.obj) || parsed.section_number == 0 || parsed.section_number > pe.section_count) { continue; }
+          map_symbol.section_number = parsed.section_number;
+          map_symbol.off            = safe_cast_u32(parsed.value);
+          map_symbol.va             = pe.image_base + image_section_table[parsed.section_number]->voff + parsed.value;
+
+          COFF_ParsedSymbol original = coff_parse_symbol_no_name(ref.obj->coff.header, lnk_coff_symbol_table_from_obj(ref.obj), ref.symbol_idx);
+          COFF_SymbolValueInterpType original_interp = coff_interp_from_parsed_symbol(original);
+          map_symbol.source = original_interp == COFF_SymbolValueInterp_Common ? str8_lit("<common>") : lnk_map_source_from_obj(scratch.arena, ref.obj);
+        } else if (interp == COFF_SymbolValueInterp_Abs) {
+          map_symbol.off = safe_cast_u32(parsed.value);
+          if (str8_match(symbol->name, str8_lit("__ImageBase"), 0)) {
+            map_symbol.va     = pe.image_base;
+            map_symbol.source = str8_lit("<linker-defined>");
+          } else {
+            map_symbol.va     = parsed.value;
+            map_symbol.source = str8_lit("<absolute>");
+          }
+        } else {
+          continue;
+        }
+
+        Assert(public_count < public_cap);
+        publics[public_count++] = map_symbol;
+      }
     }
   }
-  ProfEnd();
- 
+  LNK_MapSymbol **public_ptrs = push_array_no_zero(scratch.arena, LNK_MapSymbol *, public_count);
+  for EachIndex(i, public_count) { public_ptrs[i] = &publics[i]; }
+  if (public_count > 1) { radsort(public_ptrs, public_count, lnk_map_symbol_is_before); }
+  for EachIndex(i, public_count) { lnk_map_push_symbol_line(arena, &map, public_ptrs[i]); }
+
+  U32 entry_section_number = lnk_map_image_section_number_from_voff(image_section_table, pe.section_count, pe.entry_point);
+  U32 entry_section_off = entry_section_number ? pe.entry_point - image_section_table[entry_section_number]->voff : pe.entry_point;
+  str8_list_pushf(arena, &map, "\r\n entry point at        %04x:%08x\r\n\r\n Static symbols\r\n\r\n", entry_section_number, entry_section_off);
+
+  U64 static_cap = 0;
+  for EachIndex(obj_idx, objs_count) { static_cap += objs[obj_idx]->coff.symbols.count; }
+  LNK_MapSymbol *statics = push_array(scratch.arena, LNK_MapSymbol, static_cap);
+  U64 static_count = 0;
+  for EachIndex(obj_idx, objs_count) {
+    LNK_Obj *obj = objs[obj_idx];
+    String8 string_table = lnk_coff_string_table_from_obj(obj);
+    String8 symbol_table = lnk_coff_symbol_table_from_obj(obj);
+    for LNK_EachCoffSymbol(it, obj) {
+      COFF_ParsedSymbol original = coff_parse_symbol(obj->coff.header, string_table, symbol_table, safe_cast_u32(it.symbol_idx));
+      if (original.storage_class != COFF_SymStorageClass_Static || coff_interp_from_parsed_symbol(original) != COFF_SymbolValueInterp_Regular) { continue; }
+      if (str8_starts_with(original.name, str8_lit("$pdata$"))) { continue; }
+      if (original.section_number == 0 || original.section_number > obj->coff.sections.count_no_null) { continue; }
+      if (*lnk_obj_section_from_section_number(obj, original.section_number).flags & (COFF_SectionFlag_LnkInfo | LNK_SECTION_FLAG_DEBUG)) { continue; }
+      if (original.type.v == 0 && original.value == 0 && original.aux_symbol_count > 0 &&
+          str8_match(original.name, lnk_obj_section_name_from_section_number(obj, original.section_number), 0)) { continue; }
+
+      COFF_ParsedSymbol parsed = it.v;
+      if (coff_interp_from_parsed_symbol(parsed) != COFF_SymbolValueInterp_Regular || parsed.section_number == 0 || parsed.section_number > pe.section_count) { continue; }
+
+      Assert(static_count < static_cap);
+      statics[static_count++] = (LNK_MapSymbol){
+        .name           = original.name,
+        .source         = lnk_map_source_from_obj(scratch.arena, obj),
+        .va             = pe.image_base + image_section_table[parsed.section_number]->voff + parsed.value,
+        .section_number = parsed.section_number,
+        .off            = safe_cast_u32(parsed.value),
+        .is_func        = COFF_SymbolType_IsFunc(parsed.type),
+      };
+    }
+  }
+  LNK_MapSymbol **static_ptrs = push_array_no_zero(scratch.arena, LNK_MapSymbol *, static_count);
+  for EachIndex(i, static_count) { static_ptrs[i] = &statics[i]; }
+  if (static_count > 1) { radsort(static_ptrs, static_count, lnk_map_symbol_is_before); }
+  for EachIndex(i, static_count) { lnk_map_push_symbol_line(arena, &map, static_ptrs[i]); }
+
   scratch_end(scratch);
   ProfEnd();
   return map;
@@ -6463,11 +6479,11 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   lnk_background_file_writer_begin(pdb_writer.file_writer);
 
   //
-  // RAD Map
+  // Map
   //
-  if (config->rad_chunk_map == LNK_SwitchState_Yes) {
-    String8List rad_map = lnk_build_rad_map(scratch.arena, image_ctx.image_data, config, objs_count, objs, libs_count, libs, image_ctx.sectab);
-    lnk_write_data_list_to_file_path(config->rad_chunk_map_name, config->temp_rad_chunk_map_name, rad_map);
+  if (config->map == LNK_SwitchState_Yes) {
+    String8List map = lnk_build_map(scratch.arena, image_ctx.image_data, config, symtab, objs_count, objs);
+    lnk_write_data_list_to_file_path(config->map_name, config->temp_map_name, map);
   }
 
   //

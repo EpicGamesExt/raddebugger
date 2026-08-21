@@ -571,6 +571,42 @@ TEST(simple_link_test)
   T_Ok(opt->loader_flags == 0);
 }
 
+TEST(map)
+{
+  T_Ok(t_write_def_obj("map.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      { "text", ".text", str8_lit_comp("\xC3"), .flags = "rx:code" },
+      {0}
+    },
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Extern("map_entry", "text", 0),
+      T_COFF_DefSymbol_Static("map_local", "text", 0),
+      {0}
+    }
+  }));
+
+  t_invoke_linkerf("/entry:map_entry /subsystem:console /out:mapped.exe /map:explicit.map map.obj");
+  T_Ok(g_last_exit_code == 0);
+
+  String8 map = t_read_file(arena, str8_lit("explicit.map"));
+  T_Ok(str8_find_needle(map, 0, str8_lit(" Timestamp is "), 0) < map.size);
+  T_Ok(str8_find_needle(map, 0, str8_lit(" Preferred load address is "), 0) < map.size);
+  T_Ok(str8_find_needle(map, 0, str8_lit(" Start         Length     Name                   Class"), 0) < map.size);
+  T_Ok(str8_find_needle(map, 0, str8_lit(" Publics by Value"), 0) < map.size);
+  T_Ok(str8_find_needle(map, 0, str8_lit("map_entry"), 0) < map.size);
+  T_Ok(str8_find_needle(map, 0, str8_lit(" entry point at"), 0) < map.size);
+  T_Ok(str8_find_needle(map, 0, str8_lit(" Static symbols"), 0) < map.size);
+  T_Ok(str8_find_needle(map, 0, str8_lit("map_local"), 0) < map.size);
+
+  t_invoke_linkerf("/entry:map_entry /subsystem:console /out:default.exe /map map.obj");
+  T_Ok(g_last_exit_code == 0);
+  T_Ok(t_read_file(arena, str8_lit("default.map")).size > 0);
+
+  t_invoke_linkerf("/entry:map_entry /subsystem:console /out:collision.exe /map:collision.exe map.obj");
+  T_Ok(g_last_exit_code != 0);
+}
+
 
 TEST(out_of_bounds_section_number)
 {

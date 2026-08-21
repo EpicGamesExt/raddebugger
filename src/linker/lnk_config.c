@@ -40,6 +40,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Lib,                0, LNK_CmdValueKind_Null,   "LIB",                  "",                               "Turn linker into lib.exe."                                    },
   { LNK_CmdSwitch_LibPath,            0, LNK_CmdValueKind_Scalar, "LIBPATH",              ":DIR",                           "Add DIR for the linker to search for libraries."              },
   { LNK_CmdSwitch_Machine,            0, LNK_CmdValueKind_Scalar, "MACHINE",              ":{X64|X86}",                     "Image target platform."                                       },
+  { LNK_CmdSwitch_Map,                0, LNK_CmdValueKind_Scalar, "MAP",                  "[:FILENAME]",                    "Create a linker map file."                                    },
   { LNK_CmdSwitch_Manifest,           0, LNK_CmdValueKind_List,   "MANIFEST",             "[:{EMBED[,ID=#]|NO]",            "Controls whether the linker should create a side manifest."   },
   { LNK_CmdSwitch_ManifestDependency, 1, LNK_CmdValueKind_Scalar, "MANIFESTDEPENDENCY",   ":\"manifest dependency XML string\"", "Add a manifest dependency."                              },
   { LNK_CmdSwitch_ManifestFile,       0, LNK_CmdValueKind_Scalar, "MANIFESTFILE",         ":FILENAME",                      "Specifies a manifest file."                                   },
@@ -72,7 +73,6 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_BuildImpLib,                  0, LNK_CmdValueKind_Scalar, "RAD_BUILD_IMPLIB",                     "[:NO]",                "Build import library."                                                            },
   { LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,      0, LNK_CmdValueKind_Scalar, "RAD_CHECK_UNUSED_DELAY_LOAD_DLL",      "[:NO]",                "Check for unused delay load dlls."                                                },
   { LNK_CmdSwitch_Rad_DataDirCount,                 0, LNK_CmdValueKind_Scalar, "RAD_DATA_DIR_COUNT",                   ":#",                   "Internal default for PE optional header data directory count."                    },
-  { LNK_CmdSwitch_Rad_Map,                          0, LNK_CmdValueKind_Scalar, "RAD_MAP",                              ":FILENAME",            "Emit file with the output image's layout description."                            },
   { LNK_CmdSwitch_Rad_MapLinesForUnresolvedSymbols, 0, LNK_CmdValueKind_Scalar, "RAD_MAP_LINES_FOR_UNRESOLVED_SYMBOLS", "[:NO]",                "Use debug info to print source file location for unresolved symbol"               },
   { LNK_CmdSwitch_Rad_MemoryMapFiles,               0, LNK_CmdValueKind_Scalar, "RAD_MEMORY_MAP_FILES",                 "[:{NO|READ_ONLY|READ_WRITE}]", "When enabled, files are memory-mapped instead of being read entirely on request." },
   { LNK_CmdSwitch_Rad_BootMode,                     0, LNK_CmdValueKind_Scalar, "RAD_BOOT_MODE",                        "[:LINKER|TYPE_SERVER]", "Overrides default boot program."                                                 },
@@ -1175,8 +1175,8 @@ lnk_print_help(void)
 internal void
 lnk_apply_write_temp_files(Arena *arena, LNK_Config *config)
 {
-  if (config->rad_chunk_map_name.size) {
-    config->temp_rad_chunk_map_name = push_str8f(arena, "%S.tmp%x", config->rad_chunk_map_name, config->time_stamp);
+  if (config->map_name.size) {
+    config->temp_map_name = push_str8f(arena, "%S.tmp%x", config->map_name, config->time_stamp);
   }
   if (config->out_path.size) {
     config->temp_out_path = push_str8f(arena, "%S.tmp%x", config->out_path, config->time_stamp);
@@ -1982,9 +1982,11 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
     }
   } break;
 
-  case LNK_CmdSwitch_Rad_Map: {
-    lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value, &config->rad_chunk_map_name);
-    config->rad_chunk_map = LNK_SwitchState_Yes;
+  case LNK_CmdSwitch_Map: {
+    config->map = LNK_SwitchState_Yes;
+    if (value.size) {
+      lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value, &config->map_name);
+    }
   } break;
 
   case LNK_CmdSwitch_Rad_MapLinesForUnresolvedSymbols: {
@@ -3082,6 +3084,11 @@ lnk_config_init(U64 argc, char **argv)
     config->pdb_name = path_replace_file_extension(scratch.arena, config->out_path, str8_lit("pdb"));
   }
 
+  // handle empty /MAP
+  if (config->map == LNK_SwitchState_Yes && !config->map_name.size) {
+    config->map_name = path_replace_file_extension(scratch.arena, config->out_path, str8_lit("map"));
+  }
+
   // handle empty /RAD_DEBUG_NAME
   if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Rad_DebugName)) {
     config->rad_debug_name = path_replace_file_extension(scratch.arena, config->out_path, str8_lit("rdi"));
@@ -3100,9 +3107,31 @@ lnk_config_init(U64 argc, char **argv)
   // convert to full paths
   config->out_path       = full_path_from_path(arena, config->out_path);
   config->pdb_name       = full_path_from_path(arena, config->pdb_name);
+  if (config->map_name.size) {
+    config->map_name = full_path_from_path(arena, config->map_name);
+  }
   config->rad_debug_name = full_path_from_path(arena, config->rad_debug_name);
   config->imp_lib_name   = full_path_from_path(arena, config->imp_lib_name);
   config->manifest_name  = full_path_from_path(arena, config->manifest_name);
+
+  // reject output path aliases before background writers are launched
+  if (config->map_name.size) {
+    String8 output_paths[] = {
+      config->out_path,
+      config->pdb_name,
+      config->rad_debug_name,
+      config->imp_lib_name,
+      config->manifest_name,
+    };
+    for EachElement(i, output_paths) {
+      if (output_paths[i].size && path_match_normalized(config->map_name, output_paths[i])) {
+        lnk_error(LNK_Error_Cmdl, "/MAP output path %S conflicts with another linker output", config->map_name);
+        config->map = LNK_SwitchState_No;
+        config->map_name = str8_zero();
+        break;
+      }
+    }
+  }
 
   // push linker env vars
   {
