@@ -171,7 +171,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   U64 symbol_block_count = CeilIntegerDiv(header.symbol_count, 64);
   LNK_ObjSymbolArray symbols = {
     .count           = primary_symbol_count,
-    .primary_masks   = push_array(arena, U64, symbol_block_count),
+    .primary_bits    = bit_array_init32(arena, header.symbol_count),
     .block_bases     = push_array_no_zero(arena, U32,                  symbol_block_count),
     .values          = push_array_no_zero(arena, U64,                  primary_symbol_count),
     .section_numbers = push_array_no_zero(arena, U32,                  primary_symbol_count),
@@ -192,11 +192,9 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
       // copy out primary symbols
       {
         U64 block_idx = symbol_idx >> 6;
-        while (next_block <= block_idx) {
-          symbols.block_bases[next_block++] = primary_idx;
-        }
+        while (next_block <= block_idx) { symbols.block_bases[next_block++] = primary_idx; }
 
-        symbols.primary_masks[block_idx] |= 1ull << (symbol_idx & 63);
+        bit_array_set_bit32(symbols.primary_bits, symbol_idx, 1);
 
         symbols.values         [primary_idx] = symbol.value;
         symbols.section_numbers[primary_idx] = symbol.section_number;
@@ -205,6 +203,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
         symbols.aux_counts     [primary_idx] = symbol.aux_symbol_count;
         symbols.name_offsets   [primary_idx] = symbol.name.size ? safe_cast_u32(symbol.name.str - input->data.str) : 0;
         symbols.name_sizes     [primary_idx] = safe_cast_u32(symbol.name.size);
+
         primary_idx += 1;
       }
 
@@ -813,11 +812,18 @@ lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number)
 internal force_inline U64
 lnk_obj_primary_symbol_idx_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx)
 {
-  U64 block_idx  = symbol_idx >> 6;
-  U64 bit        = 1ull << (symbol_idx & 63);
-  U64 block_mask = obj->coff.symbols.primary_masks[block_idx];
-  Assert(block_mask & bit);
-  return obj->coff.symbols.block_bases[block_idx] + count_bits_set64(block_mask & (bit - 1));
+  U64 block_idx = symbol_idx >> 6;
+  U64 word_idx  = symbol_idx >> 5;
+  U32 bit_idx   = symbol_idx & 31;
+  U32Array primary_bits = obj->coff.symbols.primary_bits;
+  Assert(bit_array_get_bit32(primary_bits, symbol_idx));
+
+  U64 primary_idx = obj->coff.symbols.block_bases[block_idx];
+  if (word_idx & 1) {
+    primary_idx += count_bits_set32(primary_bits.v[word_idx - 1]);
+  }
+  primary_idx += count_bits_set32(primary_bits.v[word_idx] & ((1u << bit_idx) - 1));
+  return primary_idx;
 }
 
 internal force_inline COFF_ParsedSymbol

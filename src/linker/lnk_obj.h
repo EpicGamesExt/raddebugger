@@ -16,7 +16,7 @@ enum
 typedef struct LNK_ObjSymbolArray
 {
   U64                   count;
-  U64                  *primary_masks;
+  U32Array               primary_bits;
   U32                  *block_bases;
   U64                  *values;
   U32                  *section_numbers;
