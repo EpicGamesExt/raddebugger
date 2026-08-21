@@ -2855,7 +2855,7 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   for EachIndex(sect_idx, obj->coff.sections.count) {
 
     // filter by section flags
-    if (obj->coff.sections.flags[sect_idx] & (COFF_SectionFlag_LnkInfo | COFF_SectionFlag_LnkRemove | LNK_SECTION_FLAG_DEBUG)) { continue; }
+    if (obj->coff.sections.headers[sect_idx].flags & (COFF_SectionFlag_LnkInfo | COFF_SectionFlag_LnkRemove | LNK_SECTION_FLAG_DEBUG)) { continue; }
 
     // skip unwind info for the section contribution
     String8 section_name = lnk_obj_section_name_from_sect_idx(obj, sect_idx);

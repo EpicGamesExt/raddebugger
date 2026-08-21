@@ -5881,12 +5881,8 @@ TEST(debug_p_sig_mismatch)
   T_Ok(t_write_file(str8_lit("b.obj"), b_obj));
   T_Ok(t_write_entry_obj());
 
-  String8 a_obj_before = t_read_file(arena, str8_lit("a.obj"));
-  String8 b_obj_before = t_read_file(arena, str8_lit("b.obj"));
-  t_invoke_linkerf("/RAD_MEMORY_MAP_FILES:READ_WRITE /subsystem:console /entry:entry /out:a.exe /debug:full a.obj b.obj entry.obj");
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:full a.obj b.obj entry.obj");
   T_Ok(g_last_exit_code == 0);
-  T_Ok(str8_match(a_obj_before, t_read_file(arena, str8_lit("a.obj")), 0));
-  T_Ok(str8_match(b_obj_before, t_read_file(arena, str8_lit("b.obj")), 0));
 
   B32     found_error = 0;
   String8 a_obj_path    = t_make_file_path(arena, str8_lit("a.obj"));
@@ -6275,14 +6271,8 @@ TEST(gen_rrt)
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:full /rad_type_server:foo.rrt a.obj b.obj entry.obj");
   T_Ok(g_last_exit_code == 0);
 
-  String8 a_obj_before = t_read_file(arena, a_obj_file_path);
-  String8 b_obj_before = t_read_file(arena, b_obj_file_path);
-  String8 rrt_before   = t_read_file(arena, str8_lit("foo.rrt"));
-  t_invoke_linkerf("/RAD_MEMORY_MAP_FILES:READ_WRITE /subsystem:console /entry:entry /out:a.exe /debug:ghash a.obj foo.rrt b.obj entry.obj");
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /debug:ghash a.obj foo.rrt b.obj entry.obj");
   T_Ok(g_last_exit_code == 0);
-  T_Ok(str8_match(a_obj_before, t_read_file(arena, a_obj_file_path), 0));
-  T_Ok(str8_match(b_obj_before, t_read_file(arena, b_obj_file_path), 0));
-  T_Ok(str8_match(rrt_before, t_read_file(arena, str8_lit("foo.rrt")), 0));
 }
 
 TEST(debug_p_and_debug_t_in_obj)

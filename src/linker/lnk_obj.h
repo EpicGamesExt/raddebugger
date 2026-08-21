@@ -31,8 +31,6 @@ typedef struct LNK_ObjSectionArray
 {
   U64                 count;
   COFF_SectionHeader *headers;
-  COFF_SectionFlags  *flags;
-  String8            *data;
   U32                *comdats;
   U32Node           **associations;
 } LNK_ObjSectionArray;
