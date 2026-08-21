@@ -5329,7 +5329,7 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
       sizeof_uninited_data += sect->vsize;
     }
     if (sect->flags & COFF_SectionFlag_CntInitializedData) {
-      sizeof_inited_data += sect->fsize;
+      sizeof_inited_data += Max(sect->fsize, AlignPow2(sect->vsize, config->file_align));
     }
     if (sect->flags & COFF_SectionFlag_CntCode) { 
       sizeof_code += sect->fsize;

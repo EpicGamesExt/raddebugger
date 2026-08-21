@@ -728,6 +728,31 @@ TEST(merge)
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.qwe=.test entry.obj test.obj");
   T_Ok(g_last_exit_code == 0);
 
+  // initialized data size includes the aligned virtual tail of merged BSS
+  {
+    T_Ok(t_write_def_obj("mixed.obj", (T_COFF_DefObj){
+      .machine = T_COFF_DefSetMachine(X64),
+      .sections = (T_COFF_DefSection[]){
+        { "data", ".data", str8_lit_comp("d"), .flags = "rw:data@1" },
+        { "bss",  ".bss",  str8(0, 0x201),      .flags = "rw:bss@1" },
+        {0}
+      }
+    }));
+
+    t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.bss=.data entry.obj mixed.obj");
+    T_Ok(g_last_exit_code == 0);
+
+    String8                   exe           = t_read_file(arena, str8_lit("a.exe"));
+    PE_BinInfo                pe            = pe_bin_info_from_data(arena, exe);
+    COFF_SectionHeader       *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
+    PE_OptionalHeader32Plus *opt           = str8_deserial_get_raw_ptr(exe, pe.optional_header_off, sizeof(*opt));
+    COFF_SectionHeader       *data          = coff_section_header_from_name(exe, section_table, pe.section_count, str8_lit(".data"));
+    T_Ok(data != 0);
+    T_Ok(data->fsize == 0x200);
+    T_Ok(data->vsize == 0x202);
+    T_Ok(opt->sizeof_inited_data == 0x400);
+  }
+
   // merged contribution groups retain lexical order
   {
     T_Ok(t_write_def_obj("order.obj", (T_COFF_DefObj){
