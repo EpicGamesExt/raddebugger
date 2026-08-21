@@ -5380,7 +5380,7 @@ lnk_build_win32_header(Arena *arena, LNK_SymbolTable *symtab, LNK_Config *config
     if (sect->flags & COFF_SectionFlag_CntUninitializedData) {
       sizeof_uninited_data += sect->vsize;
     }
-    if ((sect->flags & COFF_SectionFlag_CntInitializedData) || (sect->flags & COFF_SectionFlag_CntCode)) {
+    if (sect->flags & COFF_SectionFlag_CntInitializedData) {
       sizeof_inited_data += sect->fsize;
     }
     if (sect->flags & COFF_SectionFlag_CntCode) { 

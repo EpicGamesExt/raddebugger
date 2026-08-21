@@ -554,7 +554,7 @@ TEST(simple_link_test)
 
   PE_OptionalHeader32Plus *opt = str8_deserial_get_raw_ptr(exe, pe.optional_header_off, sizeof(*opt));
   T_Ok(opt->sizeof_code == text_section->fsize);
-  T_Ok(opt->sizeof_inited_data == (text_section->fsize + data_section->fsize));
+  T_Ok(opt->sizeof_inited_data == data_section->fsize);
   T_Ok(opt->sizeof_uninited_data == 0x200);
   T_Ok(opt->code_base == 0x1000);
   T_Ok(opt->image_base == 0x140000000);
