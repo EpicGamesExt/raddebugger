@@ -5,20 +5,6 @@
 
 // --- Input -------------------------------------------------------------------
 
-typedef struct LNK_ObjSymbolArray
-{
-  U64                  count;
-  U64                 *primary_masks;
-  U32                 *block_bases;
-  U64                 *values;
-  U32                 *section_numbers;
-  COFF_SymbolType     *types;
-  COFF_SymStorageClass *storage_classes;
-  U8                  *aux_counts;
-  U32                 *name_offsets;
-  U32                 *name_sizes;
-} LNK_ObjSymbolArray;
-
 typedef U32 LNK_ObjSymbolPatchFlags;
 enum
 {
@@ -27,38 +13,60 @@ enum
   LNK_ObjSymbolPatch_StorageClass = (1 << 2),
 };
 
+typedef struct LNK_ObjSymbolArray
+{
+  U64                   count;
+  U64                  *primary_masks;
+  U32                  *block_bases;
+  U64                  *values;
+  U32                  *section_numbers;
+  COFF_SymbolType      *types;
+  COFF_SymStorageClass *storage_classes;
+  U8                   *aux_counts;
+  U32                  *name_offsets;
+  U32                  *name_sizes;
+} LNK_ObjSymbolArray;
+
+typedef struct LNK_ObjSectionArray
+{
+  U64                 count;
+  COFF_SectionHeader *headers;
+  COFF_SectionFlags  *flags;
+  String8            *data;
+  U32                *comdats;
+  U32Node           **associations;
+} LNK_ObjSectionArray;
+
+typedef struct LNK_ObjCoff
+{
+  String8             data;
+  COFF_FileHeaderInfo header;
+  LNK_ObjSectionArray sections;
+  LNK_ObjSymbolArray  symbols;
+  U32                 debug_t_sect_idx;
+  U32                 debug_p_sect_idx;
+  U32                 debug_h_sect_idx;
+  U32                 llvm_addrsig_sect_idx;
+  B8                  hotpatch;
+} LNK_ObjCoff;
+
 typedef struct LNK_Obj
 {
   String8 path;
-  String8 data;
 
-  COFF_FileHeaderInfo header;
-  COFF_SectionHeader *section_headers;
-  COFF_SectionFlags  *section_flags;
-  LNK_ObjSymbolArray symbols;
+  LNK_ObjCoff coff;
 
   // flags
-  B8 hotpatch;
   B8 exclude_from_debug_info;
 
   U32 input_idx;
 
-  // COMDAT
-  U32                 *comdats;
-  U32Node            **associated_sections;
-  LNK_ObjSymbolRef   *symlinks;
+  // link state
+  LNK_ObjSymbolRef  *symlinks;
 
   // link
   struct LNK_LibMemberRef *link_member;
   struct LNK_ObjNode      *self;
-
-  // type info
-  U32 debug_t_sect_idx;
-  U32 debug_p_sect_idx;
-  U32 debug_h_sect_idx;
-
-  // ICF
-  U32 llvm_addrsig_sect_idx;
 
   // @type_server
   Rng1U64         ti_range;
@@ -242,6 +250,8 @@ internal force_inline String8           lnk_symbol_name_from_coff_symbol_idx(LNK
 internal void                           lnk_obj_symbol_patch(LNK_Obj *obj, U64 symbol_idx, COFF_ParsedSymbol patch, LNK_ObjSymbolPatchFlags flags);
 
 internal COFF_SectionHeader * lnk_coff_section_header_from_section_number(LNK_Obj *obj, U64 section_number);
+internal String8              lnk_obj_section_data_from_sect_idx(LNK_Obj *obj, U64 sect_idx);
+internal U64                  lnk_obj_foff_from_section_data_ptr(LNK_Obj *obj, void *ptr);
 internal U64                  lnk_obj_sect_idx_from_section_number(LNK_Obj *obj, U64 section_number);
 internal U64                  lnk_obj_section_number_from_sect_idx(LNK_Obj *obj, U64 sect_idx);
 internal String8              lnk_obj_section_name_from_section_number(LNK_Obj *obj, U64 section_number);

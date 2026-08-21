@@ -10,7 +10,7 @@ lnk_symbol_search_type_from_coff(LNK_Obj *obj, COFF_ParsedSymbol symbol, COFF_Sy
   if (interp == COFF_SymbolValueInterp_Undefined) {
     search_type = LNK_SymbolSearch_Undefined;
   } else if (interp == COFF_SymbolValueInterp_Weak) {
-    COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(symbol, obj->header.is_big_obj);
+    COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(symbol, obj->coff.header.is_big_obj);
     switch (weak_ext->characteristics) {
     case COFF_WeakExt_SearchLibrary:  search_type = LNK_SymbolSearch_WeakLibrary;        break;
     case COFF_WeakExt_AntiDependency: search_type = LNK_SymbolSearch_WeakAntiDependency; break;
@@ -179,7 +179,7 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
     }
 
     LNK_ObjSymbolRef    weak_symbol_ref = lnk_ref_from_symbol(weak);
-    COFF_SymbolWeakExt *weak_ext        = coff_parse_weak_tag(weak_parsed, weak_symbol_ref.obj->header.is_big_obj);
+    COFF_SymbolWeakExt *weak_ext        = coff_parse_weak_tag(weak_parsed, weak_symbol_ref.obj->coff.header.is_big_obj);
     if (weak_ext->characteristics == COFF_WeakExt_SearchLibrary) {
       // NOTE: MSVC does not let a weak symbol to replace an undefined one,
       // but LLD links without errors or warnings, meaning undefined symbols
@@ -242,8 +242,8 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
   }
   // weak vs weak
   else if (dst_interp == COFF_SymbolValueInterp_Weak && src_interp == COFF_SymbolValueInterp_Weak) {
-    COFF_SymbolWeakExt *dst_ext = coff_parse_weak_tag(dst_parsed, dst_ref.obj->header.is_big_obj);
-    COFF_SymbolWeakExt *src_ext = coff_parse_weak_tag(src_parsed, src_ref.obj->header.is_big_obj);
+    COFF_SymbolWeakExt *dst_ext = coff_parse_weak_tag(dst_parsed, dst_ref.obj->coff.header.is_big_obj);
+    COFF_SymbolWeakExt *src_ext = coff_parse_weak_tag(src_parsed, src_ref.obj->coff.header.is_big_obj);
     if ((dst_ext->characteristics == COFF_WeakExt_SearchAlias && src_ext->characteristics != COFF_WeakExt_SearchAlias)) {
       if (lnk_symbol_is_before(dst, src) || src_ext->characteristics == COFF_WeakExt_AntiDependency) {
         can_replace = 0;
@@ -342,8 +342,8 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
         case COFF_ComdatSelect_ExactMatch: {
           LNK_ObjSection dst_section = lnk_obj_section_from_section_number(dst_obj, dst_parsed.section_number);
           LNK_ObjSection src_section = lnk_obj_section_from_section_number(src_obj, src_parsed.section_number);
-          String8        dst_data    = str8_substr(dst_obj->data, dst_section.frange);
-          String8        src_data    = str8_substr(src_obj->data, src_section.frange);
+          String8        dst_data    = lnk_obj_section_data_from_sect_idx(dst_obj, dst_section.sect_idx);
+          String8        src_data    = lnk_obj_section_data_from_sect_idx(src_obj, src_section.sect_idx);
 
           B32 is_exact_match = 0;
           if (dst_check_sum != 0 && src_check_sum != 0) {
@@ -396,7 +396,7 @@ lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
     *dst_section.flags |= COFF_SectionFlag_LnkRemove;
 
     // remove associated sections from the output
-    for (U32Node *associated_section = dst_ref.obj->associated_sections[dst_parsed.section_number];
+    for (U32Node *associated_section = dst_ref.obj->coff.sections.associations[dst_parsed.section_number];
         associated_section != 0;
         associated_section = associated_section->next) {
       LNK_ObjSection section = lnk_obj_section_from_section_number(dst_ref.obj, associated_section->data);
@@ -728,7 +728,7 @@ lnk_resolve_weak_symbol(LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, LNK_Ob
         break;
       }
 
-      COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(current_parsed, current_symbol.obj->header.is_big_obj);
+      COFF_SymbolWeakExt *weak_ext = coff_parse_weak_tag(current_parsed, current_symbol.obj->coff.header.is_big_obj);
 
       // no definition -- fallback to default symbol
       COFF_ParsedSymbol           tag_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(current_symbol.obj, weak_ext->tag_index);
