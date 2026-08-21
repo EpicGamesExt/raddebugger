@@ -481,7 +481,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[39] =
 {str8_lit_comp("thread"), 0, str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':set}")},
 };
 
-String8 rd_reg_slot_code_name_table[54] =
+String8 rd_reg_slot_code_name_table[55] =
 {
 {0},
 str8_lit_comp("machine"),
@@ -533,13 +533,14 @@ str8_lit_comp("prefer_new_tab"),
 str8_lit_comp("activate_with_single_click"),
 str8_lit_comp("disable_addresses"),
 str8_lit_comp("small_size"),
+str8_lit_comp("auto_unwind"),
 str8_lit_comp("dir2"),
 str8_lit_comp("string"),
 str8_lit_comp("cmd_name"),
 str8_lit_comp("wm_event"),
 };
 
-Rng1U64 rd_reg_slot_range_table[54] =
+Rng1U64 rd_reg_slot_range_table[55] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(D_Handle)},
@@ -591,6 +592,7 @@ Rng1U64 rd_reg_slot_range_table[54] =
 {OffsetOf(RD_Regs, activate_with_single_click), OffsetOf(RD_Regs, activate_with_single_click) + sizeof(B32)},
 {OffsetOf(RD_Regs, disable_addresses), OffsetOf(RD_Regs, disable_addresses) + sizeof(B32)},
 {OffsetOf(RD_Regs, small_size), OffsetOf(RD_Regs, small_size) + sizeof(B32)},
+{OffsetOf(RD_Regs, auto_unwind), OffsetOf(RD_Regs, auto_unwind) + sizeof(B32)},
 {OffsetOf(RD_Regs, dir2), OffsetOf(RD_Regs, dir2) + sizeof(Dir2)},
 {OffsetOf(RD_Regs, string), OffsetOf(RD_Regs, string) + sizeof(String8)},
 {OffsetOf(RD_Regs, cmd_name), OffsetOf(RD_Regs, cmd_name) + sizeof(String8)},

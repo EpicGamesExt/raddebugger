@@ -58,6 +58,7 @@ RD_RegSlot_PreferNewTab,
 RD_RegSlot_ActivateWithSingleClick,
 RD_RegSlot_DisableAddresses,
 RD_RegSlot_SmallSize,
+RD_RegSlot_AutoUnwind,
 RD_RegSlot_Dir2,
 RD_RegSlot_String,
 RD_RegSlot_CmdName,
@@ -515,6 +516,7 @@ B32 prefer_new_tab;
 B32 activate_with_single_click;
 B32 disable_addresses;
 B32 small_size;
+B32 auto_unwind;
 Dir2 dir2;
 String8 string;
 String8 cmd_name;
@@ -618,6 +620,7 @@ Z(getting_started)\
 .activate_with_single_click = rd_regs()->activate_with_single_click,\
 .disable_addresses = rd_regs()->disable_addresses,\
 .small_size = rd_regs()->small_size,\
+.auto_unwind = rd_regs()->auto_unwind,\
 .dir2 = rd_regs()->dir2,\
 .string = rd_regs()->string,\
 .cmd_name = rd_regs()->cmd_name,\
@@ -628,8 +631,8 @@ extern String8 rd_tab_fast_path_view_name_table[25];
 extern String8 rd_tab_fast_path_query_name_table[25];
 extern RD_VocabInfo rd_vocab_info_table[372];
 extern RD_NameSchemaInfo rd_name_schema_info_table[39];
-extern String8 rd_reg_slot_code_name_table[54];
-extern Rng1U64 rd_reg_slot_range_table[54];
+extern String8 rd_reg_slot_code_name_table[55];
+extern Rng1U64 rd_reg_slot_range_table[55];
 extern String8 rd_binding_version_remap_old_name_table[9];
 extern String8 rd_binding_version_remap_new_name_table[9];
 extern String8 rd_icon_kind_text_table[75];

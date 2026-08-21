@@ -325,7 +325,7 @@ RD_VocabTable:
       //- rjf: update check
       @default(1) @display_name('Check For Updates') @description("Enables a small network request to check if there is a newer release version available.")
         'check_for_updates': bool,
-
+      
       //- rjf: system installation
       @display_name('Install To System') @description("Controls whether or not associated installation files are created on the system, for tighter integration with the operating system shell.") 'install_to_system': bool,
     }
@@ -912,6 +912,7 @@ RD_RegTable:
   {B32               activate_with_single_click       ActivateWithSingleClick                 }
   {B32               disable_addresses                DisableAddresses                        }
   {B32               small_size                       SmallSize                               }
+  {B32               auto_unwind                      AutoUnwind                              }
   {Dir2              dir2                             Dir2                                    }
   {String8           string                           String                                  }
   {String8           cmd_name                         CmdName                                 }

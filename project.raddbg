@@ -35,6 +35,6 @@ target:
 target:
 {
   executable: "build/radbin.exe"
-  working_directory: "build/"
-  arguments: "--rdi test/a.out"
+  working_directory: build
+  arguments: "--rdi raddbg"
 }

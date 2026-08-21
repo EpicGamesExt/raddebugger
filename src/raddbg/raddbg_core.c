@@ -15121,6 +15121,10 @@ rd_frame(void)
                 break;
               }
             }
+            if(vaddr == 0)
+            {
+              vaddr = d_query_cached_rip_from_thread_unwind(thread, rd_regs()->unwind_count);
+            }
             rd_cmd(RD_CmdKind_FindCodeLocation, .process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process)->handle, .vaddr = vaddr, .prefer_disasm = 1);
           }break;
           case RD_CmdKind_GoToSource:
@@ -15399,10 +15403,73 @@ rd_frame(void)
             
             //- rjf: unpack thread info
             D_Entity *thread = d_entity_from_handle(rd_regs()->thread);
+            D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
             U64 unwind_index = rd_regs()->unwind_count;
             U64 inline_depth = rd_regs()->inline_depth;
             U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_index);
-            D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
+            
+            //- rjf: determine if any disassembly is open
+            B32 any_disasm_is_open = 0;
+            if(rd_regs()->auto_unwind)
+            {
+              for(RD_WindowState *ws = rd_state->first_window_state; ws != &rd_nil_window_state; ws = ws->order_next)
+              {
+                Temp scratch = scratch_begin(0, 0);
+                CFG_Node *window = cfg_node_from_id(ws->cfg_id);
+                CFG_PanelTree panel_tree = cfg_panel_tree_from_cfg(scratch.arena, window);
+                for(CFG_PanelNode *p = panel_tree.root; p != &cfg_nil_panel_node; p = cfg_panel_node_rec__depth_first_pre(panel_tree.root, p).next)
+                {
+                  for EachNode(n, CFG_NodePtrNode, p->tabs.first)
+                  {
+                    CFG_Node *tab = n->v;
+                    if(str8_match(tab->string, s("disasm"), 0))
+                    {
+                      any_disasm_is_open = 1;
+                      goto break_find_disasm;
+                    }
+                  }
+                }
+                break_find_disasm:;
+                scratch_end(scratch);
+              }
+            }
+            
+            //- rjf: if we have no disassembly open -> try to unwind to the first point where we have source code.
+            B32 waiting_on_unwind = 0;
+            B32 need_unwind_selection = 0;
+            if(!any_disasm_is_open && rd_regs()->auto_unwind)
+            {
+              D_Unwind unwind = d_unwind_from_thread(scratch.arena, thread->handle, rd_state->frame_eval_memread_endt_us);
+              if(unwind.flags & D_UnwindFlag_Stale)
+              {
+                waiting_on_unwind = 1;
+              }
+              else
+              {
+                ARCH_Info *arch_info = arch_info_from_arch(thread->arch);
+                for(U64 frame_idx = 0; frame_idx < unwind.frames.count; frame_idx += 1)
+                {
+                  void *regs = unwind.frames.v[frame_idx].regs;
+                  U64 ip_vaddr = arch_ip_from_reg_block(arch_info, regs);
+                  D_Entity *module = d_module_from_process_vaddr(process, ip_vaddr);
+                  U64 ip_voff = d_voff_from_vaddr(module, ip_vaddr);
+                  D_Entity *debug_info_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
+                  DI_Key dbgi_key = d_dbgi_key_from_debug_info_path(debug_info_path);
+                  String8 dbgi_path = debug_info_path->string;
+                  D_LineList lines = d_lines_from_dbgi_key_path_voff(scratch.arena, dbgi_key, dbgi_path, ip_voff);
+                  if(lines.count != 0)
+                  {
+                    rip_vaddr = ip_vaddr;
+                    unwind_index = frame_idx;
+                    inline_depth = 0;
+                    need_unwind_selection = 1;
+                    break;
+                  }
+                }
+              }
+            }
+            
+            //- rjf: unpack selected unwind address
             D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
             D_Entity *dbg_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
             String8 dbgi_path = dbg_path->string;
@@ -15429,35 +15496,45 @@ rd_frame(void)
             B32 has_module    = (module != &d_entity_nil);
             B32 has_dbg_info  = has_module && !dbgi_missing;
             
-            //- rjf: find-code-location on each affected window
-            if(!dbgi_pending && (has_line_info || has_module))
+            //- rjf: auto unwind
+            if(need_unwind_selection)
             {
-              rd_cmd(RD_CmdKind_FindCodeLocation,
-                     .file_path    = line.file_path,
-                     .line_num     = (U64)line.pt.line,
-                     .column_num   = (U64)line.pt.column,
-                     .process      = process->handle,
-                     .voff         = rip_voff,
-                     .vaddr        = rip_vaddr,
-                     .unwind_count = unwind_index,
-                     .inline_depth = inline_depth,
-                     .all_windows  = 1);
+              rd_state->base_regs.v.unwind_count = unwind_index;
+              rd_state->base_regs.v.inline_depth = 0;
             }
-            if(!missing_rip && !dbgi_pending && !has_line_info && !has_module)
+            
+            //- rjf: find-code-location on each affected window
+            if(!waiting_on_unwind)
             {
-              rd_cmd(RD_CmdKind_FindCodeLocation,
-                     .file_path    = str8_zero(),
-                     .process      = process->handle,
-                     .module       = module->handle,
-                     .voff         = rip_voff,
-                     .vaddr        = rip_vaddr,
-                     .unwind_count = unwind_index,
-                     .inline_depth = inline_depth,
-                     .all_windows  = 1);
+              if(!dbgi_pending && (has_line_info || has_module))
+              {
+                rd_cmd(RD_CmdKind_FindCodeLocation,
+                       .file_path    = line.file_path,
+                       .line_num     = (U64)line.pt.line,
+                       .column_num   = (U64)line.pt.column,
+                       .process      = process->handle,
+                       .voff         = rip_voff,
+                       .vaddr        = rip_vaddr,
+                       .unwind_count = unwind_index,
+                       .inline_depth = inline_depth,
+                       .all_windows  = 1);
+              }
+              if(!missing_rip && !dbgi_pending && !has_line_info && !has_module)
+              {
+                rd_cmd(RD_CmdKind_FindCodeLocation,
+                       .file_path    = str8_zero(),
+                       .process      = process->handle,
+                       .module       = module->handle,
+                       .voff         = rip_voff,
+                       .vaddr        = rip_vaddr,
+                       .unwind_count = unwind_index,
+                       .inline_depth = inline_depth,
+                       .all_windows  = 1);
+              }
             }
             
             // rjf: retry on stopped, pending debug info
-            if(!d_ctrl_targets_running() && (dbgi_pending || missing_rip))
+            if(!d_ctrl_targets_running() && (dbgi_pending || missing_rip || waiting_on_unwind))
             {
               find_thread_retry = thread->handle;
             }
@@ -18054,18 +18131,19 @@ rd_frame(void)
           D_Entity *module = d_module_from_process_vaddr(process, vaddr);
           U64 voff = d_voff_from_vaddr(module, vaddr);
           U64 test_cached_vaddr = d_cached_ip_from_thread(thread->handle);
+          B32 auto_unwind = (d_ctrl_last_run_kind() == D_RunKind_Run);
           
           // rjf: valid stop thread? -> select & snap
           if(need_refocus && thread->kind == D_EntityKind_Thread && evt->cause != D_EventCause_InterruptedByHalt)
           {
-            rd_cmd(RD_CmdKind_SelectThread, .thread = thread->handle);
+            rd_cmd(RD_CmdKind_SelectThread, .thread = thread->handle, .auto_unwind = auto_unwind);
           }
           
           // rjf: no stop-causing thread, but have selected thread? -> snap to selected
           D_Entity *selected_thread = d_entity_from_handle(rd_base_regs()->thread);
           if(need_refocus && (evt->cause == D_EventCause_InterruptedByHalt || thread->kind != D_EntityKind_Thread) && selected_thread != &d_entity_nil)
           {
-            rd_cmd(RD_CmdKind_SelectThread, .thread = selected_thread->handle);
+            rd_cmd(RD_CmdKind_SelectThread, .thread = selected_thread->handle, .auto_unwind = auto_unwind);
           }
           
           // rjf: no stop-causing thread, but don't have selected thread? -> snap to first available thread
@@ -18073,7 +18151,7 @@ rd_frame(void)
           {
             D_EntityArray threads = d_entity_array_from_kind(D_EntityKind_Thread);
             D_Entity *first_available_thread = d_entity_array_first(&threads);
-            rd_cmd(RD_CmdKind_SelectThread, .thread = first_available_thread->handle);
+            rd_cmd(RD_CmdKind_SelectThread, .thread = first_available_thread->handle, .auto_unwind = auto_unwind);
           }
           
           // rjf: increment breakpoint hit counts

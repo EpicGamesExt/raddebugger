@@ -1143,6 +1143,7 @@ d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, 
     // rjf: good src-id -> look up line info for visible range
     if(good_src_id) ProfScope("good src-id -> look up line info for visible range")
     {
+      String8 match_file_path = str8_copy(arena, file_path);
       RDI_SourceFile *src = rdi_element_from_name_idx(rdi, SourceFiles, src_id);
       RDI_SourceLineMap *src_line_map = rdi_element_from_name_idx(rdi, SourceLineMaps, src->source_line_map_idx);
       RDI_ParsedSourceLineMap line_map = {0};
@@ -1169,6 +1170,7 @@ d_lines_array_from_dbgi_key_file_path_line_range(Arena *arena, DI_Key dbgi_key, 
             Rng1U64 range = r1u64(base_voff, unit_line_info.voffs[line_info_idx+1]);
             S64 actual_line = (S64)unit_line_info.lines[line_info_idx].line_num;
             D_LineNode *n = push_array(arena, D_LineNode, 1);
+            n->v.file_path = match_file_path;
             n->v.voff_range = range;
             n->v.pt.line = (S64)actual_line;
             n->v.pt.column = 1;
