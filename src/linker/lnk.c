@@ -2409,7 +2409,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
                 LNK_ObjLineMap *line_map = line_maps[obj->input_idx];
 
                 // is reference inline site?
-                LNK_InlineSite *inline_site = lnk_inline_site_from_section_offset(line_map, safe_cast_u32(section_number), reloc->apply_off);
+                LNK_InlineSite *inline_site = lnk_inline_site_from_section_offset(line_map, safe_cast_u32(section_number), reloc->apply_off, symbol);
                 if (inline_site && inline_site->name.size) {
                   CV_Line *line_inline = lnk_line_from_inline_site(inline_site, reloc->apply_off);
                   if (line_inline) {

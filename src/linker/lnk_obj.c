@@ -1349,6 +1349,20 @@ lnk_line_map_from_obj(Arena *arena, LNK_Obj *obj)
             radsort(inline_site->lines, inline_site->line_count, cv_c13_voff_map_is_before);
           }
         }
+      } else if (symbol.kind == CV_SymKind_CALLEES) {
+        if (inline_site_stack_count && symbol.data.size >= sizeof(CV_SymFunctionList)) {
+          CV_SymFunctionList *func_list    = (CV_SymFunctionList *)symbol.data.str;
+          U64                 callee_count = Min(func_list->count, (symbol.data.size - sizeof(*func_list)) / sizeof(CV_ItemId));
+          CV_ItemId          *callees      = (CV_ItemId *)(func_list + 1);
+
+          LNK_InlineSite *inline_site = &map->inline_sites[inline_site_stack[inline_site_stack_count - 1]];
+          inline_site->callee_count = callee_count;
+          inline_site->callee_names = push_array(arena, String8, callee_count);
+          for EachIndex(callee_idx, callee_count) {
+            String8 *callee_name = hash_map_search_u64_string(&inlinee_hm, callees[callee_idx]);
+            inline_site->callee_names[callee_idx] = callee_name ? *callee_name : str8_zero();
+          }
+        }
       } else if (symbol.kind == CV_SymKind_INLINESITE_END) {
         if (inline_site_stack_count > 0) {
           inline_site_stack_count -= 1;
@@ -1449,10 +1463,11 @@ lnk_lines_from_section_offset(LNK_ObjLineMap *map, U32 section_number, U32 offse
 }
 
 internal LNK_InlineSite *
-lnk_inline_site_from_section_offset(LNK_ObjLineMap *map, U32 section_number, U32 offset)
+lnk_inline_site_from_section_offset(LNK_ObjLineMap *map, U32 section_number, U32 offset, LNK_Symbol *callee_symbol)
 {
   U64 key = Compose64Bit(section_number, offset);
 
+  // find upper bound
   U64 min = 0;
   U64 opl = map->inline_range_count;
   while (min < opl) {
@@ -1464,21 +1479,52 @@ lnk_inline_site_from_section_offset(LNK_ObjLineMap *map, U32 section_number, U32
     }
   }
 
-  LNK_InlineSite *site = 0;
+  // hacky demangle
+  String8 callee_name = callee_symbol ? callee_symbol->name : str8_zero();
+  if (str8_starts_with(callee_name, str8_lit("__imp_"))) {
+    callee_name = str8_skip(callee_name, 6);
+  }
+  if (str8_starts_with(callee_name, str8_lit("?"))) {
+    U64 name_opl = str8_find_needle(callee_name, 1, str8_lit("@"), 0);
+    callee_name = str8_substr(callee_name, r1u64(1, name_opl));
+  }
+
+  // scan back to the lower bound and match inline sites
+  LNK_InlineSite *site                     = 0;
+  LNK_InlineSite *callee_site              = 0;
+  B32             callee_site_is_ambiguous = 0;
   while (min > 0) {
     LNK_InlineRange *range = &map->inline_ranges[--min];
     if (key < range->key_max) {
       LNK_InlineSite *candidate = &map->inline_sites[range->site_idx];
+
       if (site == 0 || site->depth < candidate->depth) {
         site = candidate;
       }
+
+      for EachIndex(callee_idx, candidate->callee_count) {
+        String8 pdb_callee_name = candidate->callee_names[callee_idx];
+        if (str8_match(callee_name, pdb_callee_name, 0)) {
+
+          // candidate matches callee
+          if (callee_site == 0 || callee_site->depth < candidate->depth) {
+            callee_site              = candidate;
+            callee_site_is_ambiguous = 0;
+          } else if (candidate->depth == callee_site->depth && candidate != callee_site) {
+            callee_site_is_ambiguous = 1;
+          }
+
+          break;
+        }
+      }
     }
+
     if (min == 0 || map->inline_ranges[min - 1].prefix_max <= key) {
       break;
     }
   }
 
-  return site;
+  return (callee_site && !callee_site_is_ambiguous) ? callee_site : site;
 }
 
 internal CV_Line *
