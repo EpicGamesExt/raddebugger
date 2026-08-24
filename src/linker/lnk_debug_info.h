@@ -120,13 +120,15 @@ typedef struct
 ////////////////////////////////
 // Type Merging
 
-typedef struct { U32 obj_idx; U32 leaf_idx;  } LNK_LeafRef;
-typedef struct { U64 count; LNK_LeafRef **v; } LNK_LeafRefArray;
+typedef U64 LNK_LeafRef;
+typedef struct { U64 count; LNK_LeafRef *v; } LNK_LeafRefArray;
+
+#define LNK_LEAF_REF_NULL max_U64
 
 typedef struct
 {
-  U64           cap;
-  LNK_LeafRef **bucket_arr;
+  U64          cap;
+  LNK_LeafRef *bucket_arr;
 } LNK_LeafHashTable;
 
 typedef struct
@@ -180,16 +182,6 @@ typedef struct
   // extract present buckets
   U64 *counts [CV_TypeIndexSource_COUNT];
   U64 *offsets[CV_TypeIndexSource_COUNT];
-
-  // leaf ref radix sort
-  U64           obj_idx_bit_count_0;
-  U64           obj_idx_bit_count_1;
-  U64           obj_idx_bit_count_2;
-  U64           counts_max;
-  U32         **counts_arr;
-  LNK_LeafRef **dst;
-  LNK_LeafRef **src;
-  U64           pass_idx;
 
   CV_TypeIndex     min_type_indices    [CV_TypeIndexSource_COUNT];
   LNK_LeafRefArray unique_leaf_refs_arr[CV_TypeIndexSource_COUNT];
@@ -270,11 +262,9 @@ internal B32         lnk_rrt_from_string     (Arena *arena, String8 rrt_data, St
 internal LNK_CodeViewInput lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U64 objs_count, LNK_Obj **objs, LNK_RRT_Array rrt_input);
 
 internal int             lnk_leaf_ref_compare                (LNK_LeafRef a, LNK_LeafRef b);
-internal int             lnk_leaf_ref_is_before              (void *raw_a, void *raw_b);
 internal B32             lnk_match_leaf_ref                  (LNK_CodeViewInput *input, LNK_LeafRef a, LNK_LeafRef b);
 internal U64             lnk_hash_cv_leaf                    (LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInfoList ti_info_list, B32 discard_cycles);
 internal void            lnk_hash_cv_leaf_deep               (Arena *arena, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInfoList ti_info_list);
-internal LNK_LeafRef *   lnk_leaf_hash_table_insert_or_update(LNK_LeafHashTable *leaf_ht, LNK_CodeViewInput *input, CV_DebugH *hashes, U64 hash, LNK_LeafRef *new_bucket);
 internal CV_TypeIndex    lnk_assigned_ti_hash_search          (LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
 internal LNK_MergedTypes lnk_merge_types                     (TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK_MergeTypeFlags merge_flags);
 internal void            lnk_replace_type_names_with_hashes  (TP_Context *tp, TP_Arena *arena, U64 leaf_count, U8 **leaf_arr, LNK_TypeNameHashMode mode, U64 hash_length, String8 map_name);

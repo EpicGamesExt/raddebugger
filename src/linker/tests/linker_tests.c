@@ -7146,6 +7146,48 @@ TEST(psi_addr_map_radix_sort)
   tp_release(tp);
 }
 
+TEST(u64_array_radix_sort_parallel)
+{
+  TP_Context *tp = tp_alloc(arena, 1, 1, str8_zero());
+
+  U64 small_values[] = { max_U64, 0, 7, 1, 7, 0x100000000ull, 2 };
+  u64_array_sort_radix_parallel(tp,  ArrayCount(small_values), small_values);
+  for (U64 i = 1; i < ArrayCount(small_values); i += 1) {
+    T_Ok(small_values[i-1] <= small_values[i]);
+  }
+
+  U64  count      = 200003;
+  U64 *values     = push_array_no_zero(arena, U64, count);
+  U64  state      = 0x9e3779b97f4a7c15ull;
+  U64  sum_before = 0;
+  U64  xor_before = 0;
+  for EachIndex(i, count) {
+    state ^= state >> 12;
+    state ^= state << 25;
+    state ^= state >> 27;
+    values[i] = state * 0x2545f4914f6cdd1dull;
+    if ((i % 97) == 0) { values[i] = 0; }
+    if ((i % 193) == 0) { values[i] = max_U64; }
+    if ((i % 389) == 0) { values[i] = 0x100000001ull; }
+    sum_before += values[i];
+    xor_before ^= values[i];
+  }
+
+  u64_array_sort_radix_parallel(tp, count, values);
+  U64 sum_after = 0;
+  U64 xor_after = 0;
+  B32 is_sorted = 1;
+  for EachIndex(i, count) {
+    if (i > 0 && values[i-1] > values[i]) { is_sorted = 0; }
+    sum_after += values[i];
+    xor_after ^= values[i];
+  }
+  T_Ok(is_sorted);
+  T_Ok(sum_before == sum_after);
+  T_Ok(xor_before == xor_after);
+  tp_release(tp);
+}
+
 TEST(pdbstripped)
 {
   String8 debug_obj;

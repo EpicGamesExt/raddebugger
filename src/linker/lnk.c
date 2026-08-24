@@ -63,11 +63,13 @@
 
 #include "base_ext/base_inc.h"
 #include "thread_pool/thread_pool.h"
+#include "base_ext/base_radix_sort.h"
 #include "codeview_ext/codeview.h"
 #include "pdb_ext/msf_builder.h"
 
 #include "base_ext/base_inc.c"
 #include "thread_pool/thread_pool.c"
+#include "base_ext/base_radix_sort.c"
 #include "codeview_ext/codeview.c"
 
 // --- PDB Extensions- ---------------------------------------------------------
