@@ -334,6 +334,7 @@ hash_table_purge_item(HashTable *ht, U64 hash, BucketNode *node)
 {
   U64 bucket_idx = hash % ht->cap;
   DLLRemove(ht->buckets[bucket_idx].first, ht->buckets[bucket_idx].last, node);
+  SLLQueuePush(ht->free_buckets.first, ht->free_buckets.last, node);
   ht->count -= 1;
 }
 
