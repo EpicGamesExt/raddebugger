@@ -2054,6 +2054,7 @@ rd_view_ui(Rng2F32 rect)
         //
         for(CFG_Node *child = view->first; child != &cfg_nil_node; child = child->next)
         {
+          if(rd_cfg_is_project_filtered(child)) { continue; }
           if(str8_match(child->string, s("watch_expression"), 0))
           {
             CFG_Node *locked = cfg_node_child_from_string(child, s("locked"));
@@ -2897,6 +2898,8 @@ rd_view_ui(Rng2F32 rect)
                             new_cfg_parent = cfg_node_child_from_string(cfg_node_root(), str8_lit("project"));
                           }
                           cfg = cfg_node_new(rd_state->cfg, new_cfg_parent, row_info.group_cfg_name);
+                          CFG_Node *project = cfg_node_new(rd_state->cfg, cfg, s("project"));
+                          cfg_node_new(rd_state->cfg, project, rd_state->project_path);
                           state_dirty = 1;
                           snap_to_cursor = 1;
                         }
@@ -3631,6 +3634,8 @@ rd_view_ui(Rng2F32 rect)
                           cfg_node_equip_stringf(rd_state->cfg, cfg, "watch_expression");
                           CFG_Node *expr = cfg_node_new(rd_state->cfg, cfg, s("expression"));
                           cfg_node_new(rd_state->cfg, expr, drag_regs->expr);
+                          CFG_Node *project = cfg_node_new(rd_state->cfg, cfg, s("project"));
+                          cfg_node_new(rd_state->cfg, project, rd_state->project_path);
                         }
                         cfg_node_insert_child(rd_state->cfg, drag_parent_cfg, drag_prev_cfg, cfg);
                       }break;
@@ -17069,6 +17074,8 @@ rd_frame(void)
               CFG_Node *watch = cfg_node_new(rd_state->cfg, watch_tab, s("watch_expression"));
               CFG_Node *expr = cfg_node_new(rd_state->cfg, watch, s("expression"));
               cfg_node_new(rd_state->cfg, expr, rd_regs()->string);
+              CFG_Node *project = cfg_node_new(rd_state->cfg, watch, s("project"));
+              cfg_node_new(rd_state->cfg, project, rd_state->project_path);
             }
           }break;
           
