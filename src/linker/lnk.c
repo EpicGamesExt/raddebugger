@@ -2928,7 +2928,9 @@ lnk_icf_scope_from_section_number(LNK_Obj *obj, U32 section_number)
 {
   LNK_ICF_Scope result = LNK_ICF_Scope_Null;
 
+  //
   // * section flags filter *
+  //
   COFF_SectionFlags expected_flags = COFF_SectionFlag_LnkCOMDAT | COFF_SectionFlag_MemRead;
   COFF_SectionFlags exclude_flags  = COFF_SectionFlag_LnkRemove | COFF_SectionFlag_MemWrite | LNK_SECTION_FLAG_NOICF;
   if ((obj->coff.sections.headers[section_number].flags & expected_flags) != expected_flags || (obj->coff.sections.headers[section_number].flags & exclude_flags) != 0) {
@@ -2961,12 +2963,34 @@ lnk_icf_scope_from_section_number(LNK_Obj *obj, U32 section_number)
       String8 comdat_name = lnk_symbol_name_from_coff_symbol_idx(comdat_ref.obj, comdat_ref.symbol_idx);
 
       //
+      // * include MSVC C++ EH tables *
+      //
+      if (str8_starts_with(comdat_name, str8_lit("$cppxdata$")) ||
+          str8_starts_with(comdat_name, str8_lit("$stateUnwindMap$")) ||
+          str8_starts_with(comdat_name, str8_lit("$ip2state$"))) {
+        result = LNK_ICF_Scope_Unwind;
+        goto exit;
+      }
+
+      //
       // * include virtual function tables *
       //
       if (str8_starts_with(comdat_name, str8_lit(MSCRT_VFTABLE_SYMBOL_PREFIX))) {
         result = LNK_ICF_Scope_VFTable;
         goto exit;
       } 
+
+      // exclude static COMDAT data
+      COFF_ParsedSymbol comdat_symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(comdat_ref.obj, comdat_ref.symbol_idx);
+      if (comdat_symbol.storage_class != COFF_SymStorageClass_External) {
+        goto exit;
+      }
+
+      // exclude general read-only data records with fixups
+      COFF_SectionHeader *header = lnk_coff_section_header_from_section_number(obj, section_number);
+      if (lnk_coff_relocs_from_section_header(obj, header).count > 0) {
+        goto exit;
+      }
 
       //
       // * include COMDATs *
@@ -3026,6 +3050,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
   typedef struct {
     U64 *color;
     U64 static_id;
+    U64 association_id;
     U32 value;
     COFF_SymbolValueInterpType interp;
   } RelocTarget;
@@ -3115,6 +3140,34 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
   //
   // step 1: fill out color map and contributions
   //
+
+  COFF_SectionFlags associated_filter = COFF_SectionFlag_LnkRemove | COFF_SectionFlag_LnkInfo | COFF_SectionFlag_MemDiscardable | LNK_SECTION_FLAG_DEBUG;
+
+  ProfBegin("Flag Unsupported Associative Sections");
+  for EachIndex(i, task->obj_indices[task_id].count) {
+    U64      obj_idx = task->obj_indices[task_id].v[i];
+    LNK_Obj *obj     = objs[obj_idx];
+
+    for LNK_EachCoffSection(it, obj) {
+      COFF_SectionHeader *header = lnk_coff_section_header_from_section_number(obj, it.v.section_number);
+
+      if ((header->flags & (COFF_SectionFlag_LnkCOMDAT | COFF_SectionFlag_CntCode)) != (COFF_SectionFlag_LnkCOMDAT | COFF_SectionFlag_CntCode)) {
+        continue;
+      }
+
+      Temp temp = temp_begin(scratch.arena);
+      U32List associated_sections = lnk_obj_collect_associated_section_numbers(temp.arena, obj, it.v.section_number, associated_filter);
+      for EachNode(section_n, U32Node, associated_sections.first) {
+        String8 section_name = lnk_obj_section_name_from_section_number(obj, section_n->data);
+        if (str8_starts_with(section_name, str8_lit(".gsspr$"))) {
+          header->flags |= LNK_SECTION_FLAG_NOICF;
+          break;
+        }
+      }
+      temp_end(temp);
+    }
+  }
+  ProfEnd();
 
   // alloc total section counter
   U64 *contrib_counts = 0;
@@ -3207,7 +3260,6 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
 
       Temp temp = temp_begin(scratch.arena);
       // include associative children in their parent COMDAT's identity
-      COFF_SectionFlags associated_filter   = COFF_SectionFlag_LnkRemove | COFF_SectionFlag_LnkInfo | COFF_SectionFlag_MemDiscardable | LNK_SECTION_FLAG_DEBUG;
       U32List           associated_sections = lnk_obj_collect_associated_section_numbers(temp.arena, obj, it.v.section_number, associated_filter);
       u32_list_push(temp.arena, &associated_sections, it.v.section_number);
 
@@ -3253,9 +3305,33 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
                 LNK_Obj *target_obj  = target_ref.obj;
                 U32      target_sect = target_symbol.section_number;
 
+                // references between corresponding associative children compare
+                // through the owning COMDAT rather than each child's unique identity
+                while (lnk_icf_scope_from_section_number(target_obj, target_sect) == LNK_ICF_Scope_Null) {
+                  COFF_ComdatSelectType select       = COFF_ComdatSelect_Null;
+                  U32                  parent_sect  = 0;
+                  if (!lnk_try_comdat_props_from_section_number(target_obj, target_sect, &select, &parent_sect, 0, 0)) {
+                    break;
+                  }
+                  if (select != COFF_ComdatSelect_Associative) {
+                    break;
+                  }
+
+                  U64 child_pos = 0;
+                  for EachNode(child_n, U32Node, target_obj->coff.sections.associated_section_numbers[parent_sect]) {
+                    if (child_n->data == target_sect) { break; }
+                    child_pos += 1;
+                  }
+
+                  String8 child_name        = lnk_obj_section_name_from_section_number(target_obj, target_sect);
+                  U64     association_key[] = { target->association_id, hash_map_hasher(child_name), child_pos };
+
+                  target->association_id = hash_map_hasher(str8_array_fixed(association_key));
+                  target_sect = parent_sect;
+                }
+
                 // use the selected COMDAT leader so equivalent targets hash alike
-                if (target_sect != 0 && target_sect <= target_obj->coff.sections.count_no_null &&
-                    target_obj->coff.sections.headers[target_sect].flags & COFF_SectionFlag_LnkCOMDAT) {
+                if (target_obj->coff.sections.headers[target_sect].flags & COFF_SectionFlag_LnkCOMDAT) {
                   LNK_ObjSymbolRef leader_ref = {0};
                   if (lnk_obj_get_comdat_symlink_from_section_number(target_obj, target_sect, &leader_ref)) {
                     COFF_ParsedSymbol leader_symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(leader_ref.obj, leader_ref.symbol_idx);
@@ -3352,6 +3428,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
         RelocTarget *target    = contrib->reloc_targets[reloc_idx];
         U64          target_id = target->color ? *target->color : target->static_id;
         lnk_hasher_update_struct(&hasher, &target_id);
+        lnk_hasher_update_struct(&hasher, &target->association_id);
       }
       U128 hash = lnk_hasher_digest128(&hasher);
 
@@ -3574,6 +3651,31 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
 
     // update folded section COMDAT symlink to point to the leader section
     contrib_obj->symlinks[contrib->section_number] = (LNK_ObjSymbolRef){ leader_obj, leader_obj->coff.sections.comdats[leader->section_number] };
+
+    // remove discarded associated sections
+    {
+      Temp assoc_temp = temp_begin(scratch.arena);
+
+      U32List  contrib_children = lnk_obj_collect_associated_section_numbers(assoc_temp.arena, contrib_obj, contrib->section_number, associated_filter);
+      U32List  leader_children  = lnk_obj_collect_associated_section_numbers(assoc_temp.arena, leader_obj,  leader->section_number,  associated_filter);
+      U32Node *contrib_child_n  = contrib_children.first;
+      U32Node *leader_child_n   = leader_children.first;
+
+      for (; contrib_child_n && leader_child_n; contrib_child_n = contrib_child_n->next, leader_child_n = leader_child_n->next) {
+        U32     contrib_child = contrib_child_n->data;
+        U32     leader_child  = leader_child_n->data;
+        String8 contrib_name  = lnk_obj_section_name_from_section_number(contrib_obj, contrib_child);
+        String8 leader_name   = lnk_obj_section_name_from_section_number(leader_obj, leader_child);
+
+        if ( ! str8_match(contrib_name, leader_name, 0))                                         { continue; }
+        if (lnk_icf_scope_from_section_number(contrib_obj, contrib_child) != LNK_ICF_Scope_Null) { continue; }
+
+        contrib_obj->coff.sections.headers[contrib_child].flags |= COFF_SectionFlag_LnkRemove;
+        contrib_obj->symlinks[contrib_child] = (LNK_ObjSymbolRef){ leader_obj, leader_obj->coff.sections.comdats[leader_child] };
+      }
+
+      temp_end(assoc_temp);
+    }
 
     #if LNK_PARANOID
     String8 section_name = lnk_obj_section_name_from_section_number(contrib_obj, contrib->section_number);
