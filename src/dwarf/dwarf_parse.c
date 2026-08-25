@@ -59,9 +59,10 @@ dw2_read_fmt_u64(String8 data, U64 off, DW_Format format, U64 *out)
 internal DW_SectionKind
 dw_section_kind_from_string(String8 string)
 {
+  // TODO(yuraiz): check if macho_string already fits to 16 bytes
   DW_SectionKind s = DW_SectionKind_Null;
   if(0){}
-#define X(name, regular_string, macho_string, dwo_string) else if(str8_match(string, s(regular_string), 0) || str8_match(string, s(macho_string), 0) || str8_match(string, s(dwo_string), 0)) { s = DW_SectionKind_##name; }
+#define X(name, regular_string, macho_string, dwo_string) else if(str8_match(string, s(regular_string), 0) || str8_match(string, str8_prefix(s(macho_string), 16), 0) || str8_match(string, s(dwo_string), 0)) { s = DW_SectionKind_##name; }
   DW_SectionKind_XList
 #undef X
   return s;
