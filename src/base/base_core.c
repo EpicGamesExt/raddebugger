@@ -662,7 +662,7 @@ wrapped_read(U8 *ring_base, U64 ring_size, U64 ring_pos, void *dst_data, U64 rea
 internal U64
 u64_array_bsearch(U64 *arr, U64 count, U64 value)
 {
-  if(count > 1 && arr[0] <= value && value < arr[count-1])
+  if(count > 1 && arr[0] <= value && value <= arr[count-1])
   {
     U64 l = 0;
     U64 r = count - 1;
