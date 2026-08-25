@@ -14,7 +14,7 @@ arch_dw_from_reg_code_table_from_arch(Arch arch)
       result = dw_reg_code_from_x64_table;
     }break;
 #endif
-#if defined(X64_H)
+#if defined(ARM64_H)
     case Arch_arm64:
     {
       result = dw_reg_code_from_arm64_table;
