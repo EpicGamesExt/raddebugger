@@ -3509,8 +3509,11 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                       case DW_ExprOp_BReg30: case DW_ExprOp_BReg31:
                       {
                         regcode_dw = (U64)(opcode - DW_ExprOp_BReg0);
-                        regval_off = operand_s64s[1];
+                        // NOTE(yuraiz): Changed from operand_s64s[1] to fix sp on arm64.
+                        // I don't know if it was valid for x64 before.
+                        regval_off = operand_s64s[0];
                         regread_is_addr = 1;
+                        
                       }goto reg_read;
                       case DW_ExprOp_BRegX:
                       {
