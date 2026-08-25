@@ -1123,10 +1123,6 @@ internal U64 wrapped_read(U8 *ring_base, U64 ring_size, U64 ring_pos, void *dst_
 
 ////////////////////////////////
 
-internal U64 u64_array_bsearch(U64 *arr, U64 count, U64 value);
-
-////////////////////////////////
-
 internal U32 idx_of_zero_byte64(U8 *ptr, U64 size); // size must be exactly 8 bytes
 internal U64 index_of_zero_u32(U32 *ptr, U64 count);
 internal U64 index_of_zero_u64(U64 *ptr, U64 count);
