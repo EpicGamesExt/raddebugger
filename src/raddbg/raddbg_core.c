@@ -4608,12 +4608,17 @@ rd_view_ui(Rng2F32 rect)
                           // rjf: apply browse
                           if(browse_cell)
                           {
+                            String8 current_path = rd_file_path_from_eval(scratch.arena, cell->eval);
                             ewv->next_cursor = ewv->next_mark = cell_pt;
                             if(!rd_watch_pt_match(ewv->cursor, cell_pt) && ewv->text_editing)
                             {
                               rd_cmd(RD_CmdKind_Accept);
                             }
                             rd_cmd(RD_CmdKind_FocusPanel);
+                            if(current_path.size != 0)
+                            {
+                              rd_cmd(RD_CmdKind_SetCurrentPath, .file_path = str8_chop_last_slash(current_path));
+                            }
                             rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_PickFilePath].string, .pick_folder = browse_folder);
                           }
                         }
