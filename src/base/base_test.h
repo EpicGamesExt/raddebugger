@@ -30,6 +30,7 @@ struct TestCtx
   String8 exemplars_path;
   String8 artifacts_path;
   String8 input_data_path;
+  String8 user_data;
   TestResult *result_out;
   String8List *test_out;
 };
@@ -46,6 +47,7 @@ struct TestInfo
   S64 decl_line;
   B32 skip;
   TestFunctionType *test_fn;
+  String8 user_data;
 };
 
 #if BUILD_TESTS
@@ -58,6 +60,7 @@ internal String8 test_build_exe_path(Arena *arena, String8 name);
 internal String8 test_input_path(Arena *arena, TestCtx *ctx, String8 name);
 internal String8 test_input_exe_path(Arena *arena, TestCtx *ctx, String8 name);
 internal String8 test_exemplar_path(Arena *arena, TestCtx *ctx, String8 name);
+internal String8 test_layer_from_file_path(String8 file_path);
 internal void base_register_test(char *func_name, TestFunctionType *fn, char *file_path, int line, int skip);
 
 #define AddTest(name, file_path, line, skip_, ...) \
