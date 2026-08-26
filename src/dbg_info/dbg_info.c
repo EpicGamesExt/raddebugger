@@ -748,7 +748,7 @@ di_async_tick(void)
           }
           else
           {
-            rdi_path = str8f(scratch.arena, "%S.rdi", str8_chop_last_dot(og_path));
+            rdi_path = str8f(scratch.arena, "%S.rdi", og_path);
           }
         }
         
@@ -785,7 +785,7 @@ di_async_tick(void)
           make_directory(cache_folder);
           make_directory(raddbg_folder);
           make_directory(rdis_folder);
-          rdi_path = str8f(scratch.arena, "%S/%S.rdi", rdis_folder, str8_chop_last_dot(str8_skip_last_slash(og_path)));
+          rdi_path = str8f(scratch.arena, "%S/%S.rdi", rdis_folder, str8_skip_last_slash(og_path));
         }
         
         //- rjf: determine if RDI is stale
