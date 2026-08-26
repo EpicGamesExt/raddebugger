@@ -459,8 +459,6 @@ type_coverage_eval_tests(void)
   const char const_string_array[] = "Hello, World!";
   const char *const const_ptr_const_string = "Hello, World!";
   
-  char *test = ")";
-  
   MyByte *non_string_byte_ptr = "Hello, World!";
   
   void *pointer = &basics;

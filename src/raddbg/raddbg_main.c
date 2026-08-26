@@ -87,7 +87,7 @@
 // [ ] memory_size(...) view for quickly evaluating memory sizes
 // [ ] value coloring view in watch window, so you can quickly scroll & see values outside of a threshold
 //
-// [ ] more things should move to user data, but project-tagged - like
+// [x] more things should move to user data, but project-tagged - like
 //     recent files, watches?, etc.
 //
 // [ ] linux/dwarf fixes

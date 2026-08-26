@@ -1624,17 +1624,17 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                 top_task->dependency_count = already_computed_dependency_count;
               }
               
+              //- rjf: unpack task's unit
+              Rng1U64 unit_info_tag_range = unit_info_tag_ranges[top_task->unit_idx];
+              DW2_ParseCtx *unit_parse_ctx = &unit_parse_ctxs[top_task->unit_idx];
+              
               //- rjf: determine if we're done with this hash
-              B32 done = (found_already_computed_hash || (top_task->depth == 0 && top_task->start_off != top_task->off));
+              B32 done = (found_already_computed_hash || (top_task->depth == 0 && top_task->start_off != top_task->off) || !contains_1u64(unit_info_tag_range, top_task->off));
               
               //- rjf: if we're not done -> continue contributing to the task's hash
               if(!done)
               {
                 Temp tag_scratch = scratch_begin(&dedup_root_scratch.arena, 1);
-                
-                // rjf: unpack unit
-                Rng1U64 unit_info_tag_range = unit_info_tag_ranges[top_task->unit_idx];
-                DW2_ParseCtx *unit_parse_ctx = &unit_parse_ctxs[top_task->unit_idx];
                 
                 // rjf: read next tag
                 DW2_Tag tag = {0};
@@ -1707,7 +1707,10 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                 // rjf: unpack type reference in this tag
                 DW2_Attrib *type_attrib = &dw2_attrib_nil;
                 U64 type_info_off = 0;
-                if(include_tag_in_hash)
+                if(include_tag_in_hash && (!top_task->is_member || (tag.kind != DW_TagKind_PointerType &&
+                                                                    tag.kind != DW_TagKind_PtrToMemberType &&
+                                                                    tag.kind != DW_TagKind_ReferenceType &&
+                                                                    tag.kind != DW_TagKind_RValueReferenceType)))
                 {
                   type_attrib = dw2_attrib_from_kind(&tag, DW_AttribKind_Type);
                   type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &type_attrib->val);

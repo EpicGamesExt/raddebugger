@@ -1,3 +1,16 @@
+# v0.9.29-alpha
+
+## Debugger Changes
+- Reintroduced `Browse` buttons for cells that edit file paths, which spawn a
+  file picker, to more conveniently choose paths.
+- The debugger now tags watch expressions with the selected project, which
+  means they'll be loaded and unloaded along with projects, similar to targets
+  and breakpoints.
+- Empty spaces in the leftmost margin (where the selected thread position is
+  visualized) in source and disassembly views is now clickable, as a fastpath
+  for `Run To Line`.
+- The position of the destination of a `Run To Line` command is now visualized.
+
 # v0.9.28-alpha
 
 ## Debugger Changes
