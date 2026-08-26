@@ -638,7 +638,10 @@ wm_window_open(Rng2F32 rect, WM_WindowFlags flags, String8 title)
     };
     Hints hints = {.flags = 2, .decorations = 0};
     Atom property = XInternAtom(lnx_wm_state->display, "_MOTIF_WM_HINTS", 1);
-    XChangeProperty(lnx_wm_state->display, w->window, property, property, 32, PropModeReplace, (unsigned char *)&hints, 5);
+    if(property != None)
+    {
+      XChangeProperty(lnx_wm_state->display, w->window, property, property, 32, PropModeReplace, (unsigned char *)&hints, 5);
+    }
   }
   
   //- rjf: convert to handle & return
