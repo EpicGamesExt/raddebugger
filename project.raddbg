@@ -7,7 +7,6 @@ target:
   working_directory: build
   arguments: "--user:raddbg_test.user"
   debug_subprocesses: 0
-  enabled: 1
 }
 target:
 {
@@ -19,6 +18,7 @@ target:
   executable: "build/mule_main.exe"
   working_directory: build
   output_label: output_a
+  enabled: 1
 }
 target:
 {

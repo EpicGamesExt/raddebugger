@@ -4006,6 +4006,7 @@ rd_view_ui(Rng2F32 rect)
                       //
                       CFG_Node *cell_view = &cfg_nil_node;
                       B32 revert_cell = 0;
+                      B32 browse_cell = 0;
                       UI_Signal sig = {0};
                       ProfScope("build cell contents")
                         UI_Parent(cell_box)
@@ -4185,6 +4186,27 @@ rd_view_ui(Rng2F32 rect)
                             {
                               MemoryZeroStruct(&cell_params.meta_fstrs);
                               MemoryZeroStruct(&cell_params.description);
+                            }
+                            
+                            // rjf: browse button for cfg file paths
+                            if(cell->eval.space.kind == RD_EvalSpaceKind_MetaCfg && !(cell->flags & RD_WatchCellFlag_NoEval))
+                            {
+                              CFG_Node *root_cfg = rd_cfg_from_eval_space(cell->eval.space);
+                              String8 child_key = e_string_from_id(cell->eval.space.u64s[1]);
+                              MD_NodePtrList schemas = cfg_schemas_from_name(scratch.arena, rd_state->cfg_schema_table, root_cfg->string);
+                              for EachNode(n, MD_NodePtrNode, schemas.first)
+                              {
+                                MD_Node *schema_child = md_child_from_string(n->v, child_key, 0);
+                                if(schema_child != &md_nil_node)
+                                {
+                                  if(str8_match(schema_child->first->string, s("path"), 0))
+                                  {
+                                    cell_params.flags |= RD_CellFlag_BrowseButton;
+                                    cell_params.browse_out = &browse_cell;
+                                  }
+                                  break;
+                                }
+                              }
                             }
                             
                             // rjf: extra edit button for meta-cfg strings
@@ -4571,6 +4593,18 @@ rd_view_ui(Rng2F32 rect)
                                 cfg_node_release(rd_state->cfg, cfg_node_child_from_string(cfg, s("locked")));
                               }
                             }
+                          }
+                          
+                          // rjf: apply browse
+                          if(browse_cell)
+                          {
+                            ewv->next_cursor = ewv->next_mark = cell_pt;
+                            if(!rd_watch_pt_match(ewv->cursor, cell_pt) && ewv->text_editing)
+                            {
+                              rd_cmd(RD_CmdKind_Accept);
+                            }
+                            rd_cmd(RD_CmdKind_FocusPanel);
+                            rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_PickFilePath].string);
                           }
                         }
                       }
@@ -16415,6 +16449,25 @@ rd_frame(void)
             CFG_Node *brk = cfg_node_new(rd_state->cfg, bp, s("break_on_write"));
             cfg_node_new(rd_state->cfg, brk, s("1"));
             str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "$%I64x", bp->id);
+          }break;
+          
+          //- rjf: pick file paths
+          case RD_CmdKind_PickFilePath:
+          {
+            CFG_Node *window = cfg_node_from_id(rd_regs()->window);
+            RD_WindowState *ws = rd_window_state_from_cfg(window);
+            {
+              UI_Event evt = zero_struct;
+              evt.kind   = UI_EventKind_Text;
+              evt.string = rd_regs()->file_path;
+              ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
+            }
+            {
+              UI_Event evt = zero_struct;
+              evt.kind       = UI_EventKind_Press;
+              evt.slot       = UI_EventActionSlot_Accept;
+              ui_event_list_push(scratch.arena, &ws->ui_events, &evt);
+            }
           }break;
           
           //- rjf: queries

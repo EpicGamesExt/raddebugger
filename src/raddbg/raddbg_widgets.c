@@ -3657,6 +3657,43 @@ rd_cell(RD_CellParams *params, String8 string)
   }
   
   //////////////////////////////
+  //- rjf: build browse button
+  //
+  if(params->flags & RD_CellFlag_BrowseButton && !is_focus_active && !is_focus_active_disabled)
+  {
+    UI_Parent(box)
+      UI_PrefWidth(ui_children_sum(1))
+      RD_Font(RD_FontSlot_Main)
+    {
+      UI_TagF(".")
+        UI_TagF("weak")
+        UI_Column
+        UI_Padding(ui_pct(1, 0))
+        UI_PrefHeight(ui_em(2.f, 1.f))
+        UI_CornerRadius(ui_top_font_size()*0.5f)
+        UI_TextAlignment(UI_TextAlign_Center)
+        UI_PrefWidth(ui_text_dim(10, 1))
+      {
+        UI_Box *revert_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
+                                                       UI_BoxFlag_DrawHotEffects|
+                                                       UI_BoxFlag_DrawActiveEffects|
+                                                       UI_BoxFlag_DrawBorder|
+                                                       UI_BoxFlag_DrawBackground|
+                                                       UI_BoxFlag_DisableFocusOverlay|
+                                                       UI_BoxFlag_DisableFocusBorder|
+                                                       UI_BoxFlag_Clickable,
+                                                       "Browse...");
+        UI_Signal sig = ui_signal_from_box(revert_box);
+        if(ui_clicked(sig) && params->browse_out)
+        {
+          params->browse_out[0] = 1;
+        }
+      }
+      ui_spacer(ui_em(1, 1));
+    }
+  }
+  
+  //////////////////////////////
   //- rjf: build toggle-switch
   //
   if(build_toggle_switch) UI_Parent(box)

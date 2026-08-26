@@ -2315,7 +2315,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
       default:{}break;
       
       // rjf: override file picking
-      case RD_CmdKind_PickFile:
+      case RD_CmdKind_PickFileReplacement:
       {
         String8 src = rd_regs()->file_path;
         String8 dst = cmd->regs->file_path;
@@ -2445,7 +2445,7 @@ RD_VIEW_UI_FUNCTION_DEF(text)
         UI_TagF("pop")
         if(ui_clicked(ui_buttonf("Find alternative...")))
       {
-        rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_PickFile].string);
+        rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_PickFileReplacement].string);
       }
       scratch_end(scratch);
     }

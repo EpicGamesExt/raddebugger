@@ -62,7 +62,7 @@ str8_lit_comp(""),
 str8_lit_comp(""),
 };
 
-RD_VocabInfo rd_vocab_info_table[372] =
+RD_VocabInfo rd_vocab_info_table[371] =
 {
 {str8_lit_comp("type_view"), str8_lit_comp("type_views"), str8_lit_comp("Type View"), str8_lit_comp("Type Views"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -400,9 +400,8 @@ RD_VocabInfo rd_vocab_info_table[372] =
 {str8_lit_comp("break_when_value_changes"), str8_lit_comp(""), str8_lit_comp("Break When Value Changes"), str8_lit_comp(""), RD_IconKind_CircleFilled},
 {str8_lit_comp("search"), str8_lit_comp(""), str8_lit_comp("Search"), str8_lit_comp(""), RD_IconKind_Find},
 {str8_lit_comp("search_backwards"), str8_lit_comp(""), str8_lit_comp("Search Backwards"), str8_lit_comp(""), RD_IconKind_Find},
-{str8_lit_comp("pick_file"), str8_lit_comp(""), str8_lit_comp("Pick File"), str8_lit_comp(""), RD_IconKind_FileOutline},
-{str8_lit_comp("pick_folder"), str8_lit_comp(""), str8_lit_comp("Pick Folder"), str8_lit_comp(""), RD_IconKind_FolderOpenFilled},
-{str8_lit_comp("pick_file_or_folder"), str8_lit_comp(""), str8_lit_comp("Pick File/Folder"), str8_lit_comp(""), RD_IconKind_FileOutline},
+{str8_lit_comp("pick_file_replacement"), str8_lit_comp(""), str8_lit_comp("Pick File Replacement"), str8_lit_comp(""), RD_IconKind_FileOutline},
+{str8_lit_comp("pick_file_path"), str8_lit_comp(""), str8_lit_comp("Pick File Path"), str8_lit_comp(""), RD_IconKind_FileOutline},
 {str8_lit_comp("push_query"), str8_lit_comp(""), str8_lit_comp("Push Query"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("complete_query"), str8_lit_comp(""), str8_lit_comp("Complete Query"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("cancel_query"), str8_lit_comp(""), str8_lit_comp("Cancel Query"), str8_lit_comp(""), RD_IconKind_Null},
@@ -599,7 +598,7 @@ Rng1U64 rd_reg_slot_range_table[55] =
 {OffsetOf(RD_Regs, wm_event), OffsetOf(RD_Regs, wm_event) + sizeof(WM_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[259] =
+RD_CmdKindInfo rd_cmd_kind_info_table[258] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:targets")}},
@@ -824,9 +823,8 @@ RD_CmdKindInfo rd_cmd_kind_info_table[259] =
 { str8_lit_comp("break_when_value_changes"), str8_lit_comp("Adds a new write data breakpoint for this variable's range."), str8_lit_comp(""), str8_lit_comp("{memory_eval_commands}"), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*0), RD_RegSlot_Expr, str8_lit_comp("")}},
 { str8_lit_comp("search"), str8_lit_comp("Begins searching within the active interface."), str8_lit_comp("sort,search,filter,find"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*1)|(RD_QueryFlag_SelectOldInput*1)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*1), RD_RegSlot_String, str8_lit_comp("")}},
 { str8_lit_comp("search_backwards"), str8_lit_comp("Begins searching backwards within the active interface."), str8_lit_comp("sort,search,filter,find"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*1)|(RD_QueryFlag_KeepOldInput*1)|(RD_QueryFlag_SelectOldInput*1)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*1), RD_RegSlot_String, str8_lit_comp("")}},
-{ str8_lit_comp("pick_file"), str8_lit_comp("Opens the file browser to pick a file."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*1)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_FilePath, str8_lit_comp("folder:\"$input\"")}},
-{ str8_lit_comp("pick_folder"), str8_lit_comp("Opens the file browser to pick a folder."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*1)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_FilePath, str8_lit_comp("folder:\"$input\"")}},
-{ str8_lit_comp("pick_file_or_folder"), str8_lit_comp("Opens the file browser to pick a file or folder."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*1)|(RD_QueryFlag_AllowFolders*1)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_FilePath, str8_lit_comp("folder:\"$input\"")}},
+{ str8_lit_comp("pick_file_replacement"), str8_lit_comp("Opens the file browser to pick a file replacement for a missing source file."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*1)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_FilePath, str8_lit_comp("folder:\"$input\"")}},
+{ str8_lit_comp("pick_file_path"), str8_lit_comp("Opens the file browser to pick a file, then inserts that file's path as text."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*1)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_FilePath, str8_lit_comp("folder:\"$input\"")}},
 { str8_lit_comp("push_query"), str8_lit_comp("Opens a new temporary query interface."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("complete_query"), str8_lit_comp("Completes and closes a query."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("cancel_query"), str8_lit_comp("Closes a query."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
