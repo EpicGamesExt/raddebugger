@@ -805,6 +805,62 @@ file_close(File file)
   (void)result;
 }
 
+internal FilePair
+file_pipe_make(B32 read_inherited, B32 write_inherited)
+{
+  FilePair result = {0};
+  SECURITY_ATTRIBUTES attributes = { .nLength = sizeof(attributes), .bInheritHandle = TRUE };
+  HANDLE read = 0;
+  HANDLE write = 0;
+  if(CreatePipe(&read, &write, &attributes, 0) &&
+     (read_inherited || SetHandleInformation(read, HANDLE_FLAG_INHERIT, 0)) &&
+     (write_inherited || SetHandleInformation(write, HANDLE_FLAG_INHERIT, 0)))
+  {
+    result.read.u64[0] = (U64)read;
+    result.write.u64[0] = (U64)write;
+  }
+  else
+  {
+    if(read != 0)  { CloseHandle(read); }
+    if(write != 0) { CloseHandle(write); }
+  }
+  return result;
+}
+
+internal U64
+file_pipe_read(File file, void *out_data, U64 size)
+{
+  DWORD read = 0;
+  B32 is_ok = !file_match(file, file_zero()) &&
+    ReadFile((HANDLE)file.u64[0], out_data, safe_cast_u32(size), &read, 0);
+  return is_ok ? read : 0;
+}
+
+internal U64
+file_pipe_write(File file, void *data, U64 size)
+{
+  DWORD written = 0;
+  B32 is_ok = !file_match(file, file_zero()) &&
+    WriteFile((HANDLE)file.u64[0], data, safe_cast_u32(size), &written, 0);
+  return is_ok ? written : 0;
+}
+
+internal U64
+file_pipe_bytes_available(File file)
+{
+  DWORD available = 0;
+  B32 is_ok = !file_match(file, file_zero()) &&
+    PeekNamedPipe((HANDLE)file.u64[0], 0, 0, 0, &available, 0);
+  return is_ok ? available : 0;
+}
+
+internal B32
+file_pipe_is_end(File file)
+{
+  DWORD available = 0;
+  return !PeekNamedPipe((HANDLE)file.u64[0], 0, 0, 0, &available, 0);
+}
+
 internal U64
 file_read(File file, Rng1U64 rng, void *out_data)
 {
@@ -1391,6 +1447,14 @@ process_launch(ProcessLaunchParams *params)
   {
     creation_flags |= CREATE_NO_WINDOW;
   }
+  if(params->new_console)
+  {
+    creation_flags |= CREATE_NEW_CONSOLE | CREATE_NEW_PROCESS_GROUP;
+  }
+  if(params->process_group.u64[0] != 0)
+  {
+    creation_flags |= CREATE_SUSPENDED;
+  }
   
   //- rjf: launch
   BOOL inherit_handles = 0;
@@ -1419,7 +1483,19 @@ process_launch(ProcessLaunchParams *params)
   PROCESS_INFORMATION process_info = {0};
   if(CreateProcessW(0, (WCHAR*)cmd16.str, 0, 0, inherit_handles, creation_flags, use_null_env_arg ? 0 : (WCHAR*)env16.str, (WCHAR*)dir16.str, &startup_info, &process_info))
   {
-    result.u64[0] = (U64)process_info.hProcess;
+    B32 group_is_ok = params->process_group.u64[0] == 0 ||
+      AssignProcessToJobObject((HANDLE)params->process_group.u64[0], process_info.hProcess);
+    B32 resume_is_ok = params->process_group.u64[0] == 0 || ResumeThread(process_info.hThread) != (DWORD)-1;
+    if(group_is_ok && resume_is_ok)
+    {
+      result.u64[0] = (U64)process_info.hProcess;
+    }
+    else
+    {
+      TerminateProcess(process_info.hProcess, 999);
+      WaitForSingleObject(process_info.hProcess, INFINITE);
+      CloseHandle(process_info.hProcess);
+    }
     CloseHandle(process_info.hThread);
   }
   
@@ -1433,6 +1509,25 @@ pid_from_process(Process process)
   HANDLE process_handle = (HANDLE)process.u64[0];
   U64 result = (U64)GetProcessId(process_handle);
   return result;
+}
+
+internal B32
+process_poll(Process process, U64 *exit_code_out)
+{
+  if(process_match(process, process_zero()) || WaitForSingleObject((HANDLE)process.u64[0], 0) != WAIT_OBJECT_0)
+  {
+    return 0;
+  }
+  DWORD exit_code = 0;
+  B32 result = GetExitCodeProcess((HANDLE)process.u64[0], &exit_code);
+  if(result && exit_code_out != 0) { *exit_code_out = exit_code; }
+  return result;
+}
+
+internal B32
+process_is_active(Process process)
+{
+  return !process_match(process, process_zero()) && !process_poll(process, 0);
 }
 
 internal B32
@@ -1470,6 +1565,59 @@ process_kill(Process process)
   HANDLE process_handle = (HANDLE)process.u64[0];
   BOOL was_terminated = TerminateProcess(process_handle, 999);
   return was_terminated;
+}
+
+internal B32
+process_send_ctrl_c(Process process)
+{
+  B32 result = 0;
+  if(process_match(process, process_zero())) { return 0; }
+  B32 had_console = GetConsoleCP() != 0;
+  if(had_console && !FreeConsole()) { return 0; }
+  if(AttachConsole(safe_cast_u32(pid_from_process(process)))) {
+    SetConsoleCtrlHandler(0, TRUE);
+    result = GenerateConsoleCtrlEvent(CTRL_C_EVENT, 0) != 0;
+    if(result) { Sleep(10); }
+  }
+  FreeConsole();
+  if(had_console) { AttachConsole(ATTACH_PARENT_PROCESS); }
+  SetConsoleCtrlHandler(0, FALSE);
+  return result;
+}
+
+internal ProcessGroup
+process_group_make(B32 kill_on_close)
+{
+  ProcessGroup result = {0};
+  HANDLE handle = CreateJobObjectW(0, 0);
+  if(handle != 0)
+  {
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits = {0};
+    if(kill_on_close) { limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE; }
+    if(SetInformationJobObject(handle, JobObjectExtendedLimitInformation, &limits, sizeof(limits)))
+    {
+      result.u64[0] = (U64)handle;
+    }
+    else
+    {
+      CloseHandle(handle);
+    }
+  }
+  return result;
+}
+
+internal B32
+process_group_add(ProcessGroup group, Process process)
+{
+  B32 result = group.u64[0] != 0 && !process_match(process, process_zero()) &&
+    AssignProcessToJobObject((HANDLE)group.u64[0], (HANDLE)process.u64[0]);
+  return result;
+}
+
+internal void
+process_group_close(ProcessGroup group)
+{
+  if(group.u64[0] != 0) { CloseHandle((HANDLE)group.u64[0]); }
 }
 
 ////////////////////////////////

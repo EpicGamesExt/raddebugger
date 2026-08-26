@@ -25,6 +25,12 @@ struct Process
   U64 u64[1];
 };
 
+typedef struct ProcessGroup ProcessGroup;
+struct ProcessGroup
+{
+  U64 u64[1];
+};
+
 typedef struct ProcessNode ProcessNode;
 struct ProcessNode
 {
@@ -49,6 +55,8 @@ struct ProcessLaunchParams
   B32 inherit_env;
   B32 debug_subprocesses;
   B32 consoleless;
+  B32 new_console;
+  ProcessGroup process_group;
   File stdout_file;
   File stderr_file;
   File stdin_file;
@@ -84,8 +92,15 @@ internal U32 get_process_start_time_unix(void);
 
 internal Process process_launch(ProcessLaunchParams *params);
 internal U64 pid_from_process(Process process);
+internal B32 process_poll(Process process, U64 *exit_code_out);
+internal B32 process_is_active(Process process);
 internal B32 process_join(Process process, U64 endt_us, U64 *exit_code_out);
 internal void process_detach(Process process);
 internal B32 process_kill(Process process);
+internal B32 process_send_ctrl_c(Process process);
+
+internal ProcessGroup process_group_make(B32 kill_on_close);
+internal B32 process_group_add(ProcessGroup group, Process process);
+internal void process_group_close(ProcessGroup group);
 
 #endif // BASE_PROCESSES_H

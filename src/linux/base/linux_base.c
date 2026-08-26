@@ -833,6 +833,51 @@ file_close(File file)
   close(fd);
 }
 
+internal FilePair
+file_pipe_make(B32 read_inherited, B32 write_inherited)
+{
+  FilePair result = {0};
+  int fds[2] = {0};
+  if(pipe(fds) == 0)
+  {
+    if(!read_inherited)  { fcntl(fds[0], F_SETFD, FD_CLOEXEC); }
+    if(!write_inherited) { fcntl(fds[1], F_SETFD, FD_CLOEXEC); }
+    result.read.u64[0] = fds[0];
+    result.write.u64[0] = fds[1];
+  }
+  return result;
+}
+
+internal U64
+file_pipe_read(File file, void *out_data, U64 size)
+{
+  ssize_t read_size = LNX_RETRY_ON_EINTR(read((int)file.u64[0], out_data, size));
+  return read_size > 0 ? (U64)read_size : 0;
+}
+
+internal U64
+file_pipe_write(File file, void *data, U64 size)
+{
+  ssize_t write_size = LNX_RETRY_ON_EINTR(write((int)file.u64[0], data, size));
+  return write_size > 0 ? (U64)write_size : 0;
+}
+
+internal U64
+file_pipe_bytes_available(File file)
+{
+  int size = 0;
+  B32 is_ok = !file_match(file, file_zero()) && ioctl((int)file.u64[0], FIONREAD, &size) == 0;
+  return is_ok && size > 0 ? (U64)size : 0;
+}
+
+internal B32
+file_pipe_is_end(File file)
+{
+  struct pollfd poll_fd = { .fd = (int)file.u64[0], .events = POLLIN|POLLHUP };
+  poll(&poll_fd, 1, 0);
+  return !!(poll_fd.revents & (POLLHUP|POLLERR|POLLNVAL));
+}
+
 internal U64
 file_read(File file, Rng1U64 rng, void *out_data)
 {
@@ -1248,13 +1293,43 @@ process_launch(ProcessLaunchParams *params)
       int chdir_code = posix_spawn_file_actions_addchdir_np(&file_actions, (char *)push_cstr(scratch.arena, params->path).str);
       Assert(chdir_code == 0);
     }
-    int stdout_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stdout_file.u64[0], STDOUT_FILENO);
-    int stderr_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stderr_file.u64[0], STDERR_FILENO);
-    int stdin_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stdin_file.u64[0], STDIN_FILENO);
+    if(!file_match(params->stdout_file, file_zero()))
+    {
+      int stdout_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stdout_file.u64[0], STDOUT_FILENO);
+      Assert(stdout_code == 0);
+    }
+    if(!file_match(params->stderr_file, file_zero()))
+    {
+      int stderr_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stderr_file.u64[0], STDERR_FILENO);
+      Assert(stderr_code == 0);
+    }
+    if(!file_match(params->stdin_file, file_zero()))
+    {
+      int stdin_code = posix_spawn_file_actions_adddup2(&file_actions, (int)params->stdin_file.u64[0], STDIN_FILENO);
+      Assert(stdin_code == 0);
+    }
+    File std_files[] = { params->stdout_file, params->stderr_file, params->stdin_file };
+    for EachIndex(i, ArrayCount(std_files))
+    {
+      int fd = (int)std_files[i].u64[0];
+      B32 is_unique = !file_match(std_files[i], file_zero());
+      for EachIndex(j, i) { is_unique &= !file_match(std_files[i], std_files[j]); }
+      if(is_unique && fd > STDERR_FILENO)
+      {
+        int close_code = posix_spawn_file_actions_addclose(&file_actions, fd);
+        Assert(close_code == 0);
+      }
+    }
     posix_spawnattr_t attr = {0};
     int attr_init_code = posix_spawnattr_init(&attr);
     if(attr_init_code == 0)
     {
+      if(params->new_console || params->process_group.u64[0] != 0)
+      {
+        posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETPGROUP);
+        posix_spawnattr_setpgroup(&attr, 0);
+      }
+
       // package argv
       char **argv = push_array(scratch.arena, char *, params->cmd_line.node_count + 1);
       {
@@ -1290,6 +1365,12 @@ process_launch(ProcessLaunchParams *params)
       if(spawn_code == 0)
       {
         handle.u64[0] = (U64)pid;
+        if(params->process_group.u64[0] != 0 && !process_group_add(params->process_group, handle))
+        {
+          kill(pid, SIGKILL);
+          waitpid(pid, 0, 0);
+          MemoryZeroStruct(&handle);
+        }
       }
       
       // clean up attributes
@@ -1307,6 +1388,27 @@ internal U64
 pid_from_process(Process process)
 {
   U64 result = process.u64[0];
+  return result;
+}
+
+internal B32
+process_poll(Process process, U64 *exit_code_out)
+{
+  if(process_match(process, process_zero())) { return 0; }
+  siginfo_t info = {0};
+  B32 result = waitid(P_PID, (pid_t)process.u64[0], &info, WEXITED|WNOHANG|WNOWAIT) == 0 && info.si_pid != 0;
+  if(result && exit_code_out != 0)
+  {
+    *exit_code_out = info.si_code == CLD_EXITED ? (U64)info.si_status : (U64)info.si_status + 128;
+  }
+  return result;
+}
+
+internal B32
+process_is_active(Process process)
+{
+  B32 result = !process_match(process, process_zero()) &&
+    !process_poll(process, 0) && kill((pid_t)process.u64[0], 0) == 0;
   return result;
 }
 
@@ -1357,6 +1459,51 @@ process_kill(Process process)
   int error_code = kill((pid_t)process.u64[0], SIGKILL);
   B32 is_killed = error_code == 0;
   return is_killed;
+}
+
+internal B32
+process_send_ctrl_c(Process process)
+{
+  B32 result = !process_match(process, process_zero()) && kill((pid_t)process.u64[0], SIGINT) == 0;
+  return result;
+}
+
+typedef struct LNX_ProcessGroup LNX_ProcessGroup;
+struct LNX_ProcessGroup
+{
+  pid_t pid;
+  B32 kill_on_close;
+};
+
+internal ProcessGroup
+process_group_make(B32 kill_on_close)
+{
+  LNX_ProcessGroup *group = malloc(sizeof(*group));
+  if(group != 0) { *group = (LNX_ProcessGroup){ .kill_on_close = kill_on_close }; }
+  return (ProcessGroup){ .u64[0] = (U64)group };
+}
+
+internal B32
+process_group_add(ProcessGroup group, Process process)
+{
+  LNX_ProcessGroup *lnx_group = (LNX_ProcessGroup *)group.u64[0];
+  if(lnx_group == 0 || lnx_group->pid != 0 || process_match(process, process_zero())) { return 0; }
+  lnx_group->pid = (pid_t)process.u64[0];
+  return 1;
+}
+
+internal void
+process_group_close(ProcessGroup group)
+{
+  LNX_ProcessGroup *lnx_group = (LNX_ProcessGroup *)group.u64[0];
+  if(lnx_group != 0)
+  {
+    if(lnx_group->kill_on_close && lnx_group->pid != 0)
+    {
+      kill(-lnx_group->pid, SIGKILL);
+    }
+    free(lnx_group);
+  }
 }
 
 ////////////////////////////////

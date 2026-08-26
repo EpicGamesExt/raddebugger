@@ -40,6 +40,13 @@ struct File
   U64 u64[1];
 };
 
+typedef struct FilePair FilePair;
+struct FilePair
+{
+  File read;
+  File write;
+};
+
 typedef struct FileMap FileMap;
 struct FileMap
 {
@@ -70,6 +77,11 @@ internal String8 file_read_cstring(Arena *arena, File file, U64 off);
 //- rjf: files
 internal File           file_open(AccessFlags flags, String8 path);
 internal void           file_close(File file);
+internal FilePair       file_pipe_make(B32 read_inherited, B32 write_inherited);
+internal U64            file_pipe_read(File file, void *out_data, U64 size);
+internal U64            file_pipe_write(File file, void *data, U64 size);
+internal U64            file_pipe_bytes_available(File file);
+internal B32            file_pipe_is_end(File file);
 internal U64            file_read(File file, Rng1U64 rng, void *out_data);
 #define file_read_struct(f, off, ptr) file_read((f), r1u64((off), (off)+sizeof(*(ptr))), (ptr))
 internal U64            file_write(File file, Rng1U64 rng, void *data);
