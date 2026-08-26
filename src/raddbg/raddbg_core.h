@@ -319,10 +319,6 @@ struct RD_WindowState
   RD_DropCompletionTask *top_drop_completion_task;
   
   // rjf: query stack state
-#if 0
-  B32 query_is_active;
-  RD_Regs *query_regs;
-#endif
   Arena *query_arena;
   CFG_ID query_last_bottom_view_id;
   RD_QueryView *query_top;

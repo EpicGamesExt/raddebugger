@@ -1577,7 +1577,7 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
         
         // rjf: empty priority margin interaction
         UI_Signal line_margin_sig = ui_signal_from_box(line_margin_box);
-        if(ui_hovering(line_margin_sig))
+        if(ui_hovering(line_margin_sig) || line_num == params->run_to_line_num)
         {
           DR_FStrList fstrs = {0};
           Vec4F32 color = ui_color_from_name(s("thread_0"));

@@ -644,6 +644,18 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       code_slice_params.relevant_dbgi_keys = lines_array.dbgi_keys;
     }
     
+    // rjf: find visible run-to-line info for source code
+    if(!dasm_lines)
+    {
+      CFG_Node *transient = cfg_node_child_from_string(cfg_node_root(), s("transient"));
+      CFG_Node *run_to_line = cfg_node_child_from_string(transient, s("run_to_line"));
+      RD_Location loc = rd_location_from_cfg(run_to_line);
+      if(path_match_normalized(loc.file_path, rd_regs()->file_path))
+      {
+        code_slice_params.run_to_line_num = loc.pt.line;
+      }
+    }
+    
     // rjf: find live threads mapping to disasm
     if(dasm_lines) ProfScope("find live threads mapping to this disassembly")
     {
@@ -728,6 +740,22 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         U64 slice_idx = line_num-visible_line_num_range.min;
         code_slice_params.line_vaddrs[slice_idx] = vaddr;
         code_slice_params.line_infos[slice_idx] = d_lines_from_dbgi_key_path_voff(scratch.arena, dbgi_key, dbgi_path, voff);
+      }
+    }
+    
+    // rjf: find visible run-to-line info for disassembly
+    if(dasm_lines)
+    {
+      CFG_Node *transient = cfg_node_child_from_string(cfg_node_root(), s("transient"));
+      CFG_Node *run_to_line = cfg_node_child_from_string(transient, s("run_to_line"));
+      RD_Location loc = rd_location_from_cfg(run_to_line);
+      E_Value loc_value = e_value_from_string(loc.expr);
+      if(contains_1u64(dasm_vaddr_range, loc_value.u64))
+      {
+        U64 off = loc_value.u64 - dasm_vaddr_range.min;
+        U64 idx = dasm_line_array_idx_from_code_off__linear_scan(dasm_lines, off);
+        S64 line_num = (S64)idx+1;
+        code_slice_params.run_to_line_num = line_num;
       }
     }
     

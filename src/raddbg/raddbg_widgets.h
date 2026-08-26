@@ -113,6 +113,7 @@ struct RD_CodeSliceParams
   D_EntityList *line_ips;
   CFG_NodePtrList *line_pins;
   U64 *line_vaddrs;
+  S64 run_to_line_num;
   D_LineList *line_infos;
   DI_KeyList relevant_dbgi_keys;
   TXT_TextInfo *text_info;

@@ -13568,6 +13568,23 @@ rd_frame(void)
               d_push_cmd((D_CmdKind)kind, &params);
             }
             
+            // rjf: run-to-line? -> remember where we're running to, so we can render
+            if((D_CmdKind)kind == D_CmdKind_RunToLine)
+            {
+              CFG_Node *transient = cfg_node_child_from_string(cfg_node_root(), s("transient"));
+              CFG_Node *run_to_line = cfg_node_child_from_string_or_alloc(rd_state->cfg, transient, s("run_to_line"));
+              if(rd_regs()->file_path.size != 0)
+              {
+                CFG_Node *src_loc = cfg_node_child_from_string_or_alloc(rd_state->cfg, run_to_line, s("source_location"));
+                cfg_node_new_replacef(rd_state->cfg, src_loc, "%S:%I64u:%I64u", rd_regs()->file_path, rd_regs()->line_num, rd_regs()->column_num);
+              }
+              else
+              {
+                CFG_Node *addr_loc = cfg_node_child_from_string_or_alloc(rd_state->cfg, run_to_line, s("address_location"));
+                cfg_node_new_replacef(rd_state->cfg, addr_loc, "0x%I64x", rd_regs()->vaddr);
+              }
+            }
+            
             // rjf: try to open tabs, if this is a tab-fastpath-opener
             if(kind >= RD_CmdKind_FirstTabFastPathCmd)
             {
@@ -18261,6 +18278,15 @@ rd_frame(void)
     {
       break;
     }
+  }
+  
+  ////////////////////////////
+  //- rjf: remove run-to-line info
+  //
+  if(!d_ctrl_targets_running())
+  {
+    CFG_Node *transient = cfg_node_child_from_string(cfg_node_root(), s("transient"));
+    cfg_node_release(rd_state->cfg, cfg_node_child_from_string(transient, s("run_to_line")));
   }
   
   //////////////////////////////
