@@ -467,7 +467,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[39] =
 {str8_lit_comp("color"), 1, str8_lit_comp("@inherit(tab) x:\n{\n  @display_name(\"Value\") @description(\"An expression to describe the value or location of the color.\")\n  'expression': expr_string,\n}\n")},
 {str8_lit_comp("geo3d"), 1, str8_lit_comp("@inherit(tab) x:\n{\n  @display_name(\"Expression\") @description(\"An expression to describe the base address of the index buffer.\")\n  'expression': expr_string,\n  'count': expr_string,\n  'vtx': expr_string,\n  'vtx_size': expr_string,\n  'yaw': @range[0, 1] f32,\n  'pitch': @range[-0.5, 0] f32,\n  'zoom': @range[0, 100] f32,\n}\n")},
 {str8_lit_comp("getting_started"), 0, str8_lit_comp("@inherit(tab) x:\n{\n}\n")},
-{str8_lit_comp("target"), 0, str8_lit_comp("@row_commands(@cmd_line save_cfg_to_project, enable_cfg, launch_and_run, launch_and_step_into, duplicate_cfg, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  path,\n  'entry_point':        expr_string,\n  @default(\"output\") 'output_label': code_string,\n  'stdout_path':        @no_relativize path,\n  'stderr_path':        @no_relativize path,\n  'stdin_path':         @no_relativize path,\n  'environment':        set,\n  'debug_subprocesses': bool,\n  @no_revert @no_expand @default(0) 'enabled': bool,\n}\n")},
+{str8_lit_comp("target"), 0, str8_lit_comp("@row_commands(@cmd_line save_cfg_to_project, enable_cfg, launch_and_run, launch_and_step_into, duplicate_cfg, remove_cfg)\n@collection_commands(add_target)\nx:\n{\n  'label':              code_string,\n  'executable':         path,\n  'arguments':          string,\n  'working_directory':  @folder path,\n  'entry_point':        expr_string,\n  @default(\"output\") 'output_label': code_string,\n  'stdout_path':        @no_relativize path,\n  'stderr_path':        @no_relativize path,\n  'stdin_path':         @no_relativize path,\n  'environment':        set,\n  'debug_subprocesses': bool,\n  @no_revert @no_expand @default(0) 'enabled': bool,\n}\n")},
 {str8_lit_comp("breakpoint"), 0, str8_lit_comp("@row_commands(enable_cfg, duplicate_cfg, remove_cfg)\n@collection_commands(toggle_breakpoint, add_breakpoint, add_address_breakpoint, add_function_breakpoint, clear_breakpoints)\nx:\n{\n  'label':            code_string,\n  'condition':        expr_string,\n  'source_location':  path_pt,\n  'address_location': expr_string,\n  'hit_count':        u64,\n  'address_range_size': @or(0, 1, 2, 4, 8) u64,\n  'break_on_write':   bool,\n  'break_on_read':    bool,\n  'break_on_execute': bool,\n  @no_revert @no_expand @default(1) 'enabled': bool,\n}\n")},
 {str8_lit_comp("watch_pin"), 0, str8_lit_comp("@row_commands(duplicate_cfg, remove_cfg)\n@collection_commands(add_watch_pin, toggle_watch_pin)\nx:\n{\n  'expression':       expr_string,\n  'source_location':  path_pt,\n  'address_location': expr_string,\n}\n")},
 {str8_lit_comp("debug_info"), 0, str8_lit_comp("@row_commands(enable_cfg, duplicate_cfg, remove_cfg)\n@collection_commands(load_debug_info)\nx:\n{\n  'path': @no_relativize path,\n  @no_revert @no_expand @default(1) 'enabled': bool,\n  @query 'guid': string,\n}\n")},
@@ -480,7 +480,7 @@ RD_NameSchemaInfo rd_name_schema_info_table[39] =
 {str8_lit_comp("thread"), 0, str8_lit_comp("x:{'label':code_string, 'id':u64, @no_expand 'active':bool, 'call_stack':set}")},
 };
 
-String8 rd_reg_slot_code_name_table[55] =
+String8 rd_reg_slot_code_name_table[56] =
 {
 {0},
 str8_lit_comp("machine"),
@@ -533,13 +533,14 @@ str8_lit_comp("activate_with_single_click"),
 str8_lit_comp("disable_addresses"),
 str8_lit_comp("small_size"),
 str8_lit_comp("auto_unwind"),
+str8_lit_comp("pick_folder"),
 str8_lit_comp("dir2"),
 str8_lit_comp("string"),
 str8_lit_comp("cmd_name"),
 str8_lit_comp("wm_event"),
 };
 
-Rng1U64 rd_reg_slot_range_table[55] =
+Rng1U64 rd_reg_slot_range_table[56] =
 {
 {0},
 {OffsetOf(RD_Regs, machine), OffsetOf(RD_Regs, machine) + sizeof(D_Handle)},
@@ -592,6 +593,7 @@ Rng1U64 rd_reg_slot_range_table[55] =
 {OffsetOf(RD_Regs, disable_addresses), OffsetOf(RD_Regs, disable_addresses) + sizeof(B32)},
 {OffsetOf(RD_Regs, small_size), OffsetOf(RD_Regs, small_size) + sizeof(B32)},
 {OffsetOf(RD_Regs, auto_unwind), OffsetOf(RD_Regs, auto_unwind) + sizeof(B32)},
+{OffsetOf(RD_Regs, pick_folder), OffsetOf(RD_Regs, pick_folder) + sizeof(B32)},
 {OffsetOf(RD_Regs, dir2), OffsetOf(RD_Regs, dir2) + sizeof(Dir2)},
 {OffsetOf(RD_Regs, string), OffsetOf(RD_Regs, string) + sizeof(String8)},
 {OffsetOf(RD_Regs, cmd_name), OffsetOf(RD_Regs, cmd_name) + sizeof(String8)},

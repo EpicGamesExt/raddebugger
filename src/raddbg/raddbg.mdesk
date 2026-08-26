@@ -722,7 +722,7 @@ RD_VocabTable:
       'label':              code_string,
       'executable':         path,
       'arguments':          string,
-      'working_directory':  path,
+      'working_directory':  @folder path,
       'entry_point':        expr_string,
       @default("output") 'output_label': code_string,
       'stdout_path':        @no_relativize path,
@@ -913,6 +913,7 @@ RD_RegTable:
   {B32               disable_addresses                DisableAddresses                        }
   {B32               small_size                       SmallSize                               }
   {B32               auto_unwind                      AutoUnwind                              }
+  {B32               pick_folder                      PickFolder                              }
   {Dir2              dir2                             Dir2                                    }
   {String8           string                           String                                  }
   {String8           cmd_name                         CmdName                                 }

@@ -2362,10 +2362,12 @@ rd_view_ui(Rng2F32 rect)
                 String8 cmd_name = cmd->first->string;
                 
                 // rjf: if we have no selection, just pick the first row
+                B32 default_selection = 0;
                 EV_Row *row = 0;
                 if(selection_tbl.min.y == 0 && selection_tbl.max.y == 0)
                 {
                   row = ev_row_from_num(scratch.arena, eval_view, &block_ranges, 1);
+                  default_selection = 1;
                 }
                 
                 // rjf: if we do have a selection, compute that row
@@ -2374,8 +2376,14 @@ rd_view_ui(Rng2F32 rect)
                   row = ev_row_from_num(scratch.arena, eval_view, &block_ranges, selection_tbl.min.y);
                 }
                 
+                // rjf: default selection, and we're picking folder? -> pick currently browsed folder
+                if(cfg_node_child_from_string(view, s("pick_folder")) != &cfg_nil_node && default_selection)
+                {
+                  rd_cmd(RD_CmdKind_CompleteQuery, .file_path = current_input);
+                }
+                
                 // rjf: use row to complete query
-                if(row->eval.expr != &e_expr_nil)
+                else if(row->eval.expr != &e_expr_nil)
                 {
                   taken = 1;
                   E_Eval eval = row->eval;
@@ -2428,9 +2436,9 @@ rd_view_ui(Rng2F32 rect)
                     {
                       E_Type *type = e_type_from_key(eval.irtree.type_key);
                       String8 file = rd_file_path_from_eval(scratch.arena, eval);
-                      if(str8_match(type->name, str8_lit("folder"), 0))
+                      if(str8_match(type->name, s("folder"), 0))
                       {
-                        String8 new_input_string = push_str8f(scratch.arena, "%S/", file);
+                        String8 new_input_string = str8f(scratch.arena, "%S/", file);
                         rd_cmd(RD_CmdKind_UpdateQuery, .string = new_input_string);
                       }
                       else
@@ -4007,6 +4015,7 @@ rd_view_ui(Rng2F32 rect)
                       CFG_Node *cell_view = &cfg_nil_node;
                       B32 revert_cell = 0;
                       B32 browse_cell = 0;
+                      B32 browse_folder = 0;
                       UI_Signal sig = {0};
                       ProfScope("build cell contents")
                         UI_Parent(cell_box)
@@ -4203,6 +4212,7 @@ rd_view_ui(Rng2F32 rect)
                                   {
                                     cell_params.flags |= RD_CellFlag_BrowseButton;
                                     cell_params.browse_out = &browse_cell;
+                                    browse_folder = md_node_has_tag(schema_child->first, s("folder"), 0);
                                   }
                                   break;
                                 }
@@ -4604,7 +4614,7 @@ rd_view_ui(Rng2F32 rect)
                               rd_cmd(RD_CmdKind_Accept);
                             }
                             rd_cmd(RD_CmdKind_FocusPanel);
-                            rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_PickFilePath].string);
+                            rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_PickFilePath].string, .pick_folder = browse_folder);
                           }
                         }
                       }
@@ -16563,6 +16573,14 @@ rd_frame(void)
                 else
                 {
                   cfg_node_child_from_string_or_alloc(rd_state->cfg, view, s("prefer_new_tab"));
+                }
+                if(!rd_regs()->pick_folder)
+                {
+                  cfg_node_release(rd_state->cfg, cfg_node_child_from_string(view, s("pick_folder")));
+                }
+                else
+                {
+                  cfg_node_child_from_string_or_alloc(rd_state->cfg, view, s("pick_folder"));
                 }
               }
               
