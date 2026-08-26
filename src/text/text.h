@@ -142,7 +142,7 @@ typedef struct TXT_ScopePt TXT_ScopePt;
 struct TXT_ScopePt
 {
   U64 token_idx;
-  U64 scope_idx;
+  U64 scope_num;
 };
 
 typedef struct TXT_ScopePtArray TXT_ScopePtArray;

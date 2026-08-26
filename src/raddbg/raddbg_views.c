@@ -14,6 +14,7 @@ rd_code_view_init(RD_CodeViewState *cv)
     cv->preferred_column = 1;
     cv->patch_arena = rd_push_view_arena();
     cv->find_text_arena = rd_push_view_arena();
+    cv->initial_center = 1;
     cv->center_cursor = 1;
     rd_store_view_loading_info(1, 0, 0);
   }
@@ -970,6 +971,15 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
           new_idx = Clamp(scroll_idx_rng[Axis2_Y].min, new_idx, scroll_idx_rng[Axis2_Y].max);
           ui_scroll_pt_target_idx(&scroll_pos.y, new_idx);
           snap[Axis2_Y] = 0;
+        }
+        
+        // rjf: just snap if this is the initial center
+        if(cv->initial_center)
+        {
+          scroll_pos.x.off = 0;
+          scroll_pos.y.off = 0;
+          cv->initial_center = 0;
+          
         }
       }
     }
@@ -4091,6 +4101,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
               }
               if(ui_clicked(peek_sig))
               {
+                rd_cmd(RD_CmdKind_CancelAllQueries);
                 rd_cmd(RD_CmdKind_PushQuery, .expr = casted_expr);
               }
             }
@@ -4361,6 +4372,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
     // rjf: right-click -> push query
     if(ui_right_clicked(sig))
     {
+      rd_cmd(RD_CmdKind_CancelAllQueries);
       rd_cmd(RD_CmdKind_PushQuery,
              .expr = str8f(scratch.arena, "query:config.$%I64x", rd_regs()->view),
              .do_implicit_root = 1,

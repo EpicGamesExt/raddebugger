@@ -53,6 +53,7 @@ struct RD_CodeViewState
   
   // rjf: per-frame command info
   S64 goto_line_num;
+  B32 initial_center;
   B32 center_cursor;
   B32 contain_cursor;
   B32 force_contain_only;

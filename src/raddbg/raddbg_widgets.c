@@ -1561,6 +1561,7 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
             }
             if(ui_right_clicked(thread_sig))
             {
+              rd_cmd(RD_CmdKind_CancelAllQueries);
               rd_cmd(RD_CmdKind_PushQuery,
                      .ui_key = thread_box->key,
                      .expr   = push_str8f(scratch.arena, "query:control.%S", d_string_from_handle(scratch.arena, thread->handle)));
@@ -1715,6 +1716,7 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
             }
             if(ui_right_clicked(thread_sig))
             {
+              rd_cmd(RD_CmdKind_CancelAllQueries);
               rd_cmd(RD_CmdKind_PushQuery,
                      .ui_key = thread_box->key,
                      .expr   = push_str8f(scratch.arena, "query:control.%S", d_string_from_handle(scratch.arena, thread->handle)));
@@ -1796,6 +1798,7 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
             // rjf: bp right-click => open query
             if(ui_right_clicked(bp_sig))
             {
+              rd_cmd(RD_CmdKind_CancelAllQueries);
               rd_cmd(RD_CmdKind_PushQuery,
                      .ui_key = bp_box->key,
                      .expr = push_str8f(scratch.arena, "query:config.$%I64x", bp->id));
@@ -1853,6 +1856,7 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
             // rjf: pin right-click => open query
             if(ui_right_clicked(pin_sig))
             {
+              rd_cmd(RD_CmdKind_CancelAllQueries);
               rd_cmd(RD_CmdKind_PushQuery,
                      .ui_key = pin_box->key,
                      .expr = push_str8f(scratch.arena, "query:config.$%I64x", pin->id));
@@ -2096,6 +2100,7 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
         commands_expr = (*cursor == *mark) ? s("query:text_pt_commands") : s("query:text_range_commands");
       }
       rd_cmd(RD_CmdKind_FocusPanel);
+      rd_cmd(RD_CmdKind_CancelAllQueries);
       rd_cmd(RD_CmdKind_PushQuery,
              .expr = str8f(scratch.arena, "%S, query:config.$%I64x", commands_expr, rd_regs()->view),
              .do_implicit_root = 1,

@@ -267,6 +267,14 @@ struct RD_DropCompletionTask
   String8List paths;
 };
 
+typedef struct RD_QueryView RD_QueryView;
+struct RD_QueryView
+{
+  RD_QueryView *next;
+  RD_Regs *regs;
+  U64 q_arena_pos;
+};
+
 typedef struct RD_WindowState RD_WindowState;
 struct RD_WindowState
 {
@@ -310,12 +318,14 @@ struct RD_WindowState
   CFG_ID drop_completion_panel;
   RD_DropCompletionTask *top_drop_completion_task;
   
-  // rjf: query state
+  // rjf: query stack state
+#if 0
   B32 query_is_active;
-  Arena *query_arena;
   RD_Regs *query_regs;
-  CFG_ID query_view_id;
-  CFG_ID query_last_view_id;
+#endif
+  Arena *query_arena;
+  CFG_ID query_last_bottom_view_id;
+  RD_QueryView *query_top;
   
   // rjf: hover eval state
   B32 hover_eval_focused;

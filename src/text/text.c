@@ -3488,15 +3488,18 @@ txt_scope_node_from_info_off(TXT_TextInfo *info, U64 off)
         break;
       }
     }
-    TXT_ScopeNode *closest_node = &info->scope_nodes.v[info->scope_pts.v[first].scope_idx];
-    for(TXT_ScopeNode *scope_n = closest_node;
-        scope_n != &txt_scope_node_nil;
-        scope_n = txt_scope_node_from_info_num(info, scope_n->parent_num))
+    if(1 <= info->scope_pts.v[first].scope_num && info->scope_pts.v[first].scope_num <= info->scope_nodes.count)
     {
-      if(info->tokens.v[scope_n->token_idx_range.min].range.min <= off && off < info->tokens.v[scope_n->token_idx_range.max].range.max)
+      TXT_ScopeNode *closest_node = &info->scope_nodes.v[info->scope_pts.v[first].scope_num-1];
+      for(TXT_ScopeNode *scope_n = closest_node;
+          scope_n != &txt_scope_node_nil;
+          scope_n = txt_scope_node_from_info_num(info, scope_n->parent_num))
       {
-        result = scope_n;
-        break;
+        if(info->tokens.v[scope_n->token_idx_range.min].range.min <= off && off < info->tokens.v[scope_n->token_idx_range.max].range.max)
+        {
+          result = scope_n;
+          break;
+        }
       }
     }
   }
@@ -4183,7 +4186,7 @@ txt_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64 
             if(top_scope_task && (is_opener || is_closer))
             {
               shared->info.scope_pts.v[pt_idx].token_idx = token_idx;
-              shared->info.scope_pts.v[pt_idx].scope_idx = top_scope_task->scope_idx;
+              shared->info.scope_pts.v[pt_idx].scope_num = top_scope_task->scope_idx+1;
               pt_idx += 1;
             }
             
