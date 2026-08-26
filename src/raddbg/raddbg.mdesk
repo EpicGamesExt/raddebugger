@@ -725,9 +725,9 @@ RD_VocabTable:
       'working_directory':  @folder path,
       'entry_point':        expr_string,
       @default("output") 'output_label': code_string,
-      'stdout_path':        @no_relativize path,
-      'stderr_path':        @no_relativize path,
-      'stdin_path':         @no_relativize path,
+      'stdout_path':        @can_not_exist @no_relativize path,
+      'stderr_path':        @can_not_exist @no_relativize path,
+      'stdin_path':         @can_not_exist @no_relativize path,
       'environment':        set,
       'debug_subprocesses': bool,
       @no_revert @no_expand @default(0) 'enabled': bool,
@@ -913,7 +913,7 @@ RD_RegTable:
   {B32               disable_addresses                DisableAddresses                        }
   {B32               small_size                       SmallSize                               }
   {B32               auto_unwind                      AutoUnwind                              }
-  {B32               pick_folder                      PickFolder                              }
+  {B32               create_new                       CreateNew                               }
   {Dir2              dir2                             Dir2                                    }
   {String8           string                           String                                  }
   {String8           cmd_name                         CmdName                                 }

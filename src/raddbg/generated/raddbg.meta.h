@@ -59,7 +59,7 @@ RD_RegSlot_ActivateWithSingleClick,
 RD_RegSlot_DisableAddresses,
 RD_RegSlot_SmallSize,
 RD_RegSlot_AutoUnwind,
-RD_RegSlot_PickFolder,
+RD_RegSlot_CreateNew,
 RD_RegSlot_Dir2,
 RD_RegSlot_String,
 RD_RegSlot_CmdName,
@@ -517,7 +517,7 @@ B32 activate_with_single_click;
 B32 disable_addresses;
 B32 small_size;
 B32 auto_unwind;
-B32 pick_folder;
+B32 create_new;
 Dir2 dir2;
 String8 string;
 String8 cmd_name;
@@ -622,7 +622,7 @@ Z(getting_started)\
 .disable_addresses = rd_regs()->disable_addresses,\
 .small_size = rd_regs()->small_size,\
 .auto_unwind = rd_regs()->auto_unwind,\
-.pick_folder = rd_regs()->pick_folder,\
+.create_new = rd_regs()->create_new,\
 .dir2 = rd_regs()->dir2,\
 .string = rd_regs()->string,\
 .cmd_name = rd_regs()->cmd_name,\

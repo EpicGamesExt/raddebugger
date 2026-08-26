@@ -2376,8 +2376,8 @@ rd_view_ui(Rng2F32 rect)
                   row = ev_row_from_num(scratch.arena, eval_view, &block_ranges, selection_tbl.min.y);
                 }
                 
-                // rjf: default selection, and we're picking folder? -> pick currently browsed folder
-                if(cfg_node_child_from_string(view, s("pick_folder")) != &cfg_nil_node && default_selection)
+                // rjf: default selection, and we're making new item? -> pick currently browsed string
+                if(cfg_node_child_from_string(view, s("create_new")) != &cfg_nil_node && default_selection)
                 {
                   rd_cmd(RD_CmdKind_CompleteQuery, .file_path = current_input);
                 }
@@ -4016,6 +4016,7 @@ rd_view_ui(Rng2F32 rect)
                       B32 revert_cell = 0;
                       B32 browse_cell = 0;
                       B32 browse_folder = 0;
+                      B32 path_can_not_exist = 0;
                       UI_Signal sig = {0};
                       ProfScope("build cell contents")
                         UI_Parent(cell_box)
@@ -4212,7 +4213,7 @@ rd_view_ui(Rng2F32 rect)
                                   {
                                     cell_params.flags |= RD_CellFlag_BrowseButton;
                                     cell_params.browse_out = &browse_cell;
-                                    browse_folder = md_node_has_tag(schema_child->first, s("folder"), 0);
+                                    path_can_not_exist = (md_node_has_tag(schema_child->first, s("folder"), 0) || md_node_has_tag(schema_child->first, s("can_not_exist"), 0));
                                   }
                                   break;
                                 }
@@ -4619,7 +4620,7 @@ rd_view_ui(Rng2F32 rect)
                             {
                               rd_cmd(RD_CmdKind_SetCurrentPath, .file_path = str8_chop_last_slash(current_path));
                             }
-                            rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_PickFilePath].string, .pick_folder = browse_folder);
+                            rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_PickFilePath].string, .create_new = path_can_not_exist);
                           }
                         }
                       }
@@ -16579,13 +16580,13 @@ rd_frame(void)
                 {
                   cfg_node_child_from_string_or_alloc(rd_state->cfg, view, s("prefer_new_tab"));
                 }
-                if(!rd_regs()->pick_folder)
+                if(!rd_regs()->create_new)
                 {
-                  cfg_node_release(rd_state->cfg, cfg_node_child_from_string(view, s("pick_folder")));
+                  cfg_node_release(rd_state->cfg, cfg_node_child_from_string(view, s("create_new")));
                 }
                 else
                 {
-                  cfg_node_child_from_string_or_alloc(rd_state->cfg, view, s("pick_folder"));
+                  cfg_node_child_from_string_or_alloc(rd_state->cfg, view, s("create_new"));
                 }
               }
               
