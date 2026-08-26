@@ -149,13 +149,13 @@ coff_lib_writer_push_import(COFF_LibWriter *lib_writer, COFF_MachineType machine
       imp_symbol.member_idx           = member_idx;
       coff_lib_writer_symbol_list_push(lib_writer->arena, &lib_writer->symbol_list, imp_symbol);
     } break;
-    case COFF_ImportHeader_Data: {
+    case COFF_ImportHeader_Data:
+    case COFF_ImportHeader_Const: {
       COFF_LibWriterSymbol imp_symbol = {0};
       imp_symbol.name                 = push_str8f(lib_writer->arena, "__imp_%S", name);
       imp_symbol.member_idx           = member_idx;
       coff_lib_writer_symbol_list_push(lib_writer->arena, &lib_writer->symbol_list, imp_symbol);
     } break;
-    case COFF_ImportHeader_Const: { NotImplemented; } break;
     default: { InvalidPath; } break;
     }
   }
