@@ -1442,6 +1442,7 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
     ui_set_next_child_layout_axis(Axis2_Y);
     priority_margin_container_box = ui_build_box_from_string(UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable), s("priority_margin_container"));
     UI_Parent(priority_margin_container_box) UI_PrefHeight(ui_px(params->line_height_px, 1.f))
+      UI_TextAlignment(UI_TextAlign_Center)
     {
       U64 line_idx = 0;
       for(S64 line_num = params->line_num_range.min;
@@ -1449,7 +1450,8 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
           line_num += 1, line_idx += 1)
       {
         D_EntityList line_ips  = params->line_ips[line_idx];
-        UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|UI_BoxFlag_DrawActiveEffects, "line_margin_%I64x", line_num);
+        ui_set_next_background_color(v4f32(0, 0, 0, 0));
+        UI_Box *line_margin_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable*!!(params->flags & RD_CodeSliceFlag_Clickable)|UI_BoxFlag_DrawActiveEffects|UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawText, "###line_margin_%I64x", line_num);
         UI_Parent(line_margin_box)
         {
           //- rjf: build margin thread ip ui
@@ -1571,6 +1573,26 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
               RD_RegsScope(.thread = thread->handle) rd_drag_begin(RD_RegSlot_Thread);
             }
           }
+        }
+        
+        // rjf: empty priority margin interaction
+        UI_Signal line_margin_sig = ui_signal_from_box(line_margin_box);
+        if(ui_hovering(line_margin_sig))
+        {
+          DR_FStrList fstrs = {0};
+          Vec4F32 color = ui_color_from_name(s("thread_0"));
+          color.w *= 0.2f;
+          DR_FStrParams p = {rd_font_from_slot(RD_FontSlot_Icons), rd_raster_flags_from_slot(RD_FontSlot_Icons), color, ui_top_font_size()};
+          dr_fstrs_push_new(scratch.arena, &fstrs, &p, rd_icon_kind_text_table[RD_IconKind_RightArrow]);
+          ui_box_equip_display_fstrs(line_margin_box, &fstrs);
+        }
+        if(ui_clicked(line_margin_sig))
+        {
+          rd_cmd(RD_CmdKind_RunToLine,
+                 .file_path  = params->line_vaddrs[line_idx] ? str8_zero() : rd_regs()->file_path,
+                 .line_num   = params->line_vaddrs[line_idx] ? 0 : line_num,
+                 .vaddr      = params->line_vaddrs[line_idx],
+                 .expr       = s(""));
         }
       }
     }

@@ -18,6 +18,7 @@ target:
 {
   executable: "build/mule_main.exe"
   working_directory: build
+  enabled: 0
 }
 target:
 {
