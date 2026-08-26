@@ -1788,9 +1788,10 @@ rd_view_ui(Rng2F32 rect)
       {
         CFG_NodePtrList targets = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("target"));
         D_EntityArray processes = d_entity_array_from_kind(D_EntityKind_Process);
+        Rng2F32 view_rect = ui_top_parent()->rect;
         
         //- rjf: icon & info
-        UI_Padding(ui_em(2.f, 1.f)) UI_TagF("weak")
+        UI_Padding(ui_em(2.f, 1.f))
         {
           //- rjf: icon
           {
@@ -1806,16 +1807,42 @@ rd_view_ui(Rng2F32 rect)
             }
           }
           
-          //- rjf: info
-          UI_Padding(ui_em(2.f, 1.f))
-            UI_WidthFill UI_PrefHeight(ui_em(2.f, 1.f))
+          //- rjf: title
+          ui_spacer(ui_em(2.f, 1.f));
+          UI_WidthFill UI_PrefHeight(ui_em(2.f, 1.f))
             UI_Row
             UI_Padding(ui_pct(1, 0))
             UI_TextAlignment(UI_TextAlign_Center)
-            UI_PrefWidth(ui_text_dim(10, 1))
+            UI_PrefWidth(ui_text_dim(1, 1))
+            UI_FontSize(ui_top_font_size()*2.f)
           {
-            ui_label(str8_lit(BUILD_TITLE_STRING_LITERAL));
+            ui_label(s(BUILD_TITLE));
           }
+          
+          //- rjf: info
+          ui_spacer(ui_em(1.f, 1.f));
+          UI_WidthFill UI_PrefHeight(ui_em(2.f, 1.f))
+            UI_Row
+            UI_Padding(ui_pct(1, 0))
+            UI_TextAlignment(UI_TextAlign_Center)
+            UI_PrefWidth(ui_text_dim(1, 1))
+            UI_TagF("weak")
+          {
+            ui_label(s(BUILD_VERSION_STRING_LITERAL " " BUILD_RELEASE_PHASE_STRING_LITERAL));
+            ui_label(s(BUILD_GIT_HASH));
+          }
+        }
+        
+        //- rjf: helper for command lister activation
+        UI_PrefHeight(ui_em(3.75f, 1.f))
+          UI_Row
+          UI_Padding(ui_pct(1, 0))
+          UI_TextAlignment(UI_TextAlign_Center)
+          UI_PrefWidth(ui_em(28.f, 1.f))
+          UI_CornerRadius(ui_top_font_size()/2.f)
+          if(ui_clicked(rd_icon_buttonf(RD_IconKind_List, 0, "Open Commands & Settings Palette")))
+        {
+          rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string);
         }
         
         //- rjf: targets state dependent helper
@@ -1828,22 +1855,51 @@ rd_view_ui(Rng2F32 rect)
             //- rjf: user has no targets. build helper for adding them
             case 0:
             {
-              UI_PrefHeight(ui_em(3.75f, 1.f))
-                UI_Row
-                UI_Padding(ui_pct(1, 0))
+              // rjf: drop target visualization
+              ui_spacer(ui_em(2.f, 1.f));
+              UI_PrefHeight(ui_em(30.f, 1.f)) UI_Row UI_Padding(ui_pct(1, 0)) UI_PrefWidth(ui_em(40.f, 1.f))
                 UI_TextAlignment(UI_TextAlign_Center)
-                UI_PrefWidth(ui_em(22.f, 1.f))
                 UI_CornerRadius(ui_top_font_size()/2.f)
-                UI_TagF("pop")
-                if(ui_clicked(rd_icon_buttonf(RD_IconKind_Add, 0, "Add Target")))
               {
-                rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string);
+                ui_set_next_child_layout_axis(Axis2_Y);
+                UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_DrawBorder, "###add_target_drop_site");
+                UI_Parent(box) UI_Padding(ui_pct(1, 0)) UI_PrefHeight(ui_em(2.5f, 1.f))
+                {
+                  UI_PrefHeight(ui_em(3.75f, 1.f))
+                    UI_Row
+                    UI_Padding(ui_pct(1, 0))
+                    UI_TextAlignment(UI_TextAlign_Center)
+                    UI_PrefWidth(ui_em(12.f, 1.f))
+                    UI_CornerRadius(ui_top_font_size()/2.f)
+                    UI_TagF("pop")
+                    if(ui_clicked(rd_icon_buttonf(RD_IconKind_Add, 0, "Add Target")))
+                  {
+                    rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_AddTarget].string);
+                  }
+                  ui_spacer(ui_em(1.f, 1.f));
+                  UI_TagF("weak")
+                  {
+                    ui_label(s("or drop target executable file"));
+                  }
+                }
+                for(UI_Event *evt = 0; ui_next_event(&evt);)
+                {
+                  if(evt->kind == UI_EventKind_FileDrop &&
+                     contains_2f32(view_rect, evt->pos) &&
+                     evt->paths.node_count != 0)
+                  {
+                    rd_cmd(RD_CmdKind_AddTarget, .file_path = evt->paths.first->string);
+                    ui_eat_event(evt);
+                  }
+                }
               }
+              ui_spacer(ui_em(4.f, 1.f));
             }break;
             
             //- rjf: user has 1 target. build helper for launching it
             case 1:
             {
+              ui_spacer(ui_em(1.f, 1.f));
               CFG_Node *target_cfg = cfg_node_ptr_list_first(&targets);
               D_Target target = rd_target_from_cfg(scratch.arena, target_cfg);
               String8 target_full_path = target.exe;
@@ -1860,7 +1916,7 @@ rd_view_ui(Rng2F32 rect)
                 {
                   rd_cmd(RD_CmdKind_LaunchAndRun, .cfg = target_cfg->id);
                 }
-                ui_spacer(ui_em(1.5f, 1));
+                ui_spacer(ui_em(1.f, 1));
                 if(ui_clicked(rd_icon_buttonf(RD_IconKind_StepInto, 0, "Step Into %S", target_name)))
                 {
                   rd_cmd(RD_CmdKind_LaunchAndStepInto, .cfg = target_cfg->id);
@@ -1874,30 +1930,6 @@ rd_view_ui(Rng2F32 rect)
               helper_built = 0;
             }break;
           }
-        }
-        
-        //- rjf: or text
-        if(helper_built)
-        {
-          UI_TagF("weak")
-            UI_PrefHeight(ui_em(2.25f, 1.f))
-            UI_Row
-            UI_Padding(ui_pct(1, 0))
-            UI_TextAlignment(UI_TextAlign_Center)
-            UI_WidthFill
-            ui_labelf("- or -");
-        }
-        
-        //- rjf: helper text for command lister activation
-        UI_TagF("weak")
-          UI_PrefHeight(ui_em(2.25f, 1.f)) UI_Row
-          UI_PrefWidth(ui_text_dim(10, 1))
-          UI_TextAlignment(UI_TextAlign_Center)
-          UI_Padding(ui_pct(1, 0))
-        {
-          ui_labelf("use");
-          UI_TextAlignment(UI_TextAlign_Center) rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_OpenPalette].string, s(""), 1, 0);
-          ui_labelf("to search for commands and options");
         }
       }
       scratch_end(scratch);
@@ -6880,24 +6912,27 @@ rd_window_frame(void)
         for(RD_QueryView *q = top_query; q != 0; q = q->next, q_count += 1)
         {
           // rjf: close if expression is busted
+          if(q->regs->cmd_name.size == 0)
           {
             String8 expr = q->regs->expr;
             E_Eval eval = e_eval_from_string(expr);
             if(eval.msgs.max_kind > E_MsgKind_Null)
             {
               top_query = q->next;
-              remove_q_count = q_count;
+              remove_q_count = q_count+1;
             }
             else if(eval.space.kind == RD_EvalSpaceKind_MetaCfg &&
                     rd_cfg_from_eval_space(eval.space) == &cfg_nil_node)
             {
-              remove_q_count = q_count;
+              top_query = q->next;
+              remove_q_count = q_count+1;
             }
             else if((eval.space.kind == RD_EvalSpaceKind_MetaCtrlEntity ||
                      eval.space.kind == D_EvalSpaceKind_Entity) &&
                     rd_ctrl_entity_from_eval_space(eval.space) == &d_entity_nil)
             {
-              remove_q_count = q_count;
+              top_query = q->next;
+              remove_q_count = q_count+1;
             }
           }
           
@@ -6918,10 +6953,12 @@ rd_window_frame(void)
       }
       query_is_open = (top_query != 0);
       
-      //- rjf: touch immediate cfgs for all active queries
+      //- rjf: touch immediate cfgs / view states for all active queries
       for(RD_QueryView *qv = top_query; qv != 0; qv = qv->next)
       {
-        rd_immediate_cfg_from_keyf("window_query_%p_%I64u", window, qv->q_arena_pos);
+        CFG_Node *root = rd_immediate_cfg_from_keyf("window_query_%p_%I64u", window, qv->q_arena_pos);
+        CFG_Node *view = cfg_node_child_from_string(root, s("watch"));
+        RD_ViewState *vs = rd_view_state_from_cfg(view);
       }
       
       //- rjf: try to add opened query
@@ -7709,7 +7746,8 @@ rd_window_frame(void)
                   
                   // rjf: make ui
                   UI_TagF("implicit")
-                    UI_VisualMargin(ui_top_font_size()*0.45f)
+                    UI_VisualMarginX(ui_top_font_size()*0.45f)
+                    UI_VisualMarginY(ui_top_font_size()*0.5f)
                     UI_CornerRadius(ui_top_font_size()*0.5f)
                     for(U64 idx = 0; idx < ArrayCount(items); idx += 1)
                   {
@@ -7849,41 +7887,40 @@ rd_window_frame(void)
           
           // rjf: loaded project viz
           if(do_user_prof)
-            UI_VisualMargin(ui_top_font_size()*0.5f)
-            UI_CornerRadius(ui_top_font_size()*0.5f)
           {
-            ui_set_next_pref_width(ui_children_sum(1));
-            ui_set_next_child_layout_axis(Axis2_X);
-            UI_Box *prof_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
-                                                         UI_BoxFlag_DrawBackground|
-                                                         UI_BoxFlag_DrawHotEffects|
-                                                         UI_BoxFlag_DrawActiveEffects,
-                                                         "###loaded_project_button");
-            wm_window_push_custom_title_bar_client_area(ws->os, prof_box->rect);
-            UI_Parent(prof_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center) UI_Padding(ui_em(0.5f, 1.f))
+            CFG_Node *root = cfg_node_root();
+            CFG_Node *project = cfg_node_child_from_string(root, str8_lit("project"));
+            CFG_Node *name = cfg_node_child_from_string(project, str8_lit("name"));
+            String8 project_name = name->first->string;
+            if(project_name.size == 0)
             {
-              CFG_Node *root = cfg_node_root();
-              CFG_Node *project = cfg_node_child_from_string(root, str8_lit("project"));
-              CFG_Node *name = cfg_node_child_from_string(project, str8_lit("name"));
-              String8 project_name = name->first->string;
-              if(project_name.size == 0)
-              {
-                String8 prof_path = rd_state->project_path;
-                prof_path = str8_chop_last_dot(prof_path);
-                project_name = str8_skip_last_slash(prof_path);
-              }
-              if(project_name.size == 0)
-              {
-                project_name = str8_lit("Untitled Project");
-              }
-              RD_Font(RD_FontSlot_Icons)
-                ui_label(rd_icon_kind_text_table[RD_IconKind_Briefcase]);
-              ui_label(project_name);
+              String8 prof_path = rd_state->project_path;
+              prof_path = str8_chop_last_dot(prof_path);
+              project_name = str8_skip_last_slash(prof_path);
             }
-            UI_Signal prof_sig = ui_signal_from_box(prof_box);
-            if(ui_clicked(prof_sig))
+            if(project_name.size != 0)
             {
-              rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_OpenProject].string);
+              UI_VisualMargin(ui_top_font_size()*0.5f)
+                UI_CornerRadius(ui_top_font_size()*0.5f)
+              {
+                ui_set_next_pref_width(ui_children_sum(1));
+                ui_set_next_child_layout_axis(Axis2_X);
+                UI_Box *prof_box = ui_build_box_from_stringf(UI_BoxFlag_Clickable|
+                                                             UI_BoxFlag_DrawBackground|
+                                                             UI_BoxFlag_DrawHotEffects|
+                                                             UI_BoxFlag_DrawActiveEffects,
+                                                             "###loaded_project_button");
+                wm_window_push_custom_title_bar_client_area(ws->os, prof_box->rect);
+                UI_Parent(prof_box) UI_PrefWidth(ui_text_dim(10, 0)) UI_TextAlignment(UI_TextAlign_Center) UI_Padding(ui_em(0.5f, 1.f))
+                {
+                  ui_label(project_name);
+                }
+                UI_Signal prof_sig = ui_signal_from_box(prof_box);
+                if(ui_clicked(prof_sig))
+                {
+                  rd_cmd(RD_CmdKind_RunCommand, .cmd_name = rd_cmd_kind_info_table[RD_CmdKind_ProjectSettings].string);
+                }
+              }
             }
           }
           
@@ -9187,7 +9224,7 @@ rd_window_frame(void)
                   UI_Box *add_new_box = &ui_nil_box;
                   RD_Font(RD_FontSlot_Icons)
                     UI_CornerRadius((tab_bar_vheight - tab_bar_vheight/4.f) / 3.f)
-                    UI_VisualMargin(tab_bar_vheight/4.f)
+                    UI_VisualMargin(tab_bar_vheight/5.f)
                     UI_TagF("implicit")
                     UI_TagF("weak")
                   {
@@ -9539,6 +9576,7 @@ rd_window_frame(void)
           }
           
           // rjf: soft circle around mouse
+#if 0
           if(box->hot_t > 0.01f && dim_2f32(box->rect).x > box->font_size*8.f) DR_ClipScope(intersect_2f32(box_bg_rect, dr_top_clip()))
           {
             Vec4F32 color = hover_color;
@@ -9552,8 +9590,9 @@ rd_window_frame(void)
             F32 max_dim = Max(box_dim.x, box_dim.y);
             F32 radius = box->font_size*24.f;
             radius = Min(max_dim, radius);
-            dr_rect(pad_2f32(r2f32(center, center), radius), color, radius, 0, radius/3.f);
+            dr_rect(pad_2f32(r2f32(center, center), radius*2.f), color, radius, 0, radius/2.f);
           }
+#endif
         }
         
         // rjf: active effect extension

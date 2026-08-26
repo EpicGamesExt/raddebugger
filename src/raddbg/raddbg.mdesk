@@ -1615,7 +1615,7 @@ RD_ThemePresetTable:
       theme_color:{tags: "good text", value: 0x32a852ff}
       theme_color:{tags: "neutral text", value: 0x3a90bbff}
       theme_color:{tags: "bad text", value: 0xcf5242ff}
-      theme_color:{tags: hover, value: 0xabdeffff}
+      theme_color:{tags: hover, value: 0xffffffff}
       theme_color:{tags: "focus overlay", value: 0x2292eb14}
       theme_color:{tags: "focus border", value: 0x2392ebff}
       theme_color:{tags: cursor, value: 0x8aff00ff}
