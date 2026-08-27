@@ -672,16 +672,6 @@ Compiler;
 # define Compiler_CURRENT Compiler_Null
 #endif
 
-typedef enum Linker
-{
-  Linker_Null,
-  Linker_radlink,
-  Linker_msvc,
-  Linker_lld,
-  Linker_COUNT
-}
-Linker;
-
 ////////////////////////////////
 //~ rjf: Access Flags
 

@@ -46,7 +46,6 @@ internal void       t_run_fail_handler(void *raw_ctx);
 internal TestResult t_run(CmdLine *cmdline, TestInfo *test, String8 user_data);
 
 // tools
-internal String8 t_radbin_path(void);
 internal String8 t_cl_path(void);
 internal String8 t_clang_path(void);
 internal String8 t_gcc_path(void);
@@ -58,16 +57,9 @@ internal String8 t_src_path(void);
 internal B32 t_invoke(String8 exe, String8 cmdline, U64 timeout);
 internal B32 t_invoke_cl(char *fmt, ...);
 internal B32 t_invoke_linkerf(char *fmt, ...);
-internal B32 t_invoke_radbin(char *fmt, ...);
-internal void t_kill_all(String8 pattern);
 #define t_invoke_linker_timeout(c, t)       T_Ok(t_invoke(t_radlink_path(), c, t))
 #define t_invoke_linker_timeoutf(t, f, ...) t_invoke_linker_timeout(push_str8f(arena, f, ##__VA_ARGS__), t)
 #define t_invoke_linker(c)                  t_invoke_linker_timeout(c, max_U64)
-
-internal String8 t_chop_line(String8 *string);
-internal B32     t_match_line(String8 *output, String8 expected_line);
-internal B32     t_match_linef(String8 *output, char *fmt, ...);
-#define T_MatchLinef(out, ...) T_Ok(t_match_linef(out, __VA_ARGS__))
 
 // files helper
 internal String8List t_file_paths_from_dir(Arena *arena, String8 dir);
