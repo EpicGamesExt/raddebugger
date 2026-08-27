@@ -483,6 +483,10 @@ di_rdi_from_key(Access *access, DI_Key key, B32 high_priority, U64 endt_us)
             rdi = &n->rdi;
             access_touch(access, &n->access_pt, stripe->cv);
           }
+          if(ins_atomic_u64_eval(&n->working_count) != 0)
+          {
+            rdi = &di_rdi_parsed_nil_waiting;
+          }
           break;
         }
       }

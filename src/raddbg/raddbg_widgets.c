@@ -620,10 +620,19 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, D_Entity *entity, B32 include_extr
     Access *access = access_open();
     DI_Key dbgi_key = d_dbgi_key_from_module(entity);
     RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
-    if(rdi->raw_data_size == 0)
+    if(rdi == &di_rdi_parsed_nil_waiting)
     {
-      dr_fstrs_push_new(arena, &result, &params, str8_lit(" "));
-      dr_fstrs_push_new(arena, &result, &params, str8_lit("(Debug info not loaded)"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .size = extras_size, .color = secondary_color);
+      dr_fstrs_push_new(arena, &result, &params, s(" "));
+      dr_fstrs_push_new(arena, &result, &params, s("(Loading debug info)"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .size = extras_size, .color = secondary_color);
+    }
+    else if(rdi == &rdi_parsed_nil)
+    {
+      dr_fstrs_push_new(arena, &result, &params, s(" "));
+      dr_fstrs_push_new(arena, &result, &params, s("(Debug info not loaded)"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .size = extras_size, .color = secondary_color);
+    }
+    else
+    {
+      
     }
     access_close(access);
   }

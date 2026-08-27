@@ -305,6 +305,7 @@ struct DI_Shared
 ////////////////////////////////
 //~ rjf: Globals
 
+global read_only RDI_Parsed di_rdi_parsed_nil_waiting = {0};
 global DI_Shared *di_shared = 0;
 
 ////////////////////////////////

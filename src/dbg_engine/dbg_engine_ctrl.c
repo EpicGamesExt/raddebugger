@@ -3292,7 +3292,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt1->vaddr_rng  = r1u64(event->address, event->address+event->size);
       out_evt1->rip_vaddr  = event->address;
       out_evt1->timestamp  = exe_timestamp;
-      out_evt1->string     = module_path;
+      out_evt1->string     = str8_copy(scratch.arena, module_path);
       out_evt1->tls_index  = event->module_info->tls_index;
       out_evt1->tls_offset = event->module_info->tls_offset;
       

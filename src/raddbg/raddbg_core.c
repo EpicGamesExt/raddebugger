@@ -6180,7 +6180,7 @@ rd_window_frame(void)
             RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
             if(rdi->raw_data_size != 0)
             {
-              ui_labelf("Debug information successfully loaded from %S", dbg_info_entity->string);
+              ui_labelf("Debug info successfully loaded from %S", dbg_info_entity->string);
             }
             else if(dbg_info_entity->string.size != 0)
             {
