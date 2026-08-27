@@ -3199,7 +3199,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       }
       
       //- rjf: compute local symbol server cache path for this debug info
-      String8 local_symbol_server_cache_path = smsv_local_path_from_key(scratch2.arena, str8_skip_last_slash(module_info->debug_info_path), module_info->debug_info_guid, module_info->debug_info_age);
+      String8 local_symbol_server_cache_path = smsv_local_debug_info_path_from_key(scratch2.arena, str8_skip_last_slash(module_info->debug_info_path), module_info->debug_info_guid, module_info->debug_info_age);
       
       //- rjf: pick default initial debug info path
       String8 initial_debug_info_path = {0};
@@ -4184,6 +4184,35 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
               module_name = relative_module_path;
             }
           }
+          
+          // rjf: check if the local module matches the dump's version
+          B32 local_module_matches = 1;
+          {
+            File file = file_open(AccessFlag_Read|AccessFlag_ShareRead, module_name);
+            if(file_match(file, file_zero()))
+            {
+              local_module_matches = 0;
+            }
+            else
+            {
+              FileProperties props = properties_from_file(file);
+              FileMap map = file_map_open(AccessFlag_Read, file);
+              void *base = file_map_view_open(map, AccessFlag_Read, r1u64(0, props.size));
+              String8 data = str8((U8 *)base, props.size);
+              PE_BinInfo pe = pe_bin_info_from_data(scratch.arena, data);
+              local_module_matches = (pe.timestamp == module->time_date_stamp);
+            }
+            file_close(file);
+          }
+          
+          // rjf: download module if needed
+#if defined(SYMBOL_SERVER_H)
+          if(!local_module_matches)
+          {
+            module_name = smsv_local_module_path_from_key(scratch.arena, str8_skip_last_slash(module_name), module->time_date_stamp, module->image_size);
+            smsv_fill_local_path(module_name);
+          }
+#endif
           
           // rjf: unpack module file
           File module_file = file_open(AccessFlag_Read|AccessFlag_ShareRead, module_name);

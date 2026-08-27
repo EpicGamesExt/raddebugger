@@ -2153,7 +2153,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         {
           Access *access = access_open();
           D_ModuleInfo *info = d_info_from_module(access, params->entity);
-          String8 symbol_server_local_cache_path = smsv_local_path_from_key(scratch.arena, info->dbg_name, info->dbg_guid, info->dbg_age);
+          String8 symbol_server_local_cache_path = smsv_local_debug_info_path_from_key(scratch.arena, info->dbg_name, info->dbg_guid, info->dbg_age);
           smsv_fill_local_path(symbol_server_local_cache_path);
           D_Msg *msg = d_msg_list_push(scratch.arena, &ctrl_msgs);
           msg->kind = D_MsgKind_SetModuleDebugInfoPath;

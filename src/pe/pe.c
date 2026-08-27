@@ -627,6 +627,7 @@ pe_bin_info_from_data(Arena *arena, String8 data)
     info.arch                = arch_from_coff_machine(file_header.machine);
     info.image_base          = image_base;
     info.entry_point         = entry_point;
+    info.timestamp           = file_header.time_stamp;
     info.is_pe32             = (optional_magic == PE_PE32_MAGIC);
     info.subsystem           = subsystem;
     info.check_sum           = check_sum;

@@ -18,7 +18,13 @@ smsv_cache_path(void)
 }
 
 internal String8
-smsv_local_path_from_key(Arena *arena, String8 dbg_name, Guid guid, U64 age)
+smsv_local_module_path_from_key(Arena *arena, String8 module_name, U32 timestamp, U32 size_of_image)
+{
+  return s("");
+}
+
+internal String8
+smsv_local_debug_info_path_from_key(Arena *arena, String8 dbg_name, Guid guid, U64 age)
 {
   return s("");
 }

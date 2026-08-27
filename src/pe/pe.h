@@ -1009,6 +1009,7 @@ struct PE_BinInfo
   Arch arch;
   U64 image_base;
   U64 entry_point;
+  U32 timestamp;
   B32 is_pe32;
   PE_WindowsSubsystem subsystem;
   U32 *check_sum;
