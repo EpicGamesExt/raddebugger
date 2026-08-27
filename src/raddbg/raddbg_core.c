@@ -12145,26 +12145,6 @@ rd_frame(void)
   }
   
   //////////////////////////////
-  //- rjf: get fonts from config
-  //
-  ProfScope("get fonts from config")
-  {
-    String8 main_font_name = rd_setting_from_name(str8_lit("main_font"));
-    String8 code_font_name = rd_setting_from_name(str8_lit("code_font"));
-    rd_state->font_slot_table[RD_FontSlot_Main]  = fnt_tag_from_path(main_font_name);
-    rd_state->font_slot_table[RD_FontSlot_Code]  = fnt_tag_from_path(code_font_name);
-    if(fnt_tag_match(rd_state->font_slot_table[RD_FontSlot_Main], fnt_tag_zero()))
-    {
-      rd_state->font_slot_table[RD_FontSlot_Main] = fnt_tag_from_static_data_string(&rd_default_main_font_bytes);
-    }
-    if(fnt_tag_match(rd_state->font_slot_table[RD_FontSlot_Code], fnt_tag_zero()))
-    {
-      rd_state->font_slot_table[RD_FontSlot_Code] = fnt_tag_from_static_data_string(&rd_default_code_font_bytes);
-    }
-    rd_state->font_slot_table[RD_FontSlot_Icons] = fnt_tag_from_static_data_string(&rd_icon_font_bytes);
-  }
-  
-  //////////////////////////////
   //- rjf: consume events
   //
   ProfScope("consume events")
@@ -18333,6 +18313,40 @@ rd_frame(void)
     {
       break;
     }
+  }
+  
+  //////////////////////////////
+  //- rjf: get fonts from config
+  //
+  ProfScope("get fonts from config")
+  {
+    B32 use_alternative_font_for_ui = rd_setting_b32_from_name(s("use_alternative_font_for_ui"));
+    if(use_alternative_font_for_ui)
+    {
+      String8 main_font_name = rd_setting_from_name(s("main_font"));
+      String8 code_font_name = rd_setting_from_name(s("code_font"));
+      rd_state->font_slot_table[RD_FontSlot_Main]  = fnt_tag_from_path(main_font_name);
+      rd_state->font_slot_table[RD_FontSlot_Code]  = fnt_tag_from_path(code_font_name);
+      if(fnt_tag_match(rd_state->font_slot_table[RD_FontSlot_Main], fnt_tag_zero()))
+      {
+        rd_state->font_slot_table[RD_FontSlot_Main] = fnt_tag_from_static_data_string(&rd_default_main_font_bytes);
+      }
+    }
+    else
+    {
+      String8 font_name = rd_setting_from_name(s("font"));
+      rd_state->font_slot_table[RD_FontSlot_Code] = fnt_tag_from_path(font_name);
+      rd_state->font_slot_table[RD_FontSlot_Main] = rd_state->font_slot_table[RD_FontSlot_Code];
+      if(fnt_tag_match(rd_state->font_slot_table[RD_FontSlot_Main], fnt_tag_zero()))
+      {
+        rd_state->font_slot_table[RD_FontSlot_Main] = fnt_tag_from_static_data_string(&rd_default_code_font_bytes);
+      }
+    }
+    if(fnt_tag_match(rd_state->font_slot_table[RD_FontSlot_Code], fnt_tag_zero()))
+    {
+      rd_state->font_slot_table[RD_FontSlot_Code] = fnt_tag_from_static_data_string(&rd_default_code_font_bytes);
+    }
+    rd_state->font_slot_table[RD_FontSlot_Icons] = fnt_tag_from_static_data_string(&rd_icon_font_bytes);
   }
   
   ////////////////////////////

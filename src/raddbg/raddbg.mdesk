@@ -245,10 +245,14 @@ RD_VocabTable:
         @expand_if("$.animations") @default(1) 'menu_animations': bool,
       
       //- rjf: fonts
-      @display_name('UI Font') @description("The name of, or path to, the font used when displaying non-code UI elements.")
+      @display_name('Use Alternative Font For UI') @description("Uses an alternative font for non-code UI elements.")
+        @default(1) 'use_alternative_font_for_ui': bool,
+      @expand_if("$.use_alternative_font_for_ui") @display_name('UI Font') @description("The name of, or path to, the font used when displaying non-code UI elements.")
         @default('') 'main_font': string,
-      @display_name('Code Font') @description("The name of, or path to, the font used when displaying code.")
+      @expand_if("$.use_alternative_font_for_ui") @display_name('Code Font') @description("The name of, or path to, the font used when displaying code.")
         @default('') 'code_font': string,
+      @expand_if("!$.use_alternative_font_for_ui") @display_name('Font') @description("The name of, or path to, the font used in all UI.")
+        @default('') 'font': string,
       
       //- rjf: theme
       @default("Default (Dark)") @display_name('User Theme')
