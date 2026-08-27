@@ -1751,6 +1751,75 @@ d_cached_sp_from_thread(D_Handle handle)
 ////////////////////////////////
 //~ rjf: Module Image Info Functions
 
+//- rjf: module info stores / evictions
+
+internal void
+d_module_info_store(D_Handle module, Arena **stored_arena, D_ModuleInfo *info)
+{
+  D_ModuleInfoCache *cache = &d_ctrl_state->module_info_cache;
+  U64 hash = d_hash_from_handle(module);
+  U64 slot_idx = hash%cache->slots_count;
+  D_ModuleInfoCacheSlot *slot = &cache->slots[slot_idx];
+  Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
+  MutexScopeW(stripe->rw_mutex)
+  {
+    D_ModuleInfoCacheNode *node = 0;
+    for EachNode(n, D_ModuleInfoCacheNode, slot->first)
+    {
+      if(d_handle_match(n->module, module))
+      {
+        node = n;
+        break;
+      }
+    }
+    if(!node)
+    {
+      node = push_array(*stored_arena, D_ModuleInfoCacheNode, 1);
+      DLLPushBack(slot->first, slot->last, node);
+      node->module  = module;
+      node->arena   = *stored_arena;
+      node->v       = *info;
+    }
+  }
+  *stored_arena = 0;
+}
+
+internal void
+d_module_info_evict(D_Handle module)
+{
+  D_ModuleInfoCache *cache = &d_ctrl_state->module_info_cache;
+  U64 hash = d_hash_from_handle(module);
+  U64 slot_idx = hash%cache->slots_count;
+  Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
+  D_ModuleInfoCacheSlot *slot = &cache->slots[slot_idx];
+  MutexScopeW(stripe->rw_mutex) for(;;)
+  {
+    D_ModuleInfoCacheNode *node = 0;
+    for(D_ModuleInfoCacheNode *n = slot->first; n != 0; n = n->next)
+    {
+      if(d_handle_match(n->module, module))
+      {
+        node = n;
+        break;
+      }
+    }
+    if(node && access_pt_is_expired(&node->access_pt, .time = 0, .update_idxs = 0))
+    {
+      DLLRemove(slot->first, slot->last, node);
+      arena_release(node->arena);
+      break;
+    }
+    if(node)
+    {
+      cond_var_wait_rw_w(stripe->cv, stripe->rw_mutex, max_U64);
+    }
+    else
+    {
+      break;
+    }
+  }
+}
+
 //- rjf: cache lookups
 
 internal D_ModuleInfo *
@@ -1781,6 +1850,15 @@ d_entry_point_voff_from_module(D_Handle module_handle)
 {
   Access *access = access_open();
   U64 result = d_info_from_module(access, module_handle)->entry_point_voff;
+  access_close(access);
+  return result;
+}
+
+internal U64
+d_raddbg_attached_marker_voff_from_module(D_Handle module_handle)
+{
+  Access *access = access_open();
+  U64 result = d_info_from_module(access, module_handle)->raddbg_attached_marker_voff;
   access_close(access);
   return result;
 }
@@ -2650,238 +2728,79 @@ d_ctrl_thread__append_program_defined_bp_traps(Arena *arena, D_Entity *bp, DMN_T
   dmn_trap_chunk_list_push(arena, traps_out, 256, &trap);
 }
 
-//- rjf: module lifetime open/close work
-
-internal void
-d_ctrl_thread__module_open(D_Handle process, D_Handle module, U64 base_vaddr, DMN_ModuleInfo *module_info)
-{
-  Temp scratch = scratch_begin(0,0);
-  
-  //////////////////////////////
-  //- rjf: allocate / set up basic per-module info
-  //
-  Arena *arena = arena_alloc();
-  String8 raddbg_data = d_data_from_process_vaddr_range(arena, process, shift_1u64(module_info->raddbg_info_voff_range, base_vaddr), 0);
-  
-  //////////////////////////////
-  //- rjf: prepare unwind info
-  //
-  UWND_Unwinder unwinder = UWND_Unwinder_Null;
-  void *unwind_info_opaque = 0;
-  {
-    //- rjf: PE/x64 unwinder
-    if(dim_1u64(module_info->pe_intel_pdatas_vaddr_range) != 0)
-    {
-      unwinder = UWND_Unwinder_PEx64;
-      PE_X64_UWND_ModuleUnwindInfo *unwind_info = push_array(arena, PE_X64_UWND_ModuleUnwindInfo, 1);
-      {
-        U64 pdatas_count = dim_1u64(module_info->pe_intel_pdatas_vaddr_range) / sizeof(PE_IntelPdata);
-        String8 pdatas_data = d_data_from_process_vaddr_range(arena, process, module_info->pe_intel_pdatas_vaddr_range, 0);
-        pdatas_count = Min(pdatas_count, pdatas_data.size / sizeof(PE_IntelPdata));
-        PE_IntelPdata *pdatas = (PE_IntelPdata *)pdatas_data.str;
-        unwind_info->pdatas = pdatas;
-        unwind_info->pdatas_count = pdatas_count;
-      }
-      unwind_info_opaque = unwind_info;
-    }
-    
-    //- rjf: .eh_frame unwinder
-    else if(dim_1u64(module_info->eh_frame_header_vaddr_range) != 0)
-    {
-      unwinder = UWND_Unwinder_EHFrame;
-      EH_UWND_ModuleUnwindInfo *unwind_info = push_array(arena, EH_UWND_ModuleUnwindInfo, 1);
-      {
-        String8 eh_frame_hdr_data = d_data_from_process_vaddr_range(arena, process, module_info->eh_frame_header_vaddr_range, 0);
-        unwind_info->ptr_ctx.pc_vaddr   = module_info->eh_frame_header_vaddr_range.min;
-        unwind_info->ptr_ctx.data_vaddr = module_info->eh_frame_header_vaddr_range.min;
-        unwind_info->header = eh_parse_frame_hdr(eh_frame_hdr_data, byte_size_from_arch(module_info->arch), &unwind_info->ptr_ctx);
-      }
-      unwind_info_opaque = unwind_info;
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: compute local symbol server cache path for this debug info
-  //
-  String8 local_symbol_server_cache_path = smsv_local_path_from_key(scratch.arena, str8_skip_last_slash(module_info->debug_info_path), module_info->debug_info_guid, module_info->debug_info_age);
-  
-  //////////////////////////////
-  //- rjf: pick default initial debug info path
-  //
-  String8 initial_debug_info_path = {0};
-  {
-    String8List candidates = {0};
-    
-    // rjf: push module-embedded debug info paths, try both relative-to-exe & absolute
-    if(module_info->debug_info_path.size != 0)
-    {
-      PathStyle path_style = path_style_from_str8(module_info->debug_info_path);
-      if(path_style == PathStyle_Relative)
-      {
-        String8 module_image_folder = str8_chop_last_slash(module_info->module_path);
-        str8_list_pushf(scratch.arena, &candidates, "%S/%S", module_image_folder, module_info->debug_info_path);
-      }
-      str8_list_push(scratch.arena, &candidates, module_info->debug_info_path);
-    }
-    
-    // rjf: push heuristic-based debug info paths
-    {
-      String8 exe_path = module_info->module_path;
-      String8 exe_path_no_ext = str8_chop_last_dot(exe_path);
-      str8_list_pushf(scratch.arena, &candidates, "%S.pdb", exe_path_no_ext);
-      str8_list_pushf(scratch.arena, &candidates, "%S.pdb", exe_path);
-      str8_list_pushf(scratch.arena, &candidates, "%S.rdi", exe_path_no_ext);
-      str8_list_pushf(scratch.arena, &candidates, "%S.rdi", exe_path);
-    }
-    
-    // rjf: push local symbol server cache's path
-    if(local_symbol_server_cache_path.size != 0)
-    {
-      str8_list_push(scratch.arena, &candidates, local_symbol_server_cache_path);
-    }
-    
-    // rjf: pick first candidate that works
-    for EachNode(n, String8Node, candidates.first)
-    {
-      String8 candidate_path = n->string;
-      FileProperties props = properties_from_file_path(candidate_path);
-      if(props.modified != 0 && props.size != 0)
-      {
-        initial_debug_info_path = str8_copy(arena, path_normalized_from_string(scratch.arena, candidate_path));
-        break;
-      }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: no found debug info path -> try to fall back on symbol server cache path.
-  //
-  // if it exists, we can just use it. if it doesn't, then we only want to pick it *if*
-  // automatic downloads are enabled.
-  //
-  if(initial_debug_info_path.size == 0 && d_ctrl_state->auto_download_debug_info && local_symbol_server_cache_path.size != 0)
-  {
-    initial_debug_info_path = str8_copy(arena, local_symbol_server_cache_path);
-  }
-  
-  //////////////////////////////
-  //- rjf: write 1 at attachment marker, to signify attachment
-  //
-  if(module_info->raddbg_is_attached_marker_voff != 0)
-  {
-    U8 new_value = 1;
-    d_process_write_struct(process, base_vaddr + module_info->raddbg_is_attached_marker_voff, &new_value);
-  }
-  
-  //////////////////////////////
-  //- rjf: fill info
-  //
-  D_ModuleInfo info = {0};
-  {
-    info.entry_point_voff             = module_info->entry_point_voff;
-    info.unwinder                     = unwinder;
-    info.unwind_info                  = unwind_info_opaque;
-    info.local_debug_info_path        = initial_debug_info_path;
-    info.dbg_name                     = str8_copy(arena, str8_skip_last_slash(module_info->debug_info_path));
-    info.dbg_guid                     = module_info->debug_info_guid;
-    info.dbg_age                      = module_info->debug_info_age;
-    info.raddbg_attached_marker_voff  = module_info->raddbg_is_attached_marker_voff;
-    info.raddbg_data                  = raddbg_data;
-  }
-  
-  //////////////////////////////
-  //- rjf: insert info into cache
-  //
-  {
-    D_ModuleInfoCache *cache = &d_ctrl_state->module_info_cache;
-    U64 hash = d_hash_from_handle(module);
-    U64 slot_idx = hash%cache->slots_count;
-    D_ModuleInfoCacheSlot *slot = &cache->slots[slot_idx];
-    Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
-    MutexScopeW(stripe->rw_mutex)
-    {
-      D_ModuleInfoCacheNode *node = 0;
-      for EachNode(n, D_ModuleInfoCacheNode, slot->first)
-      {
-        if(d_handle_match(n->module, module))
-        {
-          node = n;
-          break;
-        }
-      }
-      if(!node)
-      {
-        node = push_array(arena, D_ModuleInfoCacheNode, 1);
-        DLLPushBack(slot->first, slot->last, node);
-        node->module  = module;
-        node->arena   = arena;
-        node->v       = info;
-      }
-    }
-  }
-  
-  scratch_end(scratch);
-}
-
-internal void
-d_ctrl_thread__module_close(D_Handle process, D_Handle module, U64 base_vaddr)
-{
-  DMN_Handle process_dmn = d_dmn_from_handle(process);
-  
-  //////////////////////////////
-  //- rjf: evict module info from cache
-  //
-  U64 raddbg_attached_marker_voff = 0;
-  {
-    D_ModuleInfoCache *cache = &d_ctrl_state->module_info_cache;
-    U64 hash = d_hash_from_handle(module);
-    U64 slot_idx = hash%cache->slots_count;
-    Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
-    D_ModuleInfoCacheSlot *slot = &cache->slots[slot_idx];
-    MutexScopeW(stripe->rw_mutex) for(;;)
-    {
-      D_ModuleInfoCacheNode *node = 0;
-      for(D_ModuleInfoCacheNode *n = slot->first; n != 0; n = n->next)
-      {
-        if(d_handle_match(n->module, module))
-        {
-          node = n;
-          break;
-        }
-      }
-      if(node && access_pt_is_expired(&node->access_pt, .time = 0, .update_idxs = 0))
-      {
-        raddbg_attached_marker_voff = node->v.raddbg_attached_marker_voff;
-        DLLRemove(slot->first, slot->last, node);
-        arena_release(node->arena);
-        break;
-      }
-      if(node)
-      {
-        cond_var_wait_rw_w(stripe->cv, stripe->rw_mutex, max_U64);
-      }
-      else
-      {
-        break;
-      }
-    }
-  }
-  
-  //////////////////////////////
-  //- rjf: write 0 at attachment marker, to signify detachment
-  //
-  if(raddbg_attached_marker_voff != 0)
-  {
-    U8 new_value = 0;
-    d_process_write_struct(process, base_vaddr + raddbg_attached_marker_voff, &new_value);
-  }
-}
-
 //- rjf: dump process closing work
 
 internal void
 d_ctrl_thread__close_dump_process(D_MsgID msg_id, D_Handle process)
 {
+  // rjf: unpack dump cache
+  D_DumpCache *cache = &d_ctrl_state->dump_cache;
+  U64 hash = d_hash_from_handle(process);
+  U64 slot_idx = hash%cache->slots_count;
+  Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
+  
+  // rjf: remove node from cache
+  D_DumpNode *node = 0;
+  {
+    RWMutexScope(stripe->rw_mutex, 1)
+    {
+      for(D_DumpNode *n = cache->slots[slot_idx].first; n != 0; n = n->next)
+      {
+        if(d_handle_match(n->process, process))
+        {
+          node = n;
+          break;
+        }
+      }
+      if(node != 0)
+      {
+        DLLRemove(cache->slots[slot_idx].first, cache->slots[slot_idx].last, node);
+      }
+    }
+  }
+  
+  // rjf: evict module infos
+  for EachIndex(idx, node->modules_count)
+  {
+    d_module_info_evict(node->modules[idx].module_handle);
+  }
+  
+  // rjf: close debug infos
+  for EachIndex(idx, node->modules_count)
+  {
+    D_Entity *module_ent = d_entity_from_handle(node->modules[idx].module_handle);
+    DI_Key dbgi_key = d_dbgi_key_from_module(module_ent);
+    di_close(dbgi_key, 0);
+  }
+  
+  // rjf: send events for modules being unloaded
+  for EachIndex(idx, node->modules_count)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    D_EventList evts = {0};
+    D_Event *evt = d_event_list_push(scratch.arena, &evts);
+    evt->kind   = D_EventKind_EndModule;
+    evt->msg_id = msg_id;
+    evt->entity = node->modules[idx].module_handle;
+    evt->string = node->modules[idx].path;
+    d_c2u_push_events(&evts);
+    scratch_end(scratch);
+  }
+  
+  // rjf: send events for threads being ended
+  for EachIndex(idx, node->threads_count)
+  {
+    Temp scratch = scratch_begin(0, 0);
+    D_EventList evts = {0};
+    D_Event *evt = d_event_list_push(scratch.arena, &evts);
+    evt->kind   = D_EventKind_EndThread;
+    evt->msg_id    = msg_id;
+    evt->entity    = node->threads[idx].thread_handle;
+    evt->entity_id = node->threads[idx].id;
+    d_c2u_push_events(&evts);
+    scratch_end(scratch);
+  }
+  
   // rjf: send debug event for process closing
   {
     Temp scratch = scratch_begin(0, 0);
@@ -2899,52 +2818,26 @@ d_ctrl_thread__close_dump_process(D_MsgID msg_id, D_Handle process)
   ins_atomic_u64_inc_eval(&d_ctrl_state->reg_gen);
   ins_atomic_u64_inc_eval(&d_ctrl_state->run_gen);
   
-  // rjf: eliminate dump node from cache
+  // rjf: release node contents
+  if(node != 0)
   {
-    D_DumpCache *cache = &d_ctrl_state->dump_cache;
-    U64 hash = d_hash_from_handle(process);
-    U64 slot_idx = hash%cache->slots_count;
-    Stripe *stripe = stripe_from_slot_idx(&cache->stripes, slot_idx);
-    
-    // rjf: remove node
-    D_DumpNode *node = 0;
-    RWMutexScope(stripe->rw_mutex, 1)
+    for EachIndex(idx, node->modules_count)
     {
-      for(D_DumpNode *n = cache->slots[slot_idx].first; n != 0; n = n->next)
-      {
-        if(d_handle_match(n->process, process))
-        {
-          node = n;
-          break;
-        }
-      }
-      if(node != 0)
-      {
-        DLLRemove(cache->slots[slot_idx].first, cache->slots[slot_idx].last, node);
-      }
+      file_map_view_close(node->modules[idx].map, node->modules[idx].base, r1u64(0, node->modules[idx].props.size));
+      file_map_close(node->modules[idx].map);
+      file_close(node->modules[idx].file);
     }
-    
-    // rjf: release node contents
-    if(node != 0)
-    {
-      for EachIndex(idx, node->modules_count)
-      {
-        file_map_view_close(node->modules[idx].map, node->modules[idx].base, r1u64(0, node->modules[idx].props.size));
-        file_map_close(node->modules[idx].map);
-        file_close(node->modules[idx].file);
-      }
-      file_map_view_close(node->map, node->base, r1u64(0, node->props.size));
-      file_map_close(node->map);
-      file_close(node->file);
-      arena_release(node->arena);
-    }
-    
-    // rjf: attach node to free list
-    if(node != 0) RWMutexScope(stripe->rw_mutex, 1)
-    {
-      node->next = (D_DumpNode *)stripe->free;
-      stripe->free = node;
-    }
+    file_map_view_close(node->map, node->base, r1u64(0, node->props.size));
+    file_map_close(node->map);
+    file_close(node->file);
+    arena_release(node->arena);
+  }
+  
+  // rjf: attach node to free list
+  if(node != 0) RWMutexScope(stripe->rw_mutex, 1)
+  {
+    node->next = (D_DumpNode *)stripe->free;
+    stripe->free = node;
   }
 }
 
@@ -3208,8 +3101,11 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
   ProfScope("push ctrl events associated with this demon event") switch(event->kind)
   {
     default:{}break;
+    
+    //- rjf: process creation
     case DMN_EventKind_CreateProcess:
     {
+      // rjf: process ID -> message ID
       D_MsgID msg_id = 0;
       for(D_Entity *entry = d_ctrl_state->ctrl_thread_entity_store->ctx.root->first;
           entry != &d_entity_nil;
@@ -3222,6 +3118,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
           break;
         }
       }
+      
+      // rjf: push
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
       out_evt->kind      = D_EventKind_NewProc;
       out_evt->msg_id    = msg_id;
@@ -3231,6 +3129,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt->os        = OperatingSystem_CURRENT; // TODO: operating system of the remote target machine
       d_ctrl_state->process_counter += 1;
     }break;
+    
+    //- rjf: create thread
     case DMN_EventKind_CreateThread:
     {
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
@@ -3245,14 +3145,144 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt->rip_vaddr  = event->instruction_pointer;
       out_evt->string     = event->string;
     }break;
+    
+    //- rjf: load module
     case DMN_EventKind_LoadModule:
     {
+      Temp scratch2 = scratch_begin(&scratch.arena, 1);
+      
+      //- rjf: unpack module
       D_Handle process_handle = d_handle_from_dmn(D_MachineID_Local, event->process);
       D_Handle module_handle = d_handle_from_dmn(D_MachineID_Local, event->module);
-      D_Event *out_evt1 = d_event_list_push(scratch.arena, &evts);
-      String8 module_path = path_normalized_from_string(scratch.arena, event->string);
+      String8 module_path = path_normalized_from_string(scratch2.arena, event->string);
       U64 exe_timestamp = properties_from_file_path(module_path).modified;
-      d_ctrl_thread__module_open(process_handle, module_handle, event->address, event->module_info);
+      DMN_ModuleInfo *module_info = event->module_info;
+      U64 base_vaddr = event->address;
+      
+      //- rjf: allocate / set up basic per-module info
+      Arena *arena = arena_alloc();
+      String8 raddbg_data = d_data_from_process_vaddr_range(arena, process_handle, shift_1u64(module_info->raddbg_info_voff_range, base_vaddr), 0);
+      
+      //- rjf: prepare unwind info
+      UWND_Unwinder unwinder = UWND_Unwinder_Null;
+      void *unwind_info_opaque = 0;
+      {
+        //- rjf: PE/x64 unwinder
+        if(dim_1u64(module_info->pe_intel_pdatas_vaddr_range) != 0)
+        {
+          unwinder = UWND_Unwinder_PEx64;
+          PE_X64_UWND_ModuleUnwindInfo *unwind_info = push_array(arena, PE_X64_UWND_ModuleUnwindInfo, 1);
+          {
+            U64 pdatas_count = dim_1u64(module_info->pe_intel_pdatas_vaddr_range) / sizeof(PE_IntelPdata);
+            String8 pdatas_data = d_data_from_process_vaddr_range(arena, process_handle, module_info->pe_intel_pdatas_vaddr_range, 0);
+            pdatas_count = Min(pdatas_count, pdatas_data.size / sizeof(PE_IntelPdata));
+            PE_IntelPdata *pdatas = (PE_IntelPdata *)pdatas_data.str;
+            unwind_info->pdatas = pdatas;
+            unwind_info->pdatas_count = pdatas_count;
+          }
+          unwind_info_opaque = unwind_info;
+        }
+        
+        //- rjf: .eh_frame unwinder
+        else if(dim_1u64(module_info->eh_frame_header_vaddr_range) != 0)
+        {
+          unwinder = UWND_Unwinder_EHFrame;
+          EH_UWND_ModuleUnwindInfo *unwind_info = push_array(arena, EH_UWND_ModuleUnwindInfo, 1);
+          {
+            String8 eh_frame_hdr_data = d_data_from_process_vaddr_range(arena, process_handle, module_info->eh_frame_header_vaddr_range, 0);
+            unwind_info->ptr_ctx.pc_vaddr   = module_info->eh_frame_header_vaddr_range.min;
+            unwind_info->ptr_ctx.data_vaddr = module_info->eh_frame_header_vaddr_range.min;
+            unwind_info->header = eh_parse_frame_hdr(eh_frame_hdr_data, byte_size_from_arch(module_info->arch), &unwind_info->ptr_ctx);
+          }
+          unwind_info_opaque = unwind_info;
+        }
+      }
+      
+      //- rjf: compute local symbol server cache path for this debug info
+      String8 local_symbol_server_cache_path = smsv_local_path_from_key(scratch2.arena, str8_skip_last_slash(module_info->debug_info_path), module_info->debug_info_guid, module_info->debug_info_age);
+      
+      //- rjf: pick default initial debug info path
+      String8 initial_debug_info_path = {0};
+      {
+        String8List candidates = {0};
+        
+        // rjf: push module-embedded debug info paths, try both relative-to-exe & absolute
+        if(module_info->debug_info_path.size != 0)
+        {
+          PathStyle path_style = path_style_from_str8(module_info->debug_info_path);
+          if(path_style == PathStyle_Relative)
+          {
+            String8 module_image_folder = str8_chop_last_slash(module_info->module_path);
+            str8_list_pushf(scratch2.arena, &candidates, "%S/%S", module_image_folder, module_info->debug_info_path);
+          }
+          str8_list_push(scratch2.arena, &candidates, module_info->debug_info_path);
+        }
+        
+        // rjf: push heuristic-based debug info paths
+        {
+          String8 exe_path = module_info->module_path;
+          String8 exe_path_no_ext = str8_chop_last_dot(exe_path);
+          str8_list_pushf(scratch2.arena, &candidates, "%S.pdb", exe_path_no_ext);
+          str8_list_pushf(scratch2.arena, &candidates, "%S.pdb", exe_path);
+          str8_list_pushf(scratch2.arena, &candidates, "%S.rdi", exe_path_no_ext);
+          str8_list_pushf(scratch2.arena, &candidates, "%S.rdi", exe_path);
+        }
+        
+        // rjf: push local symbol server cache's path
+        if(local_symbol_server_cache_path.size != 0)
+        {
+          str8_list_push(scratch2.arena, &candidates, local_symbol_server_cache_path);
+        }
+        
+        // rjf: pick first candidate that works
+        for EachNode(n, String8Node, candidates.first)
+        {
+          String8 candidate_path = n->string;
+          FileProperties props = properties_from_file_path(candidate_path);
+          if(props.modified != 0 && props.size != 0)
+          {
+            initial_debug_info_path = str8_copy(arena, path_normalized_from_string(scratch2.arena, candidate_path));
+            break;
+          }
+        }
+      }
+      
+      //- rjf: no found debug info path -> try to fall back on symbol server cache path.
+      //
+      // if it exists, we can just use it. if it doesn't, then we only want to pick it *if*
+      // automatic downloads are enabled.
+      //
+      if(initial_debug_info_path.size == 0 && d_ctrl_state->auto_download_debug_info && local_symbol_server_cache_path.size != 0)
+      {
+        initial_debug_info_path = str8_copy(arena, local_symbol_server_cache_path);
+      }
+      
+      //- rjf: write 1 at attachment marker, to signify attachment
+      if(module_info->raddbg_is_attached_marker_voff != 0)
+      {
+        U8 new_value = 1;
+        d_process_write_struct(process_handle, base_vaddr + module_info->raddbg_is_attached_marker_voff, &new_value);
+      }
+      
+      //- rjf: fill info
+      D_ModuleInfo info = {0};
+      {
+        info.entry_point_voff             = module_info->entry_point_voff;
+        info.unwinder                     = unwinder;
+        info.unwind_info                  = unwind_info_opaque;
+        info.local_debug_info_path        = initial_debug_info_path;
+        info.dbg_name                     = str8_copy(arena, str8_skip_last_slash(module_info->debug_info_path));
+        info.dbg_guid                     = module_info->debug_info_guid;
+        info.dbg_age                      = module_info->debug_info_age;
+        info.raddbg_attached_marker_voff  = module_info->raddbg_is_attached_marker_voff;
+        info.raddbg_data                  = raddbg_data;
+      }
+      
+      //- rjf: insert info into cache
+      d_module_info_store(module_handle, &arena, &info);
+      
+      //- rjf: push module load
+      D_Event *out_evt1 = d_event_list_push(scratch.arena, &evts);
       out_evt1->kind       = D_EventKind_NewModule;
       out_evt1->msg_id     = msg->msg_id;
       out_evt1->entity     = module_handle;
@@ -3265,8 +3295,9 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt1->string     = module_path;
       out_evt1->tls_index  = event->module_info->tls_index;
       out_evt1->tls_offset = event->module_info->tls_offset;
+      
+      //- rjf: push initial debug info path set
       D_Event *out_evt2 = d_event_list_push(scratch.arena, &evts);
-      String8 initial_debug_info_path = d_initial_debug_info_path_from_module(scratch.arena, module_handle);
       U64 debug_info_timestamp = properties_from_file_path(initial_debug_info_path).modified;
       out_evt2->kind       = D_EventKind_ModuleDebugInfoPathChange;
       out_evt2->msg_id     = msg->msg_id;
@@ -3274,9 +3305,14 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt2->parent     = process_handle;
       out_evt2->timestamp  = debug_info_timestamp;
       out_evt2->string     = initial_debug_info_path;
+      
+      // rjf: open debug info
       DI_Key initial_dbgi_key = di_key_from_path_timestamp(initial_debug_info_path, debug_info_timestamp);
       di_open(initial_dbgi_key);
+      scratch_end(scratch2);
     }break;
+    
+    //- rjf: exit process
     case DMN_EventKind_ExitProcess:
     {
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
@@ -3286,6 +3322,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt->u64_code   = event->code;
       d_ctrl_state->process_counter -= 1;
     }break;
+    
+    //- rjf: exit thread
     case DMN_EventKind_ExitThread:
     {
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
@@ -3294,22 +3332,42 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt->entity     = d_handle_from_dmn(D_MachineID_Local, event->thread);
       out_evt->entity_id  = event->code;
     }break;
+    
+    //- rjf: unload module
     case DMN_EventKind_UnloadModule:
     ProfScope("unload module %.*s", str8_varg(event->string))
     {
-      D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
+      //- rjf: unpack module
       D_Handle module_handle = d_handle_from_dmn(D_MachineID_Local, event->module);
       D_Entity *module_ent = d_entity_from_handle(module_handle);
       D_Entity *process_ent = d_process_from_entity(module_ent);
       String8 module_path = event->string;
-      d_ctrl_thread__module_close(process_ent->handle, module_handle, module_ent->vaddr_range.min);
+      U64 base_vaddr = module_ent->vaddr_range.min;
+      U64 raddbg_attached_marker_voff = d_raddbg_attached_marker_voff_from_module(module_handle);
+      
+      //- rjf: evict module info from cache
+      d_module_info_evict(module_handle);
+      
+      //- rjf: write 0 at attachment marker, to signify detachment
+      if(raddbg_attached_marker_voff != 0)
+      {
+        U8 new_value = 0;
+        d_process_write_struct(process_ent->handle, base_vaddr + raddbg_attached_marker_voff, &new_value);
+      }
+      
+      //- rjf: push event
+      D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
       out_evt->kind       = D_EventKind_EndModule;
       out_evt->msg_id     = msg->msg_id;
       out_evt->entity     = module_handle;
       out_evt->string     = module_path;
+      
+      //- rjf: close debug info
       DI_Key dbgi_key = d_dbgi_key_from_module(module_ent);
       di_close(dbgi_key, 0);
     }break;
+    
+    //- rjf: debug string
     case DMN_EventKind_DebugString:
     {
       U64 num_strings = (event->string.size + d_ctrl_state->c2u_ring_max_string_size-1) / d_ctrl_state->c2u_ring_max_string_size;
@@ -3323,6 +3381,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
         out_evt->string     = str8_substr(event->string, r1u64(string_idx*d_ctrl_state->c2u_ring_max_string_size, (string_idx+1)*d_ctrl_state->c2u_ring_max_string_size));
       }
     }break;
+    
+    //- rjf: thread names
     case DMN_EventKind_SetThreadName:
     {
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
@@ -3333,6 +3393,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt->string     = event->string;
       out_evt->entity_id  = event->code;
     }break;
+    
+    //- rjf: thread color
     case DMN_EventKind_SetThreadColor:
     {
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
@@ -3343,6 +3405,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt->entity_id  = event->code;
       out_evt->rgba       = event->user_data;
     }break;
+    
+    //- rjf: vaddr range notes
     case DMN_EventKind_SetVAddrRangeNote:
     {
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
@@ -3352,6 +3416,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt->vaddr_rng  = r1u64(event->address, event->address + event->size);
       out_evt->string     = event->string;
     }break;
+    
+    //- rjf: programmatic breakpoint sets
     case DMN_EventKind_SetBreakpoint:
     {
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
@@ -3361,6 +3427,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt->vaddr_rng  = r1u64(event->address, event->address+event->size);
       out_evt->bp_flags   = d_breakpoint_flags_from_dmn_trap_flags(event->flags);
     }break;
+    
+    //- rjf: programmatic breakpoint unsets
     case DMN_EventKind_UnsetBreakpoint:
     {
       // TODO(rjf): this needs to be reflected in the resolved trap list too!!!!!!!!
@@ -3858,7 +3926,9 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
 {
   Temp scratch = scratch_begin(0, 0);
   
+  //////////////////////////////
   //- rjf: unpack path
+  //
   String8 path = msg->path;
   File file = file_open(AccessFlag_Read, path);
   FileProperties props = properties_from_file(file);
@@ -3866,7 +3936,9 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   void *base = file_map_view_open(map, AccessFlag_Read, r1u64(0, props.size));
   String8 data = str8(base, base ? props.size : 0);
   
+  //////////////////////////////
   //- rjf: try to parse file data as a dump file, extract abstracted (over format) dump info
+  //
   B32 stored = 0;
   D_EventList evts = {0};
   Arena *arena = 0;
@@ -3880,7 +3952,9 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   Arch process_arch = Arch_Null;
   OperatingSystem process_os = OperatingSystem_Null;
   {
+    ////////////////////////////
     //- rjf: try minidump parse -> construct events for entity creation
+    //
     {
       MDMP_Header header = {0};
       str8_deserial_read_struct(data, 0, &header);
@@ -3954,7 +4028,6 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
               }break;
               case MDMP_StreamKind_Memory64List:
               {
-                U64 memories64_count = 0;
                 U64 off = dir->location.foff;
                 off += str8_deserial_read_struct(data, off, &memories64_count);
                 off += str8_deserial_read_struct(data, off, &memories64_base_foff);
@@ -3992,10 +4065,21 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
           case MDMP_Arch_x64:{process_arch = Arch_x64;}break;
         }
         
+        // rjf: system info -> os
+        if(system_info != 0) switch(system_info->platform_id)
+        {
+          default:{}break;
+          case MDMP_PlatformID_Win32s:
+          case MDMP_PlatformID_Win32Windows:
+          case MDMP_PlatformID_Win32NT:
+          {
+            process_os = OperatingSystem_Windows;
+          }break;
+        }
+        
         // rjf: create process handle
         d_ctrl_state->ctrl_thread_dump_handle_id_gen += 1;
         process = d_dump_handle_make(D_MachineID_Local, d_ctrl_state->ctrl_thread_dump_handle_id_gen);
-        process_os = OperatingSystem_Windows; // NOTE(rjf): minidumps are always windows
         
         // rjf: gather threads
         dump_threads_count = threads_count;
@@ -4035,6 +4119,7 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
           FileProperties module_props = properties_from_file(module_file);
           FileMap module_map = file_map_open(AccessFlag_Read, module_file);
           void *module_base = file_map_view_open(module_map, AccessFlag_Read, r1u64(0, module_props.size));
+          String8 module_data = str8(module_base, module_props.size);
           
           // rjf: store
           d_ctrl_state->ctrl_thread_dump_handle_id_gen += 1;
@@ -4050,7 +4135,9 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
     }
   }
   
+  //////////////////////////////
   //- rjf: record process creation
+  //
   {
     D_Event *evt = d_event_list_push(scratch.arena, &evts);
     evt->kind      = D_EventKind_NewProc;
@@ -4061,7 +4148,9 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
     evt->string    = path;
   }
   
+  //////////////////////////////
   //- rjf: store the dump parse artifacts in the dump cache, otherwise release
+  //
   if(stored)
   {
     U64 hash = d_hash_from_handle(process);
@@ -4105,7 +4194,9 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
     file_close(file);
   }
   
+  //////////////////////////////
   //- rjf: record thread creation
+  //
   for EachIndex(idx, dump_threads_count)
   {
     D_Handle thread_handle = dump_threads[idx].thread_handle;
@@ -4120,24 +4211,84 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
     // TODO(rjf): evt->tls_root   = ; (use thread->thread_context)
   }
   
+  //////////////////////////////
   //- rjf: record module loading
+  //
   for EachIndex(idx, dump_modules_count)
   {
-    // rjf: open module
+    //- rjf: open module
     D_Handle module_handle = dump_modules[idx].module_handle;
     Rng1U64 vaddr_range = dump_modules[idx].vaddr_range;
+    
 #if 0
-    // TODO(rjf): I don't think we can use this demon module info path here
+    //- TODO(rjf): I don't think we can use this demon module info path here
     DMN_ModuleInfo module_info = {0};
     d_ctrl_thread__module_open(process, module_handle, vaddr_range.min, dump_modules[idx].path, r1u64(0, 0), 0);
 #endif
-    // rjf: open debug info
+    
+    //- rjf: analyze module file, produce module info
+    Arena *module_info_arena = arena_alloc();
+    D_ModuleInfo module_info = {0};
+    {
+      String8 module_data = str8((U8 *)dump_modules[idx].base, dump_modules[idx].props.size);
+      
+      //- rjf: PEs
+      PE_BinInfo pe = pe_bin_info_from_data(scratch.arena, module_data);
+      if(pe.arch != Arch_Null)
+      {
+        //- rjf: fill basics
+        module_info.entry_point_voff = pe.entry_point;
+        
+        //- rjf: fill unwinder info
+        switch(pe.arch)
+        {
+          default:{}break;
+          case Arch_x64:
+          if(PE_DataDirectoryIndex_EXCEPTIONS < pe.data_dir_count)
+          {
+            Rng1U64 pdatas_foff_range = pe.data_dir_franges[PE_DataDirectoryIndex_EXCEPTIONS];
+            U64 pdatas_count_supposedly = dim_1u64(pdatas_foff_range) / sizeof(PE_IntelPdata);
+            U64 pdatas_count_possible = pdatas_foff_range.min < module_data.size ? (module_data.size - pdatas_foff_range.min) / sizeof(PE_IntelPdata) : 0;
+            U64 pdatas_count = Min(pdatas_count_possible, pdatas_count_supposedly);
+            PE_X64_UWND_ModuleUnwindInfo *module_unwind_info = push_array(module_info_arena, PE_X64_UWND_ModuleUnwindInfo, 1);
+            module_unwind_info->pdatas_count = pdatas_count;
+            module_unwind_info->pdatas       = (PE_IntelPdata *)(module_data.str + pdatas_foff_range.min);
+            module_info.unwinder     = UWND_Unwinder_PEx64;
+            module_info.unwind_info  = module_unwind_info;
+          }break;
+        }
+        
+        //- rjf: fill debug path info
+        {
+          String8 raw_debug_dir = str8_substr(module_data, pe.data_dir_franges[PE_DataDirectoryIndex_DEBUG]);
+          PE_DebugInfoList debug_dir = pe_debug_info_list_from_raw_debug_dir(scratch.arena, module_data, raw_debug_dir);
+          for(PE_DebugInfoNode *n = debug_dir.first; n != 0; n = n->next)
+          {
+            if(n->v.path.size != 0)
+            {
+              module_info.local_debug_info_path = str8_copy(module_info_arena, n->v.path);
+              module_info.dbg_name = str8_skip_last_slash(module_info.local_debug_info_path);
+              module_info.dbg_guid = n->v.guid;
+              module_info.dbg_age  = n->v.age;
+              break;
+            }
+          }
+        }
+        
+        //- TODO(rjf): still missing: raddbg data (rare but in theory possible)
+      }
+    }
+    
+    //- rjf: store module info
+    d_module_info_store(module_handle, &module_info_arena, &module_info);
+    
+    //- rjf: open debug info
     String8 initial_debug_info_path = d_initial_debug_info_path_from_module(scratch.arena, module_handle);
     U64 debug_info_timestamp = properties_from_file_path(initial_debug_info_path).modified;
     DI_Key initial_dbgi_key = di_key_from_path_timestamp(initial_debug_info_path, debug_info_timestamp);
     di_open(initial_dbgi_key);
     
-    // rjf: push module load event
+    //- rjf: push module load event
     {
       D_Event *evt = d_event_list_push(scratch.arena, &evts);
       evt->kind       = D_EventKind_NewModule;
@@ -4151,7 +4302,7 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
       // TODO(rjf): evt->tls_root   = ; (use thread->thread_context)
     }
     
-    // rjf: push debug info initial path set event
+    //- rjf: push debug info initial path set event
     {
       D_Event *evt = d_event_list_push(scratch.arena, &evts);
       evt->kind       = D_EventKind_ModuleDebugInfoPathChange;

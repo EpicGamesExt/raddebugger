@@ -54,22 +54,22 @@ enum
 };
 
 #define PE_ImageFileCharacteristic_XList \
-  X(RELOCS_STRIPPED        , 0 , "Relocations Stripped"       ) \
-  X(EXECUTABLE_IMAGE       , 1 , "Executable"                 ) \
-  X(LINE_NUMS_STRIPPED     , 2 , "Line Numbers Stripped"      ) \
-  X(LOCAL_SYMS_STRIPPED    , 3 , "Local Symbols Stripped"     ) \
-  X(AGGRESSIVE_WS_TRIM     , 4 , "Aggressive Working Set Trim") \
-  X(LARGE_ADDRESS_AWARE    , 5 , "Large Address Aware"        ) \
-  X(RESERVED               , 6 , "Reserved"                   ) \
-  X(BYTES_REVERSED_LO      , 7 , "Bytes Reversed Low"         ) \
-  X(32BIT_MACHINE          , 8 , "32-Bit Machine"             ) \
-  X(DEBUG_STRIPPED         , 9 , "Debug Information Stripped" ) \
-  X(REMOVABLE_RUN_FROM_SWAP, 10, "Removable: Run from Swap"   ) \
-  X(NET_RUN_FROM_SWAP      , 11, "Network: Run from Swap"     ) \
-  X(SYSTEM                 , 12, "System File"                ) \
-  X(DLL                    , 13, "DLL"                        ) \
-  X(UP_SYSTEM_ONLY         , 14, "Uniprocessor System Only"   ) \
-  X(BYTES_REVERSED_HI      , 15, "Bytes Reversed High"        )
+X(RELOCS_STRIPPED        , 0 , "Relocations Stripped"       ) \
+X(EXECUTABLE_IMAGE       , 1 , "Executable"                 ) \
+X(LINE_NUMS_STRIPPED     , 2 , "Line Numbers Stripped"      ) \
+X(LOCAL_SYMS_STRIPPED    , 3 , "Local Symbols Stripped"     ) \
+X(AGGRESSIVE_WS_TRIM     , 4 , "Aggressive Working Set Trim") \
+X(LARGE_ADDRESS_AWARE    , 5 , "Large Address Aware"        ) \
+X(RESERVED               , 6 , "Reserved"                   ) \
+X(BYTES_REVERSED_LO      , 7 , "Bytes Reversed Low"         ) \
+X(32BIT_MACHINE          , 8 , "32-Bit Machine"             ) \
+X(DEBUG_STRIPPED         , 9 , "Debug Information Stripped" ) \
+X(REMOVABLE_RUN_FROM_SWAP, 10, "Removable: Run from Swap"   ) \
+X(NET_RUN_FROM_SWAP      , 11, "Network: Run from Swap"     ) \
+X(SYSTEM                 , 12, "System File"                ) \
+X(DLL                    , 13, "DLL"                        ) \
+X(UP_SYSTEM_ONLY         , 14, "Uniprocessor System Only"   ) \
+X(BYTES_REVERSED_HI      , 15, "Bytes Reversed High"        )
 
 typedef U16 PE_ImageFileCharacteristics;
 enum
@@ -1006,28 +1006,29 @@ struct PE_HandlerScope
 typedef struct PE_BinInfo PE_BinInfo;
 struct PE_BinInfo
 {
-  Arch                 arch;
-  U64                  image_base;
-  U64                  entry_point;
-  B32                  is_pe32;
-  PE_WindowsSubsystem  subsystem;
-  U32                 *check_sum;
-  U64                  virt_section_align;
-  U64                  file_section_align;
-  U64                  section_count;
-  U64                  symbol_count;
-  U64                  optional_header_off;
-  Rng1U64              section_table_range;
-  Rng1U64              symbol_table_range;
-  Rng1U64              string_table_range;
-  Rng1U64              data_dir_range;
-  Rng1U64             *data_dir_franges;
-  Rng1U64             *data_dir_vranges;
-  U32                  data_dir_count;
-  PE_TLSHeader64       tls_header;
+  Arch arch;
+  U64 image_base;
+  U64 entry_point;
+  B32 is_pe32;
+  PE_WindowsSubsystem subsystem;
+  U32 *check_sum;
+  U64 virt_section_align;
+  U64 file_section_align;
+  U64 section_count;
+  U64 symbol_count;
+  U64 optional_header_off;
+  Rng1U64 section_table_range;
+  Rng1U64 symbol_table_range;
+  Rng1U64 string_table_range;
+  Rng1U64 data_dir_range;
+  Rng1U64 *data_dir_franges;
+  Rng1U64 *data_dir_vranges;
+  U32 data_dir_count;
+  PE_TLSHeader64 tls_header;
 };
 
-typedef struct PE_DebugInfo
+typedef struct PE_DebugInfo PE_DebugInfo;
+struct PE_DebugInfo
 {
   PE_DebugDirectory header;
   U32 cv_magic;
@@ -1035,21 +1036,24 @@ typedef struct PE_DebugInfo
   PE_CvHeaderPDB70 cv_pdb70_header;
   PE_CvHeaderRDI cv_rdi_header;
   String8 path;
-}
-PE_DebugInfo;
+  Guid guid;
+  U32 age;
+};
 
-typedef struct PE_DebugInfoNode
+typedef struct PE_DebugInfoNode PE_DebugInfoNode;
+struct PE_DebugInfoNode
 {
-  struct PE_DebugInfoNode *next;
-  PE_DebugInfo             v;
-} PE_DebugInfoNode;
+  PE_DebugInfoNode *next;
+  PE_DebugInfo v;
+};
 
-typedef struct PE_DebugInfoList
+typedef struct PE_DebugInfoList PE_DebugInfoList;
+struct PE_DebugInfoList
 {
   PE_DebugInfoNode *first;
   PE_DebugInfoNode *last;
-  U64               count;
-} PE_DebugInfoList;
+  U64 count;
+};
 
 ////////////////////////////////
 //~ rjf: Basic Enum Functions
@@ -1076,7 +1080,7 @@ internal String8 pe_string_from_dll_characteristics(Arena *arena, PE_DllCharacte
 internal B32        pe_check_magic(String8 data);
 internal PE_BinInfo pe_bin_info_from_data(Arena *arena, String8 data);
 
-internal PE_DataDirectory *         pe_data_directory_from_idx(String8 file_data, PE_BinInfo pe, PE_DataDirectoryIndex dir_idx);
+internal PE_DataDirectory *         pe_data_directory_from_idx(String8 file_data, PE_BinInfo *pe, PE_DataDirectoryIndex dir_idx);
 internal PE_DebugInfoList           pe_parse_debug_directory(Arena *arena, String8 raw_image, String8 raw_debug_dir);
 internal PE_DebugInfoList           pe_debug_info_list_from_raw_debug_dir(Arena *arena, String8 raw_image, String8 raw_debug_dir);
 internal PE_ParsedStaticImportTable pe_static_imports_from_data(Arena *arena, B32 is_pe32, U64 section_count, COFF_SectionHeader *sections, String8 raw_data, Rng1U64 dir_file_range);

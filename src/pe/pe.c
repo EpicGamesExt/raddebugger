@@ -361,7 +361,7 @@ pe_string_from_file_characteristics(Arena *arena, PE_ImageFileCharacteristics fi
 #define X(ID, VAL, DISPLAY_STRING) case (1 << VAL): str8_list_push(scratch.arena, &result, str8_lit(DISPLAY_STRING)); break;
       PE_ImageFileCharacteristic_XList
 #undef X
-    default: str8_list_pushf(scratch.arena, &result, "%llu", i);
+      default: str8_list_pushf(scratch.arena, &result, "%llu", i);
     }
   }
   String8 string = str8_list_join(arena, &result, &(StringJoin){.sep=str8_lit(", ")});
@@ -649,11 +649,12 @@ pe_bin_info_from_data(Arena *arena, String8 data)
 }
 
 internal PE_DataDirectory *
-pe_data_directory_from_idx(String8 file_data, PE_BinInfo pe, PE_DataDirectoryIndex dir_idx)
+pe_data_directory_from_idx(String8 file_data, PE_BinInfo *pe, PE_DataDirectoryIndex dir_idx)
 {
   PE_DataDirectory *result = 0;
-  if (dir_idx < pe.data_dir_count) {
-    result = str8_deserial_get_raw_ptr(file_data, pe.data_dir_range.min + sizeof(*result)*dir_idx, sizeof(*result));
+  if(dir_idx < pe->data_dir_count)
+  {
+    result = str8_deserial_get_raw_ptr(file_data, pe->data_dir_range.min + sizeof(*result)*dir_idx, sizeof(*result));
   }
   return result;
 }
@@ -688,6 +689,7 @@ pe_debug_info_list_from_raw_debug_dir(Arena *arena, String8 raw_image, String8 r
               str8_deserial_read_cstr(raw_image, entry->foff+sizeof(cv), &path);
               n->v.cv_pdb20_header = cv;
               n->v.path = path;
+              n->v.age = cv.age;
             }
           }break;
           case PE_CODEVIEW_PDB70_MAGIC:
@@ -700,6 +702,8 @@ pe_debug_info_list_from_raw_debug_dir(Arena *arena, String8 raw_image, String8 r
               str8_deserial_read_cstr(raw_image, entry->foff+sizeof(cv), &path);
               n->v.cv_pdb70_header = cv;
               n->v.path = path;
+              n->v.guid = cv.guid;
+              n->v.age = cv.age;
             }
           }break;
           case PE_CODEVIEW_RDI_MAGIC:
@@ -712,6 +716,7 @@ pe_debug_info_list_from_raw_debug_dir(Arena *arena, String8 raw_image, String8 r
               str8_deserial_read_cstr(raw_image, entry->foff+sizeof(cv), &path);
               n->v.cv_rdi_header = cv;
               n->v.path = path;
+              n->v.guid = cv.guid;
             }
           }break;
           default:{}break;

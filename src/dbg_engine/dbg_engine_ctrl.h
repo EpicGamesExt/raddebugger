@@ -549,9 +549,14 @@ internal U64 d_cached_sp_from_thread(D_Handle handle);
 ////////////////////////////////
 //~ rjf: Module Image Info Functions
 
+//- rjf: module info stores / evictions
+internal void d_module_info_store(D_Handle module, Arena **stored_arena, D_ModuleInfo *info);
+internal void d_module_info_evict(D_Handle module);
+
 //- rjf: cache lookups
 internal D_ModuleInfo *d_info_from_module(Access *access, D_Handle module);
 internal U64 d_entry_point_voff_from_module(D_Handle module_handle);
+internal U64 d_raddbg_attached_marker_voff_from_module(D_Handle module_handle);
 internal String8 d_initial_debug_info_path_from_module(Arena *arena, D_Handle module_handle);
 
 ////////////////////////////////
@@ -599,10 +604,6 @@ internal void d_ctrl_thread__entry_point(void *p);
 internal void d_ctrl_thread__append_resolved_module_user_bp_traps(Arena *arena, D_EvalScope *eval_scope, D_Handle process, D_Handle module, D_BreakpointList *user_bps, DMN_TrapChunkList *traps_out);
 internal void d_ctrl_thread__append_resolved_process_user_bp_traps(Arena *arena, D_EvalScope *eval_scope, D_Handle process, D_BreakpointList *user_bps, DMN_TrapChunkList *traps_out);
 internal void d_ctrl_thread__append_program_defined_bp_traps(Arena *arena, D_Entity *bp, DMN_TrapChunkList *traps_out);
-
-//- rjf: module lifetime open/close work
-internal void d_ctrl_thread__module_open(D_Handle process, D_Handle module, U64 base_vaddr, DMN_ModuleInfo *module_info);
-internal void d_ctrl_thread__module_close(D_Handle process, D_Handle module, U64 base_vaddr);
 
 //- rjf: dump process closing work
 internal void d_ctrl_thread__close_dump_process(D_MsgID msg_id, D_Handle process);

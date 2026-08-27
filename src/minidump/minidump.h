@@ -210,6 +210,25 @@ typedef enum MDMP_ArchEnum
 }
 MDMP_ArchEnum;
 
+typedef U32 MDMP_PlatformID;
+typedef enum MDMP_PlatformIDEnum
+{
+  MDMP_PlatformID_Win32s        = 0x0, // Windows 3.1
+  MDMP_PlatformID_Win32Windows  = 0x1, // Windows 95, 98, Me
+  MDMP_PlatformID_Win32NT       = 0x2, // Windows NT, 2000, XP, & later
+  //- rjf: extensions
+  MDMP_PlatformID_Unix          = 0x8000,
+  MDMP_PlatformID_MacOSX        = 0x8101,
+  MDMP_PlatformID_IOS           = 0x8102,
+  MDMP_PlatformID_Linux         = 0x8201,
+  MDMP_PlatformID_Solaris       = 0x8202,
+  MDMP_PlatformID_Android       = 0x8203,
+  MDMP_PlatformID_PS3           = 0x8204,
+  MDMP_PlatformID_NaCl          = 0x8205,
+  MDMP_PlatformID_Fuchsia       = 0x8206,
+}
+MDMP_PlatformIDEnum;
+
 typedef struct MDMP_SystemInfo MDMP_SystemInfo;
 struct MDMP_SystemInfo
 {
@@ -221,7 +240,7 @@ struct MDMP_SystemInfo
   U32 major_version;
   U32 minor_version;
   U32 build_number;
-  U32 platform_id;
+  MDMP_PlatformID platform_id;
   U32 csd_version_rva;
   U16 suite_mask;
   U16 padding;
