@@ -7442,6 +7442,7 @@ rd_window_frame(void)
                   {
                     rd_cmd_kind_info_table[RD_CmdKind_Open].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenSourceFileFromDebugInfo].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_OpenCrashDump].string,
                     {0},//-
                     rd_cmd_kind_info_table[RD_CmdKind_NewProject].string,
                     rd_cmd_kind_info_table[RD_CmdKind_OpenProject].string,
@@ -7460,6 +7461,7 @@ rd_window_frame(void)
                   {
                     'o',
                     'i',
+                    'd',
                     0,//-
                     'j',
                     'p',

@@ -13,16 +13,42 @@ make_ring(Arena *arena, U64 size)
   return ring;
 }
 
-internal B32
-ring_try_write(Ring *ring, U64 size, void *ptr)
+internal void *
+ring_try_push(Ring *ring, U64 size)
 {
   U64 bytes_unconsumed = (ring->write_pos - ring->read_pos);
   U64 bytes_available = ring->size - bytes_unconsumed;
-  B32 result = 0;
+  void *base = 0;
   if(bytes_available >= size)
   {
+    base = ring->base + ring->write_pos%ring->size;
+    ring->write_pos += size;
+  }
+  return base;
+}
+
+internal void *
+ring_try_pop(Ring *ring, U64 size)
+{
+  U64 bytes_unconsumed = (ring->write_pos - ring->read_pos);
+  void *base = 0;
+  if(bytes_unconsumed >= size)
+  {
+    base = ring->base + ring->read_pos%ring->size;
+    ring->read_pos += size;
+  }
+  return base;
+}
+
+internal B32
+ring_try_write(Ring *ring, U64 size, void *ptr)
+{
+  B32 result = 0;
+  void *dst = ring_try_push(ring, size);
+  if(dst)
+  {
     result = 1;
-    ring->write_pos += wrapped_write(ring->base, ring->size, ring->write_pos, ptr, size);
+    MemoryCopy(dst, ptr, size);
   }
   return result;
 }
@@ -30,12 +56,12 @@ ring_try_write(Ring *ring, U64 size, void *ptr)
 internal B32
 ring_try_read(Ring *ring, U64 size, void *ptr)
 {
-  U64 bytes_unconsumed = (ring->write_pos - ring->read_pos);
   B32 result = 0;
-  if(bytes_unconsumed >= size)
+  void *src = ring_try_pop(ring, size);
+  if(src)
   {
     result = 1;
-    ring->read_pos += wrapped_read(ring->base, ring->size, ring->read_pos, ptr, size);
+    MemoryCopy(ptr, src, size);
   }
   return result;
 }
@@ -76,16 +102,27 @@ internal void
 guarded_ring_close(RingGuard *guard)
 {
   mutex_drop(guard->r->mutex);
+  cond_var_broadcast(guard->r->cv);
+}
+
+internal void *
+guarded_ring_try_push(RingGuard *guard, U64 size)
+{
+  void *result = ring_try_push(guard->r->ring, size);
+  return result;
+}
+
+internal void *
+guarded_ring_try_pop(RingGuard *guard, U64 size)
+{
+  void *result = ring_try_pop(guard->r->ring, size);
+  return result;
 }
 
 internal B32
 guarded_ring_try_write(RingGuard *guard, U64 size, void *ptr)
 {
   B32 result = ring_try_write(guard->r->ring, size, ptr);
-  if(result)
-  {
-    cond_var_broadcast(guard->r->cv);
-  }
   return result;
 }
 
@@ -93,9 +130,43 @@ internal B32
 guarded_ring_try_read(RingGuard *guard, U64 size, void *ptr)
 {
   B32 result = ring_try_read(guard->r->ring, size, ptr);
-  if(result)
+  return result;
+}
+
+internal void *
+guarded_ring_push_or_wait(RingGuard *guard, U64 size, U64 endt_us)
+{
+  void *result = 0;
+  for(;!result;)
   {
-    cond_var_broadcast(guard->r->cv);
+    result = guarded_ring_try_push(guard, size);
+    if(now_time_us() >= endt_us)
+    {
+      break;
+    }
+    if(!result)
+    {
+      cond_var_wait(guard->r->cv, guard->r->mutex, endt_us);
+    }
+  }
+  return result;
+}
+
+internal void *
+guarded_ring_pop_or_wait(RingGuard *guard, U64 size, U64 endt_us)
+{
+  void *result = 0;
+  for(;!result;)
+  {
+    result = guarded_ring_try_pop(guard, size);
+    if(now_time_us() >= endt_us)
+    {
+      break;
+    }
+    if(!result)
+    {
+      cond_var_wait(guard->r->cv, guard->r->mutex, endt_us);
+    }
   }
   return result;
 }
@@ -103,37 +174,23 @@ guarded_ring_try_read(RingGuard *guard, U64 size, void *ptr)
 internal B32
 guarded_ring_write_or_wait(RingGuard *guard, U64 size, void *ptr, U64 endt_us)
 {
-  B32 write_good = 0;
-  for(;!write_good;)
+  void *dst = guarded_ring_push_or_wait(guard, size, endt_us);
+  B32 result = !!dst;
+  if(dst)
   {
-    write_good = guarded_ring_try_write(guard, size, ptr);
-    if(now_time_us() >= endt_us)
-    {
-      break;
-    }
-    if(!write_good)
-    {
-      cond_var_wait(guard->r->cv, guard->r->mutex, endt_us);
-    }
+    MemoryCopy(dst, ptr, size);
   }
-  return write_good;
+  return result;
 }
 
 internal B32
 guarded_ring_read_or_wait(RingGuard *guard, U64 size, void *ptr, U64 endt_us)
 {
-  B32 read_good = 0;
-  for(;!read_good;)
+  void *src = guarded_ring_pop_or_wait(guard, size, endt_us);
+  B32 result = !!src;
+  if(src)
   {
-    read_good = guarded_ring_try_read(guard, size, ptr);
-    if(now_time_us() >= endt_us)
-    {
-      break;
-    }
-    if(!read_good)
-    {
-      cond_var_wait(guard->r->cv, guard->r->mutex, endt_us);
-    }
+    MemoryCopy(ptr, src, size);
   }
-  return read_good;
+  return result;
 }

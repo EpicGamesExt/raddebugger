@@ -58,6 +58,9 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
   }
   
   //- rjf: initialize all included layers
+#if defined(SOCKET_H) && !defined(SOCKET_INIT_MANUAL)
+  sock_init();
+#endif
 #if defined(HTTP_H) && !defined(HTTP_INIT_MANUAL)
   http_init();
 #endif
@@ -221,6 +224,9 @@ async_thread_entry_point(void *params)
 #endif
 #if defined(FILE_STREAM_H)
       fs_async_tick();
+#endif
+#if defined(SOCKET_H)
+      sock_async_tick();
 #endif
 #if defined(HTTP_H)
       http_async_tick();
