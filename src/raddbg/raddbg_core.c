@@ -6487,6 +6487,19 @@ rd_window_frame(void)
           }
         }
         
+        // rjf: option to load dump files
+        if(task->dmp)
+        {
+          if(ui_clicked(rd_icon_buttonf(RD_IconKind_Module, 0, "Load as debuggee dump")))
+          {
+            for(String8Node *n = task->paths.first; n != 0; n = n->next)
+            {
+              rd_cmd(RD_CmdKind_OpenCrashDump, .file_path = n->string);
+            }
+            done = 1;
+          }
+        }
+        
         // rjf: option to just open & view the file contents
         if(ui_clicked(rd_icon_buttonf(RD_IconKind_FileOutline, 0, "View file%s contents", (task->paths.node_count > 1) ? "s'" : "")))
         {
@@ -9296,6 +9309,7 @@ rd_window_frame(void)
                 ws->drop_completion_panel = panel->cfg->id;
                 String8List exe_paths = {0};
                 String8List dbg_paths = {0};
+                String8List dmp_paths = {0};
                 for(String8Node *n = evt->paths.first; n != 0; n = n->next)
                 {
                   Temp scratch = scratch_begin(0, 0);
@@ -9309,6 +9323,10 @@ rd_window_frame(void)
                           str8_match(ext, str8_lit("rdi"), StringMatchFlag_CaseInsensitive))
                   {
                     str8_list_push(ws->drop_completion_arena, &dbg_paths, str8_copy(ws->drop_completion_arena, path));
+                  }
+                  else if(str8_match(ext, str8_lit("dmp"), StringMatchFlag_CaseInsensitive))
+                  {
+                    str8_list_push(ws->drop_completion_arena, &dmp_paths, str8_copy(ws->drop_completion_arena, path));
                   }
                   else
                   {
@@ -9329,6 +9347,13 @@ rd_window_frame(void)
                   SLLStackPush(ws->top_drop_completion_task, t);
                   t->exe = 1;
                   t->paths = exe_paths;
+                }
+                if(dmp_paths.node_count != 0)
+                {
+                  RD_DropCompletionTask *t = push_array(ws->drop_completion_arena, RD_DropCompletionTask, 1);
+                  SLLStackPush(ws->top_drop_completion_task, t);
+                  t->dmp = 1;
+                  t->paths = dmp_paths;
                 }
                 if(ws->top_drop_completion_task != 0)
                 {

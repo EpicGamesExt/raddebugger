@@ -264,6 +264,7 @@ struct RD_DropCompletionTask
   B32 exe;
   B32 dbg;
   B32 cfg;
+  B32 dmp;
   String8List paths;
 };
 
