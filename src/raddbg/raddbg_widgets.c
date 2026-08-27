@@ -618,21 +618,41 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, D_Entity *entity, B32 include_extr
   if(entity->kind == D_EntityKind_Module && include_extras)
   {
     Access *access = access_open();
-    DI_Key dbgi_key = d_dbgi_key_from_module(entity);
+    D_Entity *debug_info_path = d_entity_child_from_kind(entity, D_EntityKind_DebugInfoPath);
+    DI_Key dbgi_key = d_dbgi_key_from_debug_info_path(debug_info_path);
     RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
     if(rdi == &di_rdi_parsed_nil_waiting)
     {
-      dr_fstrs_push_new(arena, &result, &params, s(" "));
-      dr_fstrs_push_new(arena, &result, &params, s("(Loading debug info)"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .size = extras_size, .color = secondary_color);
+      UI_TagF("pop")
+      {
+        dr_fstrs_push_new(arena, &result, &params, s(" "));
+        dr_fstrs_push_new(arena, &result, &params, s("Loading debug info"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .size = extras_size, .color = secondary_color);
+        dr_fstrs_push_new(arena, &result, &params, s(" "));
+        dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_CircleFilled], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .size = extras_size, .color = ui_color_from_name(s("background")));
+        dr_fstrs_push_new(arena, &result, &params, s(" "), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main));
+      }
     }
-    else if(rdi == &rdi_parsed_nil)
+    else if(rdi->raw_data_size == 0)
     {
-      dr_fstrs_push_new(arena, &result, &params, s(" "));
-      dr_fstrs_push_new(arena, &result, &params, s("(Debug info not loaded)"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .size = extras_size, .color = secondary_color);
+      UI_TagF("bad_pop")
+      {
+        dr_fstrs_push_new(arena, &result, &params, s(" "));
+        dr_fstrs_push_new(arena, &result, &params, s("Debug info not found"), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .size = extras_size, .color = secondary_color);
+        dr_fstrs_push_new(arena, &result, &params, s(" "));
+        dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_X], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .size = extras_size, .color = ui_color_from_name(s("background")));
+        dr_fstrs_push_new(arena, &result, &params, s(" "), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main));
+      }
     }
     else
     {
-      
+      UI_TagF("good_pop")
+      {
+        dr_fstrs_push_new(arena, &result, &params, s(" "));
+        dr_fstrs_push_new(arena, &result, &params, str8_skip_last_slash(debug_info_path->string), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main), .size = extras_size, .color = secondary_color);
+        dr_fstrs_push_new(arena, &result, &params, s(" "));
+        dr_fstrs_push_new(arena, &result, &params, rd_icon_kind_text_table[RD_IconKind_Check], .font = rd_font_from_slot(RD_FontSlot_Icons), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Icons), .size = extras_size, .color = ui_color_from_name(s("background")));
+        dr_fstrs_push_new(arena, &result, &params, s(" "), .font = rd_font_from_slot(RD_FontSlot_Main), .raster_flags = rd_raster_flags_from_slot(RD_FontSlot_Main));
+      }
     }
     access_close(access);
   }
