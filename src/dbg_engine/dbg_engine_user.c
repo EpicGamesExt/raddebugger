@@ -1835,7 +1835,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           // rjf: no targets -> error
           if(targets_to_launch->count == 0)
           {
-            log_user_error(str8_lit("No active targets exist; cannot launch. You must select a target first."));
+            log_user_error(s("No active targets exist; cannot launch. You must select a target first."));
           }
         }break;
         case D_CmdKind_Kill:
@@ -1843,7 +1843,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           D_Entity *process = d_entity_from_handle(params->process);
           if(process == &d_entity_nil)
           {
-            log_user_error(str8_lit("Cannot kill; no process was specified."));
+            log_user_error(s("Cannot kill; no process was specified."));
           }
           else
           {
@@ -1868,7 +1868,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           D_Entity *process = d_entity_from_handle(params->process);
           if(process == &d_entity_nil)
           {
-            log_user_error(str8_lit("Cannot detach; no process specified."));
+            log_user_error(s("Cannot detach; no process specified."));
           }
           else
           {
@@ -1882,19 +1882,28 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case D_CmdKind_Continue:
         {
           B32 good_to_run = 0;
+          B32 any_non_dump_threads = 0;
           D_EntityArray threads = d_entity_array_from_kind(D_EntityKind_Thread);
           if(threads.count > 0)
           {
             for EachIndex(idx, threads.count)
             {
               D_Entity *thread = threads.v[idx];
+              if(threads.v[idx]->handle.controller_kind != D_ControllerKind_Dump)
+              {
+                any_non_dump_threads = 1;
+              }
               if(!thread->is_frozen)
               {
                 good_to_run = 1;
                 break;
               }
             }
-            if(good_to_run)
+            if(!any_non_dump_threads)
+            {
+              log_user_error(s("Cannot run with only dump file threads."));
+            }
+            else if(good_to_run)
             {
               need_run = 1;
               run_kind = D_RunKind_Run;
@@ -1902,7 +1911,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             }
             else
             {
-              log_user_error(str8_lit("Cannot run with all threads frozen."));
+              log_user_error(s("Cannot run with all threads frozen."));
             }
           }
         }break;
@@ -1916,18 +1925,22 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           D_Entity *thread = d_entity_from_handle(params->thread);
           if(thread == &d_entity_nil)
           {
-            log_user_error(str8_lit("Must have a selected thread to step."));
+            log_user_error(s("Must have a selected thread to step."));
+          }
+          else if(thread->handle.controller_kind == D_ControllerKind_Dump)
+          {
+            log_user_error(s("Cannot step a thread from a dump file."));
           }
           else if(d_ctrl_targets_running())
           {
             if(d_ctrl_last_run_kind() == D_RunKind_Run)
             {
-              log_user_error(str8_lit("Must halt before stepping."));
+              log_user_error(s("Must halt before stepping."));
             }
           }
           else if(thread->is_frozen)
           {
-            log_user_error(str8_lit("Must thaw selected thread before stepping."));
+            log_user_error(s("Must thaw selected thread before stepping."));
           }
           else
           {
@@ -1967,7 +1980,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
             }
             else if(!good_trap_net)
             {
-              log_user_error(str8_lit("Could not successfully step."));
+              log_user_error(s("Could not successfully step."));
             }
           }
         }break;
@@ -1988,12 +2001,19 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case D_CmdKind_SetThreadIP:
         {
           D_Entity *thread = d_entity_from_handle(params->thread);
-          ARCH_Info *arch_info = arch_info_from_arch(thread->arch);
-          U64 vaddr = params->vaddr;
-          void *block = d_cached_reg_block_from_thread(scratch.arena, thread->handle);
-          arch_reg_block_write_ip(arch_info, block, vaddr);
-          B32 result = d_thread_write_reg_block(thread->handle, block);
-          (void)result;
+          if(thread->handle.controller_kind == D_ControllerKind_Dump)
+          {
+            log_user_error(s("Cannot write register values to dump file threads."));
+          }
+          else
+          {
+            ARCH_Info *arch_info = arch_info_from_arch(thread->arch);
+            U64 vaddr = params->vaddr;
+            void *block = d_cached_reg_block_from_thread(scratch.arena, thread->handle);
+            arch_reg_block_write_ip(arch_info, block, vaddr);
+            B32 result = d_thread_write_reg_block(thread->handle, block);
+            (void)result;
+          }
         }break;
         
         //- rjf: high-level composite target control operations

@@ -218,6 +218,7 @@ struct D_DumpThread
   D_Handle thread_handle;
   U32 id;
   U64 context_foff;
+  String8 name;
 };
 
 typedef struct D_DumpModule D_DumpModule;

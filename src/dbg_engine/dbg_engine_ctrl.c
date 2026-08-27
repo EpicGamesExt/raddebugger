@@ -3951,6 +3951,9 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   D_Handle process = {0};
   Arch process_arch = Arch_Null;
   OperatingSystem process_os = OperatingSystem_Null;
+  U64 exception_vaddr = 0;
+  U32 exception_thread_id = 0;
+  U32 exception_code = 0;
   {
     ////////////////////////////
     //- rjf: try minidump parse -> construct events for entity creation
@@ -3987,6 +3990,8 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         MDMP_MemoryDescriptor64 *memories64 = 0;
         U64 memories64_count = 0;
         U64 memories64_base_foff = 0;
+        MDMP_ThreadName *thread_names = 0;
+        U64 thread_names_count = 0;
         {
           for EachIndex(idx, directories_count)
           {
@@ -4007,6 +4012,15 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
                 U64 threads_count_max = (data.size - off) / sizeof(MDMP_Thread);
                 threads = (MDMP_Thread *)(data.str + off);
                 threads_count = Min(threads_count_32, threads_count_max);
+              }break;
+              case MDMP_StreamKind_ThreadNames:
+              {
+                U32 thread_names_count_32 = 0;
+                U64 off = dir->location.foff;
+                off += str8_deserial_read_struct(data, off, &thread_names_count_32);
+                U64 thread_names_count_max = (data.size - off) / sizeof(MDMP_ThreadName);
+                thread_names = (MDMP_ThreadName *)(data.str + off);
+                thread_names_count = Min(thread_names_count_32, thread_names_count_max);
               }break;
               case MDMP_StreamKind_ModuleList:
               {
@@ -4034,6 +4048,14 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
                 U64 memories64_count_max = (data.size - off) / sizeof(MDMP_MemoryDescriptor64);
                 memories64 = (MDMP_MemoryDescriptor64 *)(data.str + off);
                 memories64_count = Min(memories64_count, memories64_count_max);
+              }break;
+              case MDMP_StreamKind_Exception:
+              {
+                MDMP_ExceptionStream stream = {0};
+                str8_deserial_read_struct(data, dir->location.foff, &stream);
+                exception_vaddr = stream.exception.exception_addr;
+                exception_thread_id = stream.thread_id;
+                exception_code = stream.exception.exception_code;
               }break;
             }
           }
@@ -4084,6 +4106,14 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         // rjf: gather threads
         dump_threads_count = threads_count;
         dump_threads = push_array(arena, D_DumpThread, dump_threads_count);
+        typedef struct DumpThreadNode DumpThreadNode;
+        struct DumpThreadNode
+        {
+          DumpThreadNode *next;
+          D_DumpThread *v;
+        };
+        U64 dump_thread_from_id_slots_count = threads_count;
+        DumpThreadNode **dump_thread_from_id_slots = push_array(scratch.arena, DumpThreadNode *, dump_thread_from_id_slots_count);
         for EachIndex(idx, threads_count)
         {
           d_ctrl_state->ctrl_thread_dump_handle_id_gen += 1;
@@ -4092,6 +4122,38 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
           dump_threads[idx].thread_handle = thread_handle;
           dump_threads[idx].id = thread->id;
           dump_threads[idx].context_foff = thread->thread_context.foff;
+          U64 slot_idx = u64_hash_from_str8(str8_struct(&thread->id))%dump_thread_from_id_slots_count;
+          DumpThreadNode *n = push_array(scratch.arena, DumpThreadNode, 1);
+          n->v = &dump_threads[idx];
+          SLLStackPush(dump_thread_from_id_slots[slot_idx], n);
+        }
+        
+        // rjf: equip thread names
+        for EachIndex(idx, thread_names_count)
+        {
+          MDMP_ThreadName *thread_name = &thread_names[idx];
+          U64 slot_idx = u64_hash_from_str8(str8_struct(&thread_name->thread_id))%dump_thread_from_id_slots_count;
+          D_DumpThread *thread = 0;
+          for(DumpThreadNode *n = dump_thread_from_id_slots[slot_idx]; n != 0; n = n->next)
+          {
+            if(n->v->id == thread_name->thread_id)
+            {
+              thread = n->v;
+              break;
+            }
+          }
+          if(thread != 0)
+          {
+            U64 name_foff = thread_name->thread_name_foff;
+            U32 name_size_supposedly = 0;
+            U64 off = name_foff;
+            off += str8_deserial_read_struct(data, off, &name_size_supposedly);
+            U64 name_size_max = (data.size - off);
+            U64 name_size = Min(name_size_max, name_size_supposedly);
+            String16 name16 = str16((U16 *)(data.str + off), name_size/sizeof(U16));
+            String8 name8 = str8_from_16(arena, name16);
+            thread->name = name8;
+          }
         }
         
         // rjf: gather modules
@@ -4218,6 +4280,16 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
     evt->entity_id  = dump_threads[idx].id;
     // TODO(rjf): evt->stack_base = ; (use thread->stack)
     // TODO(rjf): evt->tls_root   = ; (use thread->thread_context)
+    if(dump_threads[idx].name.size != 0)
+    {
+      D_Event *evt2 = d_event_list_push(scratch.arena, &evts);
+      evt2->kind       = D_EventKind_ThreadName;
+      evt2->msg_id     = msg->msg_id;
+      evt2->entity     = thread_handle;
+      evt2->parent     = process;
+      evt2->string     = dump_threads[idx].name;
+      evt2->entity_id  = dump_threads[idx].id;
+    }
   }
   
   //////////////////////////////
@@ -4228,12 +4300,6 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
     //- rjf: open module
     D_Handle module_handle = dump_modules[idx].module_handle;
     Rng1U64 vaddr_range = dump_modules[idx].vaddr_range;
-    
-#if 0
-    //- TODO(rjf): I don't think we can use this demon module info path here
-    DMN_ModuleInfo module_info = {0};
-    d_ctrl_thread__module_open(process, module_handle, vaddr_range.min, dump_modules[idx].path, r1u64(0, 0), 0);
-#endif
     
     //- rjf: analyze module file, produce module info
     Arena *module_info_arena = arena_alloc();
@@ -4329,6 +4395,22 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
     event->kind   = D_EventKind_Stopped;
     event->cause  = D_EventCause_Finished;
     event->msg_id = msg->msg_id;
+    if(exception_thread_id != 0)
+    {
+      D_Handle thread = {0};
+      for EachIndex(idx, dump_threads_count)
+      {
+        if(dump_threads[idx].id == exception_thread_id)
+        {
+          thread = dump_threads[idx].thread_handle;
+          break;
+        }
+      }
+      event->cause = D_EventCause_InterruptedByException;
+      event->exception_code = exception_code;
+      event->entity = thread;
+      event->parent = process;
+    }
   }
   
   //- rjf: push all events from the parse

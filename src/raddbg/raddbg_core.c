@@ -1783,10 +1783,10 @@ rd_view_ui(Rng2F32 rect)
     {
       Temp scratch = scratch_begin(0, 0);
       ui_set_next_flags(UI_BoxFlag_DefaultFocusNav);
-      UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(str8_lit("empty_view"))
+      UI_Focus(UI_FocusKind_On) UI_WidthFill UI_HeightFill UI_NamedColumn(s("empty_view"))
         UI_Padding(ui_pct(1, 0)) UI_Focus(UI_FocusKind_Null)
       {
-        CFG_NodePtrList targets = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("target"));
+        CFG_NodePtrList targets = cfg_node_top_level_list_from_string(scratch.arena, s("target"));
         D_EntityArray processes = d_entity_array_from_kind(D_EntityKind_Process);
         Rng2F32 view_rect = ui_top_parent()->rect;
         
@@ -1796,6 +1796,7 @@ rd_view_ui(Rng2F32 rect)
           //- rjf: icon
           {
             F32 icon_dim = ui_top_font_size()*10.f;
+            ui_set_next_flags(UI_BoxFlag_AnimatePosY);
             UI_PrefHeight(ui_px(icon_dim, 1.f))
               UI_Row
               UI_Padding(ui_pct(1, 0))
@@ -11386,6 +11387,7 @@ rd_init(CmdLine *cmdln)
   //- rjf: setup initial target from command line args
   String8 implicit_user_arg = {0};
   String8 implicit_project_arg = {0};
+  String8 implicit_dmp_arg = {0};
   {
     Temp scratch2 = scratch_begin(&scratch.arena, 1);
     String8List target_args = {0};
@@ -11398,12 +11400,15 @@ rd_init(CmdLine *cmdln)
                        str8_match(str8_prefix(arg, 1), str8_lit("--"), 0) ||
                        str8_match(str8_prefix(arg, 1), str8_lit("/"), 0));
         B32 is_cfg = 0;
+        B32 is_dmp = 0;
         if(!is_flag && !after_first_non_flag)
         {
           File file = file_open(AccessFlag_Read|AccessFlag_ShareRead, arg);
           U8 raddbg_cfg_magic[] = "// raddbg ";
           U8 file_magic_maybe[ArrayCount(raddbg_cfg_magic)] = {0};
           file_read(file, r1u64(0, 10), file_magic_maybe);
+          MDMP_Header mdmp_header_maybe = {0};
+          file_read_struct(file, 0, &mdmp_header_maybe);
           if(MemoryMatchArray(raddbg_cfg_magic, file_magic_maybe))
           {
             is_cfg = 1;
@@ -11421,13 +11426,18 @@ rd_init(CmdLine *cmdln)
               implicit_project_arg = path_absolute_dst_from_relative_dst_src(scratch.arena, arg, get_process_info()->initial_path);
             }
           }
+          else if(mdmp_header_maybe.magic == MDMP_MAGIC)
+          {
+            is_dmp = 1;
+            implicit_dmp_arg = arg;
+          }
           file_close(file);
         }
         if(!is_flag)
         {
           after_first_non_flag = 1;
         }
-        if(after_first_non_flag && !is_cfg)
+        if(after_first_non_flag && !is_cfg && !is_dmp)
         {
           str8_list_push(scratch2.arena, &target_args, arg);
         }
@@ -11488,6 +11498,12 @@ rd_init(CmdLine *cmdln)
       rd_cmd(RD_CmdKind_SelectTarget, .cfg = target->id);
     }
     scratch_end(scratch2);
+  }
+  
+  //- rjf: load dump arguments
+  if(implicit_dmp_arg.size != 0)
+  {
+    rd_cmd(RD_CmdKind_OpenCrashDump, .file_path = implicit_dmp_arg);
   }
   
   // rjf: set up user / project paths
@@ -13929,11 +13945,23 @@ rd_frame(void)
           //- rjf: exiting
           case RD_CmdKind_Exit:
           {
+            D_EntityArray processes = d_entity_array_from_kind(D_EntityKind_Process);
+            
+            // rjf: determine if we're attached to live processes
+            B32 attached_to_live_processes = 0;
+            for EachIndex(idx, processes.count)
+            {
+              if(processes.v[idx]->handle.controller_kind != D_ControllerKind_Dump)
+              {
+                attached_to_live_processes = 1;
+                break;
+              }
+            }
+            
             // rjf: if control processes are live, but this is not force-confirmed, then
             // get confirmation from user
-            D_EntityArray processes = d_entity_array_from_kind(D_EntityKind_Process);
-            UI_Key key = ui_key_from_string(ui_key_zero(), str8_lit("lossy_exit_confirmation"));
-            if(processes.count != 0 && !rd_regs()->force_confirm && !ui_key_match(rd_state->popup_key, key))
+            UI_Key key = ui_key_from_string(ui_key_zero(), s("lossy_exit_confirmation"));
+            if(attached_to_live_processes && !rd_regs()->force_confirm && !ui_key_match(rd_state->popup_key, key))
             {
               rd_state->popup_key = key;
               rd_state->popup_active = 1;

@@ -199,6 +199,13 @@ struct MDMP_ExceptionStream
   MDMP_LocationDescriptor32 thread_context;
 };
 
+typedef struct MDMP_ThreadName MDMP_ThreadName;
+struct MDMP_ThreadName
+{
+  U32 thread_id;
+  U64 thread_name_foff;
+};
+
 typedef U16 MDMP_Arch;
 typedef enum MDMP_ArchEnum
 {
