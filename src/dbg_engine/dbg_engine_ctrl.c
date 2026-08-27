@@ -4114,7 +4114,16 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
             module_name = path_normalized_from_string(scratch.arena, module_name);
           }
           
-          // rjf: open module file
+          // rjf: relativize module path to the dmp file, if needed
+          {
+            String8 relative_module_path = str8f(scratch.arena, "%S/%S", str8_chop_last_slash(path), str8_skip_last_slash(module_name));
+            if(properties_from_file_path(relative_module_path).created != 0)
+            {
+              module_name = relative_module_path;
+            }
+          }
+          
+          // rjf: unpack module file
           File module_file = file_open(AccessFlag_Read|AccessFlag_ShareRead, module_name);
           FileProperties module_props = properties_from_file(module_file);
           FileMap module_map = file_map_open(AccessFlag_Read, module_file);
