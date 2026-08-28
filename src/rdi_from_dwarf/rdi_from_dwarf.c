@@ -436,37 +436,41 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       for EachIndex(file_idx, hdr->files.count)
       {
         DW2_LineTableFile *f = &hdr->files.v[file_idx];
-        DW2_LineTableFile *dir = &hdr->dirs.v[f->dir_idx];
-        String8 full_file_path = str8f(scratch2.arena, "%S%s%S", dir->file_name, dir->file_name.size != 0 ? "/" : "", f->file_name);
-        U64 hash = u64_hash_from_str8(full_file_path);
-        U64 slot_idx = hash%slots_count;
-        SrcFileNode *node = 0;
-        for(SrcFileNode *n = slots[slot_idx]; n != 0; n = n->next)
+        if(f->file_name.size != 0)
         {
-          if(str8_match(n->full_path, full_file_path, 0))
+          DW2_LineTableFile *dir = &hdr->dirs.v[f->dir_idx];
+          String8 full_file_path = str8f(scratch2.arena, "%S%s%S", dir->file_name, dir->file_name.size != 0 ? "/" : "", f->file_name);
+          U64 hash = u64_hash_from_str8(full_file_path);
+          U64 slot_idx = hash%slots_count;
+          SrcFileNode *node = 0;
+          for(SrcFileNode *n = slots[slot_idx]; n != 0; n = n->next)
           {
-            node = n;
-            break;
+            if(str8_match(n->full_path, full_file_path, 0))
+            {
+              node = n;
+              break;
+            }
           }
+          if(!node)
+          {
+            node = push_array(scratch2.arena, SrcFileNode, 1);
+            SLLStackPush(slots[slot_idx], node);
+            node->full_path = full_file_path;
+            node->src_file = rdim_src_file_chunk_list_push(arena, all_src_files, slots_count);
+            node->src_file->path = str8_copy(arena, full_file_path);
+            if(f->flags & DW2_LineTableFileFlag_HasMD5)
+            {
+              node->src_file->checksum_kind = RDI_ChecksumKind_MD5;
+              node->src_file->checksum = str8_copy(arena, str8_struct(&f->md5));
+            }
+            else if(f->flags & DW2_LineTableFileFlag_HasModifyTime)
+            {
+              node->src_file->checksum_kind = RDI_ChecksumKind_Timestamp;
+              node->src_file->checksum = str8_copy(arena, str8_struct(&f->modify_time));
+            }
+          }
+          unit_src_file_maps[unit_idx].v[file_idx] = node->src_file;
         }
-        if(!node)
-        {
-          node = push_array(scratch2.arena, SrcFileNode, 1);
-          node->full_path = full_file_path;
-          node->src_file = rdim_src_file_chunk_list_push(arena, all_src_files, slots_count);
-          node->src_file->path = str8_copy(arena, full_file_path);
-          if(f->flags & DW2_LineTableFileFlag_HasMD5)
-          {
-            node->src_file->checksum_kind = RDI_ChecksumKind_MD5;
-            node->src_file->checksum = str8_copy(arena, str8_struct(&f->md5));
-          }
-          else if(f->flags & DW2_LineTableFileFlag_HasModifyTime)
-          {
-            node->src_file->checksum_kind = RDI_ChecksumKind_Timestamp;
-            node->src_file->checksum = str8_copy(arena, str8_struct(&f->modify_time));
-          }
-        }
-        unit_src_file_maps[unit_idx].v[file_idx] = node->src_file;
       }
     }
     scratch_end(scratch2);
