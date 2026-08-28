@@ -3350,16 +3350,19 @@ dmn_thread_get_module_tls_vaddr(DMN_Handle thread_handle, DMN_Handle module_hand
         Arch arch = thread->process->ctx->arch;
         U64 addr_size = byte_size_from_arch(arch);
         U64 dtv_base_vaddr = thread->dtv_base_vaddr;
-        U64 dtv_entry_size = 2 * addr_size;
-        U64 module_dtv_ptr_vaddr = dtv_base_vaddr + module->tls_index * dtv_entry_size;
-        U64 module_dtv_vaddr = 0;
-        if(lnx_dmn_read(process->fd, r1u64(module_dtv_ptr_vaddr, module_dtv_ptr_vaddr+addr_size), &module_dtv_vaddr) == addr_size)
+        if(dtv_base_vaddr != 0)
         {
-          U64 unallocated_dtv_vaddr_marker = (addr_size == 4 ? max_U32 : max_U64);
-          if(module_dtv_vaddr != unallocated_dtv_vaddr_marker)
+          U64 dtv_entry_size = 2 * addr_size;
+          U64 module_dtv_ptr_vaddr = dtv_base_vaddr + module->tls_index * dtv_entry_size;
+          U64 module_dtv_vaddr = 0;
+          if(lnx_dmn_read(process->fd, r1u64(module_dtv_ptr_vaddr, module_dtv_ptr_vaddr+addr_size), &module_dtv_vaddr) == addr_size)
           {
-            vaddr_out[0] = module_dtv_vaddr + module->tls_offset;
-            result = 1;
+            U64 unallocated_dtv_vaddr_marker = (addr_size == 4 ? max_U32 : max_U64);
+            if(module_dtv_vaddr != unallocated_dtv_vaddr_marker)
+            {
+              vaddr_out[0] = module_dtv_vaddr + module->tls_offset;
+              result = 1;
+            }
           }
         }
       }

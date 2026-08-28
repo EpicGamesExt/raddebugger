@@ -6317,6 +6317,7 @@ d_tls_vaddr_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_o
   DMN_Handle module_dmn = d_dmn_from_handle(module);
   
   // rjf: compute vaddr
+  U64 pre_run_gen = d_run_gen();
   U64 tls_vaddr = 0;
   B32 success = 1;
   if(!dmn_handle_match(thread_dmn, dmn_handle_zero()) &&
@@ -6324,11 +6325,16 @@ d_tls_vaddr_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_o
   {
     success = dmn_thread_get_module_tls_vaddr(thread_dmn, module_dmn, &tls_vaddr);
   }
+  U64 post_run_gen = d_run_gen();
   
-  // rjf: if not successful -> retry
-  if(!success)
+  // rjf: if not successful due to run -> retry
+  if(!success && (pre_run_gen != post_run_gen || d_ctrl_state->ctrl_thread_run_state))
   {
     status_out[0] = AC_Status_NeedRetry;
+  }
+  else if(!success)
+  {
+    status_out[0] = AC_Status_Failed;
   }
   
   // rjf: package as artifact
