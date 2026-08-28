@@ -105,7 +105,11 @@ pdb_info_from_data(Arena *arena, String8 data)
           result = push_array(arena, PDB_Info, 1);
           result->first = first;
           result->last = last;
-          result->auth_guid = *auth_guid;
+          // unrecognized PDB info versions (default case above) leave
+          // auth_guid unset; only dereference it when it was actually filled in.
+          if (auth_guid != 0) {
+            result->auth_guid = *auth_guid;
+          }
         }
         
         // read PDB features
@@ -457,8 +461,15 @@ pdb_gsi_from_data(Arena *arena, String8 data)
   PDB_GsiParsed *result = push_array(arena, PDB_GsiParsed, 1);
   
   // rjf: extract header
+  //
+  // `data` can be built by a caller from a malformed/out-of-range MSF stream
+  // (e.g. a stream number past the end of the stream table), which can arrive
+  // here as a null or otherwise invalid backing pointer paired with a
+  // wrapped-around (huge) size. Reject both a null pointer and a size outside
+  // the sane range for an MSF stream (all real stream sizes fit in a U32)
+  // before ever treating `data.str` as a header pointer.
   PDB_GsiHeader *header = 0;
-  if(sizeof(*header) <= data.size)
+  if(data.str != 0 && data.size <= max_U32 && sizeof(*header) <= data.size)
   {
     header = (PDB_GsiHeader*)data.str;
   }

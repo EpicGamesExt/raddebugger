@@ -43,7 +43,12 @@ msf_raw_stream_table_from_data(Arena *arena, String8 msf_data)
     
     //  (pages)
     U32 page_size = ClampTop(page_size_raw, msf_data.size);
-    
+
+    // a malformed/truncated file can drive page_size to 0 (ClampTop only
+    // caps the ceiling); reject it before it is ever used as a divisor below.
+    if (page_size != 0)
+    {
+
     //  (whole file page count)
     U32 whole_file_page_count_max = CeilIntegerDiv(msf_data.size, page_size);
     U32 whole_file_page_count     = ClampTop(whole_file_page_count_raw, whole_file_page_count_max);
@@ -163,12 +168,15 @@ msf_raw_stream_table_from_data(Arena *arena, String8 msf_data)
     B32            got_streams  = 0;
     MSF_RawStream *streams      = 0;
     
-    if (got_directory) {
+    // the directory always begins with a 4-byte stream count; a malformed
+    // stream_table_size below 4 would make the stream_count read below go out
+    // of bounds and make (directory_size - 4) underflow into a ~1G count.
+    if (got_directory && directory_size >= 4) {
       got_streams = 1;
-      
+
       // read stream count
       U32 stream_count_raw = *(U32 *) directory_buf;
-      
+
       // setup counts, sizes, and offsets
       U32 size_of_stream_entry   = index_size == 2 ? 8 : 4;
       U32 stream_count_max       = (directory_size - 4) / size_of_stream_entry;
@@ -220,8 +228,9 @@ msf_raw_stream_table_from_data(Arena *arena, String8 msf_data)
       result->stream_count     = stream_count;
       result->streams          = streams;
     }
+    } // page_size != 0
   }
-  
+
   scratch_end(scratch);
   return result;
 }
