@@ -439,7 +439,12 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         if(f->file_name.size != 0)
         {
           DW2_LineTableFile *dir = &hdr->dirs.v[f->dir_idx];
-          String8 full_file_path = str8f(scratch2.arena, "%S%s%S", dir->file_name, dir->file_name.size != 0 ? "/" : "", f->file_name);
+          String8 dir_path = dir->file_name;
+          if(f->dir_idx != 0)
+          {
+            dir_path = path_absolute_dst_from_relative_dst_src(scratch2.arena, dir_path, hdr->dirs.v[0].file_name);
+          }
+          String8 full_file_path = path_absolute_dst_from_relative_dst_src(scratch2.arena, f->file_name, dir_path);
           U64 hash = u64_hash_from_str8(full_file_path);
           U64 slot_idx = hash%slots_count;
           SrcFileNode *node = 0;
