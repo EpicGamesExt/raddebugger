@@ -276,12 +276,17 @@ rdi_section_raw_element_from_kind_idx(RDI_Parsed *rdi, RDI_SectionKind kind, RDI
 RDI_PROC RDI_U64
 rdi_decompressed_size_from_parsed(RDI_Parsed *rdi)
 {
-  RDI_U64 decompressed_size = rdi->raw_data_size;
+  RDI_Header *hdr = (RDI_Header *)rdi->raw_data;
+  U64 off = hdr->data_section_off + sizeof(RDI_Section) * rdi->sections_count;
+  off += 7;
+  off -= off%8;
   for(RDI_U64 section_idx = 0; section_idx < rdi->sections_count; section_idx += 1)
   {
-    decompressed_size += (rdi->sections[section_idx].unpacked_size - rdi->sections[section_idx].encoded_size);
+    off += rdi->sections[section_idx].unpacked_size;
+    off += 7;
+    off -= off%8;
   }
-  return decompressed_size;
+  return off;
 }
 
 //- decompression
