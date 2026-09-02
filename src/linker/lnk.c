@@ -1322,11 +1322,11 @@ lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer
   {
     B32 has_function_overrides = 0;
 
-    for EachNode(alt_name_n, LNK_AltNameNode, config->alt_name_list.first) {
+    // Ordinary alternate names can number in the millions. Classify overrides
+    // once when parsing directives, but revisit the override subset here: a
+    // later archive member may introduce a reference to an earlier directive.
+    for EachNode(alt_name_n, LNK_AltNameNode, config->function_override_list.first) {
       LNK_AltName alt_name = alt_name_n->v;
-      if ( ! str8_ends_with(alt_name.from, str8_lit("$fo$"), 0)) {
-        continue;
-      }
 
       LNK_Symbol *symbol = lnk_symbol_table_search(symtab, alt_name.from);
       if (symbol && lnk_interp_from_symbol(symbol) == COFF_SymbolValueInterp_Undefined) {

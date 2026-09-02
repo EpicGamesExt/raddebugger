@@ -399,6 +399,7 @@ typedef struct LNK_Config
   String8                     rad_debug_alt_path;
   LNK_IncludeSymbolList       include_symbol_list;
   LNK_AltNameList             alt_name_list;
+  LNK_AltNameList             function_override_list;
   LNK_MergeDirectiveList      merge_list;
   LNK_SectionDirectiveList    section_list;
   U64                         data_dir_count;

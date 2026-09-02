@@ -1259,6 +1259,9 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
           alt_name.to   = push_str8_copy(config->arena, alt_name.to);
 
           lnk_alt_name_list_push(config->arena, &config->alt_name_list, alt_name);
+          if (str8_ends_with(alt_name.from, str8_lit("$fo$"), 0)) {
+            lnk_alt_name_list_push(config->arena, &config->function_override_list, alt_name);
+          }
           hash_map_push_string_string(config->arena, &config->alt_name_ht, alt_name.from, alt_name.to);
         }
       }
