@@ -2435,6 +2435,10 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
         next_undefined_symbol:;
 
         lnk_error(LNK_Error_UnresolvedSymbol, "unresolved symbol '%S'", symbol->name);
+        if (str8_match(str8_prefix(symbol->name, 6), str8_lit("__imp_"), 0)) {
+          lnk_supplement_error("this is a DLL import, but no linked object or import library defines it");
+          lnk_supplement_error("verify that the response file includes the import library for this module dependency");
+        }
         lnk_supplement_error_list(ref_messages);
       }
 
