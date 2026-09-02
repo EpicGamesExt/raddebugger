@@ -850,8 +850,10 @@ t_invoke_linkerf(char *fmt, ...)
 }
 
 internal inline int
-t_test_info_is_before(TestInfo **a, TestInfo **b)
+t_test_info_is_before(void *raw_a, void *raw_b)
 {
+  TestInfo **a = raw_a;
+  TestInfo **b = raw_b;
   String8 layer_a = a[0]->layer;
   String8 layer_b = b[0]->layer;
   int cmp = str8_compar(layer_a, layer_b, 0);
@@ -1122,7 +1124,7 @@ t_entry_point(CmdLine *cmdline)
   // Gather tests
   {
     for EachIndex(i, test_infos_count) { g_sorted_test_infos[i] = &test_infos[i]; }
-    radsort(g_sorted_test_infos, test_infos_count, (int (*)(void *, void *))t_test_info_is_before);
+    radsort(g_sorted_test_infos, test_infos_count, t_test_info_is_before);
   }
   
   //
