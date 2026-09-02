@@ -97,6 +97,7 @@ typedef struct LNK_CObjCache
   LNK_CObjRuntimeSegment **slot_segments;
   LNK_CompressedObj **regions;
   U64 region_count;
+  U64 sorted_region_count;
   U64 region_cap;
   PVOID (WINAPI *map_view_of_file_3)(HANDLE,HANDLE,PVOID,ULONG64,SIZE_T,ULONG,ULONG,MEM_EXTENDED_PARAMETER*,ULONG);
   BOOL  (WINAPI *unmap_view_of_file_2)(HANDLE,PVOID,ULONG);
@@ -1705,10 +1706,14 @@ lnk_compressed_obj_finalize_open(void)
   // Parallel input mapping appends regions in completion order.  The caller invokes this joined
   // boundary before starting any COFF parser task, so no logical compressed range can fault until
   // the address table has been sorted for lock-free VEH lookup.
-  if (!g_lnk_cobj_cache.initialized || g_lnk_cobj_cache.region_count < 2) { return; }
+  // Archive, generated-object and empty input batches usually add no compressed
+  // regions. The table is append-only; do not sort the same addresses again.
+  if (!g_lnk_cobj_cache.initialized || g_lnk_cobj_cache.region_count < 2 ||
+      g_lnk_cobj_cache.region_count == g_lnk_cobj_cache.sorted_region_count) { return; }
   AcquireSRWLockExclusive(&g_lnk_cobj_cache.lock);
   qsort(g_lnk_cobj_cache.regions, g_lnk_cobj_cache.region_count,
         sizeof(*g_lnk_cobj_cache.regions), lnk_cobj_region_ptr_compare);
+  g_lnk_cobj_cache.sorted_region_count = g_lnk_cobj_cache.region_count;
   ReleaseSRWLockExclusive(&g_lnk_cobj_cache.lock);
 }
 
