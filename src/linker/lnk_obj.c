@@ -1028,7 +1028,7 @@ lnk_reloc_sort_key_is_before(void *raw_a, void *raw_b)
 // application at either call time (relocs + symbol tables + image section table are all
 // immutable after the image build).
 internal void
-lnk_obj_apply_relocs_to_buffer(LNK_Obj *obj, U64 section_number, COFF_SectionHeader *section_header, String8 section_data, U64 image_base, COFF_SectionHeader **image_section_table)
+lnk_obj_apply_relocs_to_buffer(LNK_Obj *obj, U64 section_number, COFF_SectionHeader *section_header, String8 section_data, U64 image_base, COFF_SectionHeader **image_section_table, LNK_CObjDecodeWindow *reloc_window)
 {
   Assert(1 <= section_number && section_number <= obj->coff.sections.count_no_null);
   COFF_RelocArray relocs = lnk_coff_relocs_from_section_header(obj, section_header);
@@ -1039,9 +1039,25 @@ lnk_obj_apply_relocs_to_buffer(LNK_Obj *obj, U64 section_number, COFF_SectionHea
 
   // apply relocs (sorted by apply_off for monotone-forward writes)
   LNK_RelocSortKey *sorted_relocs = push_array_no_zero(scratch.arena, LNK_RelocSortKey, relocs.count);
-  for EachIndex(reloc_idx, relocs.count) {
-    sorted_relocs[reloc_idx].reloc    = relocs.v[reloc_idx];
-    sorted_relocs[reloc_idx].orig_idx = (U32)reloc_idx;
+  // Debug relocation tables are immutable, but reading their logical compressed
+  // views here faults decoded segments into the shared cache just to copy them.
+  // Stream through a bounded decode window instead, like the debug section bytes.
+  U64 batch_cap = relocs.count;
+  COFF_Reloc *batch = 0;
+  if (reloc_window && obj->compressed_obj && (section_flags & LNK_SECTION_FLAG_DEBUG)) {
+    batch_cap = Min(relocs.count, 4096);
+    batch = push_array_no_zero(scratch.arena, COFF_Reloc, batch_cap);
+  }
+  for (U64 first = 0; first < relocs.count; first += batch_cap) {
+    U64 count = Min(batch_cap, relocs.count - first);
+    COFF_Reloc *src = relocs.v + first;
+    if (batch && lnk_compressed_obj_copy_string(obj->compressed_obj, str8((U8 *)src, count * sizeof(*src)), batch, reloc_window)) {
+      src = batch;
+    }
+    for EachIndex(i, count) {
+      sorted_relocs[first + i].reloc    = src[i];
+      sorted_relocs[first + i].orig_idx = (U32)(first + i);
+    }
   }
   radsort(sorted_relocs, relocs.count, lnk_reloc_sort_key_is_before);
   for EachIndex(reloc_idx, relocs.count) {

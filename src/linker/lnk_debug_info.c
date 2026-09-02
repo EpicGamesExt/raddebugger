@@ -3906,6 +3906,10 @@ lnk_obj_window_debug_s(Arena *arena, LNK_CodeViewInput *cv, U64 obj_idx, U64 ima
   CV_DebugS  out = {0};
   LNK_CObjDecodeWindow decode_window = {0};
 
+  // Keep relocation decoding separate from section-data decoding and reuse it
+  // across sections: adjacent small tables often share one compressed segment.
+  LNK_CObjDecodeWindow reloc_window = {0};
+
   U64 idx_symbols  = cv_c13_sub_section_idx_from_kind(CV_C13SubSectionKind_Symbols);
   U64 idx_inlinees = cv_c13_sub_section_idx_from_kind(CV_C13SubSectionKind_InlineeLines);
 
@@ -3958,7 +3962,7 @@ lnk_obj_window_debug_s(Arena *arena, LNK_CodeViewInput *cv, U64 obj_idx, U64 ima
         copy = push_array_no_zero(arena, U8, raw.size);
         MemoryCopy(copy, raw.str, raw.size);
       }
-      lnk_obj_apply_relocs_to_buffer(obj, section_number, section.header, str8(copy, raw.size), image_base, image_section_table);
+      lnk_obj_apply_relocs_to_buffer(obj, section_number, section.header, str8(copy, raw.size), image_base, image_section_table, &reloc_window);
       sect_base[sect_idx] = copy;
       window_size += raw.size;
     }
@@ -4031,6 +4035,7 @@ lnk_obj_window_debug_s(Arena *arena, LNK_CodeViewInput *cv, U64 obj_idx, U64 ima
   }
 
   lnk_compressed_obj_release_window(&decode_window);
+  lnk_compressed_obj_release_window(&reloc_window);
   return out;
 }
 

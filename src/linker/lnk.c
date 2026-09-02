@@ -5137,7 +5137,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
     }
 
     // apply relocs (factored: shared with the P3.3 module-write window fill)
-    lnk_obj_apply_relocs_to_buffer(obj, it.v.section_number, section_header, section_data, task->image_base, task->image_section_table);
+    lnk_obj_apply_relocs_to_buffer(obj, it.v.section_number, section_header, section_data, task->image_base, task->image_section_table, 0);
   }
 
   ProfEnd();
