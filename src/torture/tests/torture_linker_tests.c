@@ -224,6 +224,47 @@ TEST(expect_pdb_indexes_linker_output)
   T_Ok(t_result_is_ok(result));
 }
 
+TEST(link_large_import_object)
+{
+  // Each named import creates three sections in the synthesized DLL object.
+  // Add a direct function reference as well to exercise its jump thunk.
+  U32 import_count = 22000;
+  COFF_LibWriter *lib = coff_lib_writer_alloc();
+  COFF_ObjWriter *obj = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+  COFF_ObjSection *refs = coff_obj_writer_push_section(obj, str8_lit(".data"),
+      COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite|COFF_SectionFlag_Align8Bytes,
+      str8(push_array(arena, U8, (import_count + 1)*8), (import_count + 1)*8));
+  for (U32 i = 0; i < import_count; i += 1) {
+    String8 name = str8f(arena, "import_%05u", i);
+    coff_lib_writer_push_import(lib, COFF_MachineType_X64, 0, str8_lit("large.dll"), COFF_ImportBy_Name, name, 0, COFF_ImportHeader_Code);
+    COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef(obj, str8f(arena, "__imp_%S", name));
+    coff_obj_writer_section_push_reloc_addr(obj, refs, i*8, symbol);
+  }
+  COFF_ObjSymbol *func = coff_obj_writer_push_symbol_undef_func(obj, str8f(arena, "import_%05u", import_count - 1));
+  coff_obj_writer_section_push_reloc_addr(obj, refs, import_count*8, func);
+  T_Ok(t_write_file(str8_lit("refs.obj"), coff_obj_writer_serialize(arena, obj)));
+  T_Ok(t_write_file(str8_lit("large.lib"), coff_lib_writer_serialize(arena, lib, 0, 0, 1)));
+  coff_obj_writer_release(&obj);
+  coff_lib_writer_release(&lib);
+  T_Ok(t_write_entry_obj());
+  t_invoke_linkerf("/subsystem:console /entry:entry /debug:full /opt:ref /out:large.exe entry.obj refs.obj large.lib");
+  T_Ok(g_last_exit_code == 0);
+  String8 image = t_read_file(arena, str8_lit("large.exe"));
+  PE_BinInfo bin = pe_bin_info_from_data(arena, image);
+  T_Ok(bin.data_dir_count > PE_DataDirectoryIndex_IMPORT);
+  COFF_SectionHeader *sections = (COFF_SectionHeader *)(image.str + bin.section_table_range.min);
+  PE_ParsedStaticImportTable imports = pe_static_imports_from_data(arena, bin.is_pe32, bin.section_count, sections,
+      image, bin.data_dir_franges[PE_DataDirectoryIndex_IMPORT]);
+  T_Ok(imports.count == 1);
+  T_Ok(str8_match(imports.v[0].name, str8_lit("large.dll"), 0));
+  T_Ok(imports.v[0].import_count == import_count);
+  for (U32 i = 0; i < import_count; i += 1) {
+    PE_ParsedImport *import = &imports.v[0].imports[i];
+    T_Ok(import->type == PE_ParsedImport_Name);
+    T_Ok(str8_match(import->u.name.string, str8f(arena, "import_%05u", i), 0));
+  }
+}
+
 TEST(pdbstripped_coff_artifact_parity)
 {
   String8 path = str8f(arena, "%S/linker/tests/pdbstripped.tst", t_src_path());

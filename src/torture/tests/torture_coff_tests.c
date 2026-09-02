@@ -13,6 +13,61 @@ t_coff_test_encode(Arena *arena, TestCtx *ctx, String8 file_name, String8 source
   return value != 0 ? value->data : str8_zero();
 }
 
+TEST(coff_writer_bigobj)
+{
+  // Exercise the standard-COFF boundary and an associative parent above 16 bits.
+  U32 section_counts[] = {3, 0xfeff, 0xff00, 0x10002};
+  for EachElement(case_idx, section_counts) {
+    U32 section_count = section_counts[case_idx];
+    COFF_ObjWriter *writer = coff_obj_writer_alloc(0x12345678, COFF_MachineType_X64);
+    for (U32 i = 0; i < section_count - 2; i += 1) {
+      coff_obj_writer_push_section(writer, str8_lit(".empty"), COFF_SectionFlag_LnkRemove, str8_zero());
+    }
+    COFF_SectionFlags flags = COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_LnkCOMDAT;
+    COFF_ObjSection *head = coff_obj_writer_push_section(writer, str8_lit(".long_head_section"), flags, str8_lit("head"));
+    COFF_ObjSection *assoc = coff_obj_writer_push_section(writer, str8_lit(".assoc"), flags, str8(push_array(arena, U8, 8), 8));
+    coff_obj_writer_push_symbol_secdef(writer, head, COFF_ComdatSelect_Any);
+    COFF_ObjSymbol *target = coff_obj_writer_push_symbol_extern(writer, str8_lit("long_target_symbol"), 0, head);
+    COFF_ObjSymbol *weak = coff_obj_writer_push_symbol_weak(writer, str8_lit("weak"), COFF_WeakExt_SearchAlias, target);
+    COFF_ObjSymbol *absolute = coff_obj_writer_push_symbol_abs(writer, str8_lit("absolute"), 17, COFF_SymStorageClass_External);
+    COFF_ObjSymbol *assoc_def = coff_obj_writer_push_symbol_associative(writer, assoc, head);
+    COFF_ObjSymbol *undef = coff_obj_writer_push_symbol_undef(writer, str8_lit("undef"));
+    COFF_ObjSymbol *common = coff_obj_writer_push_symbol_common(writer, str8_lit("common"), 32);
+    coff_obj_writer_section_push_reloc_addr(writer, assoc, 0, weak);
+
+    String8 data = coff_obj_writer_serialize(arena, writer);
+    COFF_FileHeaderInfo info = coff_file_header_info_from_data(data);
+    T_Ok(info.is_big_obj == (section_count > 0xfeff));
+    T_Ok(info.section_count_no_null == section_count);
+    T_Ok(info.symbol_size == (info.is_big_obj ? sizeof(COFF_Symbol32) : sizeof(COFF_Symbol16)));
+    T_Ok(info.symbol_count == 10);
+    String8 symbols = str8_substr(data, info.symbol_table_range);
+    String8 strings = str8_substr(data, info.string_table_range);
+    COFF_ParsedSymbol parsed_target = coff_parse_symbol(info, strings, symbols, target->idx);
+    T_Ok(parsed_target.section_number == section_count - 1);
+    T_Ok(str8_match(parsed_target.name, target->name, 0));
+    COFF_ParsedSymbol parsed_assoc = coff_parse_symbol(info, strings, symbols, assoc_def->idx);
+    U32 parent = 0;
+    COFF_ComdatSelectType selection = 0;
+    coff_parse_secdef(parsed_assoc, info.is_big_obj, &selection, &parent, 0, 0);
+    T_Ok(parsed_assoc.section_number == section_count);
+    T_Ok(selection == COFF_ComdatSelect_Associative && parent == section_count - 1);
+    COFF_ParsedSymbol parsed_weak = coff_parse_symbol(info, strings, symbols, weak->idx);
+    COFF_SymbolWeakExt *weak_aux = coff_parse_weak_tag(parsed_weak, info.is_big_obj);
+    T_Ok(weak_aux->tag_index == target->idx && weak_aux->characteristics == COFF_WeakExt_SearchAlias);
+    COFF_ParsedSymbol parsed_absolute = coff_parse_symbol(info, strings, symbols, absolute->idx);
+    T_Ok(parsed_absolute.section_number == COFF_Symbol_AbsSection32 && parsed_absolute.value == 17);
+    T_Ok(coff_parse_symbol(info, strings, symbols, undef->idx).section_number == COFF_Symbol_UndefinedSection);
+    COFF_ParsedSymbol parsed_common = coff_parse_symbol(info, strings, symbols, common->idx);
+    T_Ok(parsed_common.section_number == COFF_Symbol_UndefinedSection && parsed_common.value == 32);
+    COFF_SectionHeader *sections = (COFF_SectionHeader *)(data.str + info.section_table_range.min);
+    COFF_Reloc *reloc = (COFF_Reloc *)(data.str + sections[section_count - 1].relocs_foff);
+    T_Ok(sections[section_count - 1].reloc_count == 1 && reloc->isymbol == weak->idx);
+    T_Ok(t_write_file(str8f(arena, "writer_%u.obj", section_count), data));
+    coff_obj_writer_release(&writer);
+  }
+}
+
 TEST(coff_codec_object_parity)
 {
   String8 source = str8_lit(
