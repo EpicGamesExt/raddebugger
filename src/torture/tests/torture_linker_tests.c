@@ -325,8 +325,21 @@ TEST(link_large_import_object)
   coff_obj_writer_release(&obj);
   coff_lib_writer_release(&lib);
   T_Ok(t_write_entry_obj());
-  t_invoke_linkerf("/subsystem:console /entry:entry /debug:full /opt:ref /out:large.exe entry.obj refs.obj large.lib");
+  U64 link_begin_us = now_time_us();
+  t_invoke_linkerf("/subsystem:console /entry:entry /debug:full /opt:ref /rad_log:summary /out:large.exe entry.obj refs.obj large.lib");
+  U64 link_elapsed_ms = (now_time_us() - link_begin_us) / 1000 + 1;
   T_Ok(g_last_exit_code == 0);
+  // A mismatched phase begin/end used to report system uptime for modules.
+  // Use the enclosing invocation, not a fixed performance threshold.
+  U64 mod_pos = str8_find_needle(g_output, 0, str8_lit(" mod="), 0);
+  T_Ok(mod_pos < g_output.size);
+  if (mod_pos < g_output.size) {
+    String8 mod = str8_skip(g_output, mod_pos + 5);
+    mod = str8_prefix(mod, str8_find_needle(mod, 0, str8_lit("/"), 0));
+    U64 mod_ms = 0;
+    T_Ok(try_u64_from_str8_c_rules(mod, &mod_ms));
+    T_Ok(mod_ms <= link_elapsed_ms);
+  }
   String8 image = t_read_file(arena, str8_lit("large.exe"));
   PE_BinInfo bin = pe_bin_info_from_data(arena, image);
   T_Ok(bin.data_dir_count > PE_DataDirectoryIndex_IMPORT);

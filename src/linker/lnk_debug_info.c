@@ -6161,7 +6161,7 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
 
 ProfScope("Write Modules")
     {
-      lnk_summary_phase_begin(LNK_SummaryPhase_PdbGsi);
+      lnk_summary_phase_begin(LNK_SummaryPhase_PdbMod);
       U64 phase_begin_us = now_time_us();
       // FAIR-SHARE: pin the cohort, distribute objs over exactly the cohort lanes,
       // then run the barrier pass at that cohort. tp_barrier_begin sets
@@ -6217,6 +6217,7 @@ ProfScope("Write Modules")
     // module streams were enqueued per-obj inside lnk_write_pdb_modules
 ProfScope("Move Global Symbols")
     {
+      lnk_summary_phase_begin(LNK_SummaryPhase_PdbGsi);
       U64 phase_begin_us = now_time_us();
       U32 C = tp_barrier_begin(tp);
       // P2b: no obj_indices distribution -- the pass reads no $S bytes; it flattens the
@@ -6224,9 +6225,12 @@ ProfScope("Move Global Symbols")
       tp_for_parallel_reserve(tp, 0, C, lnk_move_global_symbols_to_gsi, &task); // BARRIER pass (path B): tp_sum_u64/tp_broadcast/barrier_wait
       tp_barrier_end(tp);
       lnk_log(LNK_Log_Timers, "[pdb] move global symbols in %.2f ms (cohort %u)", (F64)(now_time_us() - phase_begin_us) / 1000.0, C);
+      lnk_summary_phase_end(LNK_SummaryPhase_PdbGsi);
     }
 
-ProfScope("Build GSI and PSI") pdb_build_gsi_psi(tp, task.pdb);
+    lnk_summary_phase_begin(LNK_SummaryPhase_PdbSym);
+    ProfScope("Build GSI and PSI") pdb_build_gsi_psi(tp, task.pdb);
+    lnk_summary_phase_end(LNK_SummaryPhase_PdbSym);
     if (output_ptr != 0) {
       lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->publics_sn);
       lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->globals_sn);
