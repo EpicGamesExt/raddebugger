@@ -12,7 +12,7 @@ env:
   TORTURE_FLAGS: "--gen_crash_dump" 
 
 jobs:
-  build-ubuntu-24-04:
+  build-ubuntu-24:
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -24,31 +24,54 @@ jobs:
           - radbin
           - torture
         compiler:
+          - clang-17
           - clang-22
           # TODO: - gcc
-        mode:
-          - debug
-          - release
+    
+    name: ${{ matrix.target }}-${{ matrix.compiler }}-ubuntu24
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           lfs: true
-      - name: Install Dependencies
+
+      - name: Install Common Dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y pkg-config libfreetype6-dev libx11-dev libxext-dev libgl1-mesa-dev libegl1-mesa-dev
+
+      - name: Install clang-17 Dependencies
+        if: ${{ matrix.compiler == 'clang-17' }}
+        shell: bash
+        run: |
+          sudo apt-get install --no-install-recommends -y clang-17 lld-17 llvm-17
+          sudo ln -sf /usr/bin/llvm-symbolizer-17 /usr/bin/llvm-symbolizer
+          echo CC="${{ matrix.compiler }}" >> "${GITHUB_ENV}"
+          echo AR=llvm-ar-17               >> "${GITHUB_ENV}"
+
+      - name: Install ${{ matrix.compiler }} Dependencies
+        if: ${{ matrix.compiler == 'clang-22' }}
         shell: bash
         run: |
           wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
           sudo apt-add-repository -y "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-22 main"
           sudo apt-get update
-          sudo apt-get install -y clang-22 lld-22 llvm-22 gcc-14 pkg-config libfreetype6-dev libx11-dev libxext-dev libgl1-mesa-dev libegl1-mesa-dev
-          sudo ln -s /usr/bin/llvm-symbolizer-22 /usr/bin/llvm-symbolizer
-      - name: build
-        shell: bash
-        run: |
-          [[ "${{ matrix.compiler }}" == "clang-22" ]] && export AR=llvm-ar-22
-          CC="${{ matrix.compiler }}" ./build.sh "${{ matrix.target }}" "${{ matrix.mode }}"
+          sudo apt-get install -y clang-22 lld-22 llvm-22
+          sudo ln -sf /usr/bin/llvm-symbolizer-22 /usr/bin/llvm-symbolizer
+          echo CC="${{ matrix.compiler }}" >> "${GITHUB_ENV}"
+          echo AR=llvm-ar-22               >> "${GITHUB_ENV}"
 
-  build-windows-2022:
+      - name: Build (debug)
+        shell: bash
+        run: ./build.sh "${{ matrix.target }}" debug
+
+      - name: Build (release)
+        shell: bash
+        run: ./build.sh "${{ matrix.target }}" release
+
+  build-windows-vs2022:
     runs-on: windows-2022
     strategy:
       fail-fast: false
@@ -61,23 +84,60 @@ jobs:
         compiler:
           - msvc
           - clang
-        mode:
-          - debug
-          - release
+
+    name: ${{ matrix.target }}-${{ matrix.compiler }}-vs2022
+    
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           lfs: true
-      - name: build (vs 2022)
+      - name: Build (debug)
         shell: cmd
         run: |
-          for /f "usebackq tokens=*" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VS_INSTALL=%%i"
-          call "%VS_INSTALL%\VC\Auxiliary\Build\vcvarsall.bat" x64
-          call build meta "${{ matrix.target }}" "${{ matrix.compiler }}" "${{ matrix.mode }}" || exit /b 1
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64 || exit /b 1
+          call build meta "${{ matrix.target }}" "${{ matrix.compiler }}" debug                                || exit /b 1
+      - name: Build (debug)
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64 || exit /b 1
+          call build meta "${{ matrix.target }}" "${{ matrix.compiler }}" release                              || exit /b 1
+
+  build-windows-vs2026:
+    runs-on: windows-2025
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - raddbg
+          - radlink
+          - radbin
+          - mule_main
+        compiler:
+          - msvc
+          - clang
+
+    name: ${{ matrix.target }}-${{ matrix.compiler }}-vs2026
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          lfs: true
+      - name: Build (debug)
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64 || exit /b 1
+          call build meta "${{ matrix.target }}" "${{ matrix.compiler }}" debug                              || exit /b 1
+      - name: Build (release)
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64 || exit /b 1
+          call build meta "${{ matrix.target }}" "${{ matrix.compiler }}" release                            || exit /b 1
 
   run-ubuntu-24-04:
     runs-on: ubuntu-24.04
+    if: false
     strategy:
       fail-fast: false
       matrix:
@@ -120,6 +180,7 @@ jobs:
 
   run-windows-2022:
     runs-on: windows-2022
+    if: false
     strategy:
       fail-fast: false
       matrix:
