@@ -98,6 +98,10 @@ if "%msvc%"=="1"    set rc=call rc
 if "%clang%"=="1"   set rc=call llvm-rc
 if "%msvc%"=="1"    set link_dll=/link /DLL
 if "%clang%"=="1"   set link_dll=-Xlinker -DLL
+if "%msvc%"=="1"    set asm=call ml64 -nologo -c -Zi -Fo
+if "%clang%"=="1"   set asm=call ml64 -nologo -c -Zi -Fo
+if "%msvc%"=="1"    set mklib=call lib -nologo
+if "%clang%"=="1"   set mklib=call llvm-lib
 
 :: --- Choose Compile/Link Lines ----------------------------------------------
 if "%msvc%"=="1"      set compile_debug=%cl_debug%
@@ -137,6 +141,18 @@ if "%no_meta%"=="" if exist metagen.exe (
   metagen.exe || exit /b 1
 )
 popd
+
+:: --- Assemble BLAKE3 --------------------------------------------------------
+if not exist build\blake3.lib if "%VSCMD_ARG_TGT_ARCH%" equ "x64" (
+  echo [assembling blake3]
+  pushd build
+  %asm% blake3_sse2_x86-64_windows_msvc.obj   ..\src\third_party\blake3\blake3_sse2_x86-64_windows_msvc.asm   || exit /b 1
+  %asm% blake3_sse41_x86-64_windows_msvc.obj  ..\src\third_party\blake3\blake3_sse41_x86-64_windows_msvc.asm  || exit /b 1
+  %asm% blake3_avx2_x86-64_windows_msvc.obj   ..\src\third_party\blake3\blake3_avx2_x86-64_windows_msvc.asm   || exit /b 1
+  %asm% blake3_avx512_x86-64_windows_msvc.obj ..\src\third_party\blake3\blake3_avx512_x86-64_windows_msvc.asm || exit /b 1
+  %mklib% -out:blake3.lib blake3_*_msvc.obj                                                                   || exit /b 1
+  popd
+)
 
 :: --- Build Everything (@build_targets) --------------------------------------
 pushd build
