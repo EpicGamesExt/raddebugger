@@ -12,6 +12,7 @@
 #define LNK_COBJ_MIN_TOTAL_CACHE_GIB         4u
 #define LNK_COBJ_REGION_CAP                 (1u << 20)
 #define LNK_COBJ_DEFAULT_WRITE_GROUP_SLOTS  64u
+#define LNK_COBJ_BACKING_SHARD_BYTES        MB(256)
 #define LNK_COBJ_FILE_MAPPING_GRANULARITY   KB(64)
 #define LNK_COBJ_STALL_ABORT_US            30000000ull
 #define LNK_COBJ_KNOWN_HEADER_FLAGS (LNK_COBJ_FLAG_TYPE_INDEX               | \
@@ -82,10 +83,17 @@ typedef struct LNK_CObjWriteGroup
   volatile LONG sealed;
 } LNK_CObjWriteGroup;
 
+typedef struct LNK_CObjBacking
+{
+  HANDLE *mappings;
+  U64 mapping_count;
+  U64 slots_per_mapping;
+} LNK_CObjBacking;
+
 typedef struct LNK_CObjCache
 {
   SRWLOCK lock;
-  HANDLE slot_mapping;
+  LNK_CObjBacking backing;
   LNK_CObjWriteGroup *write_groups;
   U64 write_group_count;
   U32 write_group_slot_count;
@@ -639,6 +647,55 @@ lnk_compressed_obj_stored_segment_range(LNK_CompressedObj *obj, U32 segment_idx)
 ////////////////////////////////
 // Decoded-segment cache
 
+internal void
+lnk_cobj_release_backing(LNK_CObjBacking *backing)
+{
+  if (backing->mappings) {
+    for EachIndex(i, backing->mapping_count) {
+      if (backing->mappings[i]) { CloseHandle(backing->mappings[i]); }
+    }
+    HeapFree(GetProcessHeap(), 0, backing->mappings);
+  }
+  MemoryZeroStruct(backing);
+}
+
+internal LNK_CObjBacking
+lnk_cobj_alloc_backing(U64 slot_count, U64 segment_size)
+{
+  // A single multi-GB section serializes page reclamation on the last unmapper.
+  // Bound each section, keeping write groups wholly within a shard. Logical
+  // OBJ addresses, slot indices, cache capacity and eviction order are unchanged.
+  LNK_CObjBacking result = {0};
+  result.slots_per_mapping = Max((U64)LNK_COBJ_DEFAULT_WRITE_GROUP_SLOTS,
+                                 LNK_COBJ_BACKING_SHARD_BYTES / segment_size);
+  result.mapping_count = CeilIntegerDiv(slot_count, result.slots_per_mapping);
+  result.mappings = HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
+                              result.mapping_count * sizeof(*result.mappings));
+  if (result.mappings) {
+    for EachIndex(i, result.mapping_count) {
+      U64 count = Min(result.slots_per_mapping, slot_count - i * result.slots_per_mapping);
+      U64 size = count * segment_size;
+      result.mappings[i] = CreateFileMappingW(INVALID_HANDLE_VALUE, 0, PAGE_READWRITE,
+                                              (DWORD)(size >> 32), (DWORD)size, 0);
+      if (!result.mappings[i]) {
+        lnk_cobj_release_backing(&result);
+        break;
+      }
+    }
+  }
+  return result;
+}
+
+internal HANDLE
+lnk_cobj_mapping_from_slot(U64 slot_idx, U64 *offset_out)
+{
+  LNK_CObjBacking *backing = &g_lnk_cobj_cache.backing;
+  U64 mapping_idx = slot_idx / backing->slots_per_mapping;
+  Assert(mapping_idx < backing->mapping_count);
+  *offset_out = (slot_idx % backing->slots_per_mapping) * g_lnk_cobj_cache.segment_size;
+  return backing->mappings[mapping_idx];
+}
+
 
 internal LNK_CObjWriteGroup *
 lnk_cobj_alloc_write_groups(U64 slot_count, U32 group_slot_count, U64 *group_count_out)
@@ -680,10 +737,11 @@ lnk_cobj_write_group_acquire(U32 slot_idx, U32 *group_idx_out)
     // otherwise the group never seals and none of its slots can ever be recycled.
     *group_idx_out = group_idx;
     if (!group->view) {
-      U64 group_off = (U64)group_idx * g_lnk_cobj_cache.write_group_slot_count *
-                      g_lnk_cobj_cache.segment_size;
+      U64 group_off = 0;
+      HANDLE mapping = lnk_cobj_mapping_from_slot((U64)group_idx * g_lnk_cobj_cache.write_group_slot_count,
+                                                  &group_off);
       U64 group_size = (U64)group->slot_count * g_lnk_cobj_cache.segment_size;
-      group->view = MapViewOfFile(g_lnk_cobj_cache.slot_mapping, FILE_MAP_WRITE,
+      group->view = MapViewOfFile(mapping, FILE_MAP_WRITE,
                                   (DWORD)(group_off >> 32), (DWORD)group_off, group_size);
     }
     if (group->view) {
@@ -744,16 +802,14 @@ lnk_compressed_obj_trim_working_set(void)
       // evicting cache generation; this costs shrink_gib additional system commit but avoids the
       // thousands of UnmapViewOfFile2 calls and forced re-decodes of a destructive phase reset.
       U64 new_mapping_size = wanted_slots * g_lnk_cobj_cache.segment_size;
-      HANDLE new_mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, 0, PAGE_READWRITE,
-                                               (DWORD)(new_mapping_size >> 32),
-                                               (DWORD)new_mapping_size, 0);
+      LNK_CObjBacking new_backing = lnk_cobj_alloc_backing(wanted_slots, g_lnk_cobj_cache.segment_size);
       U64 new_write_group_count = 0;
       LNK_CObjWriteGroup *new_write_groups = g_lnk_cobj_cache.write_groups ?
         lnk_cobj_alloc_write_groups(wanted_slots, g_lnk_cobj_cache.write_group_slot_count,
                                     &new_write_group_count) : 0;
       LNK_CObjRuntimeSegment **new_slots = VirtualAlloc(0, wanted_slots * sizeof(void *),
                                                         MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-      B32 can_freeze = new_mapping != 0 && new_slots != 0 &&
+      B32 can_freeze = new_backing.mappings != 0 && new_slots != 0 &&
                        (!g_lnk_cobj_cache.write_groups || new_write_groups != 0);
       AcquireSRWLockExclusive(&g_lnk_cobj_cache.lock);
       if (can_freeze) {
@@ -767,7 +823,7 @@ lnk_compressed_obj_trim_working_set(void)
         }
       }
       if (can_freeze) {
-        HANDLE old_mapping = g_lnk_cobj_cache.slot_mapping;
+        LNK_CObjBacking old_backing = g_lnk_cobj_cache.backing;
         LNK_CObjWriteGroup *old_write_groups = g_lnk_cobj_cache.write_groups;
         U64 old_write_group_count = g_lnk_cobj_cache.write_group_count;
         LNK_CObjRuntimeSegment **old_slots = g_lnk_cobj_cache.slot_segments;
@@ -781,7 +837,7 @@ lnk_compressed_obj_trim_working_set(void)
             g_lnk_cobj_cache.frozen_segments += 1;
           }
         }
-        g_lnk_cobj_cache.slot_mapping = new_mapping;
+        g_lnk_cobj_cache.backing = new_backing;
         g_lnk_cobj_cache.write_groups = new_write_groups;
         g_lnk_cobj_cache.write_group_count = new_write_group_count;
         g_lnk_cobj_cache.slot_segments = new_slots;
@@ -791,10 +847,10 @@ lnk_compressed_obj_trim_working_set(void)
         g_lnk_cobj_cache.victim_cursor = 0;
         g_lnk_cobj_cache_shrunk = 1;
         ReleaseSRWLockExclusive(&g_lnk_cobj_cache.lock);
-        // Mapped views retain the old pagefile section object. Only its handle and now-unused
+        // Mapped views retain the old pagefile sections. Only their handles and now-unused
         // reverse slot table are released here; ordinary close unmaps each frozen logical view.
         lnk_cobj_release_write_groups(old_write_groups, old_write_group_count);
-        CloseHandle(old_mapping);
+        lnk_cobj_release_backing(&old_backing);
         U64 trimmed_frozen = 0;
         U64 trim_calls = 0;
         U64 frozen_trim_us = 0;
@@ -862,7 +918,7 @@ lnk_compressed_obj_trim_working_set(void)
       }
       ReleaseSRWLockExclusive(&g_lnk_cobj_cache.lock);
       lnk_cobj_release_write_groups(new_write_groups, new_write_group_count);
-      if (new_mapping) { CloseHandle(new_mapping); }
+      lnk_cobj_release_backing(&new_backing);
       if (new_slots) { VirtualFree(new_slots, 0, MEM_RELEASE); }
     }
     AcquireSRWLockExclusive(&g_lnk_cobj_cache.lock);
@@ -1047,12 +1103,13 @@ lnk_cobj_materialize(LNK_CompressedObj *region, U32 seg_idx)
   ReleaseSRWLockExclusive(&g_lnk_cobj_cache.lock);
 
   LNK_CObjSegment *entry = &region->directory[seg_idx];
-  U64 slot_off = (U64)slot_idx * region->segment_size;
+  U64 slot_off = 0;
+  HANDLE slot_mapping = lnk_cobj_mapping_from_slot(slot_idx, &slot_off);
   U32 write_group_idx = max_U32;
   U8 *write_view = lnk_cobj_write_group_acquire(slot_idx, &write_group_idx);
   B32 temporary_write_view = write_view == 0;
   if (temporary_write_view) {
-    write_view = (U8 *)MapViewOfFile(g_lnk_cobj_cache.slot_mapping, FILE_MAP_WRITE,
+    write_view = (U8 *)MapViewOfFile(slot_mapping, FILE_MAP_WRITE,
                                      (DWORD)(slot_off >> 32), (DWORD)slot_off, region->segment_size);
   }
   B32 ok = write_view != 0;
@@ -1080,7 +1137,7 @@ lnk_cobj_materialize(LNK_CompressedObj *region, U32 seg_idx)
   U8 *target = region->base + (U64)seg_idx * region->segment_size;
   if (ok) { ok = lnk_cobj_isolate_portable_segment(region, seg_idx); }
   if (ok) {
-    void *mapped = g_lnk_cobj_cache.map_view_of_file_3(g_lnk_cobj_cache.slot_mapping, GetCurrentProcess(), target,
+    void *mapped = g_lnk_cobj_cache.map_view_of_file_3(slot_mapping, GetCurrentProcess(), target,
                                                        slot_off, region->segment_size, MEM_REPLACE_PLACEHOLDER,
                                                        PAGE_READONLY, 0, 0);
     ok = mapped == target;
@@ -1231,10 +1288,8 @@ lnk_cobj_cache_init(U32 segment_size)
   g_lnk_cobj_cache.slot_count = Max(1, cache_bytes / segment_size);
   g_lnk_cobj_cache.active_slot_count = g_lnk_cobj_cache.slot_count;
   g_lnk_cobj_cache.segment_size = segment_size;
-  U64 mapping_size = g_lnk_cobj_cache.slot_count * segment_size;
-  g_lnk_cobj_cache.slot_mapping = CreateFileMappingW(INVALID_HANDLE_VALUE, 0, PAGE_READWRITE,
-                                                       (DWORD)(mapping_size >> 32), (DWORD)mapping_size, 0);
-  if (g_lnk_cobj_cache.slot_mapping) {
+  g_lnk_cobj_cache.backing = lnk_cobj_alloc_backing(g_lnk_cobj_cache.slot_count, segment_size);
+  if (g_lnk_cobj_cache.backing.mappings) {
     g_lnk_cobj_cache.write_group_slot_count = LNK_COBJ_DEFAULT_WRITE_GROUP_SLOTS;
     g_lnk_cobj_cache.write_groups = lnk_cobj_alloc_write_groups(
       g_lnk_cobj_cache.slot_count, g_lnk_cobj_cache.write_group_slot_count,
@@ -1245,7 +1300,7 @@ lnk_cobj_cache_init(U32 segment_size)
   // it cannot constrain practical links. One million pointers cost only 8 MiB on x64.
   g_lnk_cobj_cache.region_cap = LNK_COBJ_REGION_CAP;
   g_lnk_cobj_cache.regions = VirtualAlloc(0, g_lnk_cobj_cache.region_cap * sizeof(void *), MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-  if (!g_lnk_cobj_cache.slot_mapping || !g_lnk_cobj_cache.slot_segments || !g_lnk_cobj_cache.regions) {
+  if (!g_lnk_cobj_cache.backing.mappings || !g_lnk_cobj_cache.slot_segments || !g_lnk_cobj_cache.regions) {
     g_lnk_cobj_cache.failed = 1;
   } else {
     g_lnk_cobj_cache.veh = AddVectoredExceptionHandler(1, lnk_cobj_veh);

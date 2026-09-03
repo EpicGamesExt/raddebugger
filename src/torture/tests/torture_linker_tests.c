@@ -451,6 +451,49 @@ TEST(compressed_debug_reloc_parity)
 #endif
 }
 
+TEST(compressed_cache_shard_boundary)
+{
+#if OS_WINDOWS
+  String8 compressor = str8f(arena, "%S/build/rad_obj_compress.exe", t_cwd_path());
+  if (!file_path_exists(compressor)) { TestSkip(); }
+
+  // Cross the production 256 MiB backing boundary, including a partial final
+  // write group. Distinct segment markers expose shard-local offset mistakes.
+  U64 size = MB(256) + KB(128) + 17;
+  U8 *bytes = push_array(arena, U8, size);
+  for (U64 off = 0; off + sizeof(U64) <= size; off += KB(64)) {
+    *(U64 *)(bytes + off) = off ^ 0x123456789abcdef0ull;
+  }
+  bytes[size - 1] = 0x5a;
+  COFF_ObjWriter *writer = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+  coff_obj_writer_push_section(writer, str8_lit(".data"),
+      COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite,
+      str8(bytes, size));
+  T_Ok(t_write_file(str8_lit("shard_input.obj"), coff_obj_writer_serialize(arena, writer)));
+  coff_obj_writer_release(&writer);
+  T_Ok(t_write_entry_obj());
+  char *args = "/subsystem:console /entry:entry /debug:full /opt:noref,noicf /rad_time_stamp:0 /rad_workers:4 /rad_unmap_workers:4 /rad_cobj_one_shot:no /out:shards.exe /pdbaltpath:shards.pdb entry.obj shard_input.obj";
+  t_invoke_linkerf("%s", args);
+  T_Ok(g_last_exit_code == 0);
+  String8 expected_image = t_read_file(arena, str8_lit("shards.exe"));
+  String8 expected_pdb = t_read_file(arena, str8_lit("shards.pdb"));
+  T_Ok(expected_image.size >= size);
+  T_Ok(t_invoke(compressor, str8_lit("shard_input.obj compressed.obj 64 kraken 256 fast"), TIMEOUT_SEC(30)));
+  T_Ok(g_last_exit_code == 0);
+  T_Ok(t_write_file(str8_lit("shard_input.obj"), t_read_file(arena, str8_lit("compressed.obj"))));
+  // Both frozen and destructively reset generations must preserve every byte.
+  char *freeze_modes[] = {"yes", "no"};
+  for EachIndex(i, ArrayCount(freeze_modes)) {
+    t_invoke_linkerf("%s /rad_cobj_trim_ws:yes /rad_cobj_cache_freeze:%s", args, freeze_modes[i]);
+    T_Ok(g_last_exit_code == 0);
+    T_Ok(str8_match(expected_image, t_read_file(arena, str8_lit("shards.exe")), 0));
+    T_Ok(str8_match(expected_pdb, t_read_file(arena, str8_lit("shards.pdb")), 0));
+  }
+#else
+  TestSkip();
+#endif
+}
+
 TEST(compressed_icf_debug_record_selection)
 {
 #if OS_WINDOWS
