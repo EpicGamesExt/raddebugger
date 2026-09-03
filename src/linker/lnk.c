@@ -969,19 +969,19 @@ lnk_inputer_push_lib_thin(LNK_Inputer *inputer, LNK_Config *config, LNK_InputSou
 }
 
 internal B32
-lnk_inputer_has_items(LNK_Inputer *inputer)
+lnk_has_pending_input_work(LNK_Inputer *inputer, LNK_Link *link)
 {
   if (inputer->new_objs.count > 0) {
     return 1;
   }
-
   for EachIndex(i, ArrayCount(inputer->new_libs)) {
     if (inputer->new_libs[i].count > 0) {
       return 1;
     }
   }
-
-  return 0;
+  return *link->last_include     != 0 ||
+         *link->last_default_lib != 0 ||
+         *link->last_obj_lib     != 0;
 }
 
 internal LNK_InputPtrArray
@@ -1670,7 +1670,9 @@ lnk_link_inputs(TP_Context      *tp,
   for (U64 resolved_members_count = 0; ; resolved_members_count = 0) {
     ProfBegin("Search Pass");
 
-    lnk_load_inputs(tp, arena, config, inputer, symtab, link);
+    if (lnk_has_pending_input_work(inputer, link)) {
+      lnk_load_inputs(tp, arena, config, inputer, symtab, link);
+    }
 
     for EachNode(lib_n, LNK_LibNode, link->libs.first) {
       LNK_Lib *lib = &lib_n->data;
@@ -1740,7 +1742,9 @@ lnk_link_inputs(TP_Context      *tp,
 
       ProfBeginV("Search %S", str8_skip_last_slash(lib->path));
       do {
-        lnk_load_inputs(tp, arena, config, inputer, symtab, link);
+        if (lnk_has_pending_input_work(inputer, link)) {
+          lnk_load_inputs(tp, arena, config, inputer, symtab, link);
+        }
 
         if (link_whole_archive) {
           local_persist LNK_Symbol *null_symbol = 0;
@@ -1895,7 +1899,7 @@ lnk_link_inputs(TP_Context      *tp,
         }
 
         resolved_members_count += queued_members.count;
-      } while (lnk_inputer_has_items(inputer));
+      } while (lnk_has_pending_input_work(inputer, link));
       ProfEnd();
     }
 
@@ -1933,7 +1937,7 @@ lnk_link_inputs(TP_Context      *tp,
         }
       }
 
-      resolved_members_count = lnk_inputer_has_items(inputer);
+      resolved_members_count = lnk_has_pending_input_work(inputer, link);
     }
 
     ProfEnd();
