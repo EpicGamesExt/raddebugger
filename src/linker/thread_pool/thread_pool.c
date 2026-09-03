@@ -182,6 +182,13 @@ tp_temp_end(TP_Temp temp)
 internal void
 tp_for_parallel(TP_Context *pool, TP_Arena *task_arena, U64 task_count, TP_TaskFunc *task_func, void *task_data)
 {
+  // fast path for single tasks to bypass syncs
+  if (task_count == 1) {
+    Arena *arena = task_arena ? task_arena->v[0] : 0;
+    task_func(arena, 0, 0, task_data, pool);
+    return;
+  }
+
   if (task_count) {
     // init run
     pool->task_arena = task_arena;
