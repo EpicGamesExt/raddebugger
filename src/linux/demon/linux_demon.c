@@ -112,6 +112,7 @@ lnx_dmn_module_info_from_process_module(Arena *arena, pid_t pid, int memory_fd, 
     
     //- rjf: unpack elf header info
     Arch arch = Arch_Null;
+    U64 entry_point = 0;
     U64 entry_point_voff = 0;
     ELF_Type elf_type = ELF_Type_None;
     U64 phdrs_off = 0;
@@ -156,7 +157,7 @@ lnx_dmn_module_info_from_process_module(Arena *arena, pid_t pid, int memory_fd, 
       
       // rjf: unpack ehdr
       arch               = arch_from_elf_machine(ehdr.e_machine);
-      entry_point_voff   = ehdr.e_entry - base_vaddr;
+      entry_point        = ehdr.e_entry;
       elf_type           = ehdr.e_type;
       phdrs_off          = ehdr.e_phoff;
       phdrs_entry_size   = ehdr.e_phentsize;
@@ -173,11 +174,15 @@ lnx_dmn_module_info_from_process_module(Arena *arena, pid_t pid, int memory_fd, 
     {
       module_rebase = base_vaddr;
     }
+    entry_point_voff = module_rebase + entry_point - base_vaddr;
     
     //- rjf: determine shdrs/phdrs addresses
-    U64 phdrs_vaddr = module_rebase + phdrs_off;
+    // NOTE: e_phoff/e_shoff are file offsets. base_vaddr points at the mapping
+    // of file offset zero for both ET_EXEC and ET_DYN images. module_rebase is
+    // instead the load bias used to relocate ELF virtual addresses.
+    U64 phdrs_vaddr = base_vaddr + phdrs_off;
     U64 phdrs_vaddr_opl = phdrs_vaddr + phdrs_count*phdrs_entry_size;
-    U64 shdrs_vaddr = module_rebase + shdrs_off;
+    U64 shdrs_vaddr = base_vaddr + shdrs_off;
     
     //- rjf: scan phdrs, unpack info
     U64 image_vsize = 0;
@@ -464,13 +469,26 @@ lnx_dmn_process_alloc(pid_t pid, LNX_DMN_ProcessState state, LNX_DMN_Process *pa
 }
 
 internal LNX_DMN_Module *
-lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64 name_vaddr, U64 name_space_id, B32 is_main)
+lnx_dmn_module_from_base_vaddr(LNX_DMN_ProcessCtx *ctx, U64 base_vaddr)
 {
-  //- rjf: find this module, if it is already loaded
   LNX_DMN_Module *module = 0;
-  U64 hash = u64_hash_from_str8(str8_struct(&base_vaddr));
-  U64 slot_idx = hash%ctx->module_slots_count;
+  if(base_vaddr == 0)
   {
+    // glibc records a fixed-address main executable in link_map with a zero
+    // load bias, even though the image itself has a nonzero base address.
+    for(LNX_DMN_Module *m = ctx->first_module; m != 0; m = m->order_next)
+    {
+      if(m->is_main)
+      {
+        module = m;
+        break;
+      }
+    }
+  }
+  else
+  {
+    U64 hash = u64_hash_from_str8(str8_struct(&base_vaddr));
+    U64 slot_idx = hash%ctx->module_slots_count;
     for(LNX_DMN_Module *m = ctx->module_slots[slot_idx].first; m != 0; m = m->hash_next)
     {
       if(m->base_vaddr == base_vaddr)
@@ -480,6 +498,16 @@ lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64
       }
     }
   }
+  return module;
+}
+
+internal LNX_DMN_Module *
+lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64 name_vaddr, U64 name_space_id, B32 is_main)
+{
+  //- rjf: find this module, if it is already loaded
+  LNX_DMN_Module *module = lnx_dmn_module_from_base_vaddr(ctx, base_vaddr);
+  U64 hash = u64_hash_from_str8(str8_struct(&base_vaddr));
+  U64 slot_idx = hash%ctx->module_slots_count;
   
   //- rjf: load this module if it's not already loaded
   if(module == 0)
@@ -492,7 +520,7 @@ lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64
     
     // rjf: unpack module's vaddr range
     U64 module_rebase = module_ehdr.e_type == ELF_Type_Dyn ? base_vaddr : 0;
-    U64 module_phdr_vaddr = module_rebase + module_ehdr.e_phoff;
+    U64 module_phdr_vaddr = base_vaddr + module_ehdr.e_phoff;
     Rng1U64 module_vrange = lnx_dmn_vaddr_range_from_phdrs(memory_fd, module_ehdr.e_ident[ELF_Identifier_Class], module_rebase, module_phdr_vaddr, module_ehdr.e_phentsize, module_ehdr.e_phnum);
     
     // rjf: read TLS index and TLS offset
@@ -1875,19 +1903,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                           if(gnu_read_link_map(lnx_dmn_machine_op_mem_read, &process->fd, map_vaddr, process->ctx->dl_class, &map) != MachineOpResult_Ok) { break; }
                           
                           // was module already loaded?
-                          LNX_DMN_Module *module = 0;
-                          {
-                            U64 hash = u64_hash_from_str8(str8_struct(&map.addr_vaddr));
-                            U64 slot_idx = hash%process->ctx->module_slots_count;
-                            for(LNX_DMN_Module *m = process->ctx->module_slots[slot_idx].first; m != 0; m = m->hash_next)
-                            {
-                              if(m->base_vaddr == map.addr_vaddr)
-                              {
-                                module = m;
-                                break;
-                              }
-                            }
-                          }
+                          LNX_DMN_Module *module = lnx_dmn_module_from_base_vaddr(process->ctx, map.addr_vaddr);
                           
                           // rjf: load module
                           if(module == 0)
@@ -1938,15 +1954,10 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                           GNU_LinkMapList link_map_list = gnu_parse_link_map_list(scratch.arena, is_64bit, rdebug_n->v.r_map, lnx_dmn_machine_op_mem_read, &process->fd);
                           for EachNode(link_map_n, GNU_LinkMapNode, link_map_list.first)
                           {
-                            U64 hash = u64_hash_from_str8(str8_struct(&link_map_n->v.addr_vaddr));
-                            U64 slot_idx = hash%ctx->module_slots_count;
-                            for(LNX_DMN_Module *m = ctx->module_slots[slot_idx].first; m != 0; m = m->hash_next)
+                            LNX_DMN_Module *m = lnx_dmn_module_from_base_vaddr(ctx, link_map_n->v.addr_vaddr);
+                            if(m != 0)
                             {
-                              if(m->base_vaddr == link_map_n->v.addr_vaddr)
-                              {
-                                m->is_live = 1;
-                                break;
-                              }
+                              m->is_live = 1;
                             }
                           }
                         }
@@ -2963,15 +2974,8 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           ctx->xsave_layout      = xsave_layout;
           
           //- rjf: create main module
-          LNX_DMN_Module *main_module = lnx_dmn_module_alloc(ctx, new_process->fd, base_vaddr, auxv.execfn, 1, 1);
+          lnx_dmn_module_alloc(ctx, new_process->fd, base_vaddr, auxv.execfn, 1, 1);
           
-          //- rjf: glibc has a shortcut mapping for the main module; ensure 0 base address goes to it
-          {
-            U64 vaddr = 0;
-            U64 hash = u64_hash_from_str8(str8_struct(&vaddr));
-            U64 slot_idx = hash%ctx->module_slots_count;
-            DLLPushBack_NP(ctx->module_slots[slot_idx].first, ctx->module_slots[slot_idx].last, main_module, hash_next, hash_prev);
-          }
         }
         
         ////////////////////////
