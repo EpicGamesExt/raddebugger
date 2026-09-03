@@ -949,8 +949,10 @@ t_match_linef(String8 *output, char *fmt, ...)
 }
 
 force_inline int
-t_test_info_is_before(TestInfo **a, TestInfo **b)
+t_test_info_is_before(void *a_, void *b_)
 {
+  TestInfo **a = a_;
+  TestInfo **b = b_;
   String8 layer_a = a[0]->layer;
   String8 layer_b = b[0]->layer;
   int cmp = str8_compar(layer_a, layer_b, 0);
@@ -1135,7 +1137,7 @@ t_entry_point(CmdLine *cmdline)
   // Gather tests
   {
     for EachIndex(i, test_infos_count) { g_sorted_test_infos[i] = &test_infos[i]; }
-    radsort(g_sorted_test_infos, test_infos_count, (int (*)(void *, void *))t_test_info_is_before);
+    radsort(g_sorted_test_infos, test_infos_count, t_test_info_is_before);
   }
   
   //
