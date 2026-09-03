@@ -98,6 +98,7 @@ typedef struct LNK_Link
   LNK_LibList              libs;
   LNK_ObjNode            **last_symbol_input;
   LNK_IncludeSymbolNode  **last_include;
+  LNK_AltNameNode        **last_func_override_alt_name;
   String8Node            **last_cmd_lib;
   String8Node            **last_default_lib;
   String8Node            **last_obj_lib;

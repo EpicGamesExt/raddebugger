@@ -1142,6 +1142,7 @@ lnk_link_init(TP_Arena *arena, LNK_Config *config)
   link->arena                      = arena_alloc(.name = "LINK");
   link->last_symbol_input          = &link->objs.first;
   link->last_include               = &config->include_symbol_list.first;
+  link->last_func_override_alt_name = &config->alt_name_list.first;
   link->last_default_lib           = &config->input_default_lib_list.first;
   link->last_obj_lib               = &config->input_obj_lib_list.first;
   link->last_cmd_lib               = &config->input_list[LNK_Input_Lib].first;
@@ -1310,8 +1311,8 @@ lnk_load_inputs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer
   {
     B32 has_function_overrides = 0;
 
-    for EachNode(alt_name_n, LNK_AltNameNode, config->alt_name_list.first) {
-      LNK_AltName alt_name = alt_name_n->v;
+    for (; *link->last_func_override_alt_name; link->last_func_override_alt_name = &(*link->last_func_override_alt_name)->next) {
+      LNK_AltName alt_name = (*link->last_func_override_alt_name)->v;
       if ( ! str8_ends_with(alt_name.from, str8_lit("$fo$"), 0)) {
         continue;
       }
