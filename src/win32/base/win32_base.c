@@ -695,7 +695,10 @@ semaphore_take(Semaphore semaphore, U64 endt_us)
 internal void
 semaphore_drop_count(Semaphore semaphore, U64 drop_count)
 {
-  ReleaseSemaphore((HANDLE)*semaphore.u64, drop_count, 0);
+  BOOL ok = ReleaseSemaphore((HANDLE)*semaphore.u64, drop_count, 0);
+  // Do not log here: stderr may itself be a detoured pipe, and blocking before the assertion
+  // would convert a synchronization failure into an undiagnosable process hang.
+  AssertAlways(ok);
 }
 
 internal B32
@@ -729,14 +732,9 @@ semaphore_drop_n(Semaphore semaphore, U32 count)
     HANDLE handle = (HANDLE)semaphore.u64[0];
     BOOL ok = ReleaseSemaphore(handle, count, 0);
     if (!ok) {
-      // The non-shared thread pool intentionally batches a wake of up to
-      // worker_count permits onto a semaphore that may still hold un-retaken
-      // permits from a prior pass; the surplus clamps at the max and the OS
-      // returns ERROR_TOO_MANY_POSTS. That is a benign over-wake (workers are
-      // already runnable), so tolerate it -- but ONLY it. Any other failure
-      // (e.g. a bad handle) is a real bug and must not be swallowed.
-      DWORD err = GetLastError();
-      AssertAlways(err == ERROR_TOO_MANY_POSTS);
+      // ReleaseSemaphore is all-or-nothing: ERROR_TOO_MANY_POSTS does not clamp
+      // the count. Ignoring any failure can therefore strand a thread-pool grant.
+      AssertAlways(ok);
     }
   }
 }

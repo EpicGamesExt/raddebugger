@@ -64,6 +64,8 @@ tp_worker_main(void *raw_worker)
 //~ SHARED-mode governor stats (summary line). Zero cost when the pool is off:
 //  every call site below is on a shared-mode-only path.
 
+#define TP_STALL_ABORT_US  30000000ull
+
 global TP_SharedStats g_tp_shared_stats;
 
 internal void
@@ -576,8 +578,15 @@ tp_for_parallel(TP_Context *pool, TP_Arena *task_arena, U64 task_count, TP_TaskF
   // worker will consume, drain immediately (task_left<0), and account for. So
   // `granted` monotonically drains to 0 once the governor has stopped; spin
   // until it does. This is brief (workers see task_left<0 and exit at once).
+  U64 stall_begin_us = now_time_us();
   for (; ins_atomic_u64_eval((U64 *)&pool->granted) != 0; ) {
     sleep_ms(0);
+    U64 elapsed_us = now_time_us() - stall_begin_us;
+    if (elapsed_us >= TP_STALL_ABORT_US) {
+      // Never perform stderr I/O here. Under UBA that enters the WriteFile detour and can block,
+      // turning the diagnostic path itself into a permanent hang before the fail-fast executes.
+      AssertAlways(0);
+    }
   }
 }
 
