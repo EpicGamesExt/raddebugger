@@ -301,9 +301,13 @@ tp_governor_main(void *raw_pool)
           }
         }
       } else {
-        // No demand right now (work drained or fully covered). Briefly idle; the
-        // pass-end ping will release us promptly via the outer take when we loop.
-        sleep_ms(0);
+        // This pass needs no more grants. task_left only decreases, and a worker
+        // returns its grant only after draining the shared queue: demand cannot
+        // become uncovered again within this pass. Park on the outer semaphore;
+        // the next path-A dispatch (or shutdown) supplies a persistent wake.
+        // Sleep(0) here just yielded repeatedly, burning a core while long-running
+        // tasks finished, including the entire explicit input-unmap pass.
+        break;
       }
     }
   }

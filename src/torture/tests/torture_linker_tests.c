@@ -1,6 +1,84 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
+typedef struct T_SharedPoolTask
+{
+  U64 visits[64];
+  U32 delay_ms;
+  B32 use_barrier;
+} T_SharedPoolTask;
+
+internal THREAD_POOL_TASK_FUNC(t_shared_pool_task)
+{
+  T_SharedPoolTask *task = raw_task;
+  ins_atomic_u64_inc_eval(&task->visits[task_id]);
+  if (task->delay_ms) { sleep_ms(task->delay_ms); }
+  if (task->use_barrier) { barrier_wait(tp->barrier); }
+}
+
+TEST(shared_pool_governor_repeated_passes)
+{
+#if OS_WINDOWS
+  // An isolated budget must not borrow from (or disturb) running production links.
+  String8 name = str8f(arena, "radlink-torture-governor-%u-%llu", GetCurrentProcessId(), now_time_us());
+  TP_Context *pool = tp_alloc(arena, 4, 4, name);
+  T_SharedPoolTask task = {0};
+  tp_for_parallel(pool, 0, 64, t_shared_pool_task, &task);
+
+  // Measure, but do not assert a timing threshold on a shared/busy test machine.
+  // The old governor burns a core while these already-assigned tasks sleep.
+  W32_Entity *governor = (W32_Entity *)PtrFromInt(pool->governor_handle.u64[0]);
+  FILETIME created, exited, kernel_before, user_before, kernel_after, user_after;
+  B32 before_ok = GetThreadTimes(governor->thread.handle, &created, &exited, &kernel_before, &user_before);
+  MemoryZeroStruct(&task);
+  task.delay_ms = 200;
+  tp_for_parallel(pool, 0, 3, t_shared_pool_task, &task);
+  B32 after_ok = GetThreadTimes(governor->thread.handle, &created, &exited, &kernel_after, &user_after);
+  for EachIndex(i, 3) { T_Ok(task.visits[i] == 1); }
+  T_Ok(before_ok && after_ok);
+  if (before_ok && after_ok) {
+    U64 cpu_before = (((U64)kernel_before.dwHighDateTime << 32) | kernel_before.dwLowDateTime) +
+                     (((U64)user_before.dwHighDateTime << 32) | user_before.dwLowDateTime);
+    U64 cpu_after = (((U64)kernel_after.dwHighDateTime << 32) | kernel_after.dwLowDateTime) +
+                    (((U64)user_after.dwHighDateTime << 32) | user_after.dwLowDateTime);
+    fprintf(stdout, "[shared governor] covered-pass CPU: %.3f ms\n", (F64)(cpu_after - cpu_before) / 10000.0);
+  }
+
+  // Exercise wake coalescing, tiny/queued passes, and path-A/path-B transitions.
+  U64 counts[] = {1, 2, 3, 5, 31, 64};
+  for EachIndex(pass, 96) {
+    MemoryZeroStruct(&task);
+    U64 count = counts[pass % ArrayCount(counts)];
+    task.delay_ms = (pass % 12 == 0) ? 1 : 0;
+    tp_for_parallel(pool, 0, count, t_shared_pool_task, &task);
+    for EachIndex(i, count) { T_Ok(task.visits[i] == 1); }
+    T_Ok(ins_atomic_u64_eval(&pool->granted) == 0);
+
+    MemoryZeroStruct(&task);
+    task.use_barrier = 1;
+    U64 cohort = tp_barrier_begin(pool);
+    tp_for_parallel_reserve(pool, 0, cohort, t_shared_pool_task, &task);
+    tp_barrier_end(pool);
+    for EachIndex(i, cohort) { T_Ok(task.visits[i] == 1); }
+  }
+
+  // Join before releasing test-owned storage/synchronization. thread_join consumes
+  // each handle; clear it before the common release path detaches remaining handles.
+  pool->is_live = 0;
+  semaphore_drop_if_room(pool->governor_semaphore);
+  for (U64 i = 1; i < pool->worker_count; ++i) { semaphore_drop(pool->wake_semaphore); }
+  for (U64 i = 1; i < pool->worker_count; ++i) {
+    T_Ok(thread_join(pool->worker_arr[i].handle, max_U64));
+    MemoryZeroStruct(&pool->worker_arr[i].handle);
+  }
+  T_Ok(thread_join(pool->governor_handle, max_U64));
+  MemoryZeroStruct(&pool->governor_handle);
+  tp_release(pool);
+#else
+  TestSkip();
+#endif
+}
+
 internal String8
 t_codec_test_pdb_data(Arena *arena)
 {
