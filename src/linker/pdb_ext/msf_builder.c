@@ -635,9 +635,10 @@ msf_find_max_pn_(MSF_PageDataList page_data_list, MSF_UInt page_size, MSF_PageNu
       // FPM is empty
       if (msb_idx >= hi) { break; }
 
-      // hit FPM page -- keep going
+      // Skip reserved FPM pages, but not slot 0: after the file header's
+      // interval, that slot can contain stream data.
       U64 k = msb_idx % fpm_interval_wrong;
-      if (k < 3) {
+      if (k == MSF_FPM0 || k == MSF_FPM1) {
         hi = msb_idx;
         continue;
       }
@@ -648,7 +649,7 @@ msf_find_max_pn_(MSF_PageDataList page_data_list, MSF_UInt page_size, MSF_PageNu
 
     // stop if there is a page
     if (bit_idx != max_U64) {
-      max_pn = Max(bit_idx, 2) + fpm_pn_idx * fpm_interval_correct;
+      max_pn = Max(bit_idx + fpm_pn_idx * fpm_interval_correct, MSF_FPM1);
       break;
     }
   }
@@ -1607,7 +1608,9 @@ msf_build_header(MSF_Context *msf, MSF_UInt stream_table_size)
   MemoryCopy(&header.magic[0], &msf_msf70_magic[0], sizeof(msf_msf70_magic));
   header.page_size         = msf->page_size;
   header.active_fpm        = msf->active_fpm;
-  header.page_count        = msf->page_count;
+  // The allocator also counts reserved FPM pages beyond the serialized extent.
+  // The stream table and root are finalized; use the same extent as the writer.
+  header.page_count        = (MSF_UInt)(msf_get_save_size(msf) / msf->page_size);
   header.stream_table_size = stream_table_size;
   header.unknown           = 0;
   header.root_pn           = msf->root_page_list.first->pn;
