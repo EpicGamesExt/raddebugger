@@ -18,7 +18,8 @@ typedef struct LNK_Lib
   
   struct LNK_SymbolHashTrieChunk **search_cursor_chunks;
   U64                             *search_cursor_indices;
-  B32                              searched_anti_deps;
+  struct LNK_SymbolHashTrieChunk **anti_dep_search_cursor_chunks;
+  U64                             *anti_dep_search_cursor_indices;
 } LNK_Lib;
  
 typedef struct LNK_LibNode

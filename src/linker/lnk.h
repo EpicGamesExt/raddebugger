@@ -206,7 +206,6 @@ typedef struct LNK_BaseRelocPageArray
 typedef struct
 {
   B32                   search_anti_deps;
-  B32                   reset_search_cursor;
   LNK_Link             *link;
   HashMap              *imports_hm;
   LNK_SymbolTable      *symtab;

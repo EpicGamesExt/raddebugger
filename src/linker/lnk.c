@@ -1532,8 +1532,8 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
   LNK_LibMemberInfo    *lib_member_infos = task->lib_member_infos;
   LNK_LibMemberRefList *member_ref_list  = &task->member_ref_lists[task_id];
 
-  LNK_SymbolHashTrieChunk *start_chunk = task->reset_search_cursor ? 0 : lib->search_cursor_chunks[task_id];
-  U64                      start_idx   = task->reset_search_cursor ? 0 : lib->search_cursor_indices[task_id];
+  LNK_SymbolHashTrieChunk *start_chunk = lib->search_cursor_chunks[task_id];
+  U64                      start_idx   = lib->search_cursor_indices[task_id];
   LNK_SymbolHashTrieChunk *end_chunk   = symtab->search_chunks[task_id].last;
   U64                      end_count   = end_chunk ? end_chunk->count : 0;
 
@@ -1549,16 +1549,30 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
         if (lnk_search_lib(lib, symbol->name, &member_idx)) {
           lnk_queue_lib_member(arena, task->imports_hm, task->link->lib_member_infos_hm, member_ref_list, symbol, lib, lib_member_infos, member_idx);
         }
-      } else if (search_type == LNK_SymbolSearch_WeakAntiDependency && search_anti_deps) {
-        LNK_ObjSymbolRef symbol_ref = lnk_ref_from_symbol(symbol);
-        LNK_ObjSymbolRef dep_symbol = {0};
-        if (lnk_resolve_weak_symbol(symtab, symbol_ref, &dep_symbol)) {
-          COFF_ParsedSymbol          dep_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(dep_symbol.obj, dep_symbol.symbol_idx);
-          COFF_SymbolValueInterpType dep_interp = coff_interp_from_parsed_symbol(dep_parsed);
-          if (dep_interp == COFF_SymbolValueInterp_Weak) {
-            U32 member_idx;
-            if (lnk_search_lib(lib, symbol->name, &member_idx)) {
-              lnk_queue_lib_member(arena, task->imports_hm, task->link->lib_member_infos_hm, member_ref_list, symbol, lib, lib_member_infos, member_idx);
+      }
+    }
+  }
+
+  if (search_anti_deps) {
+    start_chunk = lib->anti_dep_search_cursor_chunks[task_id];
+    start_idx   = lib->anti_dep_search_cursor_indices[task_id];
+    for EachNode(c, LNK_SymbolHashTrieChunk, start_chunk ? start_chunk : symtab->search_chunks[task_id].first) {
+      U64 i_begin = (c == start_chunk) ? start_idx : 0;
+      U64 i_end   = (c == end_chunk)   ? end_count : c->count;
+      for (U64 i = i_begin; i < i_end; i += 1) {
+        LNK_Symbol          *symbol      = c->v[i].symbol;
+        LNK_SymbolSearchType search_type = lnk_search_type_from_symbol(symbol);
+        if (search_type == LNK_SymbolSearch_WeakAntiDependency) {
+          LNK_ObjSymbolRef symbol_ref = lnk_ref_from_symbol(symbol);
+          LNK_ObjSymbolRef dep_symbol = {0};
+          if (lnk_resolve_weak_symbol(symtab, symbol_ref, &dep_symbol)) {
+            COFF_ParsedSymbol          dep_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(dep_symbol.obj, dep_symbol.symbol_idx);
+            COFF_SymbolValueInterpType dep_interp = coff_interp_from_parsed_symbol(dep_parsed);
+            if (dep_interp == COFF_SymbolValueInterp_Weak) {
+              U32 member_idx;
+              if (lnk_search_lib(lib, symbol->name, &member_idx)) {
+                lnk_queue_lib_member(arena, task->imports_hm, task->link->lib_member_infos_hm, member_ref_list, symbol, lib, lib_member_infos, member_idx);
+              }
             }
           }
         }
@@ -1569,6 +1583,10 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
   // cache search cursors
   lib->search_cursor_chunks[task_id]  = end_chunk;
   lib->search_cursor_indices[task_id] = end_count;
+  if (search_anti_deps) {
+    lib->anti_dep_search_cursor_chunks[task_id]  = end_chunk;
+    lib->anti_dep_search_cursor_indices[task_id] = end_count;
+  }
 }
 
 internal U64
@@ -1576,8 +1594,8 @@ lnk_search_lib_task_work_count(LNK_SearchLibTask *task, U64 task_id)
 {
   LNK_Lib                 *lib         = task->lib;
   LNK_SymbolTable         *symtab      = task->symtab;
-  LNK_SymbolHashTrieChunk *start_chunk = task->reset_search_cursor ? 0 : lib->search_cursor_chunks[task_id];
-  U64                      start_idx   = task->reset_search_cursor ? 0 : lib->search_cursor_indices[task_id];
+  LNK_SymbolHashTrieChunk *start_chunk = lib->search_cursor_chunks[task_id];
+  U64                      start_idx   = lib->search_cursor_indices[task_id];
   LNK_SymbolHashTrieChunk *end_chunk   = symtab->search_chunks[task_id].last;
   U64                      end_count   = end_chunk ? end_chunk->count : 0;
 
@@ -1586,6 +1604,15 @@ lnk_search_lib_task_work_count(LNK_SearchLibTask *task, U64 task_id)
     U64 i_begin = (c == start_chunk) ? start_idx : 0;
     U64 i_end   = (c == end_chunk)   ? end_count : c->count;
     work_count += i_end - i_begin;
+  }
+  if (task->search_anti_deps) {
+    start_chunk = lib->anti_dep_search_cursor_chunks[task_id];
+    start_idx   = lib->anti_dep_search_cursor_indices[task_id];
+    for EachNode(c, LNK_SymbolHashTrieChunk, start_chunk ? start_chunk : symtab->search_chunks[task_id].first) {
+      U64 i_begin = (c == start_chunk) ? start_idx : 0;
+      U64 i_end   = (c == end_chunk)   ? end_count : c->count;
+      work_count += i_end - i_begin;
+    }
   }
   return work_count;
 }
@@ -1728,24 +1755,22 @@ lnk_link_inputs(TP_Context      *tp,
         } else { // search symbols in lib
           MemoryZeroTyped(member_ref_lists, tp->worker_count);
 
-          // anti-dep mode changes which weak symbols can resolve from this lib
-          B32 reset_search_cursor = lib->search_cursor_chunks != 0 && lib->searched_anti_deps != search_anti_deps;
-
           // lazy alloc cursors for tracking searched symbols
           if (lib->search_cursor_chunks == 0) {
-            lib->search_cursor_chunks  = push_array(link->arena, LNK_SymbolHashTrieChunk *, tp->worker_count);
-            lib->search_cursor_indices = push_array(link->arena, U64,                       tp->worker_count);
+            lib->search_cursor_chunks           = push_array(link->arena, LNK_SymbolHashTrieChunk *, tp->worker_count);
+            lib->search_cursor_indices          = push_array(link->arena, U64,                       tp->worker_count);
+            lib->anti_dep_search_cursor_chunks  = push_array(link->arena, LNK_SymbolHashTrieChunk *, tp->worker_count);
+            lib->anti_dep_search_cursor_indices = push_array(link->arena, U64,                       tp->worker_count);
           }
 
           LNK_SearchLibTask search_task = {
-            .search_anti_deps    = search_anti_deps,
-            .reset_search_cursor = reset_search_cursor,
-            .link                = link,
-            .imports_hm          = &imports_hm,
-            .lib                 = lib,
-            .symtab              = symtab,
-            .lib_member_infos    = lib_member_infos,
-            .member_ref_lists    = member_ref_lists
+            .search_anti_deps = search_anti_deps,
+            .link             = link,
+            .imports_hm       = &imports_hm,
+            .lib              = lib,
+            .symtab           = symtab,
+            .lib_member_infos = lib_member_infos,
+            .member_ref_lists = member_ref_lists
           };
           enum { serial_work_limit = 16384 };
           U64 search_work_count = 0;
@@ -1764,9 +1789,6 @@ lnk_link_inputs(TP_Context      *tp,
           } else {
             tp_for_parallel(tp, arena, tp->worker_count, lnk_search_lib_task, &search_task);
           }
-
-          // cache last search mode, if the mode changes then skipped weak anti-dependency must be searched again
-          lib->searched_anti_deps = search_anti_deps;
         }
 
         LNK_LibMemberRefList queued_members = {0};
