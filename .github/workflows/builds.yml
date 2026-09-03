@@ -26,7 +26,7 @@ jobs:
         compiler:
           - clang-17
           - clang-22
-          # TODO: - gcc
+          - gcc
     
     name: ${{ matrix.target }}-${{ matrix.compiler }}-ubuntu24
 
@@ -65,11 +65,15 @@ jobs:
 
       - name: Build (debug)
         shell: bash
-        run: ./build.sh "${{ matrix.target }}" debug
+        run: |
+          export CC_BUILD="${{ matrix.compiler }}"
+          ./build.sh "${{ matrix.target }}" debug ${CC_BUILD%%-*}
 
       - name: Build (release)
         shell: bash
-        run: ./build.sh "${{ matrix.target }}" release
+        run: |
+          export CC_BUILD="${{ matrix.compiler }}"
+          ./build.sh "${{ matrix.target }}" release ${CC_BUILD%%-*}
 
   build-windows-vs2022:
     runs-on: windows-2022
