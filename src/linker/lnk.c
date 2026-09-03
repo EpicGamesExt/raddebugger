@@ -1159,11 +1159,10 @@ lnk_inputer_release_file_maps(TP_Context *tp, U64 worker_cap, LNK_Inputer *input
   }
   Assert(mapped_input_idx == mapped_input_count);
 
-  // UnmapViewOfFile serializes on the process address-space lock: with the
-  // full pool every worker camps in the kernel for the whole pass (measured
-  // ~257s of kernel CPU for a ~4.1s wall pass at 64 workers on the FN editor
-  // DLL). Cap the lanes like the other fault/VAD-bound stages -- same wall,
-  // a fraction of the spin.
+  // Unmaps contend on process address-space and system page-list locks. Tune
+  // their width independently of debug parsing: more cleanup lanes can spend
+  // their time spinning in the kernel instead of reclaiming pages. Keep the
+  // joined boundary so all input views are gone before the caller continues.
   lnk_tp_for_parallel_capped(tp, 0, worker_cap, mapped_input_count, lnk_release_file_map_task, mapped_inputs);
 
   scratch_end(scratch);
@@ -7811,7 +7810,7 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
 #if OS_WINDOWS
   // for unexplained reasons, file mappings on Windows cause slow process exit times
   ProfBegin("Release Input File Maps");
-  lnk_inputer_release_file_maps(tp, config->debug_worker_cap, inputer);
+  lnk_inputer_release_file_maps(tp, config->unmap_worker_cap, inputer);
   ProfEnd();
 #endif
 

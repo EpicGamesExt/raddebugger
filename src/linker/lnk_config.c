@@ -115,6 +115,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_Version,                      0, LNK_CmdValueKind_Null,   "RAD_VERSION",                          "",                     "Print version and exit."                                                          },
   { LNK_CmdSwitch_Rad_Workers,                      0, LNK_CmdValueKind_Scalar, "RAD_WORKERS",                          ":#",                   "Set number of workers created in the pool. Number is capped at 1024. When /RAD_SHARED_THREAD_POOL is specified this number cant exceed /RAD_SHARED_THREAD_POOL_MAX_WORKERS." },
   { LNK_CmdSwitch_Rad_DebugWorkers,                 0, LNK_CmdValueKind_Scalar, "RAD_DEBUG_WORKERS",                    ":#",                   "Cap concurrent workers in page-fault-bound debug-input stages (parse/prefetch). Default 20; 0 = uncapped. Output is identical either way; the cap only trades idle spinning in the kernel page-fault path for free cores." },
+  { LNK_CmdSwitch_Rad_UnmapWorkers,                 0, LNK_CmdValueKind_Scalar, "RAD_UNMAP_WORKERS",                    ":#",                   "Cap concurrent workers releasing input mappings, independently of debug processing. Default inherits RAD_DEBUG_WORKERS; 0 = uncapped." },
   { LNK_CmdSwitch_Rad_WorkDir,                      0, LNK_CmdValueKind_Scalar, "RAD_WORK_DIR",                         ":PATH",                "Working directory used for stable debug paths."                                   },
 
   { LNK_CmdSwitch_RadTypeServer,                   0, LNK_CmdValueKind_Scalar, "RAD_TYPE_SERVER", ":FILENAME", "Merge types and store them in the specified file. The filename must have the .rrt extension." },
@@ -2371,6 +2372,9 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
     }
   } break;
 
+  case LNK_CmdSwitch_Rad_UnmapWorkers: {
+    lnk_cmd_switch_parse_u64(obj, cmd_switch, value, &config->unmap_worker_cap, 0);
+  } break;
 
   case LNK_CmdSwitch_Rad_WorkDir: {
     lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value, &config->work_dir);
@@ -3029,6 +3033,12 @@ lnk_config_init(U64 argc, char **argv)
   // apply command line switches
   for EachNode(cmd, LNK_CmdOption, cmd_line.first_option) {
     lnk_apply_cmd_option_to_config(config, cmd->string, cmd->value, 0);
+  }
+
+  // Preserve the existing cleanup width unless explicitly overridden. Unmap
+  // page-list contention has a different throughput knee from debug parsing.
+  if (!lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Rad_UnmapWorkers)) {
+    config->unmap_worker_cap = config->debug_worker_cap;
   }
 
   // in shared thread pool mode force fixed number of workers

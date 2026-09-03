@@ -144,6 +144,7 @@ typedef enum
   LNK_CmdSwitch_Rad_TimeStamp,
   LNK_CmdSwitch_Rad_DebugTypeHash,
   LNK_CmdSwitch_Rad_DebugWorkers,
+  LNK_CmdSwitch_Rad_UnmapWorkers,
   LNK_CmdSwitch_Rad_UnresolvedSymbolLimit,
   LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,
   LNK_CmdSwitch_Rad_Version,
@@ -354,6 +355,7 @@ typedef struct LNK_Config
   U64                         worker_count;
   U64                         max_worker_count;
   U64                         debug_worker_cap;
+  U64                         unmap_worker_cap;
   String8                     shared_thread_pool_name;
   U64                         cobj_cache_gib;
   U64                         cobj_cache_shrink_gib;

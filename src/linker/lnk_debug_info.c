@@ -6854,7 +6854,7 @@ ProfScope("Move Global Symbols")
     U64 unmap_begin_us = now_time_us();
     // All thread-pool consumers above have joined. Keep compressed-object teardown at this
     // explicit quiescence point; per-object or background close can race lazy materialization.
-    lnk_inputer_release_file_maps(tp, config->debug_worker_cap, inputer);
+    lnk_inputer_release_file_maps(tp, config->unmap_worker_cap, inputer);
     lnk_log(LNK_Log_Timers, "[pdb] early input-view release in %.2f ms",
             (F64)(now_time_us() - unmap_begin_us) / 1000.0);
     ProfEnd();

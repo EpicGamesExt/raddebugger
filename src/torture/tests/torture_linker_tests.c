@@ -437,10 +437,15 @@ TEST(compressed_debug_reloc_parity)
   T_Ok(t_invoke(compressor, str8_lit("raw.obj compressed.obj 64 kraken 256 fast"), TIMEOUT_SEC(30)));
   T_Ok(g_last_exit_code == 0);
   T_Ok(t_write_file(str8_lit("reloc_input.obj"), t_read_file(arena, str8_lit("compressed.obj"))));
-  t_invoke_linkerf("%s", args);
-  T_Ok(g_last_exit_code == 0);
-  T_Ok(str8_match(expected_image, t_read_file(arena, str8_lit("reloc.exe")), 0));
-  T_Ok(str8_match(expected_pdb, t_read_file(arena, str8_lit("reloc.pdb")), 0));
+  // Explicit cleanup must preserve results at serial, capped and uncapped
+  // widths. Keep parsing at its original width to isolate the cleanup option.
+  U64 unmap_caps[] = {1, 4, 0};
+  for EachIndex(i, ArrayCount(unmap_caps)) {
+    t_invoke_linkerf("%s /rad_cobj_one_shot:no /rad_unmap_workers:%llu", args, unmap_caps[i]);
+    T_Ok(g_last_exit_code == 0);
+    T_Ok(str8_match(expected_image, t_read_file(arena, str8_lit("reloc.exe")), 0));
+    T_Ok(str8_match(expected_pdb, t_read_file(arena, str8_lit("reloc.pdb")), 0));
+  }
 #else
   TestSkip();
 #endif
