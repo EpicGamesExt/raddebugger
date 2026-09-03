@@ -429,7 +429,7 @@ TEST(compressed_debug_reloc_parity)
   T_Ok(t_write_file(str8_lit("raw.obj"), obj));
   T_Ok(t_write_file(str8_lit("reloc_input.obj"), obj));
   T_Ok(t_write_entry_obj());
-  char *args = "/subsystem:console /entry:entry /debug:full /rad_time_stamp:0 /rad_workers:1 /out:reloc.exe /pdbaltpath:reloc.pdb entry.obj reloc_input.obj";
+  char *args = "/subsystem:console /entry:entry /debug:full /rad_time_stamp:0 /rad_workers:4 /out:reloc.exe /pdbaltpath:reloc.pdb entry.obj reloc_input.obj";
   t_invoke_linkerf("%s", args);
   T_Ok(g_last_exit_code == 0);
   String8 expected_image = t_read_file(arena, str8_lit("reloc.exe"));
@@ -438,7 +438,8 @@ TEST(compressed_debug_reloc_parity)
   T_Ok(g_last_exit_code == 0);
   T_Ok(t_write_file(str8_lit("reloc_input.obj"), t_read_file(arena, str8_lit("compressed.obj"))));
   // Explicit cleanup must preserve results at serial, capped and uncapped
-  // widths. Keep parsing at its original width to isolate the cleanup option.
+  // widths. Keep four workers available for every run so cap 1 actually
+  // serializes cleanup; with a one-worker pool every cap would be equivalent.
   U64 unmap_caps[] = {1, 4, 0};
   for EachIndex(i, ArrayCount(unmap_caps)) {
     t_invoke_linkerf("%s /rad_cobj_one_shot:no /rad_unmap_workers:%llu", args, unmap_caps[i]);
