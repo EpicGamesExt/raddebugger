@@ -1109,7 +1109,7 @@ lnk_lib_member_ref_is_before(void *raw_a, void *raw_b)
                               g_sort_lib_member_context[(*b)->member_idx].link);
 }
 
-force_inline int
+internal force_inline int
 lnk_import_ref_is_before(void *raw_a, void *raw_b)
 {
   LNK_LibMemberRef **a_ptr = raw_a, **b_ptr = raw_b;

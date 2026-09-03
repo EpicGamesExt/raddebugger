@@ -180,7 +180,7 @@ internal String16 str16_zero(void);
 internal String32 str32(U32 *str, U64 size);
 internal String32 str32_range(U32 *first, U32 *one_past_last);
 internal String32 str32_zero(void);
-internal String8  str8_cstring(char *c);
+internal String8  str8_cstring(const char *c);
 internal String16 str16_cstring(U16 *c);
 internal String32 str32_cstring(U32 *c);
 internal String8  str8_cstring_capped(void *cstr, void *cap);

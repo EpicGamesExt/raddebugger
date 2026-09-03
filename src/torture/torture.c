@@ -948,7 +948,7 @@ t_match_linef(String8 *output, char *fmt, ...)
   return is_match;
 }
 
-force_inline int
+internal force_inline int
 t_test_info_is_before(void *a_, void *b_)
 {
   TestInfo **a = a_;

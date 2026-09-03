@@ -655,11 +655,11 @@ hash_map_purge(HashMap *hm)
 
 ////////////////////////////////
 
-force_inline HASH_MAP_KEY_MATCH(hash_map_match_u32)    { return a->key_u32 == b->key_u32;                    }
-force_inline HASH_MAP_KEY_MATCH(hash_map_match_u64)    { return a->key_u64 == b->key_u64;                    }
-force_inline HASH_MAP_KEY_MATCH(hash_map_match_raw)    { return a->key_raw == b->key_raw;                    }
-force_inline HASH_MAP_KEY_MATCH(hash_map_match_string) { return str8_match(a->key_string, b->key_string, 0); }
-force_inline HASH_MAP_KEY_MATCH(hash_map_match_path)   { return str8_match(a->key_string, b->key_string, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive); }
+internal force_inline HASH_MAP_KEY_MATCH(hash_map_match_u32)    { return a->key_u32 == b->key_u32;                    }
+internal force_inline HASH_MAP_KEY_MATCH(hash_map_match_u64)    { return a->key_u64 == b->key_u64;                    }
+internal force_inline HASH_MAP_KEY_MATCH(hash_map_match_raw)    { return a->key_raw == b->key_raw;                    }
+internal force_inline HASH_MAP_KEY_MATCH(hash_map_match_string) { return str8_match(a->key_string, b->key_string, 0); }
+internal force_inline HASH_MAP_KEY_MATCH(hash_map_match_path)   { return str8_match(a->key_string, b->key_string, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive); }
 
 internal U64
 hash_map_hash_from_path(String8 path)
@@ -949,29 +949,29 @@ hash_map_extract(Arena               *arena,
 }
 
 // { keys, value }
-force_inline HASH_MAP_EXTRACT_FUNC(hash_map_extract_key_value)  { MemoryCopy(buffer, kv, sizeof(*kv));                                 }
+internal force_inline HASH_MAP_EXTRACT_FUNC(hash_map_extract_key_value)  { MemoryCopy(buffer, kv, sizeof(*kv));                                 }
 internal HashMapKeyValue * key_value_from_hash_map  ( Arena *arena, HashMap *hm) { return hash_map_extract(arena, hm, hash_map_extract_key_value,  sizeof(HashMapKeyValue), 0, 0).keys; }
 
 // keys
-force_inline HASH_MAP_EXTRACT_FUNC(hash_map_extract_key_u32)    { MemoryCopy(buffer, &kv->key.key_u32, sizeof(kv->key.key_u32));       }
-force_inline HASH_MAP_EXTRACT_FUNC(hash_map_extract_key_u64)    { MemoryCopy(buffer, &kv->key.key_u64, sizeof(kv->key.key_u64));       }
-force_inline HASH_MAP_EXTRACT_FUNC(hash_map_extract_key_string) { MemoryCopy(buffer, &kv->key.key_string, sizeof(kv->key.key_string)); }
+internal force_inline HASH_MAP_EXTRACT_FUNC(hash_map_extract_key_u32)    { MemoryCopy(buffer, &kv->key.key_u32, sizeof(kv->key.key_u32));       }
+internal force_inline HASH_MAP_EXTRACT_FUNC(hash_map_extract_key_u64)    { MemoryCopy(buffer, &kv->key.key_u64, sizeof(kv->key.key_u64));       }
+internal force_inline HASH_MAP_EXTRACT_FUNC(hash_map_extract_key_string) { MemoryCopy(buffer, &kv->key.key_string, sizeof(kv->key.key_string)); }
 internal U32 *     keys_from_hash_map_u32   ( Arena *arena, HashMap *hm) { return hash_map_extract(arena, hm, hash_map_extract_key_u32,    sizeof(U32),     0, 0).keys; }
 internal U64 *     keys_from_hash_map_u64   ( Arena *arena, HashMap *hm) { return hash_map_extract(arena, hm, hash_map_extract_key_u64,    sizeof(U64),     0, 0).keys; }
 internal String8 * keys_from_hash_map_string( Arena *arena, HashMap *hm) { return hash_map_extract(arena, hm, hash_map_extract_key_string, sizeof(String8), 0, 0).keys; }
 internal void *    keys_from_hash_map_raw   ( Arena *arena, HashMap *hm) { return hash_map_extract(arena, hm, hash_map_extract_key_string, sizeof(void *),  0, 0).keys; }
 
 // values
-force_inline HASH_MAP_EXTRACT_FUNC(hash_map_extract_value_u64) { MemoryCopy(buffer, &kv->value.value_u64, sizeof(kv->value.value_u64)); }
-force_inline HASH_MAP_EXTRACT_FUNC(hash_map_extract_value_raw) { MemoryCopy(buffer, &kv->value.value_raw, sizeof(kv->value.value_raw)); }
+internal force_inline HASH_MAP_EXTRACT_FUNC(hash_map_extract_value_u64) { MemoryCopy(buffer, &kv->value.value_u64, sizeof(kv->value.value_u64)); }
+internal force_inline HASH_MAP_EXTRACT_FUNC(hash_map_extract_value_raw) { MemoryCopy(buffer, &kv->value.value_raw, sizeof(kv->value.value_raw)); }
 internal U64 * values_from_hash_map_u64(Arena *arena, HashMap *hm) { return hash_map_extract(arena, hm, 0, 0, hash_map_extract_value_u64, sizeof(U64)).values;    }
 internal void * values_from_hash_map_raw(Arena *arena, HashMap *hm) {return hash_map_extract(arena, hm, 0, 0, hash_map_extract_value_raw, sizeof(void *)).values; }
 
 ////////////////////////////////
 
-force_inline int hash_map_key_is_before_u32(void *a, void *b)    { return ((HashMapKeyValue*)a)->key.key_u32 < ((HashMapKeyValue*)b)->key.key_u32; }
-force_inline int hash_map_key_is_before_u64(void *a, void *b)    { return ((HashMapKeyValue*)a)->key.key_u64 < ((HashMapKeyValue*)b)->key.key_u64; }
-force_inline int hash_map_key_is_before_string(void *a, void *b) { return str8_is_before_case_sensitive(a, b);                                     }
+internal force_inline int hash_map_key_is_before_u32(void *a, void *b)    { return ((HashMapKeyValue*)a)->key.key_u32 < ((HashMapKeyValue*)b)->key.key_u32; }
+internal force_inline int hash_map_key_is_before_u64(void *a, void *b)    { return ((HashMapKeyValue*)a)->key.key_u64 < ((HashMapKeyValue*)b)->key.key_u64; }
+internal force_inline int hash_map_key_is_before_string(void *a, void *b) { return str8_is_before_case_sensitive(a, b);                                     }
 
 internal void sort_hash_map_key_value_u32(HashMapKeyValue *pairs, U64 count)    { radsort(pairs, count, hash_map_key_is_before_u32);    }
 internal void sort_hash_map_key_value_u64(HashMapKeyValue *pairs, U64 count)    { radsort(pairs, count, hash_map_key_is_before_u64);    }

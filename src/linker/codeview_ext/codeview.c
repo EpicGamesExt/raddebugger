@@ -1635,7 +1635,7 @@ cv_c13_voff_map_compar(const void *raw_a, const void *raw_b)
   return cmp;
 }
 
-force_inline int
+internal force_inline int
 cv_c13_voff_map_is_before(void *raw_a, void *raw_b)
 {
   return cv_c13_voff_map_compar(raw_a, raw_b) < 0;

@@ -80,6 +80,11 @@ struct TCTX
 };
 
 ////////////////////////////////
+// Globals
+
+extern thread_static TCTX *tctx_thread_local;
+
+////////////////////////////////
 //~ rjf: Thread Context Functions
 
 //- rjf: thread-context allocation & selection

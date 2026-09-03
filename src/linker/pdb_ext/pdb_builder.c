@@ -1833,14 +1833,14 @@ typedef struct PDB_PsiAddrMapNameSortTask
   Rng1U64                  *batch_arr;
 } PDB_PsiAddrMapNameSortTask;
 
-force_inline U64
+internal force_inline U64
 psi_addr_map_sort_key(PDB_GsiSortRecord *record)
 {
   U64 key = ((U64)record->isect_off.isect << 32) | record->isect_off.off;
   return key;
 }
 
-force_inline int
+internal force_inline int
 psi_addr_map_name_compar_is_before(void *raw_a, void *raw_b)
 {
   PDB_PsiAddrMapSortRecord *a = raw_a;
@@ -1903,7 +1903,7 @@ THREAD_POOL_TASK_FUNC(psi_addr_map_radix_sort_task)
   ProfEnd();
 }
 
-force_inline U64
+internal force_inline U64
 psi_addr_map_name_sort_work(Rng1U64 run)
 {
   U64 count = dim_1u64(run);
@@ -2084,7 +2084,7 @@ THREAD_POOL_TASK_FUNC(gsi_size_buckets_task)
   }
 }
 
-force_inline int
+internal force_inline int
 gsi_symbol_is_before(void *raw_a, void *raw_b)
 {
   CV_Symbol *a = *(CV_Symbol **)raw_a;
@@ -2113,7 +2113,7 @@ gsi_symbol_is_before(void *raw_a, void *raw_b)
   return is_before;
 }
 
-force_inline int
+internal force_inline int
 gsi_pub_symbol_is_before(void *raw_a, void *raw_b)
 {
   CV_Symbol *a = *(CV_Symbol **)raw_a;
