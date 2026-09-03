@@ -4,15 +4,22 @@
 
 #include "blake3_impl.h"
 
+
 #if defined(IS_X86)
-#if defined(_MSC_VER)
-#include <intrin.h>
-#elif defined(__GNUC__)
-#include <immintrin.h>
+
+#if defined(__GNUC__) || defined(__clang__)
+#define ATOMIC_INT         int
+#define ATOMIC_LOAD(x)     __atomic_load_n(&x, __ATOMIC_RELAXED)
+#define ATOMIC_STORE(x, y) __atomic_store_n(&x, y, __ATOMIC_RELAXED)
 #else
-#undef IS_X86 /* Unimplemented! */
+#include <intrin.h>
+#define ATOMIC_INT         int
+#define ATOMIC_LOAD(x)     __iso_volatile_load32(&x)
+#define ATOMIC_STORE(x, y) __iso_volatile_store32(&x, y)
 #endif
+
 #endif
+
 
 #define MAYBE_UNUSED(x) (void)((x))
 
@@ -28,7 +35,7 @@ static uint64_t xgetbv(void) {
 }
 
 static void cpuid(uint32_t out[4], uint32_t id) {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(__clang__)
   __cpuid((int *)out, id);
 #elif defined(__i386__) || defined(_M_IX86)
   __asm__ __volatile__("movl %%ebx, %1\n"
@@ -44,7 +51,7 @@ static void cpuid(uint32_t out[4], uint32_t id) {
 }
 
 static void cpuidex(uint32_t out[4], uint32_t id, uint32_t sid) {
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) && !defined(__clang__)
   __cpuidex((int *)out, id, sid);
 #elif defined(__i386__) || defined(_M_IX86)
   __asm__ __volatile__("movl %%ebx, %1\n"
@@ -59,7 +66,6 @@ static void cpuidex(uint32_t out[4], uint32_t id, uint32_t sid) {
 #endif
 }
 
-#endif
 
 enum cpu_feature {
   SSE2 = 1 << 0,
@@ -76,7 +82,7 @@ enum cpu_feature {
 #if !defined(BLAKE3_TESTING)
 static /* Allow the variable to be controlled manually for testing */
 #endif
-    volatile int g_cpu_features = UNDEFINED;
+    ATOMIC_INT g_cpu_features = UNDEFINED;
 
 #if !defined(BLAKE3_TESTING)
 static
@@ -85,9 +91,9 @@ static
     get_cpu_features(void) {
 
   /* If TSAN detects a data race here, try compiling with -DBLAKE3_ATOMICS=1 */
-  long features = g_cpu_features;
+  enum cpu_feature features = ATOMIC_LOAD(g_cpu_features);
   if (features != UNDEFINED) {
-    return (enum cpu_feature)features;
+    return features;
   } else {
 #if defined(IS_X86)
     uint32_t regs[4] = {0};
@@ -126,14 +132,15 @@ static
         }
       }
     }
-    g_cpu_features = features;
-    return (enum cpu_feature)features;
+    ATOMIC_STORE(g_cpu_features, features);
+    return features;
 #else
     /* How to detect NEON? */
     return 0;
 #endif
   }
 }
+#endif
 
 void blake3_compress_in_place(uint32_t cv[8],
                               const uint8_t block[BLAKE3_BLOCK_LEN],
@@ -191,6 +198,30 @@ void blake3_compress_xof(const uint32_t cv[8],
 #endif
 #endif
   blake3_compress_xof_portable(cv, block, block_len, counter, flags, out);
+}
+
+
+void blake3_xof_many(const uint32_t cv[8],
+                     const uint8_t block[BLAKE3_BLOCK_LEN],
+                     uint8_t block_len, uint64_t counter, uint8_t flags,
+                     uint8_t out[64], size_t outblocks) {
+  if (outblocks == 0) {
+    // The current assembly implementation always outputs at least 1 block.
+    return;
+  }
+#if defined(IS_X86)
+  const enum cpu_feature features = get_cpu_features();
+  MAYBE_UNUSED(features);
+#if !defined(_WIN32) && !defined(__CYGWIN__) && !defined(BLAKE3_NO_AVX512)
+  if (features & AVX512VL) {
+    blake3_xof_many_avx512(cv, block, block_len, counter, flags, out, outblocks);
+    return;
+  }
+#endif
+#endif
+  for(size_t i = 0; i < outblocks; ++i) {
+    blake3_compress_xof(cv, block, block_len, counter + i, flags, out + 64*i);
+  }
 }
 
 void blake3_hash_many(const uint8_t *const *inputs, size_t num_inputs,

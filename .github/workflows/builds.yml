@@ -45,6 +45,7 @@ jobs:
       - name: build
         shell: bash
         run: |
+          [[ "${{ matrix.compiler }}" == "clang-22" ]] && export AR=llvm-ar-22
           CC="${{ matrix.compiler }}" ./build.sh "${{ matrix.target }}" "${{ matrix.mode }}"
 
   build-windows-2022:
@@ -103,6 +104,7 @@ jobs:
       - name: Run
         shell: bash
         run: |
+          [[ "${{ matrix.compiler }}" == "clang-22" ]] && export AR=llvm-ar-22
           CC="${{ matrix.compiler }}" ./run_tests.sh clang "${{ matrix.mode }}" -- \* $TORTURE_FLAGS 
       - name: Upload Artifacts
         if: failure()

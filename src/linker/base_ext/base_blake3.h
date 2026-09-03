@@ -6,7 +6,7 @@
 #define BLAKE3_API static
 #define BLAKE3_PRIVATE static
 
-#include "third_party/blake3/c/blake3.h"
+#include "third_party/blake3/blake3.h"
 
 static void
 blake3(void* out, size_t outlen, void* in, size_t inlen)
