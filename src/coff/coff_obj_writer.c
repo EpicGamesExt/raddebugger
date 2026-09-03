@@ -26,8 +26,8 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
   
   String8List srl = {0};
   
-  String8List string_table = {0};
-  U32 *string_table_size = push_array(scratch.arena, U32, 1);
+  String8List  string_table      = {0};
+  U32         *string_table_size = push_array(scratch.arena, U32, 1);
   *string_table_size = sizeof(*string_table_size);
   str8_list_push(scratch.arena, &string_table, str8_struct(string_table_size));
   
@@ -41,16 +41,16 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
     AssertAlways(obj_sections_count < COFF_Symbol_DebugSection32);
     obj_sections       = push_array(scratch.arena, COFF_ObjSection *, obj_writer->sect_count);
     U64 sect_idx = 0;
-    for (COFF_ObjSectionNode *sect_n = obj_writer->sect_first; sect_n != 0; sect_n = sect_n->next, sect_idx += 1) {
+    for EachNode(sect_n, COFF_ObjSectionNode, obj_writer->sect_first) {
       COFF_ObjSection *sect = &sect_n->v;
       sect->section_number = sect_idx+1;
       obj_sections[sect_idx] = sect;
+      sect_idx += 1;
       
     }
   }
-  // Standard COFF reserves section numbers 0xff00 and above. BigObj also
-  // widens every symbol/auxiliary record from 18 to 20 bytes.
-  B32 is_big_obj = obj_sections_count > 0xfeff;
+
+  B32 is_big_obj  = obj_sections_count > 0xfeff;
   U64 symbol_size = is_big_obj ? sizeof(COFF_Symbol32) : sizeof(COFF_Symbol16);
   
   //
@@ -60,7 +60,7 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
   {
     {
       U64 symbol_idx = 0;
-      for (COFF_ObjSymbolNode *symbol_n = obj_writer->symbol_first; symbol_n != 0; symbol_n = symbol_n->next) {
+      for EachNode(symbol_n, COFF_ObjSymbolNode, obj_writer->symbol_first) {
         COFF_ObjSymbol *s = &symbol_n->v;
         
         // assign symbol index
@@ -70,7 +70,7 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
     }
     
     U64 symbol_idx = 0;
-    for (COFF_ObjSymbolNode *symbol_n = obj_writer->symbol_first; symbol_n != 0; symbol_n = symbol_n->next) {
+    for EachNode(symbol_n, COFF_ObjSymbolNode, obj_writer->symbol_first) {
       COFF_ObjSymbol *s = &symbol_n->v;
       
       COFF_SymbolName name = {0};
@@ -193,7 +193,7 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
   COFF_SectionHeader *sectab = push_array(scratch.arena, COFF_SectionHeader, obj_sections_count);
   str8_list_push(scratch.arena, &srl, str8_array(sectab, obj_sections_count));
   {
-    for (U64 sect_idx = 0; sect_idx < obj_sections_count; sect_idx += 1) {
+    for EachIndex(sect_idx, obj_sections_count) {
       COFF_ObjSection    *s = obj_sections[sect_idx];
       COFF_SectionHeader *d = &sectab[sect_idx];
       
@@ -208,7 +208,7 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
       }
       
       // alloc zero nodes 
-      for (String8Node *data_n = s->data.first; data_n != 0; data_n = data_n->next) {
+      for EachNode(data_n, String8Node, s->data.first) {
         if (data_n->string.str == 0 && data_n->string.size > 0) {
           data_n->string = str8(push_array(scratch.arena, U8, data_n->string.size), data_n->string.size);
         }
@@ -229,9 +229,9 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
         AssertAlways(s->reloc_count <= max_U16);
         COFF_Reloc *relocs    = push_array(scratch.arena, COFF_Reloc, s->reloc_count);
         U64         reloc_idx = 0;
-        for (COFF_ObjRelocNode *reloc_n = s->reloc_first; reloc_n != 0; reloc_n = reloc_n->next, reloc_idx += 1) {
+        for EachNode(reloc_n, COFF_ObjRelocNode, s->reloc_first) {
           COFF_ObjReloc *rs = &reloc_n->v;
-          COFF_Reloc    *rd = &relocs[reloc_idx];
+          COFF_Reloc    *rd = &relocs[reloc_idx++];
           rd->apply_off = rs->apply_off;
           rd->isymbol   = rs->symbol->idx;
           rd->type      = rs->type;

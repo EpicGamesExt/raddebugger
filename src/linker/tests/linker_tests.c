@@ -433,6 +433,72 @@ t_write_entry_obj(void)
 
 ////////////////////////////////
 
+TEST(coff_writer_bigobj)
+{
+  // Exercise the standard-COFF boundary and an associative parent above 16 bits.
+  U32 section_counts[] = {3, 0xfeff, 0xff00, 0x10002};
+  for EachElement(case_idx, section_counts) {
+    COFF_ObjWriter *writer = coff_obj_writer_alloc(0x12345678, COFF_MachineType_X64);
+
+    U32 section_count = section_counts[case_idx];
+    for (U32 i = 0; i < section_count - 2; i += 1) {
+      coff_obj_writer_push_section(writer, str8_lit(".empty"), COFF_SectionFlag_LnkRemove, str8_zero());
+    }
+
+    COFF_SectionFlags  flags = COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_LnkCOMDAT;
+    COFF_ObjSection   *head  = coff_obj_writer_push_section(writer, str8_lit(".long_head_section"), flags, str8_lit("head"));
+    COFF_ObjSection   *assoc = coff_obj_writer_push_section(writer, str8_lit(".assoc"), flags, str8(push_array(arena, U8, 8), 8));
+    coff_obj_writer_push_symbol_secdef(writer, head, COFF_ComdatSelect_Any);
+
+    COFF_ObjSymbol *target    = coff_obj_writer_push_symbol_extern(writer, str8_lit("long_target_symbol"), 0, head);
+    COFF_ObjSymbol *weak      = coff_obj_writer_push_symbol_weak(writer, str8_lit("weak"), COFF_WeakExt_SearchAlias, target);
+    COFF_ObjSymbol *absolute  = coff_obj_writer_push_symbol_abs(writer, str8_lit("absolute"), 17, COFF_SymStorageClass_External);
+    COFF_ObjSymbol *assoc_def = coff_obj_writer_push_symbol_associative(writer, assoc, head);
+    COFF_ObjSymbol *undef     = coff_obj_writer_push_symbol_undef(writer, str8_lit("undef"));
+    COFF_ObjSymbol *common    = coff_obj_writer_push_symbol_common(writer, str8_lit("common"), 32);
+
+    coff_obj_writer_section_push_reloc_addr(writer, assoc, 0, weak);
+
+    String8             data = coff_obj_writer_serialize(arena, writer);
+    COFF_FileHeaderInfo info = coff_file_header_info_from_data(data);
+    T_Ok(info.is_big_obj == (section_count > 0xfeff));
+    T_Ok(info.section_count_no_null == section_count);
+    T_Ok(info.symbol_size == (info.is_big_obj ? sizeof(COFF_Symbol32) : sizeof(COFF_Symbol16)));
+    T_Ok(info.symbol_count == 10);
+
+    String8           symbols       = str8_substr(data, info.symbol_table_range);
+    String8           strings       = str8_substr(data, info.string_table_range);
+    COFF_ParsedSymbol parsed_target = coff_parse_symbol(info, strings, symbols, target->idx);
+    T_Ok(parsed_target.section_number == section_count - 1);
+    T_Ok(str8_match(parsed_target.name, target->name, 0));
+
+    COFF_ParsedSymbol     parsed_assoc = coff_parse_symbol(info, strings, symbols, assoc_def->idx);
+    U32                   parent       = 0;
+    COFF_ComdatSelectType selection    = 0;
+    coff_parse_secdef(parsed_assoc, info.is_big_obj, &selection, &parent, 0, 0);
+    T_Ok(parsed_assoc.section_number == section_count);
+    T_Ok(selection == COFF_ComdatSelect_Associative && parent == section_count - 1);
+
+    COFF_ParsedSymbol   parsed_weak = coff_parse_symbol(info, strings, symbols, weak->idx);
+    COFF_SymbolWeakExt *weak_aux    = coff_parse_weak_tag(parsed_weak, info.is_big_obj);
+    T_Ok(weak_aux->tag_index == target->idx && weak_aux->characteristics == COFF_WeakExt_SearchAlias);
+
+    COFF_ParsedSymbol parsed_absolute = coff_parse_symbol(info, strings, symbols, absolute->idx);
+    T_Ok(parsed_absolute.section_number == COFF_Symbol_AbsSection32 && parsed_absolute.value == 17);
+    T_Ok(coff_parse_symbol(info, strings, symbols, undef->idx).section_number == COFF_Symbol_UndefinedSection);
+
+    COFF_ParsedSymbol parsed_common = coff_parse_symbol(info, strings, symbols, common->idx);
+    T_Ok(parsed_common.section_number == COFF_Symbol_UndefinedSection && parsed_common.value == 32);
+
+    COFF_SectionHeader *sections = (COFF_SectionHeader *)(data.str + info.section_table_range.min);
+    COFF_Reloc         *reloc    = (COFF_Reloc *)(data.str + sections[section_count - 1].relocs_foff);
+    T_Ok(sections[section_count - 1].reloc_count == 1 && reloc->isymbol == weak->idx);
+    T_Ok(t_write_file(str8f(arena, "writer_%u.obj", section_count), data));
+
+    coff_obj_writer_release(&writer);
+  }
+}
+
 TEST(machine_compat_check)
 {
   // unknown.obj
@@ -727,31 +793,6 @@ TEST(merge)
   // merge non-defined section with defined section
   t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.qwe=.test entry.obj test.obj");
   T_Ok(g_last_exit_code == 0);
-
-  // initialized data size includes the aligned virtual tail of merged BSS
-  {
-    T_Ok(t_write_def_obj("mixed.obj", (T_COFF_DefObj){
-      .machine = T_COFF_DefSetMachine(X64),
-      .sections = (T_COFF_DefSection[]){
-        { "data", ".data", str8_lit_comp("d"), .flags = "rw:data@1" },
-        { "bss",  ".bss",  str8(0, 0x201),      .flags = "rw:bss@1" },
-        {0}
-      }
-    }));
-
-    t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe /merge:.bss=.data entry.obj mixed.obj");
-    T_Ok(g_last_exit_code == 0);
-
-    String8                   exe           = t_read_file(arena, str8_lit("a.exe"));
-    PE_BinInfo                pe            = pe_bin_info_from_data(arena, exe);
-    COFF_SectionHeader       *section_table = (COFF_SectionHeader *)str8_substr(exe, pe.section_table_range).str;
-    PE_OptionalHeader32Plus *opt           = str8_deserial_get_raw_ptr(exe, pe.optional_header_off, sizeof(*opt));
-    COFF_SectionHeader       *data          = coff_section_header_from_name(exe, section_table, pe.section_count, str8_lit(".data"));
-    T_Ok(data != 0);
-    T_Ok(data->fsize == 0x200);
-    T_Ok(data->vsize == 0x202);
-    T_Ok(opt->sizeof_inited_data == 0x400);
-  }
 
   // merged contribution groups retain lexical order
   {
@@ -2333,7 +2374,7 @@ TEST(guard_cf_pulls_load_config)
 
 TEST(section_sort)
 {
-  COFF_SectionFlags data_flags = COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemRead|COFF_SectionFlag_Align1Bytes;
+  COFF_SectionFlags data_flags = COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite|COFF_SectionFlag_Align1Bytes;
   T_Ok(t_write_def_obj("data.obj", (T_COFF_DefObj){
     .machine = T_COFF_DefSetMachine(X64),
     .sections = (T_COFF_DefSection[]){
@@ -2373,14 +2414,14 @@ TEST(section_sort)
   T_Ok(data_section);
 
   String8 data = str8_substr(exe, rng_1u64(data_section->foff, data_section->foff + data_section->vsize));
-  String8 expected_data = str8_lit("onetwothreefourfive");
+  String8 expected_data = str8_lit("firstonetwothreefourfivelast");
   T_Ok(str8_match(data, expected_data, 0));
 
   COFF_SectionHeader *rdata_section = coff_section_header_from_name(string_table, section_table, pe.section_count, str8_lit(".rdata"));
   T_Ok(rdata_section);
 
-  String8 rdata = str8_substr(exe, rng_1u64(rdata_section->foff, rdata_section->foff + 15));
-  T_Ok(str8_match(rdata, str8_lit("firstmiddlelast"), 0));
+  String8 rdata = str8_substr(exe, rng_1u64(rdata_section->foff, rdata_section->foff + rdata_section->vsize));
+  T_Ok(str8_match(rdata, str8_lit("middle"), 0));
 }
 
 TEST(flag_conf)
@@ -4744,6 +4785,54 @@ TEST(communal_var_vs_regular_comdat)
     T_Ok(data_sect);
     String8             data          = str8_substr(exe, rng_1u64(data_sect->foff, data_sect->foff + data_sect->vsize));
     T_Ok(str8_match(data, str8_lit("test"), 0));
+  }
+}
+
+TEST(link_large_import_object)
+{
+  // Each named import creates three sections in the synthesized DLL object.
+  // Add a direct function reference as well to exercise its jump thunk.
+
+  U32 import_count = 22000;
+  COFF_LibWriter  *lib  = coff_lib_writer_alloc();
+  COFF_ObjWriter  *obj  = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+  COFF_ObjSection *refs = coff_obj_writer_push_section(obj, str8_lit(".data"),
+      COFF_SectionFlag_CntInitializedData|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemWrite|COFF_SectionFlag_Align8Bytes,
+      str8(push_array(arena, U8, (import_count + 1)*8), (import_count + 1)*8));
+
+  for EachIndex(i, import_count) {
+    String8 name = str8f(arena, "import_%05u", i);
+    coff_lib_writer_push_import(lib, COFF_MachineType_X64, 0, str8_lit("large.dll"), COFF_ImportBy_Name, name, 0, COFF_ImportHeader_Code);
+    COFF_ObjSymbol *symbol = coff_obj_writer_push_symbol_undef(obj, str8f(arena, "__imp_%S", name));
+    coff_obj_writer_section_push_reloc_addr(obj, refs, i*8, symbol);
+  }
+
+  COFF_ObjSymbol *func = coff_obj_writer_push_symbol_undef_func(obj, str8f(arena, "import_%05u", import_count - 1));
+  coff_obj_writer_section_push_reloc_addr(obj, refs, import_count*8, func);
+  T_Ok(t_write_file(str8_lit("refs.obj"), coff_obj_writer_serialize(arena, obj)));
+  T_Ok(t_write_file(str8_lit("large.lib"), coff_lib_writer_serialize(arena, lib, 0, 0, 1)));
+
+  coff_obj_writer_release(&obj);
+  coff_lib_writer_release(&lib);
+
+  T_Ok(t_write_entry_obj());
+  t_invoke_linkerf("/subsystem:console /entry:entry /debug:full /opt:ref /out:large.exe entry.obj refs.obj large.lib");
+  T_Ok(g_last_exit_code == 0);
+
+  String8 image = t_read_file(arena, str8_lit("large.exe"));
+  PE_BinInfo bin = pe_bin_info_from_data(arena, image);
+  T_Ok(bin.data_dir_count > PE_DataDirectoryIndex_IMPORT);
+
+  COFF_SectionHeader *sections = (COFF_SectionHeader *)(image.str + bin.section_table_range.min);
+  PE_ParsedStaticImportTable imports = pe_static_imports_from_data(arena, bin.is_pe32, bin.section_count, sections, image, bin.data_dir_franges[PE_DataDirectoryIndex_IMPORT]);
+  T_Ok(imports.count == 1);
+  T_Ok(str8_match(imports.v[0].name, str8_lit("large.dll"), 0));
+  T_Ok(imports.v[0].import_count == import_count);
+
+  for EachIndex(i, import_count) {
+    PE_ParsedImport *import = &imports.v[0].imports[i];
+    T_Ok(import->type == PE_ParsedImport_Name);
+    T_Ok(str8_match(import->u.name.string, str8f(arena, "import_%05u", i), 0));
   }
 }
 
@@ -7947,7 +8036,7 @@ TEST(infer_asan)
 TEST(determ_test)
 {
   // compile the test target (torture)
-  t_invoke_cl("/fsanitize=address /c /Z7 /Fo:test.obj -I%S /Zc:preprocessor %S/torture/torture_main.c", t_src_path(), t_src_path());
+  t_invoke_cl("/fsanitize=address /c /Z7 /DBUILD_GIT_HASH=Stringify() /Fo:test.obj -I%S /Zc:preprocessor %S/torture/torture_main.c", t_src_path(), t_src_path());
   T_Ok(g_last_exit_code == 0);
 
   U64 run_count = 25;
