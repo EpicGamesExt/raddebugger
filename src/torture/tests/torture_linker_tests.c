@@ -446,6 +446,81 @@ TEST(compressed_debug_reloc_parity)
 #endif
 }
 
+TEST(compressed_icf_debug_record_selection)
+{
+#if OS_WINDOWS
+  String8 compressor = str8f(arena, "%S/build/rad_obj_compress.exe", t_cwd_path());
+  if (!file_path_exists(compressor)) { TestSkip(); }
+  // Three folded pairs: no locals, locals at different source lines, and locals
+  // at the same source line. Only the second pair needs both full record trees.
+  String8 source = str8_lit(
+      "__declspec(noinline) int empty_a(void) { return 3; }\n"
+      "__declspec(noinline) int empty_b(void) { return 3; }\n"
+      "__declspec(noinline) int different_a(int x) { int a = x+1; return a; }\n"
+      "__declspec(noinline) int different_b(int x) { int b = x+1; return b; }\n"
+      "#line 200 \"shared.h\"\n"
+      "__declspec(noinline) int same_a(int x) { int a = x+2; return a; }\n"
+      "#line 200 \"shared.h\"\n"
+      "__declspec(noinline) int same_b(int x) { int b = x+2; return b; }\n"
+      "int (*volatile functions[])(int) = {different_a,different_b,same_a,same_b};\n"
+      "int (*volatile empty[])(void) = {empty_a,empty_b};\n"
+      "int entry(void) { return functions[0] != functions[1] || functions[2] != functions[3] || empty[0] != empty[1]; }\n");
+  T_Ok(t_write_file(str8_lit("icf_source.c"), source));
+  // Permit ICF despite the address comparisons used to verify the folds below.
+  T_Ok(t_invoke(t_clang_path(), str8_lit("--target=x86_64-pc-windows-msvc -c -O0 -g -gcodeview -ffunction-sections -fno-addrsig -o raw.obj icf_source.c"), TIMEOUT_SEC(30)));
+  T_Ok(g_last_exit_code == 0);
+  String8 raw_obj = t_read_file(arena, str8_lit("raw.obj"));
+  T_Ok(t_invoke(compressor, str8_lit("raw.obj compressed.obj 64 kraken 256 fast"), TIMEOUT_SEC(30)));
+  T_Ok(g_last_exit_code == 0);
+  String8 inputs[] = {raw_obj, t_read_file(arena, str8_lit("compressed.obj"))};
+  String8 expected_image = {0}, expected_pdb = {0};
+  for EachElement(input_idx, inputs) {
+    T_Ok(t_write_file(str8_lit("icf_input.obj"), inputs[input_idx]));
+    t_invoke_linkerf("/nodefaultlib /subsystem:console /entry:entry /debug:full /opt:ref,icf /rad_time_stamp:0 /rad_workers:1 /out:icf.exe /pdbaltpath:icf.pdb icf_input.obj");
+    T_Ok(g_last_exit_code == 0);
+    T_Ok(t_invoke(t_make_file_path(arena, str8_lit("icf.exe")), str8_zero(), TIMEOUT_SEC(5)));
+    T_Ok(g_last_exit_code == 0); // prove all three function pairs actually folded
+    String8 image_data = t_read_file(arena, str8_lit("icf.exe"));
+    String8 pdb_data = t_read_file(arena, str8_lit("icf.pdb"));
+    if (input_idx == 0) {
+      expected_image = image_data;
+      expected_pdb = pdb_data;
+    } else {
+      T_Ok(str8_match(expected_image, image_data, 0));
+      T_Ok(str8_match(expected_pdb, pdb_data, 0));
+    }
+
+    MSF_Parsed *msf = msf_parsed_from_data(arena, pdb_data);
+    T_Ok(msf != 0);
+    if (!msf) { continue; }
+    PDB_DbiParsed *dbi = pdb_dbi_from_data(arena, msf_data_from_stream(msf, PDB_FixedStream_Dbi));
+    PDB_CompUnitArray *modules = pdb_comp_unit_array_from_data(arena, pdb_data_from_dbi_range(dbi, PDB_DbiRange_ModuleInfo));
+    U32 empty_count = 0, different_count = 0, same_count = 0;
+    for EachIndex(module_idx, modules->count) {
+      String8 symbols = pdb_data_from_unit_range(msf, modules->units[module_idx], PDB_DbiCompUnitRange_Symbols);
+      for (U64 cursor = 0; cursor < symbols.size;) {
+        CV_Symbol symbol = {0}; U64 read_size = 0; String8 error = {0};
+        B32 ok = t_codec_pdb_read_symbol(symbols, cursor, PDB_SYMBOL_ALIGN, &symbol, &read_size, &error);
+        T_Ok(ok);
+        if (!ok) { break; }
+        if (CV_IsProc32(symbol.kind)) {
+          String8 name = cv_name_from_symbol(symbol.kind, symbol.data);
+          if (str8_match(name, str8_lit("empty_a"), 0) || str8_match(name, str8_lit("empty_b"), 0)) { empty_count += 1; }
+          if (str8_match(name, str8_lit("different_a"), 0) || str8_match(name, str8_lit("different_b"), 0)) { different_count += 1; }
+          if (str8_match(name, str8_lit("same_a"), 0) || str8_match(name, str8_lit("same_b"), 0)) { same_count += 1; }
+        }
+        cursor += read_size;
+      }
+    }
+    T_Ok(empty_count == 1);
+    T_Ok(different_count == 2);
+    T_Ok(same_count == 1);
+  }
+#else
+  TestSkip();
+#endif
+}
+
 TEST(pdbstripped_coff_artifact_parity)
 {
   String8 path = str8f(arena, "%S/linker/tests/pdbstripped.tst", t_src_path());

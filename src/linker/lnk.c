@@ -4243,6 +4243,16 @@ lnk_icf_src_key_from_fn(Arena *scratch, LNK_Obj *obj, U32 fn_sn, String8 chksms)
   return key;
 }
 
+internal B32
+lnk_icf_debug_s_summary_has_locals(LNK_CObjDebugSView *indexed)
+{
+  for EachIndex(i, indexed->count) {
+    if (indexed->v[i].kind == CV_C13SubSectionKind_Symbols &&
+        (indexed->summaries[i].flags & LNK_COBJ_DEBUG_S_SUMMARY_HAS_LOCALS)) { return 1; }
+  }
+  return 0;
+}
+
 // does the function's record tree have anything a watch window would show?
 internal B32
 lnk_icf_debug_s_has_locals(Arena *scratch, LNK_Obj *obj, U32 child_sn)
@@ -4252,11 +4262,7 @@ lnk_icf_debug_s_has_locals(Arena *scratch, LNK_Obj *obj, U32 child_sn)
   String8List syms = {0};
   if (lnk_compressed_obj_debug_s_index(obj->compressed_obj, sect.frange, &indexed)) {
     if (indexed.summaries) {
-      for EachIndex(i, indexed.count) {
-        if (indexed.v[i].kind == CV_C13SubSectionKind_Symbols &&
-            (indexed.summaries[i].flags & LNK_COBJ_DEBUG_S_SUMMARY_HAS_LOCALS)) { return 1; }
-      }
-      return 0;
+      return lnk_icf_debug_s_summary_has_locals(&indexed);
     }
     for EachIndex(i, indexed.count) {
       if (indexed.v[i].kind == CV_C13SubSectionKind_Symbols) {
@@ -4332,7 +4338,21 @@ THREAD_POOL_TASK_FUNC(lnk_icf_mark_folded_lines_task)
     {
       Temp fold_temp = temp_begin(scratch.arena);
       U32 child_sn = lnk_icf_debug_s_child_from_section(obj, section_number);
-      if (child_sn != 0) {
+      B32 needs_src_key = child_sn != 0;
+      if (needs_src_key && obj->compressed_obj != 0) {
+        // Only a follower with locals can escalate to a full record tree. A
+        // negative summary proves that source-key reads cannot change the mark;
+        // avoid faulting compressed Lines/checksum payloads just to compare them.
+        // Without summaries, retain the old source-key-first order so raw symbol
+        // trees are not parsed unnecessarily for same-source folds.
+        LNK_ObjSection child = lnk_obj_section_from_section_number(obj, child_sn);
+        LNK_CObjDebugSView indexed = {0};
+        if (lnk_compressed_obj_debug_s_index(obj->compressed_obj, child.frange, &indexed) && indexed.summaries &&
+            !lnk_icf_debug_s_summary_has_locals(&indexed)) {
+          needs_src_key = 0;
+        }
+      }
+      if (needs_src_key) {
         String8 follower_chksms = lnk_icf_obj_file_chksms(obj);        // per-obj memo -- leaders
         String8 leader_chksms   = lnk_icf_obj_file_chksms(leader_obj); // shared across follower objs
         LNK_ICFSrcKey fk = lnk_icf_src_key_from_fn(fold_temp.arena, obj, section_number, follower_chksms);
