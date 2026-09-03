@@ -64,6 +64,7 @@ typedef struct LNK_Inputer
   LNK_InputList  new_objs;
 
   HashTable     *libs_ht;
+  HashTable     *cmd_lib_names_ht;
   HashTable     *missing_lib_ht;
   LNK_InputList  libs;
   LNK_InputList  new_libs[LNK_InputSource_Count];

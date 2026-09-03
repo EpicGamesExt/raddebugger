@@ -2663,6 +2663,77 @@ TEST(base_relocs)
   }
 }
 
+TEST(default_lib_matches_explicit_path)
+{
+  COFF_ObjWriter *entry = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+  COFF_ObjSection *text = coff_obj_writer_push_section(entry, str8_lit(".text"),
+      COFF_SectionFlag_CntCode|COFF_SectionFlag_MemRead|COFF_SectionFlag_MemExecute|COFF_SectionFlag_Align1Bytes,
+      str8_lit("\x31\xc0\xc3"));
+  coff_obj_writer_push_symbol_extern_func(entry, str8_lit("entry"), 0, text);
+  T_Ok(t_write_file(str8_lit("entry.obj"), coff_obj_writer_serialize(arena, entry)));
+  coff_obj_writer_release(&entry);
+  char *dirs[] = {"sdk libs", "other libs"};
+  char *symbols[] = {"first_provider", "second_provider"};
+  for EachIndex(i, ArrayCount(dirs)) {
+    T_Ok(make_directory(t_make_file_path(arena, str8_cstring(dirs[i]))));
+    COFF_ObjWriter *obj = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_symbol_abs(obj, str8_cstring(symbols[i]), 1, COFF_SymStorageClass_External);
+    COFF_LibWriter *lib = coff_lib_writer_alloc();
+    coff_lib_writer_push_obj(lib, str8_lit("provider.obj"), coff_obj_writer_serialize(arena, obj));
+    T_Ok(t_write_file(str8f(arena, "%s/provider.lib", dirs[i]), coff_lib_writer_serialize(arena, lib, 0, 0, 1)));
+    coff_lib_writer_release(&lib);
+    coff_obj_writer_release(&obj);
+  }
+
+  char *args = "/subsystem:console /entry:entry /out:default.exe entry.obj /include:first_provider";
+  String8 paths[] = {str8_lit("sdk libs/provider.lib"), t_make_file_path(arena, str8_lit("sdk libs/provider.lib"))};
+  // Debug builds also write normal progress to stderr; reject only the missing-library diagnostic.
+  char *names[] = {"provider.lib", "PROVIDER.LIB", "provider"};
+  // RAD accepts an omitted extension; LLD checks visited names before adding it.
+  U64 name_count = t_id_linker() == Linker_radlink ? ArrayCount(names) : 2;
+  for EachIndex(path_idx, ArrayCount(paths)) {
+    for EachIndex(name_idx, name_count) {
+      t_invoke_linkerf("%s \"%S\" /defaultlib:%s", args, paths[path_idx], names[name_idx]);
+      T_Ok(g_last_exit_code == 0);
+      T_Ok(str8_find_needle(g_errors, 0, str8_lit("unable to find library"), 0) == g_errors.size);
+    }
+  }
+
+  // Embedded directives use a separate input-source queue from /DEFAULTLIB.
+  COFF_ObjWriter *directive = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+  coff_obj_writer_push_directive(directive, str8_lit("/DEFAULTLIB:provider.lib"));
+  T_Ok(t_write_file(str8_lit("directive.obj"), coff_obj_writer_serialize(arena, directive)));
+  coff_obj_writer_release(&directive);
+  t_invoke_linkerf("%s \"%S\" directive.obj", args, paths[1]);
+  T_Ok(g_last_exit_code == 0);
+  T_Ok(str8_find_needle(g_errors, 0, str8_lit("unable to find library"), 0) == g_errors.size);
+
+  // A basename match must not swallow another explicitly named library, or a
+  // path-qualified default, with the same basename but a different provider.
+  t_invoke_linkerf("%s \"%S\" \"other libs/provider.lib\" /include:second_provider", args, paths[1]);
+  T_Ok(g_last_exit_code == 0);
+  T_Ok(str8_find_needle(g_errors, 0, str8_lit("unable to find library"), 0) == g_errors.size);
+  t_invoke_linkerf("%s \"%S\" /defaultlib:\"other libs/provider.lib\" /include:second_provider", args, paths[1]);
+  T_Ok(g_last_exit_code == 0);
+  T_Ok(str8_find_needle(g_errors, 0, str8_lit("unable to find library"), 0) == g_errors.size);
+
+  // Missing defaults must still warn; explicit bare paths are not defaults.
+  t_invoke_linkerf("%s \"%S\" /defaultlib:missing_provider.lib", args, paths[1]);
+  if (t_id_linker() == Linker_radlink) {
+    T_Ok(g_last_exit_code == 0);
+    T_Ok(str8_find_needle(g_errors, 0, str8_lit("unable to find library `missing_provider.lib`"), 0) < g_errors.size);
+  } else {
+    T_Ok(g_last_exit_code != 0);
+  }
+  t_invoke_linkerf("%s \"%S\" provider.lib", args, paths[1]);
+  if (t_id_linker() == Linker_radlink) {
+    T_Ok(g_last_exit_code == 0);
+    T_Ok(str8_find_needle(g_errors, 0, str8_lit("unable to find library `provider.lib`"), 0) < g_errors.size);
+  } else {
+    T_Ok(g_last_exit_code != 0);
+  }
+}
+
 TEST(simple_lib_test)
 {
   String8 test_payload = str8_lit("The quick brown fox jumps over the lazy dog");
