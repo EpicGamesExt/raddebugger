@@ -11400,7 +11400,7 @@ rd_init(CmdLine *cmdln)
         String8 arg = str8_cstring(cmdln->argv[idx]);
         B32 is_flag = (str8_match(str8_prefix(arg, 1), str8_lit("-"), 0) ||
                        str8_match(str8_prefix(arg, 1), str8_lit("--"), 0) ||
-                       str8_match(str8_prefix(arg, 1), str8_lit("/"), 0));
+                       (str8_match(str8_prefix(arg, 1), str8_lit("/"), 0) && OperatingSystem_CURRENT == OperatingSystem_Windows));
         B32 is_cfg = 0;
         B32 is_dmp = 0;
         if(!is_flag && !after_first_non_flag)
