@@ -428,6 +428,7 @@ internal LNX_DMN_Entity *lnx_dmn_entity_alloc(LNX_DMN_EntityKind kind);
 internal void lnx_dmn_entity_release(LNX_DMN_Entity *entity);
 
 //- rjf: specialized allocation / deallocation helpers
+internal LNX_DMN_Module *lnx_dmn_module_from_base_vaddr(LNX_DMN_ProcessCtx *ctx, U64 base_vaddr);
 internal LNX_DMN_Process *lnx_dmn_process_alloc(pid_t pid, LNX_DMN_ProcessState state, LNX_DMN_Process *parent_process, B32 debug_subprocess, B32 is_cow);
 internal LNX_DMN_Module *lnx_dmn_module_alloc(LNX_DMN_ProcessCtx *ctx, int memory_fd, U64 base_vaddr, U64 name_vaddr, U64 name_space_id, B32 is_main);
 internal void lnx_dmn_module_release(LNX_DMN_ProcessCtx *ctx, LNX_DMN_Module *module);
