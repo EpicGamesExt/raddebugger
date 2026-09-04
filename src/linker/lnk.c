@@ -921,17 +921,16 @@ lnk_inputer_push_lib_thin(LNK_Inputer *inputer, LNK_Config *config, LNK_InputSou
 
   LNK_Input *input = 0;
 
-  // default libraries may omit extension
   if (input_source == LNK_InputSource_Default || input_source == LNK_InputSource_Obj) {
+    // default libraries may omit extension
     if (!str8_ends_with(path, str8_lit(".lib"), StringMatchFlag_CaseInsensitive)) {
       path = push_str8f(scratch.arena, "%S.lib", path);
     }
     if (lnk_is_lib_disallowed(config, path)) {
       goto exit;
     }
-    // An explicitly supplied library also satisfies a bare /DEFAULTLIB name,
-    // even when its directory is not on LIBPATH. Do not strip directory parts
-    // from the request: path-qualified defaults still name distinct libraries.
+
+    // default libraries may duplicate libs that are specified using full path
     input = hash_table_search_path_raw(inputer->cmd_lib_names_ht, path);
     if (input) {
       goto exit;
@@ -973,8 +972,8 @@ lnk_inputer_push_lib_thin(LNK_Inputer *inputer, LNK_Config *config, LNK_InputSou
 
   exit:;
   if (input && input_source == LNK_InputSource_CmdLine) {
-    // Keep basename aliases separate from path identity so two explicitly
-    // supplied libraries with the same basename can both be linked.
+    // store command-line libraries by basename; keep only the first mapping because
+    // /DEFAULTLIB only needs to know whether a matching library was explicitly supplied
     String8 name = str8_skip_last_slash(input->path);
     if (!hash_table_search_path(inputer->cmd_lib_names_ht, name)) {
       hash_table_push_path_raw(inputer->arena, inputer->cmd_lib_names_ht, name, input);
