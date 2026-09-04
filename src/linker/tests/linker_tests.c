@@ -8175,15 +8175,16 @@ TEST(infer_asan)
 TEST(determ_test)
 {
   // compile the test target (torture)
-  t_invoke_cl("/fsanitize=address /c /Z7 /DBUILD_GIT_HASH=Stringify() /Fo:test.obj -I%S /Zc:preprocessor %S/torture/torture_main.c", t_src_path(), t_src_path());
+  t_invoke_cl("/Brepro /fsanitize=address /c /Z7 /DBUILD_GIT_HASH=Stringify() /Fo:test.obj -I%S /Zc:preprocessor %S/torture/torture_main.c", t_src_path(), t_src_path());
   T_Ok(g_last_exit_code == 0);
 
   U64 run_count = 25;
   T_Ok(run_count > 1);
   String8 test_path = t_make_file_path(arena, str8_lit("test.obj"));
+  String8 lib_path = str8_chop_last_slash(t_radlink_path());
 
   // single-threaded link
-  t_invoke_linkerf("%S /debug:full /rad_time_stamp:0 /rad_workers:1 /pdbaltpath:main.pdb /rad_log:-all /rad_ignore:74 /out:main.exe", test_path);
+  t_invoke_linkerf("%S /libpath:\"%S\" /debug:full /rad_time_stamp:0 /rad_workers:1 /pdbaltpath:main.pdb /rad_log:-all /rad_ignore:74 /out:main.exe", test_path, lib_path);
   T_Ok(g_last_exit_code == 0);
 
   // read b
@@ -8194,7 +8195,7 @@ TEST(determ_test)
   ProcessList linkers = {0};
   for EachIndex(i, run_count) {
     String8 out_path = t_make_file_path(arena, str8f(arena, "%llu.exe", i));
-    String8 cmdl = str8f(arena, "%S %S /debug:full /rad_time_stamp:0 /rad_imagealtpath:main.exe /pdbaltpath:main.pdb /rad_log:-all /rad_ignore:74 /out:%S", t_radlink_path(), test_path, out_path);
+    String8 cmdl = str8f(arena, "%S %S /libpath:\"%S\" /debug:full /rad_time_stamp:0 /rad_imagealtpath:main.exe /pdbaltpath:main.pdb /rad_log:-all /rad_ignore:74 /out:%S", t_radlink_path(), test_path, lib_path, out_path);
     Process process_handle = launch_cmd_line(cmdl);
     T_Ok(!process_match(process_zero(), process_handle));
     process_list_push(arena, &linkers, process_handle);
