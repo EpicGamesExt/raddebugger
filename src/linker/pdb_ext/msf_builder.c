@@ -490,14 +490,17 @@ msf_alloc_pn_arr(Arena *arena, MSF_Context *msf, MSF_UInt alloc_count)
 {
   // make sure FPM has enough space for new page numbers
   // 
-  // we grow FPM at correct intervals here because we pre-alloc unused FPM pages ahead of time
+  // grow FPM at correct intervals here because we pre-alloc unused FPM pages ahead of time
   MSF_UInt curr_page_cap = msf_get_page_count_cap(msf->page_data_list, msf->page_size);
-  MSF_UInt new_page_count = msf->page_count + alloc_count;
-  if (new_page_count > curr_page_cap) {
-    B32 is_fpm_alloced = msf_grow(msf, new_page_count);
-    if (!is_fpm_alloced) {
+  for (;;) {
+    U64 new_page_count = (U64)msf->page_count + alloc_count;
+    if (new_page_count <= curr_page_cap) {
+      break;
+    }
+    if (new_page_count > MSF_PN_MAX || !msf_grow(msf, (MSF_PageNumber)new_page_count)) {
       return 0;
     }
+    curr_page_cap = msf_get_page_count_cap(msf->page_data_list, msf->page_size);
   }
 
   Temp scratch = scratch_begin(&arena, 1);

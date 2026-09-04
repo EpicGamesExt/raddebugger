@@ -7123,58 +7123,96 @@ TEST(get_msf_stream_pages)
 
 TEST(msf_header_matches_saved_extent)
 {
-  MSF_UInt page_sizes[] = {512, 4096};
+  MSF_UInt page_sizes[] = {512, KB(4)};
   MSF_UInt fpms[] = {MSF_FPM0, MSF_FPM1};
+
   for EachIndex(size_idx, ArrayCount(page_sizes)) {
-    MSF_UInt page_size = page_sizes[size_idx];
-    MSF_PageNumber last_pages[] = {68, page_size - 1, page_size, page_size + 3,
-                                  page_size * 8 - 1, page_size * 8, page_size * 8 + 3};
-    // Cover an entire FPM's bitmap with small pages, and the default page size's
-    // first interval without making this a large-memory test.
-    U64 case_count = page_size == 512 ? ArrayCount(last_pages) : 4;
+    MSF_UInt P = page_sizes[size_idx];
+
+    // Exercise physical FPM-slot boundaries and transitions between bitmap intervals.
+    //                                                                                                                                                                     
+    // P * 2 and P * 7: intermediate valid slot-zero pages.                                                                                                         
+    // P * 16 - 1: end of the second bitmap interval.                                                                                                               
+    // P * 16: first page in the third interval.                                                                                                                    
+    // P * 16 + 3: first ordinary page after reserved FPM slots.                                                                                                    
+    //
+    // Both active FPM choices.                                                                                                                                     
+    //
+    MSF_PageNumber last_pages[] = {
+      68,
+      P - 1,
+      P,
+      P + 3,
+      P * 2,
+      P * 7,
+      P * 8 - 1,
+      P * 8,
+      P * 8 + 3,
+      P * 16 - 1,
+      P * 16,
+      P * 16 + 3,
+    };
+    // Full bitmap coverage is inexpensive with 512-byte pages. With 4 KiB
+    // pages, stop after the first physical FPM-slot boundary.
+    U64 case_count = P == 512 ? ArrayCount(last_pages) : 4;
     for EachIndex(fpm_idx, ArrayCount(fpms)) {
       for EachIndex(case_idx, case_count) {
         Temp temp = temp_begin(arena);
-        MSF_Context *msf = msf_alloc(page_size, fpms[fpm_idx]);
+        MSF_Context *msf = msf_alloc(P, fpms[fpm_idx]);
 
-        // Leave low pages for the stream table and root so that the final data
-        // page, not metadata, determines EOF. This also exercises a sparse file.
         MSF_PageList gap = msf_alloc_pages(msf, 64);
         T_Ok(gap.first->pn == 4 && gap.last->pn == 67);
-        MSF_PageNumber last_pn = last_pages[case_idx];
-        MSF_UInt data_page_count = 0;
+
+        // Cover an entire FPM's bitmap with small pages, and the default page size's
+        // first interval without making this a large-memory test.
+        MSF_PageNumber last_pn         = last_pages[case_idx];
+        MSF_UInt       data_page_count = 0;
         for (MSF_PageNumber pn = 68; pn <= last_pn; ++pn) {
-          MSF_UInt slot = pn % page_size;
+          MSF_UInt slot = pn % P;
           data_page_count += slot != MSF_FPM0 && slot != MSF_FPM1;
         }
-        String8 payload = str8(push_array_no_zero(arena, U8, (U64)data_page_count * page_size),
-                              (U64)data_page_count * page_size);
+        String8 payload = str8(push_array_no_zero(arena, U8, (U64)data_page_count * P),
+                              (U64)data_page_count * P);
         MemorySet(payload.str, 0xA5, payload.size);
+
         MSF_StreamNumber sn = msf_stream_alloc(msf);
         T_Ok(msf_stream_write(msf, sn, payload.str, (MSF_UInt)payload.size));
         T_Ok(msf_find_stream(msf, sn)->page_list.last->pn == last_pn);
+
+        // Free the low pages so metadata can reuse them while the payload remains at
+        // high page numbers. Unused pages below EOF exercise sparse MSF page layouts.
         msf_free_pages(msf, &gap);
         T_Ok(msf_build(msf) == MSF_Error_OK);
         T_Ok(msf->root_page_list.last->pn < last_pn);
         T_Ok(msf->st_page_list.last->pn < last_pn);
 
+        // validate that last page was assigned to the payload
         U64 save_size = msf_get_save_size(msf);
-        T_Ok(save_size == ((U64)last_pn + 1) * page_size);
+        T_Ok(save_size == ((U64)last_pn + 1) * P);
+
+        // allocate buffer for the serialized MSF file
         String8 saved = str8(push_array_no_zero(arena, U8, save_size), save_size);
         T_Ok(msf_save(msf, saved.str, saved.size));
+
+        // validate 'page_count' field matches the serialized file size
         MSF_Header70 *header = (MSF_Header70 *)saved.str;
         T_Ok((U64)header->page_count * header->page_size == saved.size);
+
+        // match internal page data list to the serialized file bytes
         String8List pages = msf_get_page_data_nodes(arena, msf);
         T_Ok(str8_match(saved, str8_list_join(arena, &pages, 0), 0));
 
         // Size agreement alone must not conceal a truncated final stream page.
         MSF_Parsed *parsed = msf_parsed_from_data(arena, saved);
         T_Ok(parsed != 0);
+
+        // validate parsed stream against the expected payload
         if (parsed != 0 && sn < parsed->stream_count) {
           T_Ok(str8_match(parsed->streams[sn], payload, 0));
         } else {
           T_Ok(0);
         }
+
         msf_release(msf);
         temp_end(temp);
       }
