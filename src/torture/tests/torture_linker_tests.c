@@ -54,12 +54,17 @@ TEST(shared_pool_governor_repeated_passes)
     for EachIndex(i, count) { T_Ok(task.visits[i] == 1); }
     T_Ok(ins_atomic_u64_eval(&pool->granted) == 0);
 
-    MemoryZeroStruct(&task);
-    task.use_barrier = 1;
     U64 cohort = tp_barrier_begin(pool);
-    tp_for_parallel_reserve(pool, 0, cohort, t_shared_pool_task, &task);
+    // Back-to-back barrier passes reuse the same task state, then transition
+    // back to governor dispatch on the next iteration. Every prior worker must
+    // have left the task loop before a pass can reset that state.
+    for EachIndex(barrier_pass, 4) {
+      MemoryZeroStruct(&task);
+      task.use_barrier = 1;
+      tp_for_parallel_reserve(pool, 0, cohort, t_shared_pool_task, &task);
+      for EachIndex(i, cohort) { T_Ok(task.visits[i] == 1); }
+    }
     tp_barrier_end(pool);
-    for EachIndex(i, cohort) { T_Ok(task.visits[i] == 1); }
   }
 
   // Join before releasing test-owned storage/synchronization. thread_join consumes

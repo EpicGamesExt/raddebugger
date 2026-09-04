@@ -194,11 +194,13 @@ tp_run_tasks_shared(TP_Context *pool, TP_Worker *worker)
     // cache task count so we dont touch pool memory after atomic inc
     U64 task_count = pool->task_count;
 
-    // on last task ping main thread (main_semaphore is null when worker_count==1,
-    // in which case main runs everything inline and never waits)
+    // Path A's last task pings main; its dispatcher separately drains grants.
+    // A one-worker pool runs inline and never waits on main_semaphore.
     U64 task_done = ins_atomic_u64_inc_eval(&pool->task_done);
     if (task_done == task_count && pool->worker_count > 1) {
-      semaphore_drop(pool->main_semaphore);
+      // Barrier passes signal completion only after all woken workers have
+      // left this loop. The last task alone does not make the queue quiescent.
+      if (!pool->barrier_pass) { semaphore_drop(pool->main_semaphore); }
     }
   }
 }
@@ -231,7 +233,13 @@ tp_worker_main_shared(void *raw_worker)
 
     tp_run_tasks_shared(pool, worker);
 
-    if (!barrier_pass) {
+    if (barrier_pass) {
+      // Do not let the dispatcher reset task state while a previous worker can
+      // still read it. The last worker acknowledges after leaving the task loop.
+      if (ins_atomic_u64_dec_eval(&pool->barrier_workers_left) == 0) {
+        semaphore_drop(pool->main_semaphore);
+      }
+    } else {
       // path A: hand my budget slot back so another process can use it
       tp_stats_level_add(-1);
       ins_atomic_u64_dec_eval(&pool->granted);
@@ -758,6 +766,7 @@ tp_for_parallel_reserve(TP_Context *pool, TP_Arena *task_arena, U64 task_count, 
     opened = 1;
   }
 
+  pool->barrier_pass = 1;
   U32 cohort = pool->worker_count; // pinned for the whole pass
 
   if (cohort == 1) {
@@ -767,6 +776,8 @@ tp_for_parallel_reserve(TP_Context *pool, TP_Arena *task_arena, U64 task_count, 
   } else {
     tp_for_parallel_init_state(pool, task_arena, cohort, task_func, task_data);
 
+    ins_atomic_u64_eval_assign(&pool->barrier_workers_left, cohort - 1);
+
     // wake exactly the cohort's workers (ids 1..cohort-1). These are barrier-pass
     // wakes: workers must NOT return budget on drain -- the slots are held by the
     // bracket and released in tp_barrier_end so the cohort stays live for the pass.
@@ -775,7 +786,8 @@ tp_for_parallel_reserve(TP_Context *pool, TP_Arena *task_arena, U64 task_count, 
     // main is the cohort-th participant (lane 0)
     tp_run_tasks_shared(pool, &pool->worker_arr[0]);
 
-    // wait for the cohort to finish
+    // Main has left the task loop. Wait for every woken worker to leave it too,
+    // before resetting the queue, changing pass kind, or releasing the cohort.
     semaphore_take(pool->main_semaphore, max_U64);
   }
 

@@ -57,6 +57,7 @@ typedef struct TP_Context
   U32          barrier_saved_workers;  // worker_count to restore at tp_barrier_end
   U32          barrier_cohort_extra;   // budget slots held for this barrier pass (cohort = 1 + this)
   Barrier      barrier_saved;          // pool->barrier to restore at tp_barrier_end
+  U64          barrier_workers_left;  // woken path-B workers still accessing this pass
   U64          barrier_begin_us;       // stats: bracket open time (for park accounting)
   U32          barrier_shortfall;      // stats: budget slots we wanted but could not grab for this pass
 
