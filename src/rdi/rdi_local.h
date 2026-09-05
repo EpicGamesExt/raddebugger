@@ -9,6 +9,9 @@
 #if defined(X64_H)
 # include "rdi/x64/rdi_x64.h"
 #endif
+#if defined(ARM64_H)
+# include "rdi/arm64/rdi_arm64.h"
+#endif
 
 ////////////////////////////////
 //~ rjf: RDI Dumping Flags

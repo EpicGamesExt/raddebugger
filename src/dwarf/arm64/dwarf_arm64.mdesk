@@ -1,0 +1,7 @@
+// Copyright (c) Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
+@data(U8) dw_reg_code_from_arm64_table:
+{
+  @expand(ARM64_RegTable a) `$(a.has_dwarf == 'x' -> "DW_RegCodeARM64_" .. a.name)$(a.has_dwarf != 'x' -> 0)`
+}

@@ -8,6 +8,9 @@
 #if defined(X64_H)
 # include "dwarf/x64/dwarf_x64.c"
 #endif
+#if defined(ARM64_H)
+# include "dwarf/arm64/dwarf_arm64.c"
+#endif
 
 ////////////////////////////////
 //~ rjf: X-List Helpers
@@ -445,6 +448,7 @@ dw_reg_count_from_arch(Arch arch)
   {
     default:{}break;
     case Arch_x64:{result = DW_RegCodeX64_LAST;}break;
+    case Arch_arm64:{result = DW_RegCodeARM64_LAST;}break;
   }
   return result;
 }

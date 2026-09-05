@@ -14,6 +14,12 @@ arch_rdi_from_reg_code_table_from_arch(Arch arch)
       result = rdi_reg_code_from_x64_table;
     }break;
 #endif
+#if defined(ARM64_H)
+    case Arch_arm64:
+    {
+      result = rdi_reg_code_from_arm64_table;
+    }break;
+#endif
   }
   return result;
 }

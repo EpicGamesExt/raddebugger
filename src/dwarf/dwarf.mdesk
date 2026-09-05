@@ -1409,3 +1409,92 @@ DW_RegCodeTableX64:
   @expand(DW_RegCodeTableX64 a) `$(a.name) = $(a.code)`,
   LAST,
 }
+
+////////////////////////////////
+//~ rjf: Registers (arm64)
+
+@table(name code byte_size)
+DW_RegCodeTableARM64:
+{
+  {x0               0       8}
+  {x1               1       8}
+  {x2               2       8}
+  {x3               3       8}
+  {x4               4       8}
+  {x5               5       8}
+  {x6               6       8}
+  {x7               7       8}
+  {x8               8       8}
+  {x9               9       8}
+  {x10              10      8}
+  {x11              11      8}
+  {x12              12      8}
+  {x13              13      8}
+  {x14              14      8}
+  {x15              15      8}
+  {x16              16      8}
+  {x17              17      8}
+  {x18              18      8}
+  {x19              19      8}
+  {x20              20      8}
+  {x21              21      8}
+  {x22              22      8}
+  {x23              23      8}
+  {x24              24      8}
+  {x25              25      8}
+  {x26              26      8}
+  {x27              27      8}
+  {x28              28      8}
+  {fp               29      8}
+  {lr               30      8}
+  {sp               31      8}
+  {pc               32      8}
+  {elr_mode         33      8}
+  {ra_sign_state    34      8} // Return address signed state pseudo-register
+  {tpidrro_elo      35      8} // EL0 Read-Only Software Thread ID register
+  {tpidr_elo        36      8} // EL0 Read/Write Software Thread ID register
+  {tpidr_el1        37      8} // EL1 Software Thread ID register
+  {tpidr_el2        38      8} // EL2 Software Thread ID register
+  {tpidr_el3        39      8} // EL3 Software Thread ID register
+  // 40-45 reserved
+  // 46-63 beta
+  {v0               64      6}
+  {v1               65      6}
+  {v2               66      6}
+  {v3               67      6}
+  {v4               68      6}
+  {v5               69      6}
+  {v6               70      6}
+  {v7               71      6}
+  {v8               72      6}
+  {v9               73      6}
+  {v10              74      6}
+  {v11              75      6}
+  {v12              76      6}
+  {v13              77      6}
+  {v14              78      6}
+  {v15              79      6}
+  {v16              80      6}
+  {v17              81      6}
+  {v18              82      6}
+  {v19              83      6}
+  {v20              84      6}
+  {v21              85      6}
+  {v22              86      6}
+  {v23              87      6}
+  {v24              88      6}
+  {v25              89      6}
+  {v26              90      6}
+  {v27              91      6}
+  {v28              92      6}
+  {v29              93      6}
+  {v30              94      6}
+  {v31              95      6}
+  // 96-127 beta
+}
+
+@enum DW_RegCodeARM64:
+{
+  @expand(DW_RegCodeTableARM64 a) `$(a.name) = $(a.code)`,
+  LAST,
+}
