@@ -2633,20 +2633,26 @@ lnk_obj_indices_from_section_counts(Arena *arena, U64 worker_count, LNK_Obj **ob
 }
 
 internal B32
-lnk_resolve_reloc_target_symbol(Arena *arena, LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, String8 pass_name, LNK_ObjSymbolRef *resolved_symbol_out)
+lnk_resolve_reloc_target_symbol(Arena *arena, LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, String8 pass_name, LNK_ObjSymbolRef *resolved_symbol_out, U32 *resolved_value_out)
 {
-  Temp             temp        = temp_begin(arena);
-  B32              is_resolved = 1;
-  HashMap          seen_hm     = {0};
-  LNK_ObjSymbolRef result      = symbol;
+  Temp temp = temp_begin(arena);
+ 
+  B32              is_resolved  = 1;
+  HashMap          seen_hm      = {0};
+  LNK_ObjSymbolRef result       = symbol;
+  U32              result_value = 0;
+
   for (;;) {
     // unpack symbol
     COFF_ParsedSymbol          result_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(result.obj, result.symbol_idx);
     COFF_SymbolValueInterpType result_interp = coff_interp_from_parsed_symbol(result_parsed);
+    if (result_interp == COFF_SymbolValueInterp_Regular) {
+      result_value = result_parsed.value;
+    }
 
     // resolve symbol
     LNK_ObjSymbolRef next_ref = {0};
-    if (!lnk_resolve_symbol(symtab, result, &next_ref)) {
+    if (lnk_resolve_symbol(symtab, result, &next_ref) == 0) {
       break;
     }
     if (result_interp != COFF_SymbolValueInterp_Weak && result_interp != COFF_SymbolValueInterp_Undefined) {
@@ -2655,7 +2661,7 @@ lnk_resolve_reloc_target_symbol(Arena *arena, LNK_SymbolTable *symtab, LNK_ObjSy
     }
 
     // most relocations resolve in one step; only allocate cycle tracking for chains
-    U64 symbol_key = ((U64)result.obj->input_idx << 32ull) | (U64)result.symbol_idx;
+    U64 symbol_key = Compose64Bit(result.obj->input_idx, result.symbol_idx);
     if (hash_map_search_u64_u64(&seen_hm, symbol_key) != 0) {
       COFF_ParsedSymbol symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx);
       lnk_error_obj(LNK_Warning_CyclicSymbol, symbol.obj, "symbol %S forms a cyclic chain (%S)", symbol_parsed.name, pass_name);
@@ -2669,6 +2675,9 @@ lnk_resolve_reloc_target_symbol(Arena *arena, LNK_SymbolTable *symtab, LNK_ObjSy
 
   if (resolved_symbol_out) {
     *resolved_symbol_out = result;
+  }
+  if (resolved_value_out) {
+    *resolved_value_out = result_value;
   }
 
   temp_end(temp);
@@ -2783,7 +2792,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_ref_task)
 
           // reloc -> symbol
           LNK_ObjSymbolRef ref_symbol = (LNK_ObjSymbolRef){ .obj = batch->v[i].obj, .symbol_idx = reloc->isymbol };
-          lnk_resolve_reloc_target_symbol(scratch2.arena, symtab, ref_symbol, str8_lit("/OPT:REF"), &ref_symbol);
+          lnk_resolve_reloc_target_symbol(scratch2.arena, symtab, ref_symbol, str8_lit("/OPT:REF"), &ref_symbol, 0);
 
           // skip unresolved symbol
           if (ref_symbol.obj == 0) { continue; }
@@ -3156,7 +3165,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
 
         if (symbol_idx < obj->coff.header.symbol_count) {
           LNK_ObjSymbolRef target_ref      = { .obj = obj, .symbol_idx = symbol_idx };
-          B32              is_symbol_found = lnk_resolve_reloc_target_symbol(scratch.arena, task->symtab, target_ref, str8_lit("/OPT:ICF"), &target_ref);
+          B32              is_symbol_found = lnk_resolve_reloc_target_symbol(scratch.arena, task->symtab, target_ref, str8_lit("/OPT:ICF"), &target_ref, 0);
           if (is_symbol_found) {
             COFF_ParsedSymbol symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(target_ref.obj, target_ref.symbol_idx);
             if (coff_interp_from_parsed_symbol(symbol) == COFF_SymbolValueInterp_Regular) {
@@ -3336,7 +3345,8 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
             *target = (RelocTarget){0};
 
             LNK_ObjSymbolRef target_ref      = { .obj = obj, .symbol_idx = r->isymbol };
-            B32              is_symbol_found = lnk_resolve_reloc_target_symbol(scratch2.arena, task->symtab, target_ref, str8_lit("/OPT:ICF"), &target_ref);
+            U32              target_value    = 0;
+            B32              is_symbol_found = lnk_resolve_reloc_target_symbol(scratch2.arena, task->symtab, target_ref, str8_lit("/OPT:ICF"), &target_ref, &target_value);
             if (is_symbol_found) {
               COFF_ParsedSymbol target_symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(target_ref.obj, target_ref.symbol_idx);
               target->interp = coff_interp_from_parsed_symbol(target_symbol);
@@ -3384,6 +3394,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
                   }
                 }
 
+                target->value = target_value;
                 target->color = &shared.color_map[target_obj->input_idx][target_sect];
               } break;
               default: {
