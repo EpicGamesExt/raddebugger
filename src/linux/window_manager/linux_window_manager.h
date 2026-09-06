@@ -53,6 +53,7 @@ struct LNX_WM_Window
   U64 counter_value;
   B32 resize_draw;
   Rng2F32 last_synced_rect;
+  B32 pending_focus;
   B32 waiting_for_resize;
   B32 custom_border;
   F32 custom_title_bar_thickness;

@@ -682,17 +682,18 @@ wm_window_focus(WM_Window handle)
 {
   if(wm_window_match(handle, wm_window_zero())) {return;}
   LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
-  // 
-  // TODO: if the target is lightweight, the debugger may launch it even before the first frame is drawn;
-  //       this is a problem because XSetInputFocus is now called before XMapWindow, we need a guard
-  //       to prevent an X server error:
-  //
-  //         X Error of failed request:  BadMatch (invalid parameter attributes)
-  //            Major opcode of failed request:  42 (X_SetInputFocus)
-  //            Serial number of failed request:  373
-  //            Current serial number in output stream:  374
-  //        
-  XSetInputFocus(lnx_wm_state->display, w->window, RevertToNone, CurrentTime);
+
+  //NOTE(Giovanni): defer focus until window is mapped to avoid X BadMatch
+  XWindowAttributes attr;
+  if(!XGetWindowAttributes(lnx_wm_state->display, w->window, &attr)) {return;}
+  if(attr.map_state == IsViewable)
+  {
+    XSetInputFocus(lnx_wm_state->display, w->window, RevertToNone, CurrentTime);
+  }
+  else
+  {
+    w->pending_focus = 1;
+  }
 }
 
 internal B32
@@ -1272,7 +1273,17 @@ wm_get_events(Arena *arena, B32 wait)
           WM_Event *e = wm_event_list_push_new(arena, &evts, WM_EventKind_WindowLoseFocus);
           e->window.u64[0] = (U64)window;
         }break;
-        
+        // NOTE(Giovanni): complete focus request
+        case MapNotify:
+        {
+          LNX_WM_Window *window = lnx_window_from_x11window(evt.xmap.window);
+          if(window != 0 && window->pending_focus)
+          {
+            window->pending_focus = 0;
+            XSetInputFocus(lnx_wm_state->display, window->window, RevertToNone, CurrentTime);
+            XFlush(lnx_wm_state->display);
+          }
+        }break;
         //- rjf: window moves & resizes
         case ConfigureNotify:
         {
