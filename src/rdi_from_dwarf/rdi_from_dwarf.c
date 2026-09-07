@@ -831,10 +831,10 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         }
         
         //- rjf: emit lines
-        if(emit_line && vm_regs.address != 0 && vm_regs.line != 0)
+        B32 should_emit_line = emit_line;
+        emit_line = 0;
+        if(should_emit_line && vm_regs.address != 0 && vm_regs.line != 0)
         {
-          emit_line = 0;
-          
           // rjf: grab the last emitted line info
           U32 last_line = 0;
           U16 last_col = 0;
@@ -2997,11 +2997,11 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           U64 voff_opl = 0;
           if(dw_attrib_class_from_form_kind(unit_parse_ctx->version, unit_parse_ctx->exts, hipc_attrib->val.kind) & DW_AttribClass_Address)
           {
-            voff_opl = voff_base + hipc_attrib->val.u128.u64[0];
+            voff_opl = hipc_attrib->val.addr;
           }
           else
           {
-            voff_opl = hipc_attrib->val.addr;
+            voff_opl = voff_base + hipc_attrib->val.u128.u64[0];
           }
           rdim_rng1u64_chunk_list_push(arena, &unit_voff_ranges, 256, (RDIM_Rng1U64){voff_base, voff_opl});
         }
