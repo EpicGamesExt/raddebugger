@@ -559,7 +559,42 @@ cv_obj_info_from_symbol(CV_Symbol symbol)
 //~ .debug$S helpers
 
 internal void
-cv_debug_s_from_data_c13_(Arena *arena, CV_DebugS *debug_s, String8 raw_debug_s)
+cv_debug_s_prov_list_push_node(CV_DebugSProvList *list, CV_DebugSProvNode *node)
+{
+  SLLQueuePush(list->first, list->last, node);
+  list->count += 1;
+}
+
+internal void
+cv_debug_s_prov_list_push(Arena *arena, CV_DebugSProvList *list, U64 off, U64 size, U32 sect_idx, B32 is_synthetic)
+{
+  CV_DebugSProvNode *node = push_array_no_zero(arena, CV_DebugSProvNode, 1);
+  node->next         = 0;
+  node->off          = off;
+  node->size         = size;
+  node->sect_idx     = sect_idx;
+  node->is_synthetic = is_synthetic;
+  cv_debug_s_prov_list_push_node(list, node);
+}
+
+internal void
+cv_debug_s_prov_list_concat_in_place(CV_DebugSProvList *dst, CV_DebugSProvList *src)
+{
+  if (src->first != 0) {
+    if (dst->last != 0) {
+      dst->last->next = src->first;
+      dst->last       = src->last;
+    } else {
+      dst->first = src->first;
+      dst->last  = src->last;
+    }
+    dst->count += src->count;
+    MemoryZeroStruct(src);
+  }
+}
+
+internal void
+cv_debug_s_from_data_c13_(Arena *arena, CV_DebugS *debug_s, String8 raw_debug_s, U64 prov_base_off)
 {
   for (U64 cursor = 0; cursor + sizeof(CV_C13SubSectionHeader) <= raw_debug_s.size; ) {
     // read header
@@ -575,6 +610,12 @@ cv_debug_s_from_data_c13_(Arena *arena, CV_DebugS *debug_s, String8 raw_debug_s)
       Rng1U64 sub_sect_range = r1u64(cursor, cursor + header.size);
       String8 sub_sect_data  = str8_substr(raw_debug_s, sub_sect_range);
       str8_list_push(arena, sub_sect_list, sub_sect_data);
+
+      // record provenance: slice position within the raw input (sub_sect_data.size, not
+      // header.size -- str8_substr clamps a header that overruns the section, and provenance
+      // must describe the bytes the node actually holds)
+      cv_debug_s_prov_list_push(arena, &debug_s->prov_list[sub_sect_idx], prov_base_off + cursor, sub_sect_data.size, CV_DebugSProvSect_Nil, 0);
+      Assert(debug_s->prov_list[sub_sect_idx].last->size == sub_sect_data.size);
     }
 
     // advance
@@ -595,7 +636,7 @@ internal CV_DebugS
 cv_debug_s_from_data_c13(Arena *arena, String8 raw_debug_s)
 {
   CV_DebugS debug_s = {0};
-  cv_debug_s_from_data_c13_(arena, &debug_s, raw_debug_s);
+  cv_debug_s_from_data_c13_(arena, &debug_s, raw_debug_s, 0);
   return debug_s;
 }
 
@@ -608,7 +649,9 @@ cv_debug_s_from_data(Arena *arena, String8 raw_debug_s)
     switch (sig) {
     case CV_Signature_C13: {
       String8 raw_debug_s_past_sig = str8_substr(raw_debug_s, r1u64(sizeof(sig), raw_debug_s.size));
-      result = cv_debug_s_from_data_c13(arena, raw_debug_s_past_sig);
+      // prov base = sizeof(sig): provenance offsets are relative to the raw input handed to
+      // THIS function, which still carries the signature
+      cv_debug_s_from_data_c13_(arena, &result, raw_debug_s_past_sig, sizeof(sig));
     } break;
     case CV_Signature_C6: {
       Assert(!"TODO: handle C6");
@@ -630,6 +673,7 @@ cv_debug_s_concat_in_place(CV_DebugS *dst, CV_DebugS *src)
 {
   for (U64 sub_sect_idx = 0; sub_sect_idx < ArrayCount(dst->data_list); sub_sect_idx += 1) {
     str8_list_concat_in_place(&dst->data_list[sub_sect_idx], &src->data_list[sub_sect_idx]);
+    cv_debug_s_prov_list_concat_in_place(&dst->prov_list[sub_sect_idx], &src->prov_list[sub_sect_idx]);
   }
 }
 
@@ -747,6 +791,67 @@ cv_file_chksms_from_debug_s(CV_DebugS debug_s)
     file_chksms = data_list.first->string;
   }
   return file_chksms;
+}
+
+internal U64
+cv_total_sub_section_size_from_debug_s(CV_DebugS *debug_s)
+{
+  U64 total = 0;
+  for EachElement(i, debug_s->data_list) { total += debug_s->data_list[i].total_size; }
+  return total;
+}
+
+internal CV_DebugSProvList *
+cv_sub_section_prov_ptr_from_debug_s(CV_DebugS *debug_s, CV_C13SubSectionKind kind)
+{
+  CV_C13SubSectionIdxKind idx = cv_c13_sub_section_idx_from_kind(kind);
+  return &debug_s->prov_list[idx];
+}
+
+internal void
+cv_debug_s_push_synthetic_sub_section(Arena *arena, CV_DebugS *debug_s, CV_C13SubSectionKind kind, String8 data)
+{
+  String8List       *data_list = cv_sub_section_ptr_from_debug_s(debug_s, kind);
+  CV_DebugSProvList *prov_list = cv_sub_section_prov_ptr_from_debug_s(debug_s, kind);
+  Assert(prov_list->count == data_list->node_count); // keep tracked lists tracked
+  str8_list_push(arena, data_list, data);
+  cv_debug_s_prov_list_push(arena, prov_list, 0, data.size, CV_DebugSProvSect_Nil, 1);
+}
+
+internal void
+cv_debug_s_concat_sub_section_in_place(CV_DebugS *dst, CV_DebugS *src, CV_C13SubSectionKind kind)
+{
+  CV_C13SubSectionIdxKind idx = cv_c13_sub_section_idx_from_kind(kind);
+  str8_list_concat_in_place(&dst->data_list[idx], &src->data_list[idx]);
+  cv_debug_s_prov_list_concat_in_place(&dst->prov_list[idx], &src->prov_list[idx]);
+}
+
+internal void
+cv_debug_s_tag_prov_sect(CV_DebugS *debug_s, U32 sect_idx)
+{
+  for EachElement(i, debug_s->prov_list) {
+    for EachNode(n, CV_DebugSProvNode, debug_s->prov_list[i].first) { n->sect_idx = sect_idx; }
+  }
+}
+
+// debug-only invariant walk: per subsection, provenance is either absent (untracked
+// synthetic construction) or one node per data node with matching sizes
+internal void
+cv_debug_s_validate_prov(CV_DebugS *debug_s)
+{
+#if BUILD_DEBUG
+  for EachElement(i, debug_s->data_list) {
+    if (debug_s->prov_list[i].count == 0) { Assert(debug_s->prov_list[i].first == 0); continue; }
+    Assert(debug_s->prov_list[i].count == debug_s->data_list[i].node_count);
+    CV_DebugSProvNode *prov_n = debug_s->prov_list[i].first;
+    for EachNode(data_n, String8Node, debug_s->data_list[i].first) {
+      Assert(prov_n != 0);
+      if (!prov_n->is_synthetic) { Assert(prov_n->size == data_n->string.size); }
+      prov_n = prov_n->next;
+    }
+    Assert(prov_n == 0);
+  }
+#endif
 }
 
 ////////////////////////////////

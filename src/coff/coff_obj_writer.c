@@ -49,8 +49,9 @@ coff_obj_writer_serialize(Arena *arena, COFF_ObjWriter *obj_writer)
       
     }
   }
-
-  B32 is_big_obj  = obj_sections_count > 0xfeff;
+  // Standard COFF reserves section numbers 0xff00 and above. BigObj also
+  // widens every symbol/auxiliary record from 18 to 20 bytes.
+  B32 is_big_obj = obj_sections_count > 0xfeff;
   U64 symbol_size = is_big_obj ? sizeof(COFF_Symbol32) : sizeof(COFF_Symbol16);
   
   //

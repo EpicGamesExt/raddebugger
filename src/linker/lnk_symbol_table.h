@@ -63,6 +63,10 @@ typedef struct LNK_SymbolHashTrie
 {
   String8                   *name;
   LNK_Symbol                *symbol;
+  // full key hash stored at insert; descent fast-rejects on hash mismatch BEFORE
+  // dereferencing name -> String8 -> name bytes (saves 2-3 line misses/level).
+  // str8_match still gates the real match, so this is fast-reject only -> byte-identical.
+  U64                        hash;
   struct LNK_SymbolHashTrie *child[4];
 } LNK_SymbolHashTrie;
 
@@ -79,6 +83,10 @@ typedef struct LNK_SymbolHashTrieChunkList
   U64                      count;
   LNK_SymbolHashTrieChunk *first;
   LNK_SymbolHashTrieChunk *last;
+  // false-sharing pad: symtab->chunks / search_chunks are [worker_count] arrays indexed
+  // [worker_id]; at 24B/entry adjacent workers share a cache line on the parallel insert.
+  // Pad each entry to a full 64B line so each worker owns its line. Pure layout -> byte-identical.
+  U8                       pad_[64 - 3*8];
 } LNK_SymbolHashTrieChunkList;
 
 // --- Symbol Table ------------------------------------------------------------

@@ -276,6 +276,7 @@ internal MD_NodeFlags md_node_flags_from_token_flags(MD_TokenFlags flags);
 
 //- rjf: nil
 internal B32 md_node_is_nil(MD_Node *node);
+internal B32 t_md_node_is_valid(MD_Node *node);
 
 //- rjf: iteration
 #define MD_EachNode(it, first) (MD_Node *it = first; !md_node_is_nil(it); it = it->next)

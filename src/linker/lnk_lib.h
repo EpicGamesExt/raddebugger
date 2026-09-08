@@ -13,13 +13,16 @@ typedef struct LNK_Lib
   U32                 *member_offsets;
   U16                 *symbol_indices;
   String8Array         symbol_names;
+
+  // symbol-dir bsearch pre-filter: symbol_names.v[].str points into the mapped archive's string
+  // table, so every bsearch probe's MemCompare chases scattered archive bytes (sorted order !=
+  // memory order -> no locality). symbol_discs[i] packs the first 8 bytes of symbol_names.v[i]
+  // big-endian (zero-padded), so an integer compare of discriminators decides str8_compar order
+  // whenever they differ; probes touch archive bytes only on discriminator ties. Parallel to
+  // symbol_names, built once at parse time.
+  U64                 *symbol_discs;
   String8              long_names;
   U64                  input_idx;
-  
-  struct LNK_SymbolHashTrieChunk **search_cursor_chunks;
-  U64                             *search_cursor_indices;
-  struct LNK_SymbolHashTrieChunk **anti_dep_search_cursor_chunks;
-  U64                             *anti_dep_search_cursor_indices;
 } LNK_Lib;
  
 typedef struct LNK_LibNode
@@ -71,5 +74,6 @@ internal LNK_Lib **       lnk_array_from_lib_list(Arena *arena, LNK_LibList list
 internal void             lnk_lib_list_push_node(LNK_LibList *list, LNK_LibNode *node);
 internal LNK_LibNodeArray lnk_lib_list_push_parallel(TP_Context *tp, TP_Arena *arena, LNK_LibList *list, U64 inputs_count, struct LNK_Input **inputs);
 
+internal U64              lnk_lib_bsearch_symbol_name(LNK_Lib *lib, String8 value);
 internal force_inline B32 lnk_search_lib(LNK_Lib *lib, String8 symbol_name, U32 *member_idx_out);
 

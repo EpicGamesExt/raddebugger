@@ -169,6 +169,7 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     }
   }
 
+  U32 *associated_section_offsets = push_array(arena, U32, header.section_count_no_null + 2);
   U64 symbol_block_count = CeilIntegerDiv(header.symbol_count, 64);
   LNK_ObjSymbolArray symbols = {
     .count           = primary_symbol_count,
@@ -220,6 +221,8 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
           if (select == COFF_ComdatSelect_Associative) {
             if (section_number == 0 || section_number > header.section_count_no_null) {
               lnk_error_input_obj(LNK_Error_IllData, input, "section definition symbol %S (No. 0x%x) associates with an out of bounds section 0x%x", symbol.name, symbol_idx, section_number);
+            } else if (symbol.section_number > 0 && symbol.section_number <= header.section_count_no_null) {
+              associated_section_offsets[section_number + 1] += 1;
             }
           }
         }
@@ -230,6 +233,14 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     }
     Assert(primary_idx == primary_symbol_count);
   }
+
+  // Convert per-parent association counts to CSR offsets. The offsets double as fill cursors
+  // below; the backwards pass restores them and the old SLLStackPush sibling order.
+  for (U64 section_number = 1; section_number <= header.section_count_no_null; section_number += 1) {
+    associated_section_offsets[section_number + 1] += associated_section_offsets[section_number];
+  }
+  U32  associated_section_count   = associated_section_offsets[header.section_count_no_null + 1];
+  U32 *associated_section_numbers = push_array_no_zero(arena, U32, associated_section_count);
 
   //
   // create symbol links to COMDAT sections
@@ -248,10 +259,16 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
         if (symbol.storage_class == COFF_SymStorageClass_Static) {
           if (symbol.section_number > 0 && symbol.section_number <= header.section_count_no_null) {
             COFF_SectionHeader *sect_header = &coff_section_table[symbol.section_number-1];
-            if (section_headers[symbol.section_number].flags & COFF_SectionFlag_LnkCOMDAT) {
-              if (symbol.aux_symbol_count) {
-                U32 section_length = 0;
-                coff_parse_secdef(symbol, header.is_big_obj, 0, 0, &section_length, 0);
+            if (symbol.aux_symbol_count) {
+              COFF_ComdatSelectType selection      = COFF_ComdatSelect_Null;
+              U32                   section_number = 0;
+              U32                   section_length = 0;
+              coff_parse_secdef(symbol, header.is_big_obj, &selection, &section_number, &section_length, 0);
+              if (selection == COFF_ComdatSelect_Associative && section_number > 0 && section_number <= header.section_count_no_null) {
+                U32 cursor = associated_section_offsets[section_number]++;
+                associated_section_numbers[cursor] = symbol.section_number;
+              }
+              if (section_headers[symbol.section_number].flags & COFF_SectionFlag_LnkCOMDAT) {
                 if (sect_header->fsize == section_length) {
                   if (comdats[symbol.section_number] == ~0) {
                     comdats[symbol.section_number] = symbol_idx;
@@ -268,6 +285,14 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
           }
         }
       }
+    }
+  }
+  for (U64 section_number = header.section_count_no_null; section_number > 0; section_number -= 1) {
+    associated_section_offsets[section_number] = associated_section_offsets[section_number - 1];
+    U32 min = associated_section_offsets[section_number];
+    U32 max = associated_section_offsets[section_number + 1];
+    for (U32 child_idx = 0; child_idx < (max - min) / 2; child_idx += 1) {
+      Swap(U32, associated_section_numbers[min + child_idx], associated_section_numbers[max - child_idx - 1]);
     }
   }
 
@@ -320,28 +345,6 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
     scratch_end(scratch);
   }
 
-  //
-  // collect sections associations
-  //
-  U32Node **associated_sections = push_array(arena, U32Node *, header.section_count_no_null + 1);
-  {
-    COFF_ParsedSymbol symbol;
-    for (U32 symbol_idx = 0; symbol_idx < header.symbol_count; symbol_idx += (1 + symbol.aux_symbol_count)) {
-      symbol = coff_parse_symbol_no_name(header, raw_coff_symbol_table, symbol_idx);
-      COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
-      if (interp == COFF_SymbolValueInterp_Regular && symbol.storage_class == COFF_SymStorageClass_Static && symbol.aux_symbol_count > 0) {
-        COFF_ComdatSelectType selection      = COFF_ComdatSelect_Null;
-        U32                   section_number = 0;
-        coff_parse_secdef(symbol, header.is_big_obj, &selection, &section_number, 0, 0);
-        if (selection != COFF_ComdatSelect_Associative) { continue; }
-
-        U32Node *associated_node = push_array(arena, U32Node, 1);
-        associated_node->data    = symbol.section_number;
-        SLLStackPush(associated_sections[section_number], associated_node);
-      }
-    }
-  }
-
   B8 hotpatch = 0;
   if (header.machine == COFF_MachineType_X64) {
     hotpatch = 1;
@@ -361,7 +364,9 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
           Temp temp = temp_begin(scratch.arena);
           String8   debug_s_data = str8_substr(input->data, rng_1u64(sect_header->foff, sect_header->foff+sect_header->fsize));
           CV_DebugS debug_s      = cv_debug_s_from_data(temp.arena, debug_s_data);
-          for EachNode(symbols_n, String8Node, debug_s.data_list[CV_C13SubSectionIdxKind_Symbols].first) {
+          cv_debug_s_tag_prov_sect(&debug_s, (U32)sect_idx);
+          String8List symbols_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
+          for EachNode(symbols_n, String8Node, symbols_list.first) {
             for (U64 cursor = 0, count = 0; cursor < symbols_n->string.size && count < 2; count += 1) {
               CV_SymbolHeader symbol_header;
               TryReadBreak(str8_deserial_read_struct(symbols_n->string, cursor, &symbol_header), cursor);
@@ -396,7 +401,8 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
       .count_no_null = header.section_count_no_null,
       .headers      = section_headers,
       .comdats      = comdats,
-      .associated_section_numbers = associated_sections,
+      .associated_section_offsets = associated_section_offsets,
+      .associated_section_numbers = associated_section_numbers,
     },
     .symbols                     = symbols,
     .debug_t_section_number      = debug_t_section_number,
@@ -569,8 +575,9 @@ lnk_obj_collect_associated_section_numbers(Arena *arena, LNK_Obj *obj, U32 root_
 
   // walk the complete descendant chain because associated COMDATs can nest
   for EachNode(parent_n, U32Node, queue.first) {
-    for EachNode(associated_n, U32Node, obj->coff.sections.associated_section_numbers[parent_n->data]) {
-      U32 child_section_number = associated_n->data;
+    U32Array associated_sections = lnk_obj_associated_sections_from_section_number(obj, parent_n->data);
+    for EachIndex(associated_idx, associated_sections.count) {
+      U32 child_section_number = associated_sections.v[associated_idx];
 
       if (child_section_number == 0)                                           { continue; }
       if (hash_map_search_u64_u64(&seen_hm, child_section_number))             { continue; }
@@ -673,10 +680,25 @@ lnk_obj_get_comdat_symlink_from_section_number(LNK_Obj *obj, U64 section_number,
   return is_valid;
 }
 
+internal U32Array
+lnk_obj_associated_sections_from_section_number(LNK_Obj *obj, U32 section_number)
+{
+  Assert(section_number <= obj->coff.sections.count_no_null);
+  U32 min = obj->coff.sections.associated_section_offsets[section_number];
+  U32 max = obj->coff.sections.associated_section_offsets[section_number + 1];
+  U32Array result = { .count = max - min };
+  if (result.count) {
+    result.v = obj->coff.sections.associated_section_numbers + min;
+  }
+  return result;
+}
 internal String8
 lnk_obj_section_data_from_number(LNK_Obj *obj, U64 section_number)
 {
   Assert(1 <= section_number && section_number <= obj->coff.sections.count_no_null);
+  if (obj->section_data_copies != 0 && obj->section_data_copies[section_number].size != 0) {
+    return obj->section_data_copies[section_number];
+  }
   COFF_SectionHeader *section_table = (COFF_SectionHeader *)str8_substr(obj->coff.data, obj->coff.header.section_table_range).str;
   COFF_SectionHeader *section       = &section_table[section_number-1];
   return str8_substr(obj->coff.data, r1u64s(section->foff, section->fsize));
@@ -851,11 +873,178 @@ lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx)
   return result;
 }
 
+// Drop the obj's patched debug-section copies: zero each entry so
+// lnk_obj_section_data_from_number
+// falls back to the (still-mapped) input view. The copy BYTES live on the shared
+// per-worker SECT_DATA_COPIES arenas (see lnk_obj_reloc_patcher) and are handed back
+// wholesale via arena_release at the caller; only call once every reader of the patched
+// bytes is done. Idempotent.
+internal void
+lnk_obj_drop_section_data_copies(LNK_Obj *obj)
+{
+  if (obj->section_data_copies == 0) { return; }
+  for (U32 section_number = 1; section_number <= obj->coff.sections.count_no_null; section_number += 1) {
+    obj->section_data_copies[section_number] = str8_zero();
+  }
+}
+
+// Resolve a .debug$S subsection provenance record (streaming-ring P1) back to its bytes.
+// Returns exactly what the parse consumed: lnk_obj_section_data_from_number prefers the reloc-patched
+// private copy when one exists (the parsed node slices point into that same copy), otherwise
+// the raw mapped input. Synthetic provenance (linker-made bytes, is_synthetic) and untagged
+// records (sect_idx == CV_DebugSProvSect_Nil) have no backing section to resolve through:
+// returns str8_zero and the caller must fall back to the node's String8.
+internal String8
+lnk_resolve_debug_s_node(LNK_Obj *obj, CV_DebugSProvNode *prov)
+{
+  if (prov == 0 || prov->is_synthetic || prov->sect_idx == CV_DebugSProvSect_Nil) {
+    return str8_zero();
+  }
+  U64     section_number = (U64)prov->sect_idx + 1;
+  String8 sect_data      = lnk_obj_section_data_from_number(obj, section_number);
+  return str8_substr(sect_data, rng_1u64(prov->off, prov->off + prov->size));
+}
+
+// reloc patch ordering: sort each section's relocs by apply_off so the RMW write stream into
+// the destination buffer is monotone-forward (HW-prefetchable) instead of scattered in on-disk
+// table order. apply_off is the primary key; orig_idx is a tiebreak so the total order is
+// deterministic and the final bytes are identical to the unsorted patch order (each reloc
+// writes its own disjoint field; only a pathological same-apply_off overlap could depend on
+// order, and the orig_idx tiebreak preserves the original sequence there too).
+typedef struct LNK_RelocSortKey
+{
+  COFF_Reloc reloc;
+  U32        orig_idx;
+} LNK_RelocSortKey;
+
+internal int
+lnk_reloc_sort_key_is_before(void *raw_a, void *raw_b)
+{
+  LNK_RelocSortKey *a = raw_a, *b = raw_b;
+  if (a->reloc.apply_off != b->reloc.apply_off) {
+    return a->reloc.apply_off < b->reloc.apply_off;
+  }
+  return a->orig_idx < b->orig_idx;
+}
+
+// Applies one section's relocations into `section_data` -- a writable buffer holding that
+// section's bytes (the section's slice of the image at image-build time, a private patched
+// copy for non-$S debug sections, or the streaming-ring window copy at module-write time).
+// Factored out of lnk_obj_reloc_patcher so the image patch pass and the P3.3 window fill
+// share one definition: same reloc order, same symbol resolution, same skip semantics
+// (debug-section relocs against removed sections are silently dropped), byte-identical
+// application at either call time (relocs + symbol tables + image section table are all
+// immutable after the image build).
+internal void
+lnk_obj_apply_relocs_to_buffer(LNK_Obj *obj, U64 section_number, COFF_SectionHeader *section_header, String8 section_data, U64 image_base, COFF_SectionHeader **image_section_table)
+{
+  Assert(1 <= section_number && section_number <= obj->coff.sections.count_no_null);
+  COFF_RelocArray relocs = lnk_coff_relocs_from_section_header(obj, section_header);
+  if (relocs.count == 0) { return; }
+
+  Temp scratch = scratch_begin(0, 0);
+  COFF_SectionFlags section_flags = obj->coff.sections.headers[section_number].flags;
+
+  // apply relocs (sorted by apply_off for monotone-forward writes)
+  LNK_RelocSortKey *sorted_relocs = push_array_no_zero(scratch.arena, LNK_RelocSortKey, relocs.count);
+  for EachIndex(reloc_idx, relocs.count) {
+    sorted_relocs[reloc_idx].reloc    = relocs.v[reloc_idx];
+    sorted_relocs[reloc_idx].orig_idx = (U32)reloc_idx;
+  }
+  radsort(sorted_relocs, relocs.count, lnk_reloc_sort_key_is_before);
+  for EachIndex(reloc_idx, relocs.count) {
+    COFF_Reloc *reloc = &sorted_relocs[reloc_idx].reloc;
+
+    // error check relocation
+    if (obj->coff.header.machine == COFF_MachineType_X64) {
+      if (reloc->type > COFF_Reloc_X64_Last) {
+        lnk_error_obj(LNK_Error_IllegalRelocation, obj, "unknown relocation type 0x%x", reloc->type);
+      }
+    } else if (obj->coff.header.machine != COFF_MachineType_Unknown) {
+      lnk_not_implemented("relocation patching is not implemented for %S", coff_string_from_machine_type(obj->coff.header.machine));
+      continue;
+    }
+
+    // compute virtual offsets
+    U64 reloc_voff = section_header->voff + reloc->apply_off;
+
+    // compute symbol location values
+    U32 symbol_secnum = 0;
+    U32 symbol_secoff = 0;
+    S64 symbol_voff   = 0;
+    {
+      COFF_ParsedSymbol          symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, reloc->isymbol);
+      COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
+      if (interp == COFF_SymbolValueInterp_Regular) {
+        if (symbol.section_number == lnk_obj_get_removed_section_number(obj)) {
+          if (~section_flags & LNK_SECTION_FLAG_DEBUG) {
+            String8 sect_name   = lnk_obj_section_name_from_section_number(obj, section_number);
+            String8 symbol_name = lnk_symbol_name_from_coff_symbol_idx(obj, reloc->isymbol);
+            lnk_error_obj(LNK_Error_RelocationAgainstRemovedSection, obj, "relocating against symbol that is in a removed section (symbol: %S, reloc-section: %S 0x%llx, reloc-index: 0x%llx)", symbol_name, sect_name, section_number, reloc_idx);
+          }
+          continue;
+        }
+        symbol_secnum = symbol.section_number;
+        symbol_secoff = symbol.value;
+        symbol_voff   = safe_cast_u32((U64)image_section_table[symbol.section_number]->voff + (U64)symbol_secoff);
+      } else if (interp == COFF_SymbolValueInterp_Abs) {
+        // There aren't enough bits in COFF symbol to store full image base address,
+        // so we special case __ImageBase. A better solution would be to add
+        // a 64-bit symbol format to COFF.
+        if (str8_match(lnk_symbol_name_from_coff_symbol_idx(obj, reloc->isymbol), str8_lit("__ImageBase"), 0)) {
+          symbol.value = image_base;
+        }
+        symbol_secnum = 0;
+        symbol_secoff = 0;
+        symbol_voff   = (S64)symbol.value - (S64)image_base;
+      } else if (interp == COFF_SymbolValueInterp_Weak) {
+        // unresolved weak
+      } else if (interp == COFF_SymbolValueInterp_Undefined) {
+        // unresolved undefined
+      } else {
+        InvalidPath;
+      }
+    }
+
+    // pick reloc value
+    COFF_RelocValue reloc_value = {0};
+    switch (obj->coff.header.machine) {
+    case COFF_MachineType_Unknown: {} break;
+    case COFF_MachineType_X64: { reloc_value = coff_pick_reloc_value_x64(reloc->type, image_base, reloc_voff, symbol_secnum, symbol_secoff, symbol_voff); } break;
+    default: { NotImplemented; } break;
+    }
+
+    // read addend
+    Assert(reloc_value.size <= section_data.size);
+    U64 raw_addend = 0;
+    str8_deserial_read(section_data, reloc->apply_off, &raw_addend, reloc_value.size, 1);
+
+    // compute new reloc value
+    S64 addend       = extend_sign64(raw_addend, reloc_value.size);
+    U64 reloc_result = reloc_value.value + addend;
+
+    // commit new reloc value
+    MemoryCopy(section_data.str + reloc->apply_off, &reloc_result, reloc_value.size);
+  }
+  scratch_end(scratch);
+}
+
 internal
 THREAD_POOL_TASK_FUNC(lnk_collect_obj_chunks_task)
 {
   LNK_SectionCollector *task = raw_task;
   LNK_Obj              *obj  = task->objs[task_id];
+
+  // Optional 0-based section-index sidecar, kept in the same order as out_lists.
+  if (task->out_sect_indices != 0) {
+    U64 match_count = 0;
+    for LNK_EachCoffSection(count_it, obj) {
+      if (*count_it.v.flags & COFF_SectionFlag_LnkRemove && !task->collect_discarded) { continue; }
+      if (str8_match(lnk_obj_section_name_from_section_number(obj, count_it.v.section_number), task->name, 0)) { match_count += 1; }
+    }
+    task->out_sect_indices[task_id].count = 0;
+    task->out_sect_indices[task_id].v = push_array_no_zero(arena, U32, match_count ? match_count : 1);
+  }
 
   for LNK_EachCoffSection(it, obj) {
     LNK_ObjSection section = it.v;
@@ -868,19 +1057,29 @@ THREAD_POOL_TASK_FUNC(lnk_collect_obj_chunks_task)
     if (str8_match(section_name, task->name, 0)) {
       String8 section_data = lnk_obj_section_data_from_number(obj, section.section_number);
       str8_list_push(arena, &task->out_lists[task_id], section_data);
+      if (task->out_sect_indices != 0) {
+        U32Array *indices = &task->out_sect_indices[task_id];
+        indices->v[indices->count++] = safe_cast_u32(section.section_number - 1);
+      }
     }
   }
 }
 
 internal String8List *
-lnk_collect_obj_sections(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded)
+lnk_collect_obj_sections(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded, U32Array **sect_indices_out)
 {
   LNK_SectionCollector task = {0};
   task.objs              = objs;
   task.name              = name;
   task.collect_discarded = collect_discarded;
   task.out_lists         = push_array(arena->v[0], String8List, objs_count);
+  if (sect_indices_out != 0) {
+    task.out_sect_indices = push_array(arena->v[0], U32Array, objs_count);
+  }
   tp_for_parallel(tp, arena, objs_count, lnk_collect_obj_chunks_task, &task);
+  if (sect_indices_out != 0) {
+    *sect_indices_out = task.out_sect_indices;
+  }
   return task.out_lists;
 }
 
@@ -1045,42 +1244,34 @@ lnk_symbol_from_section_offset(LNK_ObjSymbolMap *map, U32 section_number, U32 of
 internal CV_DebugS
 lnk_debug_s_from_obj(Arena *arena, LNK_Obj *obj)
 {
-  Temp scratch = scratch_begin(&arena, 1);
-
-  String8List raw_debug_s = {0};
-  {
-    for LNK_EachCoffSection(it, obj) {
-      LNK_ObjSection section      = it.v;
-      String8        section_name = lnk_obj_section_name_from_section_number(obj, section.section_number);
-      if (str8_match(section_name, str8_lit(".debug$S"), 0)) {
-        String8 debug_s = lnk_obj_section_data_from_number(obj, section.section_number);
-        str8_list_push(scratch.arena, &raw_debug_s, debug_s);
-      }
-    }
-  }
-
+  // (single loop so each parse can tag provenance with its section index; the old
+  // collect-then-parse split had no side effects between the loops)
   CV_DebugS debug_s = {0};
-  {
-    for (String8Node *node = raw_debug_s.first; node != 0; node = node->next) {
-      // parse & merge sub sections
-      CV_DebugS ds = cv_debug_s_from_data(arena, node->string);
-      cv_debug_s_concat_in_place(&debug_s, &ds);
+  for LNK_EachCoffSection(it, obj) {
+    LNK_ObjSection section      = it.v;
+    String8        section_name = lnk_obj_section_name_from_section_number(obj, section.section_number);
+    if (!str8_match(section_name, str8_lit(".debug$S"), 0)) { continue; }
 
-      // make sure there is one string table
-      String8List string_data_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable);
-      if (string_data_list.node_count > 1) {
-        break;
-      }
+    // parse & merge sub sections
+    String8   raw_debug_s = lnk_obj_section_data_from_number(obj, section.section_number);
+    CV_DebugS ds          = cv_debug_s_from_data(arena, raw_debug_s);
+    cv_debug_s_tag_prov_sect(&ds, safe_cast_u32(section.section_number - 1));
+    cv_debug_s_concat_in_place(&debug_s, &ds);
 
-      // make sure there is one file checksum table
-      String8List checksum_data_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
-      if (checksum_data_list.node_count > 1) {
-        continue;
-      }
+    // make sure there is one string table
+    String8List string_data_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable);
+    if (string_data_list.node_count > 1) {
+      break;
+    }
+
+    // make sure there is one file checksum table
+    String8List checksum_data_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
+    if (checksum_data_list.node_count > 1) {
+      continue;
     }
   }
 
-  scratch_end(scratch);
+  cv_debug_s_validate_prov(&debug_s);
   return debug_s;
 }
 

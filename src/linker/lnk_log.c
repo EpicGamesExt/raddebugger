@@ -28,6 +28,9 @@ lnk_fprintf(FILE *f, char *fmt, ...)
 internal void
 lnk_exit(int code)
 {
+  // one-line summary must reach the build log on error exits too (best-effort;
+  // takes/drops g_log_mutex internally, so print BEFORE taking it here)
+  lnk_print_summary(code);
   mutex_take(g_log_mutex);
   fflush(stdout);
   fflush(stderr);

@@ -353,6 +353,54 @@ arena_pop_to(Arena *arena, U64 pos)
   
 }
 
+//- rjf: arena decommit of unused (rewound/free) pages
+
+internal void
+arena_decommit_unused(Arena *arena)
+{
+  // NOTE(perf): decommit committed-but-unused pages so they stop counting against
+  // working set, while keeping the reservation. Only touches pages strictly above
+  // the live `pos` high-water of each block in the active chain, and the unused
+  // bodies of free-list blocks. Live data (<= pos) is never touched. The push path
+  // re-commits on demand (arena_push grows `cmt`), so reuse is transparent.
+  if(arena->flags & ArenaFlag_LargePages)
+  {
+    // large pages cannot be partially decommitted safely; skip.
+    return;
+  }
+  U64 page_size = get_system_info()->page_size;
+
+  // rjf: active chain -- decommit committed region above each block's live pos
+  for(Arena *n = arena->current; n != 0; n = n->prev)
+  {
+    U64 pos_aligned = AlignPow2(n->pos, page_size);
+    if(pos_aligned < n->cmt)
+    {
+      U8 *decommit_ptr = (U8 *)n + pos_aligned;
+      U64 decommit_size = n->cmt - pos_aligned;
+      AsanPoisonMemoryRegion(decommit_ptr, decommit_size);
+      decommit_memory(decommit_ptr, decommit_size);
+      n->cmt = pos_aligned;
+    }
+  }
+
+#if ARENA_FREE_LIST
+  // rjf: free chain -- decommit everything above the first (header) page
+  for(Arena *n = arena->free_last; n != 0; n = n->prev)
+  {
+    U64 keep = AlignPow2(ARENA_HEADER_SIZE, page_size);
+    if(keep < n->cmt)
+    {
+      U8 *decommit_ptr = (U8 *)n + keep;
+      U64 decommit_size = n->cmt - keep;
+      AsanPoisonMemoryRegion(decommit_ptr, decommit_size);
+      decommit_memory(decommit_ptr, decommit_size);
+      n->cmt = keep;
+    }
+  }
+#endif
+}
+
 //- rjf: arena push/pop helpers
 
 internal void

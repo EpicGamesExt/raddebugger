@@ -58,6 +58,8 @@ struct FileMap
 
 internal File file_zero(void);
 internal B32 file_match(File a, File b);
+internal B32 file_pair_ok(FilePair p);
+internal void file_pair_close(FilePair *p);
 
 ////////////////////////////////
 //~ rjf: Filesystem Helpers (Helpers, Implemented Once)

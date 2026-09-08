@@ -695,7 +695,63 @@ semaphore_take(Semaphore semaphore, U64 endt_us)
 internal void
 semaphore_drop_count(Semaphore semaphore, U64 drop_count)
 {
-  ReleaseSemaphore((HANDLE)*semaphore.u64, drop_count, 0);
+  BOOL ok = ReleaseSemaphore((HANDLE)*semaphore.u64, drop_count, 0);
+  // Do not log here: stderr may itself be a detoured pipe, and blocking before the assertion
+  // would convert a synchronization failure into an undiagnosable process hang.
+  AssertAlways(ok);
+}
+
+internal B32
+semaphore_drop_prev(Semaphore semaphore, U32 *prev_count_out)
+{
+  LONG prev = 0;
+  BOOL ok = ReleaseSemaphore((HANDLE)*semaphore.u64, 1, &prev);
+  *prev_count_out = ok ? (U32)prev : 0;
+  return !!ok;
+}
+
+// Best-effort post: succeed if there is room, silently no-op if the count is
+// already at max (ERROR_TOO_MANY_POSTS). Use ONLY for "at least one pending
+// signal" wakeups (e.g. the governor ping) where redundant posts are harmless.
+// Any OTHER failure is still a hard error.
+internal void
+semaphore_drop_if_room(Semaphore semaphore)
+{
+  HANDLE handle = (HANDLE)semaphore.u64[0];
+  BOOL ok = ReleaseSemaphore(handle, 1, 0);
+  if (!ok) {
+    DWORD err = GetLastError();
+    AssertAlways(err == ERROR_TOO_MANY_POSTS);
+  }
+}
+
+internal void
+semaphore_drop_n(Semaphore semaphore, U32 count)
+{
+  if (count > 0) {
+    HANDLE handle = (HANDLE)semaphore.u64[0];
+    BOOL ok = ReleaseSemaphore(handle, count, 0);
+    if (!ok) {
+      // ReleaseSemaphore is all-or-nothing: ERROR_TOO_MANY_POSTS does not clamp
+      // the count. Ignoring any failure can therefore strand a thread-pool grant.
+      AssertAlways(ok);
+    }
+  }
+}
+
+internal B32
+semaphore_take_n(Semaphore semaphore, U32 count, U64 endt_us)
+{
+  // Blocking acquire of `count` permits, one at a time. Off the hot path only:
+  // used by the shared thread-pool barrier-reserve path to gather budget slots.
+  for (U32 i = 0; i < count; i += 1) {
+    if (!semaphore_take(semaphore, endt_us)) {
+      // partial failure: give back what we took so we don't leak permits
+      semaphore_drop_n(semaphore, i);
+      return 0;
+    }
+  }
+  return 1;
 }
 
 //- rjf: barriers
