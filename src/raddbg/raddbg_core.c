@@ -13737,7 +13737,10 @@ rd_frame(void)
                 }
                 primary_args_string = str8_list_join(scratch.arena, &primary_args_strings, &(StringJoin){.sep = str8_lit(" ")});
               }
-              rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, cmd_kind_info->query.expr, primary_args_string);
+              if(cmd_kind_info->query.slot != RD_RegSlot_Null)
+              {
+                rd_regs_fill_slot_from_string(cmd_kind_info->query.slot, cmd_kind_info->query.expr, primary_args_string);
+              }
               rd_regs()->disable_addresses = 1;
               rd_push_cmd(cmd_kind_name, rd_regs());
             }

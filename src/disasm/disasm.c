@@ -204,12 +204,31 @@ dasm_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64
             RDI_SourceFile *file = rdi_element_from_name_idx(rdi, SourceFiles, line->file_idx);
             String8 file_normalized_full_path = {0};
             file_normalized_full_path.str = rdi_string_from_idx(rdi, file->normal_full_path_string_idx, &file_normalized_full_path.size);
+            // NOTE(Giovanni): reconstruct the file's real-case path from the file path node tree
+            // "normal_full_path" is lowercased for case-insensitive matching, and must not
+            // be used to actually touch the filesystem, which is case sensitive on Linux
+            String8 file_full_path = file_normalized_full_path;
+            if(file->file_path_node_idx != 0)
+            {
+              String8List path_parts = {0};
+              for(RDI_FilePathNode *fpn = rdi_element_from_name_idx(rdi, FilePathNodes, file->file_path_node_idx);
+                  fpn != rdi_element_from_name_idx(rdi, FilePathNodes, 0);
+                  fpn = rdi_element_from_name_idx(rdi, FilePathNodes, fpn->parent_path_node))
+              {
+                String8 path_part = {0};
+                path_part.str = rdi_string_from_idx(rdi, fpn->name_string_idx, &path_part.size);
+                str8_list_push_front(scratch.arena, &path_parts, path_part);
+              }
+              StringJoin path_join = {0};
+              path_join.sep = str8_lit("/");
+              file_full_path = str8_list_join(scratch.arena, &path_parts, &path_join);
+            }
             if(file != last_file)
             {
               if(params.style_flags & DASM_StyleFlag_SourceFilesNames &&
-                 file->normal_full_path_string_idx != 0 && file_normalized_full_path.size != 0)
+                 file->normal_full_path_string_idx != 0 && file_full_path.size != 0)
               {
-                String8 inst_string = push_str8f(scratch.arena, "> %S", file_normalized_full_path);
+                String8 inst_string = push_str8f(scratch.arena, "> %S", file_full_path);
                 DASM_Line inst = {u32_from_u64_saturate(off), DASM_LineFlag_Decorative, 0, r1u64(inst_strings.total_size + inst_strings.node_count,
                                                                                                  inst_strings.total_size + inst_strings.node_count + inst_string.size)};
                 dasm_line_chunk_list_push(scratch.arena, &line_list, 1024, &inst);
@@ -227,15 +246,15 @@ dasm_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out, U64
             }
             if(line && line != last_line && file->normal_full_path_string_idx != 0 &&
                params.style_flags & DASM_StyleFlag_SourceLines &&
-               file_normalized_full_path.size != 0)
+               file_full_path.size != 0)
             {
-              FileProperties props = properties_from_file_path(file_normalized_full_path);
+              FileProperties props = properties_from_file_path(file_full_path);
               if(props.modified != 0)
               {
                 // TODO(rjf): need redirection path - this may map to a different path on the local machine,
                 // need frontend to communicate path remapping info to this layer
-                C_Key key = fs_key_from_path_range(file_normalized_full_path, r1u64(0, max_U64), 0);
-                TXT_LangKind lang_kind = txt_lang_kind_from_extension(file_normalized_full_path);
+                C_Key key = fs_key_from_path_range(file_full_path, r1u64(0, max_U64), 0);
+                TXT_LangKind lang_kind = txt_lang_kind_from_extension(file_full_path);
                 U64 endt_us = max_U64;
                 U128 hash = {0};
                 TXT_TextInfo text_info = txt_text_info_from_key_lang(access, key, lang_kind, &hash);

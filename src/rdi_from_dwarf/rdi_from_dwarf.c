@@ -439,7 +439,13 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         if(f->file_name.size != 0)
         {
           DW2_LineTableFile *dir = &hdr->dirs.v[f->dir_idx];
-          String8 full_file_path = str8f(scratch2.arena, "%S%s%S", dir->file_name, dir->file_name.size != 0 ? "/" : "", f->file_name);
+          String8 dir_path = dir->file_name;
+          if(dir_path.size != 0 && dir_path.str[0] != '/' &&
+             hdr->dirs.count != 0 && hdr->dirs.v[0].file_name.size != 0)
+          {
+            dir_path = str8f(scratch2.arena, "%S/%S", hdr->dirs.v[0].file_name, dir_path);
+          }
+          String8 full_file_path = str8f(scratch2.arena, "%S%s%S", dir_path, dir_path.size != 0 ? "/" : "", f->file_name);
           U64 hash = u64_hash_from_str8(full_file_path);
           U64 slot_idx = hash%slots_count;
           SrcFileNode *node = 0;
@@ -825,10 +831,10 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         }
         
         //- rjf: emit lines
-        if(emit_line && vm_regs.address != 0 && vm_regs.line != 0)
+        B32 should_emit_line = emit_line;
+        emit_line = 0;
+        if(should_emit_line && vm_regs.address != 0 && vm_regs.line != 0)
         {
-          emit_line = 0;
-          
           // rjf: grab the last emitted line info
           U32 last_line = 0;
           U16 last_col = 0;
@@ -2991,11 +2997,11 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           U64 voff_opl = 0;
           if(dw_attrib_class_from_form_kind(unit_parse_ctx->version, unit_parse_ctx->exts, hipc_attrib->val.kind) & DW_AttribClass_Address)
           {
-            voff_opl = voff_base + hipc_attrib->val.u128.u64[0];
+            voff_opl = hipc_attrib->val.addr;
           }
           else
           {
-            voff_opl = hipc_attrib->val.addr;
+            voff_opl = voff_base + hipc_attrib->val.u128.u64[0];
           }
           rdim_rng1u64_chunk_list_push(arena, &unit_voff_ranges, 256, (RDIM_Rng1U64){voff_base, voff_opl});
         }
@@ -3121,28 +3127,55 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           DW2_Attrib *framebase_attrib = &dw2_attrib_nil;
           DW2_Attrib *external_attrib = &dw2_attrib_nil;
           DW2_Attrib *decl_attrib = &dw2_attrib_nil;
+          DW2_Attrib *abstract_origin_attrib = &dw2_attrib_nil;
           for EachNode(n, DW2_AttribNode, tag.attribs.first)
           {
             switch(n->v.attrib_kind)
             {
               default:{}break;
 #define Case(dst, src) case DW_AttribKind_##src:{dst##_attrib = &n->v;}break
-              Case(name,      Name);
-              Case(linkname,  LinkageName);
-              Case(type,      Type);
-              Case(inline,    Inline);
-              Case(ranges,    Ranges);
-              Case(lopc,      LowPc);
-              Case(hipc,      HighPc);
-              Case(constval,  ConstValue);
-              Case(location,  Location);
-              Case(framebase, FrameBase);
-              Case(external,  External);
-              Case(decl,      Declaration);
+              Case(name,            Name);
+              Case(linkname,        LinkageName);
+              Case(type,            Type);
+              Case(inline,          Inline);
+              Case(ranges,          Ranges);
+              Case(lopc,            LowPc);
+              Case(hipc,            HighPc);
+              Case(constval,        ConstValue);
+              Case(location,        Location);
+              Case(framebase,       FrameBase);
+              Case(external,        External);
+              Case(decl,            Declaration);
+              Case(abstract_origin, AbstractOrigin);
 #undef Case
             }
           }
-          
+
+          ////////////////////////
+          //- NOTE(Giovanni): inherit name/type from abstract origin
+          //
+          if(abstract_origin_attrib != &dw2_attrib_nil)
+          {
+            U64 origin_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &abstract_origin_attrib->val);
+            U64 origin_unit_idx = unit_idx;
+            if(!contains_1u64(unit_info_tag_range, origin_info_off))
+            {
+              U64 origin_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, origin_info_off);
+              origin_unit_idx = (origin_unit_num > 0 ? origin_unit_num-1 : unit_idx);
+            }
+            DW2_ParseCtx *origin_unit_parse_ctx = &unit_parse_ctxs[origin_unit_idx];
+            DW2_Tag origin_tag = {0};
+            dw2_read_tag(scratch2.arena, raw, origin_unit_parse_ctx, raw->sec[DW_SectionKind_Info].data, origin_info_off, &origin_tag);
+            if(name_attrib == &dw2_attrib_nil)
+            {
+              name_attrib = dw2_attrib_from_kind(&origin_tag, DW_AttribKind_Name);
+            }
+            if(type_attrib == &dw2_attrib_nil)
+            {
+              type_attrib = dw2_attrib_from_kind(&origin_tag, DW_AttribKind_Type);
+            }
+          }
+
           ////////////////////////
           //- rjf: unpack basic attributes
           //
@@ -4041,7 +4074,15 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             //- rjf: inline site
             case DW_TagKind_InlinedSubroutine:
             {
-              // TODO(rjf)
+              RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, &dst_artifacts->scopes, chunk_count);
+              scope->voff_ranges = ranges;
+              dst_artifacts->scopes.scope_voff_count += 2*ranges.count;
+              // NOTE(Giovanni): name/type here come from the abstract-origin fixup above.
+              RDIM_InlineSite *inline_site = rdim_inline_site_chunk_list_push(arena, &dst_artifacts->inline_sites, chunk_count);
+              inline_site->name = name;
+              inline_site->type = type;
+              scope->inline_site = inline_site;
+              new_scope_open = scope;
             }break;
             
             //- rjf: variables
