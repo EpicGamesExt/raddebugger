@@ -54,7 +54,7 @@
 #if COMPILER_MSVC
 # define force_inline __forceinline
 #elif COMPILER_CLANG || COMPILER_GCC
-# define force_inline __attribute__((always_inline))
+# define force_inline inline __attribute__((always_inline))
 #else
 # error force_inline not defined for this compiler.
 #endif

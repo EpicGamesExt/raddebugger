@@ -521,6 +521,13 @@ tp_for_parallel(TP_Context *pool, TP_Arena *task_arena, U64 task_count, TP_TaskF
     return;
   }
 
+  // Upstream's single-task fast path needs neither the barrier nor governor.
+  if (task_count == 1) {
+    Arena *arena = task_arena ? task_arena->v[0] : 0;
+    task_func(arena, 0, 0, task_data, pool);
+    return;
+  }
+
   if (!pool->is_shared) {
     //
     // NON-SHARED: UPSTREAM verbatim. Init state, then join the barrier as worker

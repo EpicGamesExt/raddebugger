@@ -67,6 +67,7 @@ typedef struct LNK_Inputer
   LNK_InputList  new_objs;
 
   HashTable     *libs_ht;
+  HashTable     *cmd_lib_names_ht;
   HashTable     *missing_lib_ht;
   LNK_InputList  libs;
   LNK_InputList  new_libs[LNK_InputSource_Count];
@@ -385,7 +386,7 @@ internal LNK_Input * lnk_inputer_push_lib(LNK_Inputer *inputer, LNK_InputSourceT
 internal LNK_Input * lnk_inputer_push_lib_linkgen(LNK_Inputer *inputer, LNK_InputSourceType input_source, String8 path, String8 data);
 internal LNK_Input * lnk_inputer_push_lib_thin(LNK_Inputer *inputer, LNK_Config *config, LNK_InputSourceType input_source, String8 lib_path);
 
-internal B32               lnk_inputer_has_items(LNK_Inputer *inputer);
+internal B32               lnk_has_pending_input_work(LNK_Inputer *inputer, LNK_Link *link);
 internal LNK_InputPtrArray lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Flags io_flags, LNK_InputList *all_inputs, LNK_InputList *new_inputs);
 internal void               lnk_inputer_release_file_maps(TP_Context *tp, U64 worker_cap, LNK_Inputer *inputer);
 
