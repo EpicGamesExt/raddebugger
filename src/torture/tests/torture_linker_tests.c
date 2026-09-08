@@ -88,6 +88,57 @@ t_codec_test_pdb_data(Arena *arena)
   return data;
 }
 
+// Port of dev's ICF regression to the combined branch's native torture tests.
+TEST(icf_nonzero_local_reloc_targets_do_not_fold)
+{
+  U8 address_of_local[] = {0x48, 0x8d, 0x05, 0, 0, 0, 0, 0xc3, 0x90};
+  U8 entry_text[] = {0xc3};
+  U64 addresses[2] = {0};
+  T_Ok(t_write_def_obj("icf_nonzero_local.obj", (T_COFF_DefObj){
+    .machine = T_COFF_DefSetMachine(X64),
+    .sections = (T_COFF_DefSection[]){
+      {"entry", ".text", str8_array_fixed(entry_text), .flags = "rx:code@1"},
+      {"func_a", ".text$mn", str8_array_fixed(address_of_local), .flags = "rx:code@1",
+       .raw_flags = COFF_SectionFlag_LnkCOMDAT,
+       .relocs = (T_COFF_DefReloc[]){T_COFF_DefReloc(X64_Rel32, 3, "local_a"), {0}}},
+      {"func_b", ".text$mn", str8_array_fixed(address_of_local), .flags = "rx:code@1",
+       .raw_flags = COFF_SectionFlag_LnkCOMDAT,
+       .relocs = (T_COFF_DefReloc[]){T_COFF_DefReloc(X64_Rel32, 3, "local_b"), {0}}},
+      {"addresses", ".data", str8_array_fixed(addresses), .flags = "rw:data@8",
+       .relocs = (T_COFF_DefReloc[]){T_COFF_DefReloc(X64_Addr64, 0, "func_a"),
+                                   T_COFF_DefReloc(X64_Addr64, 8, "func_b"), {0}}},
+      {0}},
+    .symbols = (T_COFF_DefSymbol[]){
+      T_COFF_DefSymbol_Secdef("func_a", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_Secdef("func_b", COFF_ComdatSelect_Any),
+      T_COFF_DefSymbol_ExternFunc("entry", "entry", 0),
+      T_COFF_DefSymbol_ExternFunc("func_a", "func_a", 0),
+      T_COFF_DefSymbol_ExternFunc("func_b", "func_b", 0),
+      T_COFF_DefSymbol_Static("local_a", "func_a", 7),
+      T_COFF_DefSymbol_Static("local_b", "func_b", 8),
+      T_COFF_DefSymbol_Extern("addresses", "addresses", 0),
+      {0}},
+  }));
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:icf_nonzero_local.exe /opt:ref,icf /include:addresses icf_nonzero_local.obj");
+  T_Ok(g_last_exit_code == 0);
+  String8 image = t_read_file(arena, str8_lit("icf_nonzero_local.exe"));
+  PE_BinInfo bin = pe_bin_info_from_data(arena, image);
+  COFF_SectionHeader *sections = (COFF_SectionHeader *)(image.str + bin.section_table_range.min);
+  B32 found = 0;
+  for EachIndex(i, bin.section_count) {
+    if (MemoryMatch(sections[i].name, ".data", 6)) {
+      String8 data = str8_substr(image, r1u64s(sections[i].foff, sizeof(addresses)));
+      T_Ok(data.size == sizeof(addresses));
+      MemoryCopy(addresses, data.str, sizeof(addresses));
+      found = 1;
+      break;
+    }
+  }
+  T_Ok(found);
+  T_Ok(addresses[0] != 0 && addresses[1] != 0);
+  T_Ok(addresses[0] != addresses[1]);
+}
+
 TEST(generic_run_operation)
 {
 #if OS_WINDOWS
@@ -271,6 +322,67 @@ TEST(pdb_codec_rejects_malformed_tpi)
   T_Ok(semantic == 0);
 }
 
+TEST(msf_header_matches_saved_extent)
+{
+  MSF_UInt page_sizes[] = {512, 4096};
+  MSF_UInt fpms[] = {MSF_FPM0, MSF_FPM1};
+  for EachIndex(size_idx, ArrayCount(page_sizes)) {
+    MSF_UInt page_size = page_sizes[size_idx];
+    MSF_PageNumber last_pages[] = {68, page_size - 1, page_size, page_size + 3,
+                                  page_size * 8 - 1, page_size * 8, page_size * 8 + 3};
+    // Cover an entire FPM's bitmap with small pages, and the default page size's
+    // first interval without making this a large-memory test.
+    U64 case_count = page_size == 512 ? ArrayCount(last_pages) : 4;
+    for EachIndex(fpm_idx, ArrayCount(fpms)) {
+      for EachIndex(case_idx, case_count) {
+        Temp temp = temp_begin(arena);
+        MSF_Context *msf = msf_alloc(page_size, fpms[fpm_idx]);
+
+        // Leave low pages for the stream table and root so that the final data
+        // page, not metadata, determines EOF. This also exercises a sparse file.
+        MSF_PageList gap = msf_alloc_pages(msf, 64);
+        T_Ok(gap.first->pn == 4 && gap.last->pn == 67);
+        MSF_PageNumber last_pn = last_pages[case_idx];
+        MSF_UInt data_page_count = 0;
+        for (MSF_PageNumber pn = 68; pn <= last_pn; ++pn) {
+          MSF_UInt slot = pn % page_size;
+          data_page_count += slot != MSF_FPM0 && slot != MSF_FPM1;
+        }
+        String8 payload = str8(push_array_no_zero(arena, U8, (U64)data_page_count * page_size),
+                              (U64)data_page_count * page_size);
+        MemorySet(payload.str, 0xA5, payload.size);
+        MSF_StreamNumber sn = msf_stream_alloc(msf);
+        T_Ok(msf_stream_write(msf, sn, payload.str, (MSF_UInt)payload.size));
+        T_Ok(msf_find_stream(msf, sn)->page_list.last->pn == last_pn);
+        msf_free_pages(msf, &gap);
+        T_Ok(msf_build(msf) == MSF_Error_OK);
+        T_Ok(msf->root_page_list.last->pn < last_pn);
+        T_Ok(msf->st_page_list.last->pn < last_pn);
+
+        U64 save_size = msf_get_save_size(msf);
+        T_Ok(save_size == ((U64)last_pn + 1) * page_size);
+        String8 saved = str8(push_array_no_zero(arena, U8, save_size), save_size);
+        T_Ok(msf_save(msf, saved.str, saved.size));
+        MSF_Header70 *header = (MSF_Header70 *)saved.str;
+        T_Ok((U64)header->page_count * header->page_size == saved.size);
+        String8List pages = msf_get_page_data_nodes(arena, msf);
+        T_Ok(str8_match(saved, str8_list_join(arena, &pages, 0), 0));
+
+        // Size agreement alone must not conceal a truncated final stream page.
+        MSF_Parsed *parsed = msf_parsed_from_data(arena, saved);
+        T_Ok(parsed != 0);
+        if (parsed != 0 && sn < parsed->stream_count) {
+          T_Ok(str8_match(parsed->streams[sn], payload, 0));
+        } else {
+          T_Ok(0);
+        }
+        msf_release(msf);
+        temp_end(temp);
+      }
+    }
+  }
+}
+
 TEST(expect_pdb_indexes_linker_output)
 {
   String8 raw_symbol = cv_make_symbol(arena, CV_SymKind_GDATA32,
@@ -289,6 +401,16 @@ TEST(expect_pdb_indexes_linker_output)
   t_invoke_linkerf("/subsystem:console /entry:entry /debug:full /out:indexed.exe /pdbstripped:indexed.stripped.pdb entry.obj indexed.obj");
   T_Ok(g_last_exit_code == 0);
 
+  char *pdb_paths[] = {"indexed.pdb", "indexed.stripped.pdb"};
+  for EachIndex(i, ArrayCount(pdb_paths)) {
+    String8 pdb = t_read_file(arena, str8_cstring(pdb_paths[i]));
+    T_Ok(pdb.size >= sizeof(MSF_Header70));
+    if (pdb.size >= sizeof(MSF_Header70)) {
+      MSF_Header70 *header = (MSF_Header70 *)pdb.str;
+      T_Ok((U64)header->page_count * header->page_size == pdb.size);
+    }
+  }
+
   String8 source = str8_lit(
       "test: { steps: { expect_pdb: { path: \"indexed.pdb\", expected: { pdb: { "
       "gsi: { symbols: { indexed_data: { kind: S_GDATA32 } } }, psi: { symbols: { public_func: { kind: S_PUB32, flags: 2 } } }, "
@@ -300,6 +422,61 @@ TEST(expect_pdb_indexes_linker_output)
   if (t_result_is_ok(result)) { result = t_script_execute(&script); }
   if (!t_result_is_ok(result)) { t_script_test_log_result(arena, ctx, result); }
   T_Ok(t_result_is_ok(result));
+}
+
+TEST(default_lib_matches_explicit_path)
+{
+  T_Ok(t_write_entry_obj());
+  char *dirs[] = {"sdk libs", "other libs"};
+  char *symbols[] = {"first_provider", "second_provider"};
+  for EachIndex(i, ArrayCount(dirs)) {
+    T_Ok(make_directory(t_make_file_path(arena, str8_cstring(dirs[i]))));
+    COFF_ObjWriter *obj = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+    coff_obj_writer_push_symbol_abs(obj, str8_cstring(symbols[i]), 1, COFF_SymStorageClass_External);
+    COFF_LibWriter *lib = coff_lib_writer_alloc();
+    coff_lib_writer_push_obj(lib, str8_lit("provider.obj"), coff_obj_writer_serialize(arena, obj));
+    T_Ok(t_write_file(str8f(arena, "%s/provider.lib", dirs[i]), coff_lib_writer_serialize(arena, lib, 0, 0, 1)));
+    coff_lib_writer_release(&lib);
+    coff_obj_writer_release(&obj);
+  }
+
+  char *args = "/subsystem:console /entry:entry /out:default.exe entry.obj /include:first_provider";
+  String8 paths[] = {str8_lit("sdk libs/provider.lib"), t_make_file_path(arena, str8_lit("sdk libs/provider.lib"))};
+  // Debug builds also write normal progress to stderr; reject only the missing-library diagnostic.
+  char *names[] = {"provider.lib", "PROVIDER.LIB", "provider"};
+  for EachIndex(path_idx, ArrayCount(paths)) {
+    for EachIndex(name_idx, ArrayCount(names)) {
+      t_invoke_linkerf("%s \"%S\" /defaultlib:%s", args, paths[path_idx], names[name_idx]);
+      T_Ok(g_last_exit_code == 0);
+      T_Ok(str8_find_needle(g_errors, 0, str8_lit("unable to find library"), 0) == g_errors.size);
+    }
+  }
+
+  // Embedded directives use a separate input-source queue from /DEFAULTLIB.
+  COFF_ObjWriter *directive = coff_obj_writer_alloc(0, COFF_MachineType_X64);
+  coff_obj_writer_push_directive(directive, str8_lit("/DEFAULTLIB:provider.lib"));
+  T_Ok(t_write_file(str8_lit("directive.obj"), coff_obj_writer_serialize(arena, directive)));
+  coff_obj_writer_release(&directive);
+  t_invoke_linkerf("%s \"%S\" directive.obj", args, paths[1]);
+  T_Ok(g_last_exit_code == 0);
+  T_Ok(str8_find_needle(g_errors, 0, str8_lit("unable to find library"), 0) == g_errors.size);
+
+  // A basename match must not swallow another explicitly named library, or a
+  // path-qualified default, with the same basename but a different provider.
+  t_invoke_linkerf("%s \"%S\" \"other libs/provider.lib\" /include:second_provider", args, paths[1]);
+  T_Ok(g_last_exit_code == 0);
+  T_Ok(str8_find_needle(g_errors, 0, str8_lit("unable to find library"), 0) == g_errors.size);
+  t_invoke_linkerf("%s \"%S\" /defaultlib:\"other libs/provider.lib\" /include:second_provider", args, paths[1]);
+  T_Ok(g_last_exit_code == 0);
+  T_Ok(str8_find_needle(g_errors, 0, str8_lit("unable to find library"), 0) == g_errors.size);
+
+  // Missing defaults must still warn; explicit bare paths are not defaults.
+  t_invoke_linkerf("%s \"%S\" /defaultlib:missing_provider.lib", args, paths[1]);
+  T_Ok(g_last_exit_code == 0);
+  T_Ok(str8_find_needle(g_errors, 0, str8_lit("unable to find library `missing_provider.lib`"), 0) < g_errors.size);
+  t_invoke_linkerf("%s \"%S\" provider.lib", args, paths[1]);
+  T_Ok(g_last_exit_code == 0);
+  T_Ok(str8_find_needle(g_errors, 0, str8_lit("unable to find library `provider.lib`"), 0) < g_errors.size);
 }
 
 TEST(link_large_import_object)

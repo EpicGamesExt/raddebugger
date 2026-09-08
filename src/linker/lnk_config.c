@@ -11,10 +11,10 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_AlternateName,      1, LNK_CmdValueKind_Scalar, "ALTERNATENAME",        ":FROM=TO",                       "Creates a symbol alias \"FROM=TO\"."                          },
   { LNK_CmdSwitch_AppContainer,       0, LNK_CmdValueKind_Scalar, "APPCONTAINER",         "[:NO]",                          "Toggles app container bit in the image header."               },
   { LNK_CmdSwitch_Base,               0, LNK_CmdValueKind_List,   "BASE",                 "{ADDRESS[,SIZE]|@FILENAME,KEY}", "Set default image base address."                              },
-  { LNK_CmdSwitch_Brepro,             0, LNK_CmdValueKind_Null,   "BREPRO",               "",                               "No support."                                                  },
+  { LNK_CmdSwitch_Brepro,             0, LNK_CmdValueKind_Null,   "BREPRO",               "",                               "Equivalent to '/RAD_TIME_STAMP:0'."                           },
   { LNK_CmdSwitch_Debug,              0, LNK_CmdValueKind_Scalar, "DEBUG",                "[:{FULL|NONE}]",                 "Controls debug info level."                                   },
   { LNK_CmdSwitch_DefaultLib,         1, LNK_CmdValueKind_Scalar, "DEFAULTLIB",           ":LIBNAME",                       "Set default library."                                         },
-  { LNK_CmdSwitch_Def,                1, LNK_CmdValueKind_Scalar, "DEF",                  ":FILENAME",                      "Read exports from a module-definition file."                   },
+  { LNK_CmdSwitch_Def,                1, LNK_CmdValueKind_Scalar, "DEF",                  ":FILENAME",                      "Read exports from a module-definition file."                  },
   { LNK_CmdSwitch_Delay,              0, LNK_CmdValueKind_Scalar, "DELAY",                ":{NOBIND|UNLOAD}",               "Controls emission of unload and bind tables."                 },
   { LNK_CmdSwitch_DelayLoad,          0, LNK_CmdValueKind_Scalar, "DELAYLOAD",            ":DLL",                           "Delay load DLL."                                              },
   { LNK_CmdSwitch_Dll,                0, LNK_CmdValueKind_Null,   "DLL",                  "",                               "Link to a DLL."                                               },
@@ -91,7 +91,7 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_Guid,                         0, LNK_CmdValueKind_Scalar, "RAD_GUID",                             ":{IMAGEBLAKE3|XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXXXXXX}", "The image guid that is embeded in the debug info." },
   { LNK_CmdSwitch_Rad_LargePages,                   0, LNK_CmdValueKind_Scalar, "RAD_LARGE_PAGES",                      "[:NO]",                "Disabled by default on Windows."                                                  },
   { LNK_CmdSwitch_Rad_LinkVer,                      0, LNK_CmdValueKind_Scalar, "RAD_LINK_VER",                         ":##,##",               "Linker version."                                                                  },
-  { LNK_CmdSwitch_Rad_Log,                          0, LNK_CmdValueKind_Scalar, "RAD_LOG",                              ":{ALL,INPUT_OBJ,INPUT_LIB,IO,LINK_STATS,TIMERS}", "Loggers."                                              },
+  { LNK_CmdSwitch_Rad_Log,                          0, LNK_CmdValueKind_Scalar, "RAD_LOG",                              ":{ALL,INPUT_OBJ,INPUT_LIB,IO,LINKS,TIMERS}", "Loggers."                                                   },
   { LNK_CmdSwitch_Rad_MtPath,                       0, LNK_CmdValueKind_Scalar, "RAD_MT_PATH",                          ":EXEPATH",             "Exe path to the manifest tool (default: " LNK_MANIFEST_MERGE_TOOL_NAME ")"        },
   { LNK_CmdSwitch_Rad_OsVer,                        0, LNK_CmdValueKind_Scalar, "RAD_OS_VER",                           ":##,##",               "OS version."                                                                      },
   { LNK_CmdSwitch_Rad_PageSize,                     0, LNK_CmdValueKind_Scalar, "RAD_PAGE_SIZE",                        ":#",                   "Must be power of two."                                                            },
@@ -2949,16 +2949,14 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
   if (lnk_cmd_line_has_switch(user_cmd_line, LNK_CmdSwitch_Dll)) {
     DefaultOpt("/SUBSYSTEM:%S", pe_string_from_subsystem(PE_WindowsSubsystem_WINDOWS_GUI));
   }
-  if (!lnk_cmd_line_has_switch(user_cmd_line, LNK_CmdSwitch_Brepro)) {
+  if (lnk_cmd_line_has_switch(user_cmd_line, LNK_CmdSwitch_Brepro)) {
+    DefaultOpt("/RAD_TIME_STAMP:0");
+  } else {
     DefaultOpt("/RAD_TIME_STAMP:%u", get_process_start_time_unix());
   }
-  for EachIndex(i, ArrayCount(default_opts)) {
-    DefaultOpt("%s", default_opts[i]);
-  }
 
-  for EachIndex(i, ArrayCount(push_opts)) {
-    PushOpt("%s", push_opts[i]);
-  }
+  for EachIndex(i, ArrayCount(default_opts)) { DefaultOpt("%s", default_opts[i]); }
+  for EachIndex(i, ArrayCount(push_opts))    { PushOpt("%s", push_opts[i]);       }
 
   // when /FORCE is specified on the command line, do not stop on these errors
   if (lnk_cmd_line_has_switch(user_cmd_line, LNK_CmdSwitch_Force)) {

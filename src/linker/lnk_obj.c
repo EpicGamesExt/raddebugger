@@ -1283,7 +1283,7 @@ lnk_directive_info_from_raw_directives(Arena *arena, LNK_Obj *obj, String8List r
   return directive_info;
 }
 
-force_inline int
+internal force_inline int
 lnk_section_offset_symbol_is_before(void *raw_a, void *raw_b)
 {
   LNK_SectionOffsetSymbol *a = raw_a, *b = raw_b;
@@ -1383,7 +1383,7 @@ lnk_debug_s_from_obj(Arena *arena, LNK_Obj *obj)
   return debug_s;
 }
 
-force_inline int
+internal force_inline int
 lnk_line_table_block_is_before(void *raw_a, void *raw_b)
 {
   LNK_LineTableBlock *a = raw_a, *b = raw_b;
@@ -1393,7 +1393,7 @@ lnk_line_table_block_is_before(void *raw_a, void *raw_b)
   return key_a < key_b;
 }
 
-force_inline int
+internal force_inline int
 lnk_inline_range_is_before(void *raw_a, void *raw_b)
 {
   LNK_InlineRange *a = raw_a, *b = raw_b;

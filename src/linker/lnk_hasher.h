@@ -27,7 +27,7 @@ typedef struct LNK_Hasher
 #if BUILD_DEBUG
 #define LNK_HASHER_FN internal
 #else
-#define LNK_HASHER_FN force_inline
+#define LNK_HASHER_FN internal force_inline
 #endif
 
 LNK_HASHER_FN void    lnk_hasher_init     (LNK_Hasher *hasher, LNK_HashKind kind);
