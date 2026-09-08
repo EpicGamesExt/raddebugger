@@ -101,7 +101,7 @@ if "%clang%"=="1"   set rc=call llvm-rc
 if "%msvc%"=="1"    set link_dll=/link /DLL
 if "%clang%"=="1"   set link_dll=-Xlinker -DLL
 if "%msvc%"=="1"    set asm=call ml64 -nologo -c -Zi -Fo
-if "%clang%"=="1"   set asm=call llvm-ml -m64 /c /Fo
+if "%clang%"=="1"   set asm=call llvm-ml -m64 -nologo -c -Fo
 if "%msvc%"=="1"    set mklib=call lib -nologo
 if "%clang%"=="1"   set mklib=call llvm-lib
 

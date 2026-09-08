@@ -4,11 +4,7 @@
 ////////////////////////////////
 //~ rjf: Globals/Thread-Locals
 
-C_LINKAGE thread_static Log *log_active;
-#if !BUILD_SUPPLEMENTARY_UNIT
-C_LINKAGE thread_static Log *log_active = 0;
-#endif
-
+thread_static Log *log_active;
 String8 g_logs_folder;
 
 ////////////////////////////////

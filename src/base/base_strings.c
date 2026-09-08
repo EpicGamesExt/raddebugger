@@ -196,7 +196,7 @@ str32_zero(void)
 }
 
 internal String8
-str8_cstring(char *c)
+str8_cstring(const char *c)
 {
   String8 result = {(U8*)c, cstring8_length((U8*)c)};
   return result;
@@ -3076,7 +3076,7 @@ str8_deserial_read_sleb128(String8 string, U64 off, S64 *value_out)
 
 ////////////////////////////////
 
-force_inline int
+internal force_inline int
 str8_compar(String8 a, String8 b, B32 ignore_case)
 {
   U64 size = Min(a.size, b.size);
@@ -3095,19 +3095,19 @@ str8_compar(String8 a, String8 b, B32 ignore_case)
   return cmp;
 }
 
-force_inline int
+internal force_inline int
 str8_compar_ignore_case(const void *a, const void *b)
 {
   return str8_compar(*(String8*)a, *(String8*)b, 1);
 }
 
-force_inline int
+internal force_inline int
 str8_compar_case_sensitive(const void *a, const void *b)
 {
   return str8_compar(*(String8*)a, *(String8*)b, 0);
 }
 
-force_inline int
+internal force_inline int
 str8_is_before_case_sensitive(const void *a, const void *b)
 {
   int cmp = str8_compar_case_sensitive(a, b);

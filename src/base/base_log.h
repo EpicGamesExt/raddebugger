@@ -40,6 +40,7 @@ struct Log
 // Globals
 
 extern String8 g_logs_folder;
+extern thread_static Log *log_active;
 
 ////////////////////////////////
 //~ rjf: Log Creation/Selection

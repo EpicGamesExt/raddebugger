@@ -824,6 +824,7 @@ lnk_inputer_init(void)
   inputer->arena            = arena;
   inputer->objs_ht          = hash_table_init(arena, 0x20000);
   inputer->libs_ht          = hash_table_init(arena, 0x1000);
+  inputer->cmd_lib_names_ht = hash_table_init(arena, 0x100);
   inputer->missing_lib_ht   = hash_table_init(arena, 0x100);
   return inputer;
 }
@@ -926,12 +927,18 @@ lnk_inputer_push_lib_thin(LNK_Inputer *inputer, LNK_Config *config, LNK_InputSou
 
   LNK_Input *input = 0;
 
-  // default libraries may omit extension
   if (input_source == LNK_InputSource_Default || input_source == LNK_InputSource_Obj) {
+    // default libraries may omit extension
     if (!str8_ends_with(path, str8_lit(".lib"), StringMatchFlag_CaseInsensitive)) {
       path = push_str8f(scratch.arena, "%S.lib", path);
     }
     if (lnk_is_lib_disallowed(config, path)) {
+      goto exit;
+    }
+
+    // default libraries may duplicate libs that are specified using full path
+    input = hash_table_search_path_raw(inputer->cmd_lib_names_ht, path);
+    if (input) {
       goto exit;
     }
   }
@@ -970,24 +977,32 @@ lnk_inputer_push_lib_thin(LNK_Inputer *inputer, LNK_Config *config, LNK_InputSou
   }
 
   exit:;
+  if (input && input_source == LNK_InputSource_CmdLine) {
+    // store command-line libraries by basename; keep only the first mapping because
+    // /DEFAULTLIB only needs to know whether a matching library was explicitly supplied
+    String8 name = str8_skip_last_slash(input->path);
+    if (!hash_table_search_path(inputer->cmd_lib_names_ht, name)) {
+      hash_table_push_path_raw(inputer->arena, inputer->cmd_lib_names_ht, name, input);
+    }
+  }
   scratch_end(scratch);
   return input;
 }
 
 internal B32
-lnk_inputer_has_items(LNK_Inputer *inputer)
+lnk_has_pending_input_work(LNK_Inputer *inputer, LNK_Link *link)
 {
   if (inputer->new_objs.count > 0) {
     return 1;
   }
-
   for EachIndex(i, ArrayCount(inputer->new_libs)) {
     if (inputer->new_libs[i].count > 0) {
       return 1;
     }
   }
-
-  return 0;
+  return *link->last_include     != 0 ||
+         *link->last_default_lib != 0 ||
+         *link->last_obj_lib     != 0;
 }
 
 internal LNK_InputPtrArray
@@ -1120,7 +1135,7 @@ lnk_lib_member_ref_is_before(void *raw_a, void *raw_b)
                               g_sort_lib_member_context[(*b)->member_idx].link);
 }
 
-force_inline int
+internal force_inline int
 lnk_import_ref_is_before(void *raw_a, void *raw_b)
 {
   LNK_LibMemberRef **a_ptr = raw_a, **b_ptr = raw_b;
@@ -1555,16 +1570,28 @@ THREAD_POOL_TASK_FUNC(lnk_search_lib_task)
         if (lnk_search_lib(lib, symbol->name, &member_idx)) {
           lnk_queue_lib_member(arena, task->imports_hm, task->link->lib_member_infos_hm, member_ref_list, symbol, lib, lib_member_infos, member_idx);
         }
-      } else if (search_type == LNK_SymbolSearch_WeakAntiDependency && search_anti_deps) {
-        LNK_ObjSymbolRef symbol_ref = lnk_ref_from_symbol(symbol);
-        LNK_ObjSymbolRef dep_symbol = {0};
-        if (lnk_resolve_weak_symbol(symtab, symbol_ref, &dep_symbol)) {
-          COFF_ParsedSymbol          dep_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(dep_symbol.obj, dep_symbol.symbol_idx);
-          COFF_SymbolValueInterpType dep_interp = coff_interp_from_parsed_symbol(dep_parsed);
-          if (dep_interp == COFF_SymbolValueInterp_Weak) {
-            U32 member_idx;
-            if (lnk_search_lib(lib, symbol->name, &member_idx)) {
-              lnk_queue_lib_member(arena, task->imports_hm, task->link->lib_member_infos_hm, member_ref_list, symbol, lib, lib_member_infos, member_idx);
+      }
+    }
+  }
+
+  if (search_anti_deps) {
+    // Symbols may change search type in place after loading another archive.
+    // Revisit existing entries as well as newly appended symbols.
+    for EachNode(c, LNK_SymbolHashTrieChunk, symtab->search_chunks[task_id].first) {
+      for EachIndex(i, c->count) {
+        LNK_Symbol          *symbol      = c->v[i].symbol;
+        LNK_SymbolSearchType search_type = lnk_search_type_from_symbol(symbol);
+        if (search_type == LNK_SymbolSearch_WeakAntiDependency) {
+          LNK_ObjSymbolRef symbol_ref = lnk_ref_from_symbol(symbol);
+          LNK_ObjSymbolRef dep_symbol = {0};
+          if (lnk_resolve_weak_symbol(symtab, symbol_ref, &dep_symbol)) {
+            COFF_ParsedSymbol          dep_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(dep_symbol.obj, dep_symbol.symbol_idx);
+            COFF_SymbolValueInterpType dep_interp = coff_interp_from_parsed_symbol(dep_parsed);
+            if (dep_interp == COFF_SymbolValueInterp_Weak) {
+              U32 member_idx;
+              if (lnk_search_lib(lib, symbol->name, &member_idx)) {
+                lnk_queue_lib_member(arena, task->imports_hm, task->link->lib_member_infos_hm, member_ref_list, symbol, lib, lib_member_infos, member_idx);
+              }
             }
           }
         }
@@ -1580,6 +1607,9 @@ lnk_search_lib_task_work_count(LNK_SearchLibTask *task, U64 task_id)
   U64 work_count = 0;
   for EachNode(c, LNK_SymbolHashTrieChunk, symtab->search_chunks[task_id].first) {
     work_count += c->count;
+  }
+  if (task->search_anti_deps) {
+    work_count *= 2;
   }
   return work_count;
 }
@@ -1644,7 +1674,9 @@ lnk_link_inputs(TP_Context      *tp,
   for (U64 resolved_members_count = 0; ; resolved_members_count = 0) {
     ProfBegin("Search Pass");
 
-    lnk_load_inputs(tp, arena, config, inputer, symtab, link);
+    if (lnk_has_pending_input_work(inputer, link)) {
+      lnk_load_inputs(tp, arena, config, inputer, symtab, link);
+    }
 
     for EachNode(lib_n, LNK_LibNode, link->libs.first) {
       LNK_Lib *lib = &lib_n->data;
@@ -1714,7 +1746,9 @@ lnk_link_inputs(TP_Context      *tp,
 
       ProfBeginV("Search %S", str8_skip_last_slash(lib->path));
       do {
-        lnk_load_inputs(tp, arena, config, inputer, symtab, link);
+        if (lnk_has_pending_input_work(inputer, link)) {
+          lnk_load_inputs(tp, arena, config, inputer, symtab, link);
+        }
 
         if (link_whole_archive) {
           local_persist LNK_Symbol *null_symbol = 0;
@@ -1861,7 +1895,7 @@ lnk_link_inputs(TP_Context      *tp,
         }
 
         resolved_members_count += queued_members.count;
-      } while (lnk_inputer_has_items(inputer));
+      } while (lnk_has_pending_input_work(inputer, link));
       ProfEnd();
     }
 
@@ -1899,7 +1933,7 @@ lnk_link_inputs(TP_Context      *tp,
         }
       }
 
-      resolved_members_count = lnk_inputer_has_items(inputer);
+      resolved_members_count = lnk_has_pending_input_work(inputer, link);
     }
 
     ProfEnd();
@@ -2622,20 +2656,26 @@ lnk_obj_indices_from_section_counts(Arena *arena, U64 worker_count, LNK_Obj **ob
 }
 
 internal B32
-lnk_resolve_reloc_target_symbol(Arena *arena, LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, String8 pass_name, LNK_ObjSymbolRef *resolved_symbol_out)
+lnk_resolve_reloc_target_symbol(Arena *arena, LNK_SymbolTable *symtab, LNK_ObjSymbolRef symbol, String8 pass_name, LNK_ObjSymbolRef *resolved_symbol_out, U32 *resolved_value_out)
 {
-  Temp             temp        = temp_begin(arena);
-  B32              is_resolved = 1;
-  HashMap          seen_hm     = {0};
-  LNK_ObjSymbolRef result      = symbol;
+  Temp temp = temp_begin(arena);
+ 
+  B32              is_resolved  = 1;
+  HashMap          seen_hm      = {0};
+  LNK_ObjSymbolRef result       = symbol;
+  U32              result_value = 0;
+
   for (;;) {
     // unpack symbol
     COFF_ParsedSymbol          result_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(result.obj, result.symbol_idx);
     COFF_SymbolValueInterpType result_interp = coff_interp_from_parsed_symbol(result_parsed);
+    if (result_interp == COFF_SymbolValueInterp_Regular) {
+      result_value = result_parsed.value;
+    }
 
     // resolve symbol
     LNK_ObjSymbolRef next_ref = {0};
-    if (!lnk_resolve_symbol(symtab, result, &next_ref)) {
+    if (lnk_resolve_symbol(symtab, result, &next_ref) == 0) {
       break;
     }
     if (result_interp != COFF_SymbolValueInterp_Weak && result_interp != COFF_SymbolValueInterp_Undefined) {
@@ -2644,7 +2684,7 @@ lnk_resolve_reloc_target_symbol(Arena *arena, LNK_SymbolTable *symtab, LNK_ObjSy
     }
 
     // most relocations resolve in one step; only allocate cycle tracking for chains
-    U64 symbol_key = ((U64)result.obj->input_idx << 32ull) | (U64)result.symbol_idx;
+    U64 symbol_key = Compose64Bit(result.obj->input_idx, result.symbol_idx);
     if (hash_map_search_u64_u64(&seen_hm, symbol_key) != 0) {
       COFF_ParsedSymbol symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx(symbol.obj, symbol.symbol_idx);
       lnk_error_obj(LNK_Warning_CyclicSymbol, symbol.obj, "symbol %S forms a cyclic chain (%S)", symbol_parsed.name, pass_name);
@@ -2658,6 +2698,9 @@ lnk_resolve_reloc_target_symbol(Arena *arena, LNK_SymbolTable *symtab, LNK_ObjSy
 
   if (resolved_symbol_out) {
     *resolved_symbol_out = result;
+  }
+  if (resolved_value_out) {
+    *resolved_value_out = result_value;
   }
 
   temp_end(temp);
@@ -3295,7 +3338,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
 
         if (symbol_idx < obj->coff.header.symbol_count) {
           LNK_ObjSymbolRef target_ref      = { .obj = obj, .symbol_idx = symbol_idx };
-          B32              is_symbol_found = lnk_resolve_reloc_target_symbol(scratch.arena, task->symtab, target_ref, str8_lit("/OPT:ICF"), &target_ref);
+          B32              is_symbol_found = lnk_resolve_reloc_target_symbol(scratch.arena, task->symtab, target_ref, str8_lit("/OPT:ICF"), &target_ref, 0);
           if (is_symbol_found) {
             COFF_ParsedSymbol symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(target_ref.obj, target_ref.symbol_idx);
             if (coff_interp_from_parsed_symbol(symbol) == COFF_SymbolValueInterp_Regular) {
@@ -3477,7 +3520,8 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
             *target = (RelocTarget){0};
 
             LNK_ObjSymbolRef target_ref      = { .obj = obj, .symbol_idx = r->isymbol };
-            B32              is_symbol_found = lnk_resolve_reloc_target_symbol(scratch2.arena, task->symtab, target_ref, str8_lit("/OPT:ICF"), &target_ref);
+            U32              target_value    = 0;
+            B32              is_symbol_found = lnk_resolve_reloc_target_symbol(scratch2.arena, task->symtab, target_ref, str8_lit("/OPT:ICF"), &target_ref, &target_value);
             if (is_symbol_found) {
               COFF_ParsedSymbol target_symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(target_ref.obj, target_ref.symbol_idx);
               target->interp = coff_interp_from_parsed_symbol(target_symbol);
@@ -3526,6 +3570,7 @@ THREAD_POOL_TASK_FUNC(lnk_opt_icf_task)
                   }
                 }
 
+                target->value = target_value;
                 target->color = &shared.color_map[target_obj->input_idx][target_sect];
               } break;
               default: {

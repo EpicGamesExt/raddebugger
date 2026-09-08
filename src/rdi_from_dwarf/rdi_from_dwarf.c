@@ -2040,10 +2040,10 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
   //  This compiles to in DWARF:
   //
   //  foo -> DW_TAG_ArrayType -> (A0) DW_TAG_Subrange [2]
-  //                          \
-  //                           -> (B0) DW_TAG_PointerType -> (A1) DW_TAG_ArrayType -> DW_TAG_Subrange [3]
-  //                                                      \
-  //                                                       -> (B1) DW_TAG_BaseType (int)
+  //                          |
+  //                          +-> (B0) DW_TAG_PointerType -> (A1) DW_TAG_ArrayType -> DW_TAG_Subrange [3]
+  //                                                      | 
+  //                                                      +-> (B1) DW_TAG_BaseType (int)
   //
   // RDI expects:
   //
