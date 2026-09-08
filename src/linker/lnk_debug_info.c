@@ -6485,7 +6485,7 @@ typedef struct
   U32 obj_idx;
 } LNK_ObjDistWeight;
 
-force_inline int
+internal force_inline int
 lnk_obj_dist_weight_is_before(void *raw_a, void *raw_b)
 {
   LNK_ObjDistWeight *a = raw_a, *b = raw_b;
