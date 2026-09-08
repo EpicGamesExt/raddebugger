@@ -102,6 +102,11 @@
 #include "linker/lnk_log.h"
 #include "linker/lnk_debug_helper.h"
 #include "torture.h"
+#include "torture_controller.h"
+#include "torture_script.h"
+#include "torture_build.h"
+#include "torture_coff.h"
+#include "torture_linker.h"
 
 #include "base/base_inc.c"
 #include "x64/x64.c"
@@ -182,6 +187,12 @@
 #include "linker/pdb_ext/pdb_builder.c"
 #include "linker/lnk_debug_helper.c"
 #include "torture.c"
+#include "torture_base.c"
+#include "torture_controller.c"
+#include "torture_script.c"
+#include "torture_build.c"
+#include "torture_linker.c"
+#include "torture_coff.c"
 
 #include "base/tests/base_tests.c"
 #include "mdesk/tests/mdesk_tests.c"
@@ -191,6 +202,10 @@
 #include "rdi_from_pdb/tests/rdi_from_pdb_tests.c"
 #include "raddbg/tests/raddbg_tests.c"
 #include "eval2/tests/eval2_tests.c"
+#include "torture/tests/torture_subprocess_tests.c"
+#include "torture/tests/torture_script_tests.c"
+#include "torture/tests/torture_coff_tests.c"
+#include "torture/tests/torture_linker_tests.c"
 
 internal B32 frame(void) { return 0; }
 
@@ -199,6 +214,29 @@ internal B32 frame(void) { return 0; }
 internal void
 entry_point(CmdLine *cmdline)
 {
-  t_entry_point(cmdline);
+  if(cmd_line_has_flag(cmdline, str8_lit("controller_fixture")))
+  {
+    t_controller_fixture();
+  }
+  else if(cmd_line_has_flag(cmdline, str8_lit("controller_interrupt_fixture")))
+  {
+    t_controller_interrupt_fixture();
+  }
+  else if(cmd_line_has_flag(cmdline, str8_lit("run_fixture_ok")))
+  {
+    t_run_operation_fixture(0, 0);
+  }
+  else if(cmd_line_has_flag(cmdline, str8_lit("run_fixture_nonzero")))
+  {
+    t_run_operation_fixture(0, 7);
+  }
+  else if(cmd_line_has_flag(cmdline, str8_lit("run_fixture_sleep")))
+  {
+    t_run_operation_fixture(1, 0);
+  }
+  else
+  {
+    t_entry_point(cmdline);
+  }
 }
 

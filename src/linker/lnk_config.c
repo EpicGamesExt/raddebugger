@@ -68,6 +68,11 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_WholeArchive,       0, LNK_CmdValueKind_Scalar, "WHOLEARCHIVE",         "[:LIBNAME]",                     "Force linker to pull in all objs from the specified lib."     },
 
   { LNK_CmdSwitch_Rad_Age,                          0, LNK_CmdValueKind_Scalar, "RAD_AGE",                              ":#",                   "Age embeded in EXE and PDB, used to validate incremental build. Default is 1."    },
+  { LNK_CmdSwitch_Rad_CObjCacheGiB,                 0, LNK_CmdValueKind_Scalar, "RAD_COBJ_CACHE_GIB",                   ":#",                   "Initial decoded compressed-OBJ cache capacity in GiB."                           },
+  { LNK_CmdSwitch_Rad_CObjCacheShrinkGiB,           0, LNK_CmdValueKind_Scalar, "RAD_COBJ_CACHE_SHRINK_GIB",            ":#",                   "Post-type-merge decoded compressed-OBJ cache capacity in GiB."                   },
+  { LNK_CmdSwitch_Rad_CObjCacheFreeze,              0, LNK_CmdValueKind_Scalar, "RAD_COBJ_CACHE_FREEZE",                "[:NO]",                "Retain the initial decoded generation when starting the post-boundary cache."    },
+  { LNK_CmdSwitch_Rad_CObjTrimWs,                   0, LNK_CmdValueKind_Scalar, "RAD_COBJ_TRIM_WS",                     "[:NO]",                "Trim decoded cache working-set pages at the type-merge boundary."                },
+  { LNK_CmdSwitch_Rad_CObjOneShot,                  0, LNK_CmdValueKind_Scalar, "RAD_COBJ_ONE_SHOT",                    "[:NO]",                "Use process-teardown cleanup for this one-shot linker invocation."               },
   //{ LNK_CmdSwitch_Rad_BuildExp,                     0, LNK_CmdValueKind_Scalar, "RAD_BUILD_EXP",                        "[:NO]",     "Build export data."                                                             },
   { LNK_CmdSwitch_Rad_BuildInfo,                    0, LNK_CmdValueKind_Null,   "RAD_BUILD_INFO",                       "",                     "Print build info and exit."                                                       },
   { LNK_CmdSwitch_Rad_BuildImpLib,                  0, LNK_CmdValueKind_Scalar, "RAD_BUILD_IMPLIB",                     "[:NO]",                "Build import library."                                                            },
@@ -104,15 +109,19 @@ global read_only LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_WriteTempFiles,               0, LNK_CmdValueKind_Scalar, "RAD_WRITE_TEMP_FILES",                 "[:NO]",                "When speicifed linker writes image and debug info to temporary files and renames after link is done." },
   { LNK_CmdSwitch_Rad_TimeStamp,                    0, LNK_CmdValueKind_Scalar, "RAD_TIME_STAMP",                       ":#",                   "Time stamp embeded in EXE and PDB."                                               },
   { LNK_CmdSwitch_Rad_DebugTypeHash,                0, LNK_CmdValueKind_Scalar, "RAD_DEBUG_TYPE_HASH",                  ":{BLAKE3|XXHASH}",     "Sets hashing algorithm for debug type merging."                                   },
+  { LNK_CmdSwitch_Rad_DebugTypeHash,                0, LNK_CmdValueKind_Scalar, "RAD_TYPEHASHALG",                      ":{BLAKE3|XXHASH}",     "Alias of RAD_DEBUG_TYPE_HASH (spelling used by UnrealBuildTool)."                  },
   { LNK_CmdSwitch_Rad_UnresolvedSymbolLimit,        0, LNK_CmdValueKind_Scalar, "RAD_UNRESOLVED_SYMBOL_LIMIT",          ":#",                   "Limits number of unresolved symbol errors linker reports."                        },
   { LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,     0, LNK_CmdValueKind_Scalar, "RAD_UNRESOLVED_SYMBOL_REF_LIMIT",      ":#",                   "Limit number of unresolved symbol references linker reports."                     },
   { LNK_CmdSwitch_Rad_Version,                      0, LNK_CmdValueKind_Null,   "RAD_VERSION",                          "",                     "Print version and exit."                                                          },
   { LNK_CmdSwitch_Rad_Workers,                      0, LNK_CmdValueKind_Scalar, "RAD_WORKERS",                          ":#",                   "Set number of workers created in the pool. Number is capped at 1024. When /RAD_SHARED_THREAD_POOL is specified this number cant exceed /RAD_SHARED_THREAD_POOL_MAX_WORKERS." },
+  { LNK_CmdSwitch_Rad_DebugWorkers,                 0, LNK_CmdValueKind_Scalar, "RAD_DEBUG_WORKERS",                    ":#",                   "Cap concurrent workers in page-fault-bound debug-input stages (parse/prefetch). Default 20; 0 = uncapped. Output is identical either way; the cap only trades idle spinning in the kernel page-fault path for free cores." },
   { LNK_CmdSwitch_Rad_WorkDir,                      0, LNK_CmdValueKind_Scalar, "RAD_WORK_DIR",                         ":PATH",                "Working directory used for stable debug paths."                                   },
 
   { LNK_CmdSwitch_RadTypeServer,                   0, LNK_CmdValueKind_Scalar, "RAD_TYPE_SERVER", ":FILENAME", "Merge types and store them in the specified file. The filename must have the .rrt extension." },
 
   { LNK_CmdSwitch_LLVM_AddrSig, 0, LNK_CmdValueKind_Scalar, "LLVM_ADDRSIG", "[:NO]", "Use .llvm_addrsig to guide ICF." },
+  { LNK_CmdSwitch_IfcMap,       1, LNK_CmdValueKind_Scalar, "IFCMAP",          ":FILENAME", "Map a header-unit module interface (.ifc) for debug-record resolution (TOML)." },
+  { LNK_CmdSwitch_IfcDebugRecords, 0, LNK_CmdValueKind_Scalar, "IFCDEBUGRECORDS", "[:NO]",     "Resolve MSVC header-unit IFC debug records into real CodeView types." },
 
   { LNK_CmdSwitch_Help, 0, LNK_CmdValueKind_Null, "HELP", "", "" },
   { LNK_CmdSwitch_Help, 0, LNK_CmdValueKind_Null, "?",    "", "" },
@@ -1208,7 +1217,17 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
 
   switch (cmd_switch) {
   case LNK_CmdSwitch_Null: {
-    lnk_error_obj(LNK_Warning_UnknownSwitch, obj, "unknown switch: \"/%S%s%S\"", cmd_name, value.size ? ":" : "", value);
+    // Unknown /RAD_* switches on the command line warn and are ignored: the
+    // RAD_ namespace is owned by this linker, but newer build scripts must
+    // keep working against older radlink binaries (forward compatibility),
+    // so an unrecognized /RAD_* switch must not fail the link. Use
+    // LNK_Warning_Cmdl so the warning stays visible even though the
+    // release-default /RAD_IGNORE mutes LNK_Warning_UnknownSwitch.
+    if (obj == 0 && str8_match_lit("RAD_", str8_prefix(cmd_name, 4), StringMatchFlag_CaseInsensitive)) {
+      lnk_error(LNK_Warning_Cmdl, "unknown switch \"/%S%s%S\"; this radlink build does not support it -- switch ignored", cmd_name, value.size ? ":" : "", value);
+    } else {
+      lnk_error_obj(LNK_Warning_UnknownSwitch, obj, "unknown switch: \"/%S%s%S\"", cmd_name, value.size ? ":" : "", value);
+    }
   } break;
 
   default: break;
@@ -1245,6 +1264,9 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
           alt_name.to   = push_str8_copy(config->arena, alt_name.to);
 
           lnk_alt_name_list_push(config->arena, &config->alt_name_list, alt_name);
+          if (str8_ends_with(alt_name.from, str8_lit("$fo$"), 0)) {
+            lnk_alt_name_list_push(config->arena, &config->function_override_list, alt_name);
+          }
           hash_map_push_string_string(config->arena, &config->alt_name_ht, alt_name.from, alt_name.to);
         }
       }
@@ -1721,12 +1743,20 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
           }
         }
         config->opt_icf = LNK_SwitchState_Yes;
+      } else if (str8_match_lit("icfstatic", param, StringMatchFlag_CaseInsensitive)) {
+        // compatibility: build systems that drove the fork's /OPT:ICFSTATIC. Internal-linkage
+        // COMDATs are always fold candidates here, so this is plain ICF.
+        config->opt_icf = LNK_SwitchState_Yes;
       } else if (str8_match_lit("noicf", param, StringMatchFlag_CaseInsensitive)) {
         config->opt_icf = LNK_SwitchState_No;
       } else if (str8_match_lit("lbr", param, StringMatchFlag_CaseInsensitive)) {
         config->opt_lbr = LNK_SwitchState_Yes;
       } else if (str8_match_lit("nolibr", param, StringMatchFlag_CaseInsensitive)) {
         config->opt_lbr = LNK_SwitchState_No;
+      } else if (str8_match_lit("gctypes", param, StringMatchFlag_CaseInsensitive)) {
+        config->opt_gc_types = LNK_SwitchState_Yes;
+      } else if (str8_match_lit("nogctypes", param, StringMatchFlag_CaseInsensitive)) {
+        config->opt_gc_types = LNK_SwitchState_No;
       } else {
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "unknown option \"%S\"", param);
       }
@@ -1946,6 +1976,32 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
 
   case LNK_CmdSwitch_Rad_Age: {
     lnk_cmd_switch_parse_u32(obj, cmd_switch, value, &config->age, 0);
+  } break;
+
+  case LNK_CmdSwitch_Rad_CObjCacheGiB: {
+    if (lnk_cmd_switch_parse_u64(obj, cmd_switch, value, &config->cobj_cache_gib, 0) &&
+        config->cobj_cache_gib == 0) {
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "cache capacity must be greater than zero");
+    }
+  } break;
+
+  case LNK_CmdSwitch_Rad_CObjCacheShrinkGiB: {
+    if (lnk_cmd_switch_parse_u64(obj, cmd_switch, value, &config->cobj_cache_shrink_gib, 0) &&
+        config->cobj_cache_shrink_gib == 0) {
+      lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "cache capacity must be greater than zero");
+    }
+  } break;
+
+  case LNK_CmdSwitch_Rad_CObjCacheFreeze: {
+    lnk_cmd_switch_parse_flag(obj, cmd_switch, value, &config->cobj_cache_freeze);
+  } break;
+
+  case LNK_CmdSwitch_Rad_CObjTrimWs: {
+    lnk_cmd_switch_parse_flag(obj, cmd_switch, value, &config->cobj_trim_ws);
+  } break;
+
+  case LNK_CmdSwitch_Rad_CObjOneShot: {
+    lnk_cmd_switch_parse_flag(obj, cmd_switch, value, &config->cobj_one_shot);
   } break;
 
   //case LNK_CmdSwitch_Rad_BuildExp: {
@@ -2198,7 +2254,10 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
     if (value.size == 0) {
       config->shared_thread_pool_name = str8_lit(LNK_DEFAULT_THREAD_POOL_NAME);
     } else {
-      lnk_cmd_switch_parse_string(obj, cmd_switch, value, &config->shared_thread_pool_name);
+      // NOTE: must copy into the config arena -- the parsed string points into
+      // response-file/cmdline scratch that is freed long before late consumers
+      // (pool init, summary) read it
+      lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value, &config->shared_thread_pool_name);
       if (config->shared_thread_pool_name.size == 0) {
         lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid empty string for thread pool name");
       }
@@ -2305,6 +2364,14 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
     }
   } break;
 
+  case LNK_CmdSwitch_Rad_DebugWorkers: {
+    U64 cap;
+    if (lnk_cmd_switch_parse_u64(obj, cmd_switch, value, &cap, 0)) {
+      config->debug_worker_cap = cap;
+    }
+  } break;
+
+
   case LNK_CmdSwitch_Rad_WorkDir: {
     lnk_cmd_switch_parse_string_copy(config->arena, obj, cmd_switch, value, &config->work_dir);
   } break;
@@ -2331,6 +2398,19 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
 
   case LNK_CmdSwitch_LLVM_AddrSig: {
     lnk_cmd_switch_parse_flag(obj, cmd_switch, value, &config->llvm_addrsig);
+  } break;
+  case LNK_CmdSwitch_IfcMap: {
+    // collect .toml paths (header-unit -> .ifc); parsed lazily during debug-info build
+    String8 path = {0};
+    if (lnk_cmd_switch_parse_string(obj, cmd_switch, value, &path)) {
+      str8_list_push(config->arena, &config->ifc_map_list, push_str8_copy(config->arena, path));
+    }
+  } break;
+  case LNK_CmdSwitch_IfcDebugRecords: {
+    LNK_SwitchState state = LNK_SwitchState_Null;
+    if (lnk_cmd_switch_parse_flag(obj, cmd_switch, value, &state)) {
+      config->ifc_debug_records = state;
+    }
   } break;
   }
 
@@ -2938,6 +3018,11 @@ lnk_config_init(U64 argc, char **argv)
   config->raw_cmd_line = str8_copy(arena, cmd_line_string);
   config->work_dir     = get_current_path(arena);
   config->force        = lnk_cmd_line_has_switch(cmd_line, LNK_CmdSwitch_Force);
+
+  // fault-bound debug-input stages spin on the kernel page-fault path past ~20
+  // concurrent workers (current throughput knee); default cap trades that spin for
+  // free cores, /RAD_DEBUG_WORKERS:0 restores full width
+  config->debug_worker_cap = 20;
 
   // apply command line switches
   for EachNode(cmd, LNK_CmdOption, cmd_line.first_option) {

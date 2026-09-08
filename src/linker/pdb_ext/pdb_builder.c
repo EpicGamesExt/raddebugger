@@ -1133,7 +1133,8 @@ pdb_type_server_push_udt_arr(PDB_TypeServer *ts, U64 count, U32 *hash_arr, Strin
     bucket->raw_leaf   = raw_leaf;
     bucket->type_index = ts->ti_lo + ts->leaf_list.node_count + leaf_idx;
 
-    U32 bucket_idx = hash % ts->bucket_cap;
+    Assert(ts->bucket_cap == PDB_TYPE_SERVER_HASH_BUCKET_COUNT_CURRENT);
+    U32 bucket_idx = hash % PDB_TYPE_SERVER_HASH_BUCKET_COUNT_CURRENT;
     SLLStackPush(ts->buckets[bucket_idx], bucket);
   }
 
@@ -1204,7 +1205,8 @@ THREAD_POOL_TASK_FUNC(pdb_push_udt_leaf_task)
       if (~udt_info.props & CV_TypeProp_FwdRef) {
         // hash udt and compute bucket index
         U32 hash       = pdb_hash_udt(udt_info, leaf.data);
-        U32 bucket_idx = hash % type_ht_cap;
+        Assert(type_ht_cap == PDB_TYPE_SERVER_HASH_BUCKET_COUNT_CURRENT);
+        U32 bucket_idx = hash % PDB_TYPE_SERVER_HASH_BUCKET_COUNT_CURRENT;
 
         // fill out & insert bucket
         PDB_TypeBucket *bucket = &new_buckets[bucket_cursor++];
@@ -1349,14 +1351,15 @@ pdb_load_types_from_leaf_list(PDB_TypeServer **type_server_arr, CV_LeafList leaf
       
       // get offsets for type indices in data blob
       CV_Leaf *leaf = &node->data;
-      CV_TypeIndexInfoList ti_info_list = cv_get_leaf_type_index_offsets(temp.arena, leaf->kind, leaf->data);
-      
-      for (CV_TypeIndexInfo *ti_info = ti_info_list.first; ti_info != 0; ti_info = ti_info->next) {
-        Assert(ti_info->offset + sizeof(CV_TypeIndex) <= leaf->data.size);
-        CV_TypeIndex *ti_ptr = (CV_TypeIndex *)(leaf->data.str + ti_info->offset);
+      CV_TiOffsets ti_offs = cv_leaf_ti_offsets(temp.arena, leaf->kind, leaf->data);
+
+      for (U64 ti_idx = 0, ti_count = cv_ti_offsets_count(&ti_offs); ti_idx < ti_count; ti_idx += 1) {
+        CV_TiOff ti_info = cv_ti_offset_at(&ti_offs, ti_idx);
+        Assert(ti_info.offset + sizeof(CV_TypeIndex) <= leaf->data.size);
+        CV_TypeIndex *ti_ptr = (CV_TypeIndex *)(leaf->data.str + ti_info.offset);
         CV_TypeIndex external_ti = *ti_ptr;
-        
-        B32 is_complex_type = external_ti >= ti_map->min_itype[ti_info->source];
+
+        B32 is_complex_type = external_ti >= ti_map->min_itype[ti_info.source];
         if (is_complex_type) {
           // search external type index
           CV_TypeIndex internal_tpi_idx = pdb_type_index_map_search(ti_map, CV_TypeIndexSource_TPI, external_ti);
@@ -1693,7 +1696,7 @@ gsi_alloc(void)
   gsi->word_size    = PDB_GSI_V70_WORD_SIZE;
   gsi->symbol_align = PDB_GSI_V70_SYMBOL_ALIGN;
   gsi->bucket_count = PDB_GSI_V70_BUCKET_COUNT;
-  gsi->bucket_arr   = push_array(arena, CV_SymbolList, gsi->bucket_count);
+  gsi->bucket_arr   = push_array(arena, PDB_GsiSymbolBucket, gsi->bucket_count);
   ProfEnd();
   return gsi;
 }
@@ -1724,10 +1727,6 @@ gsi_write_build_result(TP_Context         *tp,
   msf_stream_reserve(msf, gsi_sn, gsi_size);
   ProfEnd();
 
-  ProfBeginV("Reserve %M for symbols", build.symbol_data.size);
-  msf_stream_reserve(msf, symbols_sn, build.symbol_data.size);
-  ProfEnd();
-
   ProfBegin("Write GSI header");
   msf_stream_write_struct(msf, gsi_sn, &build.header);
   ProfEnd();
@@ -1744,9 +1743,8 @@ gsi_write_build_result(TP_Context         *tp,
   msf_stream_write(msf, gsi_sn, &build.compressed_bucket_arr[0], compressed_bucket_arr_size);
   ProfEnd();
   
-  ProfBegin("Write symbols [%M]", build.symbol_data.size);
-  msf_stream_write_string_parallel(tp, msf, symbols_sn, build.symbol_data);
-  ProfEnd();
+  // NOTE: the symbol payload itself was streamed into symbols_sn inside
+  // gsi_build_ex, window by window
 
   ProfEnd();
 }
@@ -2076,11 +2074,11 @@ psi_addr_map_from_gsi_records(TP_Context *tp, Arena *arena, PDB_GsiSortRecord *g
 internal
 THREAD_POOL_TASK_FUNC(gsi_size_buckets_task)
 {
-  U64                          bucket_idx  = task_id;
-  PDB_GsiSerializeSymbolsTask *task        = raw_task;
-  CV_SymbolList               *bucket_list = &task->bucket_arr[bucket_idx];
-  for (CV_SymbolNode *node = bucket_list->first; node != 0; node = node->next) {
-    task->bucket_size_arr[bucket_idx] += cv_size_from_symbol(&node->data, task->symbol_align);
+  PDB_GsiSerializeSymbolsTask *task = raw_task;
+  U64 bucket_idx = task->bucket_base + task_id;
+  PDB_GsiSymbolBucket               *bucket = &task->bucket_arr[bucket_idx];
+  for EachIndex(i, bucket->count) {
+    task->bucket_size_arr[bucket_idx] += cv_size_from_symbol(&bucket->v[i], task->symbol_align);
   }
 }
 
@@ -2149,14 +2147,13 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_pub32)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  U64                          bucket_idx = task_id;
-  PDB_GsiSerializeSymbolsTask *task       = raw_task;
+  PDB_GsiSerializeSymbolsTask *task = raw_task;
+  U64 bucket_idx = task->bucket_base + task_id;
 
-  CV_SymbolList bucket = task->bucket_arr[bucket_idx];
+  PDB_GsiSymbolBucket bucket = task->bucket_arr[bucket_idx];
 
-  CV_Symbol **symbol_arr = push_array(scratch.arena, CV_Symbol *, bucket.count); 
-  U64 symbol_arr_count = 0;
-  for EachNode(n, CV_SymbolNode, bucket.first) { symbol_arr[symbol_arr_count++] = &n->data; }
+  CV_Symbol **symbol_arr = push_array(scratch.arena, CV_Symbol *, bucket.count);
+  for EachIndex(i, bucket.count) { symbol_arr[i] = &bucket.v[i]; }
 
   // sort symbols within bucket
   radsort(symbol_arr, bucket.count, gsi_pub_symbol_is_before);
@@ -2164,7 +2161,7 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_pub32)
   PDB_GsiSortRecord *sort_record_arr = task->sort_record_arr_arr[bucket_idx];
   U64                buffer_size     = task->bucket_size_arr[bucket_idx];
   U64                buffer_base     = task->bucket_off_arr[bucket_idx];
-  U8                *buffer          = task->buffer + buffer_base;
+  U8                *buffer          = task->buffer + (buffer_base - task->window_base);
 
   U64 sort_idx      = 0;
   U64 buffer_cursor = 0;
@@ -2200,15 +2197,12 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_symbols_task)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  U64                          bucket_idx  = task_id;
-  PDB_GsiSerializeSymbolsTask *task        = raw_task;
-  CV_SymbolList                bucket = task->bucket_arr[bucket_idx];
+  PDB_GsiSerializeSymbolsTask *task = raw_task;
+  U64 bucket_idx = task->bucket_base + task_id;
+  PDB_GsiSymbolBucket                bucket = task->bucket_arr[bucket_idx];
 
-  CV_Symbol **symbol_arr = push_array(scratch.arena, CV_Symbol *, bucket.count); 
-  {
-    U64 i = 0;
-    for EachNode(n, CV_SymbolNode, bucket.first) { symbol_arr[i++] = &n->data; }
-  }
+  CV_Symbol **symbol_arr = push_array(scratch.arena, CV_Symbol *, bucket.count);
+  for EachIndex(i, bucket.count) { symbol_arr[i] = &bucket.v[i]; }
 
   // sort symbols within bucket
   radsort(symbol_arr, bucket.count, gsi_symbol_is_before);
@@ -2218,7 +2212,7 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_symbols_task)
     PDB_GsiSortRecord   *sort_record_arr = task->sort_record_arr_arr[bucket_idx];
     U64                  buffer_size     = task->bucket_size_arr[bucket_idx];
     U64                  buffer_base     = task->bucket_off_arr[bucket_idx];
-    U8                  *buffer          = task->buffer + buffer_base;
+    U8                  *buffer          = task->buffer + (buffer_base - task->window_base);
 
     U64 sort_idx      = 0;
     U64 buffer_cursor = 0;
@@ -2242,7 +2236,7 @@ THREAD_POOL_TASK_FUNC(gsi_serialize_symbols_task)
 }
 
 internal PDB_GsiBuildResult
-gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_base, B32 is_pub32, U64 msf_page_size)
+gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, MSF_Context *msf, MSF_StreamNumber symbols_sn, U64 symbol_data_base, B32 is_pub32, U64 msf_page_size)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(&arena,1);
@@ -2258,9 +2252,17 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
   // estimate each bucket size
   tp_for_parallel(tp, 0, gsi->bucket_count, gsi_size_buckets_task, &serial_task);
 
-  // prepare serial buffer
+  // prepare serial buffer -- a REUSED WINDOW, not a full staging copy: the
+  // whole symbol payload is GB-class at FN scale and used to sit committed
+  // alongside the payload copies it was serialized from (the link's commit
+  // peak). Buckets are serialized in groups that fit the window and streamed
+  // into the symbols stream immediately; absolute offsets are unchanged, so
+  // the emitted bytes are identical to the single-buffer path.
   U64 buffer_size = sum_array_u64(gsi->bucket_count, serial_task.bucket_size_arr);
-  serial_task.buffer         = push_array_no_zero(arena, U8, buffer_size);
+  U64 max_bucket_size = 0;
+  for EachIndex(bucket_idx, gsi->bucket_count) { max_bucket_size = Max(max_bucket_size, serial_task.bucket_size_arr[bucket_idx]); }
+  U64 window_cap = Max(MB(256), max_bucket_size);
+  serial_task.buffer         = push_array_no_zero(scratch.arena, U8, Min(window_cap, buffer_size ? buffer_size : 1));
   serial_task.bucket_off_arr = push_array_copy_u64(scratch.arena, serial_task.bucket_size_arr, gsi->bucket_count);
   u64_array_counts_to_offsets(gsi->bucket_count, serial_task.bucket_off_arr);
 
@@ -2272,9 +2274,26 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
     cursor += gsi->bucket_arr[bucket_idx].count;
   }
 
-  // fill out sort records & serialize symbols
+  // fill out sort records & serialize symbols, window by window
+  msf_stream_reserve(msf, symbols_sn, buffer_size);
   TP_TaskFunc *serial_func = is_pub32 ? gsi_serialize_pub32 : gsi_serialize_symbols_task;
-  tp_for_parallel(tp, 0, gsi->bucket_count, serial_func, &serial_task);
+  for (U64 window_lo = 0; window_lo < gsi->bucket_count;) {
+    U64 window_base = serial_task.bucket_off_arr[window_lo];
+    U64 window_hi   = window_lo;
+    while (window_hi < gsi->bucket_count &&
+           (serial_task.bucket_off_arr[window_hi] + serial_task.bucket_size_arr[window_hi]) - window_base <= window_cap) {
+      window_hi += 1;
+    }
+    Assert(window_hi > window_lo); // window_cap >= max_bucket_size guarantees progress
+    serial_task.bucket_base = window_lo;
+    serial_task.window_base = window_base;
+    tp_for_parallel(tp, 0, window_hi - window_lo, serial_func, &serial_task);
+    U64 window_end = (window_hi < gsi->bucket_count) ? serial_task.bucket_off_arr[window_hi] : buffer_size;
+    if (window_end > window_base) {
+      msf_stream_write_parallel(tp, msf, symbols_sn, serial_task.buffer, window_end - window_base);
+    }
+    window_lo = window_hi;
+  }
 
   ProfEnd();
 
@@ -2288,7 +2307,7 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
   ProfBegin("Write Bitmap & Record Offsets");
   for (U64 bucket_idx = 0, hash_idx = 0; bucket_idx < gsi->bucket_count; bucket_idx += 1) {
     // set bit for each occupied bucket
-    CV_SymbolList bucket_list = gsi->bucket_arr[bucket_idx];
+    PDB_GsiSymbolBucket bucket_list = gsi->bucket_arr[bucket_idx];
     if (bucket_list.count) {
       U64 word_idx = bucket_idx / gsi->word_size;
       Assert(word_idx < bitmap_count);
@@ -2325,7 +2344,7 @@ gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_
   result.compressed_bucket_count = compressed_offset_count;
   result.compressed_bucket_arr   = compressed_offset_arr;
   result.total_hash_size         = sizeof(header) + header.hash_record_arr_size + header.bucket_data_size;
-  result.symbol_data             = str8(serial_task.buffer, buffer_size);
+  result.symbol_data             = str8(0, buffer_size); // already streamed into symbols_sn window by window; size kept for logging
   
   scratch_end(scratch);
   ProfEnd();
@@ -2339,7 +2358,7 @@ gsi_build(TP_Context *tp, PDB_GsiContext *gsi, MSF_Context *msf, MSF_StreamNumbe
   Temp scratch = scratch_begin(0,0);
 
   U64 symbol_data_base = msf_stream_get_pos(msf, symbols_sn);
-  PDB_GsiBuildResult build = gsi_build_ex(tp, scratch.arena, gsi, symbol_data_base, /* is_pub32: */ 0, msf->page_size);
+  PDB_GsiBuildResult build = gsi_build_ex(tp, scratch.arena, gsi, msf, symbols_sn, symbol_data_base, /* is_pub32: */ 0, msf->page_size);
   gsi_write_build_result(tp, build, msf, sn, symbols_sn);
 
   scratch_end(scratch);
@@ -2354,28 +2373,41 @@ gsi_hash(PDB_GsiContext *gsi, String8 input)
 }
 
 internal void
-gsi_push_(PDB_GsiContext *gsi, U32 hash, CV_SymbolNode *node)
+gsi_reserve(PDB_GsiContext *gsi, U64 bucket_idx, U64 additional)
 {
-  U64 bucket_idx = hash % gsi->bucket_count;
-  CV_SymbolList *list = &gsi->bucket_arr[bucket_idx];
-  cv_symbol_list_push_node(list, node);
-  gsi->symbol_count += 1;
+  PDB_GsiSymbolBucket *bucket = &gsi->bucket_arr[bucket_idx];
+  if (bucket->count + additional > bucket->cap) {
+    U64        new_cap = bucket->count + additional;
+    CV_Symbol *new_v   = push_array_no_zero(gsi->arena, CV_Symbol, new_cap);
+    MemoryCopy(new_v, bucket->v, sizeof(bucket->v[0]) * bucket->count);
+    bucket->v   = new_v;
+    bucket->cap = new_cap;
+  }
 }
 
-internal CV_SymbolNode *
+internal CV_Symbol *
+gsi_push_(PDB_GsiContext *gsi, U32 hash, CV_Symbol *symbol)
+{
+  Assert(gsi->bucket_count == PDB_GSI_V70_BUCKET_COUNT);
+  U64            bucket_idx = hash & (PDB_GSI_V70_BUCKET_COUNT - 1);
+  PDB_GsiSymbolBucket *bucket     = &gsi->bucket_arr[bucket_idx];
+  if (bucket->count == bucket->cap) {
+    // rare path: bulk inserters reserve up front via gsi_reserve
+    gsi_reserve(gsi, bucket_idx, Max(bucket->cap, 8));
+  }
+  CV_Symbol *dst = &bucket->v[bucket->count];
+  *dst = *symbol;
+  bucket->count    += 1;
+  gsi->symbol_count += 1;
+  return dst;
+}
+
+internal CV_Symbol *
 gsi_push(PDB_GsiContext *gsi, CV_Symbol *symbol)
 {
   String8 name = cv_name_from_symbol(symbol->kind, symbol->data);
   U32     hash = gsi_hash(gsi, name);
-
-  CV_SymbolNode *node = push_array_no_zero(gsi->arena, CV_SymbolNode, 1);
-  node->next = 0;
-  node->prev = 0;
-  node->data = *symbol;
-
-  gsi_push_(gsi, hash, node);
-
-  return node;
+  return gsi_push_(gsi, hash, symbol);
 }
 
 internal
@@ -2408,7 +2440,7 @@ gsi_push_many_arr(TP_Context *tp, PDB_GsiContext *gsi, U64 count, CV_SymbolNode 
   ProfEnd();
 
   for (U64 i = 0; i < count; ++i) {
-    gsi_push_(gsi, task.hashes[i], symbols[i]);
+    gsi_push_(gsi, task.hashes[i], &symbols[i]->data);
   }
 
   scratch_end(scratch);
@@ -2423,28 +2455,25 @@ gsi_push_many_list(PDB_GsiContext *gsi, U64 count, U32 *hash_arr, CV_SymbolList 
   U64 hash_idx = 0;
   for (CV_SymbolNode *curr = list->first, *next = 0; curr != 0; curr = next, ++hash_idx) {
     next = curr->next;
-
-    curr->prev = 0;
-    curr->next = 0;
-
-    gsi_push_(gsi, hash_arr[hash_idx], curr);
+    gsi_push_(gsi, hash_arr[hash_idx], &curr->data);
   }
 
   MemoryZeroStruct(list);
 }
 
-internal CV_SymbolNode *
+internal CV_Symbol *
 gsi_search(PDB_GsiContext *gsi, CV_Symbol *symbol)
 {
+  Assert(gsi->bucket_count == PDB_GSI_V70_BUCKET_COUNT);
   String8 name    = cv_name_from_symbol(symbol->kind, symbol->data);
   U32     hash    = gsi_hash(gsi, name);
-  U64     ibucket = hash % gsi->bucket_count;
+  U64     ibucket = hash & (PDB_GSI_V70_BUCKET_COUNT - 1);
 
-  CV_SymbolList bucket_list = gsi->bucket_arr[ibucket];
-  for (CV_SymbolNode *node = bucket_list.first; node != 0; node = node->next) {
-    String8 that_name = cv_name_from_symbol(node->data.kind, node->data.data);
+  PDB_GsiSymbolBucket *bucket = &gsi->bucket_arr[ibucket];
+  for EachIndex(i, bucket->count) {
+    String8 that_name = cv_name_from_symbol(bucket->v[i].kind, bucket->v[i].data);
     if (str8_match(name, that_name, 0)) {
-      return node;
+      return &bucket->v[i];
     }
   }
 
@@ -2472,7 +2501,7 @@ psi_build(TP_Context *tp, PDB_PsiContext *psi, MSF_Context *msf, MSF_StreamNumbe
   Temp scratch = scratch_begin(0,0);
   
   U64 symbol_data_base = msf_stream_get_pos(msf, symbols_sn);
-  PDB_GsiBuildResult gsi_build = gsi_build_ex(tp, scratch.arena, psi->gsi, symbol_data_base, /* is_pub32: */ 1, msf->page_size);
+  PDB_GsiBuildResult gsi_build = gsi_build_ex(tp, scratch.arena, psi->gsi, msf, symbols_sn, symbol_data_base, /* is_pub32: */ 1, msf->page_size);
   
   ProfBegin("Address Map");
 
@@ -2511,12 +2540,12 @@ psi_release(PDB_PsiContext *psi)
   ProfEnd();
 }
 
-internal CV_SymbolNode *
+internal CV_Symbol *
 psi_push(PDB_PsiContext *psi, CV_Pub32Flags flags, U32 offset, U16 isect, String8 name)
 {
   CV_Symbol pub = cv_make_pub32(psi->arena, flags, offset, isect, name);
-  CV_SymbolNode *node = gsi_push(psi->gsi, &pub);
-  return node;
+  CV_Symbol *symbol = gsi_push(psi->gsi, &pub);
+  return symbol;
 }
 
 ////////////////////////////////

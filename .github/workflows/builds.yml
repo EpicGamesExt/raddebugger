@@ -9,7 +9,7 @@ on:
       - '**.md'
 
 env:
-  TORTURE_FLAGS: "--gen_crash_dump" 
+  TORTURE_FLAGS: "--gen_crash_dump"
 
 jobs:
   build-ubuntu-24:
@@ -27,7 +27,7 @@ jobs:
           - clang-17
           - clang-22
           - gcc
-    
+
     name: ${{ matrix.target }}-${{ matrix.compiler }}-ubuntu24
 
     steps:
@@ -90,7 +90,7 @@ jobs:
           - clang
 
     name: ${{ matrix.target }}-${{ matrix.compiler }}-vs2022
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -169,7 +169,7 @@ jobs:
         shell: bash
         run: |
           [[ "${{ matrix.compiler }}" == "clang-22" ]] && export AR=llvm-ar-22
-          CC="${{ matrix.compiler }}" ./run_tests.sh clang "${{ matrix.mode }}" -- \* $TORTURE_FLAGS 
+          CC="${{ matrix.compiler }}" ./run_tests.sh clang "${{ matrix.mode }}" -- \* $TORTURE_FLAGS
       - name: Upload Artifacts
         if: failure()
         uses: actions/upload-artifact@v7

@@ -25,7 +25,8 @@ typedef struct LNK_ObjSectionArray
   U64                 count_no_null;
   COFF_SectionHeader *headers;
   U32                *comdats;
-  U32Node           **associated_section_numbers;
+  U32                *associated_section_offsets;
+  U32                *associated_section_numbers;
 } LNK_ObjSectionArray;
 
 typedef struct LNK_ObjCoff
@@ -41,11 +42,23 @@ typedef struct LNK_ObjCoff
   B8                  hotpatch;
 } LNK_ObjCoff;
 
+// /OPT:ICF fold record (one per section number; slot zero is null), filled at fold-apply.
+// Distinguishes ICF folds from same-name COMDAT selection and /OPT:REF removal (all three end
+// up LnkRemove'd with a redirected symlink, but only ICF folds join DIFFERENT-named sections,
+// which is what the debug-info aliasing below needs to know). set==0 means not ICF-folded.
+typedef struct LNK_ICFFold
+{
+  U32 leader_obj_idx; // input_idx of the leader's obj
+  U32 leader_sn;      // leader section number
+  B8  set;
+} LNK_ICFFold;
+
 typedef struct LNK_Obj
 {
   String8 path;
 
   LNK_ObjCoff coff;
+  struct LNK_CompressedObj *compressed_obj;
 
   // flags
   B8 exclude_from_debug_info;
@@ -53,11 +66,26 @@ typedef struct LNK_Obj
   U32 input_idx;
 
   // link state
-  LNK_ObjSymbolRef  *symlinks; // indexed by COFF section number; slot zero is null
+  LNK_ObjSymbolRef   *symlinks;       // indexed by COFF section number; slot zero is null
+  LNK_ICFFold        *icf_fold;       // /OPT:ICF fold map (per section number); 0 if ICF off
+  String8             icf_file_chksms;      // memoized obj-wide FILECHKSMS slice (see lnk_icf_obj_file_chksms);
+  B32                 icf_file_chksms_init; // idempotent racy fill, flag published last
+  B8                 *icf_lines_only; // .debug$S sections associated to an ICF-folded function: stay
+                                      // LnkRemove'd, but merge into the module remapped to the leader RVA
+                                      // (section-number indexed; slot zero is null; 0 array ptr when
+                                      // ICF is off or no folds exist).
+                                      // 1 = C13 Lines only (source breakpoints bind); 2 = full record
+                                      // tree (fold joins a DIFFERENT source location and has locals --
+                                      // watch-window labels come from the right source)
 
   // link
   struct LNK_LibMemberRef *link_member;
   struct LNK_ObjNode      *self;
+
+  // Reloc-patched private copies of debug sections, indexed by COFF section
+  // number (slot zero is null). Keeping patches out of the copy-on-write input
+  // view avoids committing private pages for the mapped OBJ.
+  String8 *section_data_copies;
 
   // @type_server
   Rng1U64         ti_range;
@@ -225,6 +253,7 @@ typedef struct
   String8      name;
   B32          collect_discarded;
   String8List *out_lists;
+  U32Array    *out_sect_indices; // optional; per obj, 0-based sect_idx of each collected node (parallel to out_lists[obj])
 } LNK_SectionCollector;
 
 // --- Error -------------------------------------------------------------------
@@ -246,6 +275,7 @@ internal struct LNK_Lib * lnk_obj_get_lib(LNK_Obj *obj);
 internal String8          lnk_obj_get_lib_path(LNK_Obj *obj);
 internal U32              lnk_obj_get_removed_section_number(LNK_Obj *obj);
 internal B32              lnk_obj_get_comdat_symlink_from_section_number(LNK_Obj *obj, U64 section_number, LNK_ObjSymbolRef *symlink_out);
+internal U32Array         lnk_obj_associated_sections_from_section_number(LNK_Obj *obj, U32 section_number);
 internal U32List          lnk_obj_collect_associated_section_numbers(Arena *arena, LNK_Obj *obj, U32 root_section_number, COFF_SectionFlags skip_flags);
 
 // --- Symbol & Section Helpers ------------------------------------------------
@@ -259,6 +289,18 @@ internal COFF_SectionHeader * lnk_coff_section_header_from_section_number(LNK_Ob
 internal String8              lnk_obj_section_data_from_number(LNK_Obj *obj, U64 section_number);
 internal U64                  lnk_obj_foff_from_section_data_ptr(LNK_Obj *obj, void *ptr);
 internal String8              lnk_obj_section_name_from_section_number(LNK_Obj *obj, U64 section_number);
+internal void                 lnk_obj_drop_section_data_copies(LNK_Obj *obj);
+internal String8              lnk_resolve_debug_s_node(LNK_Obj *obj, CV_DebugSProvNode *prov);
+internal void                 lnk_obj_apply_relocs_to_buffer(LNK_Obj *obj, U64 section_number, COFF_SectionHeader *section_header, String8 section_data, U64 image_base, COFF_SectionHeader **image_section_table);
+
+// Streaming-ring P3.3: when set (default), .debug$S sections are NOT copied+patched at
+// image-build time (lnk_obj_reloc_patcher skips them); the PDB module-write visit re-reads
+// each obj's raw mapped bytes into a small per-worker window and applies relocs + the
+// journaled TI/kind fixups there (lnk_obj_window_debug_s), so the GB-class patched-copy set
+// never exists. Cleared under /OPT:GCTYPES, which reads AND rewrites $S type indices in
+// place after an eager journal apply and therefore needs the persistent patched copies
+// (the old path, kept intact).
+global B32 g_debug_s_window = 1;
 internal LNK_ObjSection       lnk_obj_section_from_section_number(LNK_Obj *obj, U64 section_number);
 internal COFF_RelocArray      lnk_coff_relocs_from_section_header(LNK_Obj *obj, COFF_SectionHeader *section_header);
 internal String8              lnk_coff_string_table_from_obj(LNK_Obj *obj);
@@ -270,8 +312,9 @@ internal force_inline B32 lnk_obj_symbol_iter_next(LNK_Obj *obj, LNK_ObjSymbolIt
 
 // --- Helpers ----------------------------------------------------------------- 
 
-internal String8List * lnk_collect_obj_sections(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded);
+internal String8List * lnk_collect_obj_sections(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded, U32Array **sect_indices_out);
 internal B32           lnk_obj_is_before(void *raw_a, void *raw_b);
+internal void          lnk_obj_log_compressed_census(void);
 
 // --- Directive Parser --------------------------------------------------------
 

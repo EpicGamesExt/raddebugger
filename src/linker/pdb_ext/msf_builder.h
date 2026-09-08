@@ -83,6 +83,10 @@ typedef struct MSF_Context
   MSF_PageList     st_page_list;
   MSF_PageList     page_pool;
   MSF_StreamList   sectab;
+  // direct stream-number -> node table (sn is allocated sequentially, so the
+  // linear sectab walk in msf_find_stream_node is O(streams) per lookup and
+  // O(streams^2) across the module passes); fixed 64K-entry table = 512KiB
+  MSF_StreamNode **stream_from_sn;
 } MSF_Context;
 
 typedef enum MSF_Error

@@ -291,6 +291,12 @@ internal B32                cv_is_leaf_type_server(CV_LeafKind kind);
 internal B32                cv_is_leaf_pch(CV_LeafKind kind);
 internal CV_TypeIndexSource cv_type_index_source_from_leaf_kind(CV_LeafKind leaf_kind);
 
+internal CV_TiOffsets cv_symbol_ti_offsets(CV_SymKind kind, String8 data);              // never allocates
+internal CV_TiOffsets cv_leaf_ti_offsets(Arena *arena, CV_LeafKind leaf_kind, String8 data); // allocates only for FIELDLIST/METHODLIST
+internal CV_TiOffsets cv_inlinee_ti_offsets(Arena *arena, String8 raw_data);
+internal U64          cv_ti_offsets_count(const CV_TiOffsets *offs);
+internal CV_TiOff     cv_ti_offset_at(const CV_TiOffsets *offs, U64 idx);
+
 internal CV_TypeIndexInfoList cv_get_symbol_type_index_offsets(Arena *arena, CV_SymKind kind, String8 data);
 internal CV_TypeIndexInfoList cv_get_leaf_type_index_offsets(Arena *arena, CV_LeafKind leaf_kind, String8 data);
 internal CV_TypeIndexInfoList cv_get_inlinee_type_index_offsets(Arena *arena, String8 raw_data);

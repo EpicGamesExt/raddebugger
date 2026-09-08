@@ -67,15 +67,21 @@ u64_array_sort_radix_parallel(TP_Context *tp, U64 count, U64 *v)
     tp_for_parallel(tp, 0, task_count, u64_radix_hist_task, &task);
 
     U64 cursor = 0;
+    U64 populated_digit_count = 0;
     for EachIndex(digit, U64_RADIX_SIZE) {
+      U64 digit_begin = cursor;
       for EachIndex(task_idx, task_count) {
         U64 *slot       = &offsets[task_idx * U64_RADIX_SIZE + digit];
         U64  slot_count = *slot;
         *slot = cursor;
         cursor += slot_count;
       }
+      populated_digit_count += (cursor != digit_begin);
     }
     Assert(cursor == count);
+
+    // A stable radix pass with a single populated digit is the identity transform.
+    if (populated_digit_count == 1) { continue; }
 
     tp_for_parallel(tp, 0, task_count, u64_radix_scatter_task, &task);
     Swap(U64 *, task.src, task.dst);

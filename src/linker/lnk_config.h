@@ -102,6 +102,11 @@ typedef enum
 
   LNK_CmdSwitch_Rad_Age,
   LNK_CmdSwitch_Rad_BootMode,
+  LNK_CmdSwitch_Rad_CObjCacheGiB,
+  LNK_CmdSwitch_Rad_CObjCacheShrinkGiB,
+  LNK_CmdSwitch_Rad_CObjCacheFreeze,
+  LNK_CmdSwitch_Rad_CObjTrimWs,
+  LNK_CmdSwitch_Rad_CObjOneShot,
   LNK_CmdSwitch_Rad_BuildExp,
   LNK_CmdSwitch_Rad_BuildImpLib,
   LNK_CmdSwitch_Rad_BuildInfo,
@@ -138,6 +143,7 @@ typedef enum
   LNK_CmdSwitch_Rad_SortImports,
   LNK_CmdSwitch_Rad_TimeStamp,
   LNK_CmdSwitch_Rad_DebugTypeHash,
+  LNK_CmdSwitch_Rad_DebugWorkers,
   LNK_CmdSwitch_Rad_UnresolvedSymbolLimit,
   LNK_CmdSwitch_Rad_UnresolvedSymbolRefLimit,
   LNK_CmdSwitch_Rad_Version,
@@ -149,6 +155,8 @@ typedef enum
   LNK_CmdSwitch_RadTypeServer_MatchObj,
 
   LNK_CmdSwitch_LLVM_AddrSig,
+  LNK_CmdSwitch_IfcMap,
+  LNK_CmdSwitch_IfcDebugRecords,
 
   LNK_CmdSwitch_Help,
 
@@ -324,6 +332,7 @@ typedef struct LNK_Config
   LNK_SwitchState             opt_ref;
   LNK_SwitchState             opt_icf;
   LNK_SwitchState             opt_lbr;
+  LNK_SwitchState             opt_gc_types; // /OPT:GCTYPES -- prune unreferenced CodeView types. Default OFF: shrinks PDB but a pruned type can't be cast-to in the debugger watch window.
   U64                         opt_iter_count;
   LNK_SwitchState             import_table_emit_biat;
   LNK_SwitchState             import_table_emit_uiat;
@@ -344,7 +353,13 @@ typedef struct LNK_Config
   U64                         pdb_page_size;
   U64                         worker_count;
   U64                         max_worker_count;
+  U64                         debug_worker_cap;
   String8                     shared_thread_pool_name;
+  U64                         cobj_cache_gib;
+  U64                         cobj_cache_shrink_gib;
+  LNK_SwitchState             cobj_cache_freeze;
+  LNK_SwitchState             cobj_trim_ws;
+  LNK_SwitchState             cobj_one_shot;
   LNK_SwitchState             do_function_pad_min;
   B32                         infer_function_pad_min;
   U64                         function_pad_min;
@@ -394,6 +409,7 @@ typedef struct LNK_Config
   String8                     rad_debug_alt_path;
   LNK_IncludeSymbolList       include_symbol_list;
   LNK_AltNameList             alt_name_list;
+  LNK_AltNameList             function_override_list;
   LNK_MergeDirectiveList      merge_list;
   LNK_SectionDirectiveList    section_list;
   U64                         data_dir_count;
@@ -425,6 +441,8 @@ typedef struct LNK_Config
   LNK_SwitchState             type_server;
   LNK_SwitchState             sort_imports;
   LNK_SwitchState             llvm_addrsig;
+  LNK_SwitchState             ifc_debug_records; // resolve LF_IFC_RECORD (0x1522) into real CodeView types
+  String8List                 ifc_map_list;      // .toml paths from /ifcMap (header-unit -> .ifc)
 } LNK_Config;
 
 // --- MSVC Error Codes --------------------------------------------------------
