@@ -176,6 +176,15 @@ typedef enum
 #define PDB_GSI_V70_BITMAP_COUNT ((PDB_GSI_V70_BUCKET_COUNT / PDB_GSI_V70_WORD_SIZE) + 1)
 #define PDB_GSI_V70_BITMAP_SIZE  (PDB_GSI_V70_BITMAP_COUNT * sizeof(U32))
 
+// per-bucket array of CV_Symbol values (replaces linked lists of 48-byte
+// CV_SymbolNode; cuts PDB-phase commit and pointer-chase on serialize)
+typedef struct PDB_GsiSymbolBucket
+{
+  U64        count;
+  U64        cap;
+  CV_Symbol *v;
+} PDB_GsiSymbolBucket;
+
 typedef struct PDB_GsiContext
 {
   Arena         *arena;
@@ -183,7 +192,7 @@ typedef struct PDB_GsiContext
   U64            symbol_align;
   U64            bucket_count;
   U64            symbol_count;
-  CV_SymbolList *bucket_arr;
+  PDB_GsiSymbolBucket *bucket_arr;
 } PDB_GsiContext;
 
 typedef struct PDB_GsiSortRecord
@@ -211,10 +220,12 @@ typedef struct PDB_GsiSerializeSymbolsTask
 {
   U64                  symbol_data_base;
   U64                  symbol_align;
-  CV_SymbolList       *bucket_arr;
+  PDB_GsiSymbolBucket       *bucket_arr;
   U64                 *bucket_size_arr;
-  U64                 *bucket_off_arr;
-  U8                  *buffer;
+  U64                 *bucket_off_arr; // absolute offsets within the full symbol payload
+  U8                  *buffer;         // window backing: holds buckets [bucket_base, bucket_base+N)
+  U64                  bucket_base;    // first bucket of the current window
+  U64                  window_base;    // absolute offset the window starts at
   PDB_GsiSortRecord  **sort_record_arr_arr;
   PDB_GsiSortRecord   *sort_record_arr;
 } PDB_GsiSerializeSymbolsTask;
@@ -365,12 +376,13 @@ internal PDB_GsiContext *   gsi_alloc(void);
 internal void               gsi_build(TP_Context *tp, PDB_GsiContext *gsi, MSF_Context *msf, MSF_StreamNumber gsi_sn, MSF_StreamNumber symbols_sn);
 internal void               gsi_release(PDB_GsiContext *gsi);
 internal void               gsi_write_build_result(TP_Context *tp, PDB_GsiBuildResult build, MSF_Context *msf, MSF_StreamNumber sn, MSF_StreamNumber symbols_sn);
-internal PDB_GsiBuildResult gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, U64 symbol_data_base, B32 export_symbol_ptr_arr, U64 msf_page_size);
+internal PDB_GsiBuildResult gsi_build_ex(TP_Context *tp, Arena *arena, PDB_GsiContext *gsi, MSF_Context *msf, MSF_StreamNumber symbols_sn, U64 symbol_data_base, B32 is_pub32, U64 msf_page_size);
 internal U32                gsi_hash(PDB_GsiContext *gsi, String8 input);
-internal CV_SymbolNode *    gsi_push(PDB_GsiContext *gsi, CV_Symbol *symbol);
+internal void               gsi_reserve(PDB_GsiContext *gsi, U64 bucket_idx, U64 additional);
+internal CV_Symbol *        gsi_push(PDB_GsiContext *gsi, CV_Symbol *symbol);
 internal void               gsi_push_many_arr(TP_Context *tp, PDB_GsiContext *gsi, U64 count, CV_SymbolNode **symbol_arr);
 internal void               gsi_push_many_list(PDB_GsiContext *gsi, U64 count, U32 *hash_arr, CV_SymbolList *list);
-internal CV_SymbolNode *    gsi_search(PDB_GsiContext *gsi, CV_Symbol *symbol);
+internal CV_Symbol *        gsi_search(PDB_GsiContext *gsi, CV_Symbol *symbol);
 
 ////////////////////////////////
 // PSI
@@ -378,7 +390,7 @@ internal CV_SymbolNode *    gsi_search(PDB_GsiContext *gsi, CV_Symbol *symbol);
 internal PDB_PsiContext * psi_alloc(void);
 internal void             psi_build(TP_Context *tp, PDB_PsiContext *psi, MSF_Context *msf, MSF_StreamNumber sn, MSF_StreamNumber symbols_sn);
 internal void             psi_release(PDB_PsiContext *psi);
-internal CV_SymbolNode *  psi_push(PDB_PsiContext *psi, CV_Pub32Flags flags, U32 offset, U16 isect, String8 name);
+internal CV_Symbol *      psi_push(PDB_PsiContext *psi, CV_Pub32Flags flags, U32 offset, U16 isect, String8 name);
 
 // TODO:
 //internal CV_Symbol psi_neareset_symbol(PDB_PsiContext *psi, U16 isect, U32 off);

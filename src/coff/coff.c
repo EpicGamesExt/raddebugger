@@ -293,6 +293,26 @@ coff_make_import_lookup(Arena *arena, U16 hint, String8 name)
   return result;
 }
 
+internal String8
+coff_import_lookup_name_from_import_by(String8 name, COFF_ImportByType import_by)
+{
+  // IMPORT_OBJECT_NAME_NO_PREFIX: the public symbol name without a leading ?, @, or _.
+  // IMPORT_OBJECT_NAME_UNDECORATE: prefix skipped as above, then truncated at the first @.
+  String8 result = name;
+  if (import_by == COFF_ImportBy_NameNoPrefix || import_by == COFF_ImportBy_Undecorate) {
+    if (result.size > 0 && (result.str[0] == '?' || result.str[0] == '@' || result.str[0] == '_')) {
+      result = str8_skip(result, 1);
+    }
+    if (import_by == COFF_ImportBy_Undecorate) {
+      U64 at_pos = str8_find_needle(result, 0, str8_lit("@"), 0);
+      if (at_pos < result.size) {
+        result = str8_prefix(result, at_pos);
+      }
+    }
+  }
+  return result;
+}
+
 internal U32
 coff_make_ordinal32(U16 hint)
 {

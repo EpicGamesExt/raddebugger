@@ -27,6 +27,7 @@ cd /D "%~dp0"
 :: - `ubsan`: enable undefined-behavior sanitizer
 :: - `telemetry`: enable RAD telemetry profiling support
 :: - `spall`: enable spall profiling support
+:: - `oodle`: enable Oodle-compressed OBJ support in radlink (requires OODLE_SDK_DIR)
 
 :: --- Unpack Arguments -------------------------------------------------------
 for %%a in (%*) do set "%%~a=1"
@@ -53,13 +54,15 @@ if "%pgo%"=="1" (
   where llvm-profdata /q || echo llvm-profdata is not in the PATH || exit /b 1 
   if "%clang%"=="1" (
     if "%pgo_run%" == "1" (
-      call llvm-profdata merge %LLVM_PROFILE_FILE% -output=%~dp0build\build.profdata || exit /b 1
+      call llvm-profdata merge %~dp0build\pgo_raw\*.profraw -output=%~dp0build\build.profdata || exit /b 1
       set auto_compile_flags=%auto_compile_flags% -fprofile-use=%~dp0build\build.profdata
       set pgo_run=0
     ) else (
       echo [pgo enabled]
       set auto_compile_flags=%auto_compile_flags% -fprofile-generate -mllvm -vp-counters-per-site=5
-      set LLVM_PROFILE_FILE=%~dp0build\build.profraw
+      if not exist %~dp0build\pgo_raw mkdir %~dp0build\pgo_raw
+      del /q %~dp0build\pgo_raw\*.profraw 2>nul
+      set LLVM_PROFILE_FILE=%~dp0build\pgo_raw\build.%%p.profraw
       set pgo_run=1
     )
   ) else (
@@ -159,7 +162,26 @@ pushd build
 if "%raddbg%"=="1"                     set didbuild=1 && %compile% ..\src\raddbg\raddbg_main.c                               %compile_link% %link_icon% %out%raddbg.exe || exit /b 1
 if "%raddbg_non_graphical%"=="1"       set didbuild=1 && %compile% -DWM_STUB=1 -DR_BACKEND=R_BACKEND_STUB ..\src\raddbg\raddbg_main.c %compile_link% %link_icon% %out%raddbg_non_graphical.exe || exit /b 1
 if "%com_shim%"=="1"                   set didbuild=1 && %compile% ..\src\com_shim\com_shim_main.c                           %compile_link% %out%com_shim.exe || exit /b 1
-if "%radlink%"=="1"                    set didbuild=1 && %compile% ..\src\linker\lnk.c                                       %compile_link% %linker% /NOIMPLIB %linker% /NATVIS:"%~dp0\src\linker\linker.natvis" %out%radlink.exe || exit /b 1
+set radlink_oodle_flags=
+set radlink_oodle_lib=
+set rad_obj_compress_oodle_flags=
+set rad_obj_compress_oodle_lib=
+if "%oodle%"=="1" if "%OODLE_SDK_DIR%"=="" (
+  echo OODLE_SDK_DIR must name an Oodle SDK when building radlink with oodle
+  exit /b 1
+)
+if "%oodle%"=="1" if "%msvc%"=="1"  set radlink_oodle_flags=/I"%OODLE_SDK_DIR%\include" -DLNK_OODLE=1
+if "%oodle%"=="1" if "%clang%"=="1" set radlink_oodle_flags=-I"%OODLE_SDK_DIR%\include" -DLNK_OODLE=1
+if "%oodle%"=="1" set radlink_oodle_lib="%OODLE_SDK_DIR%\lib\Win64\oo2core_win64.lib"
+if "%rad_obj_compress%"=="1" if "%OODLE_SDK_DIR%"=="" (
+  echo OODLE_SDK_DIR must name an Oodle SDK when building rad_obj_compress
+  exit /b 1
+)
+if "%rad_obj_compress%"=="1" if "%msvc%"=="1"  set rad_obj_compress_oodle_flags=/I"%OODLE_SDK_DIR%\include"
+if "%rad_obj_compress%"=="1" if "%clang%"=="1" set rad_obj_compress_oodle_flags=-I"%OODLE_SDK_DIR%\include"
+if "%rad_obj_compress%"=="1" set rad_obj_compress_oodle_lib="%OODLE_SDK_DIR%\lib\Win64\oo2core_win64.lib"
+if "%radlink%"=="1"                    set didbuild=1 && %compile% %radlink_oodle_flags% ..\src\linker\lnk.c %radlink_oodle_lib% %compile_link% %linker% /NOIMPLIB %linker% /NATVIS:"%~dp0\src\linker\linker.natvis" %out%radlink.exe || exit /b 1
+if "%rad_obj_compress%"=="1"           set didbuild=1 && %compile% %rad_obj_compress_oodle_flags% ..\src\linker\rad_obj_compress.c %rad_obj_compress_oodle_lib% %compile_link% %out%rad_obj_compress.exe || exit /b 1
 if "%radbin%"=="1"                     set didbuild=1 && %compile% ..\src\radbin\radbin_main.c                               %compile_link% %out%radbin.exe || exit /b 1
 if "%raddump%"=="1"                    set didbuild=1 && %compile% ..\src\raddump\raddump_main.c                             %compile_link% %out%raddump.exe || exit /b 1
 if "%ryan_scratch%"=="1"               set didbuild=1 && %compile% ..\src\scratch\ryan_scratch.c                             %compile_link% %out%ryan_scratch.exe || exit /b 1
@@ -200,6 +222,10 @@ if "%pgo_run%"=="1" (
   if "%radlink%"=="1" (
     pushd local\lyra_pgo
     call %~dp0build\radlink @lyra.rsp || exit /b 1
+    rem lyra.rsp trains with /OPT:NOREF /OPT:NOICF; run a second link with REF+ICF on
+    rem (later switches win) so the profile also covers the /OPT:REF walk and the ICF
+    rem refinement -- otherwise PGO marks them cold and the build regresses on real links
+    call %~dp0build\radlink @lyra.rsp /OPT:REF /OPT:ICF || exit /b 1
     popd
   )
   goto restart

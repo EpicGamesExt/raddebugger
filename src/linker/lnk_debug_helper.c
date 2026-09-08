@@ -26,7 +26,9 @@ lnk_make_debug_s(Arena *arena, String8List symbols)
 
   cv_patch_symbol_tree_offsets(symbols, sizeof(CV_Signature), CV_SymbolAlign);
 
-  CV_DebugS   debug_s           = { .data_list[CV_C13SubSectionIdxKind_Symbols] = symbols };
+  // synthetic construction (linker-made symbols): provenance untracked by design
+  CV_DebugS debug_s = {0};
+  *cv_sub_section_ptr_from_debug_s(&debug_s, CV_C13SubSectionKind_Symbols) = symbols;
   String8List debug_s_data_list = cv_data_from_debug_s_c13(scratch.arena, &debug_s, 1);
   String8     debug_s_data      = str8_list_join(arena, &debug_s_data_list, 0);
 

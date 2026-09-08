@@ -216,9 +216,43 @@ typedef struct CV_C13SubSectionList
 
 ////////////////////////////////
 
+// Provenance for parsed .debug$S subsection nodes (streaming-ring P1 groundwork).
+// One node per data_list node, in lockstep order; records where the slice came from so a
+// later representation swap (String8 slices -> offset records) has the origin on hand.
+// DORMANT: nothing reads this yet; it must merely stay correct.
+//  - off/size: slice position within the raw input String8 handed to cv_debug_s_from_data
+//    (offsets include the leading CV_Signature when the input carried one)
+//  - sect_idx: 0-based COFF section index the raw input was sliced from;
+//    CV_DebugSProvSect_Nil until the caller tags it (cv_debug_s_tag_prov_sect)
+//  - is_synthetic: bytes were synthesized post-parse (not sliced from any input section);
+//    off/size/sect_idx are meaningless
+// A CV_DebugS built without the parser (wholesale list assignment) may leave prov_list
+// empty: prov_list[i].count is either 0 (untracked) or data_list[i].node_count (tracked).
+#define CV_DebugSProvSect_Nil max_U32
+typedef struct CV_DebugSProvNode
+{
+  struct CV_DebugSProvNode *next;
+  U64 off;
+  U64 size;
+  U32 sect_idx;
+  B32 is_synthetic;
+  U32 module_symbol_size;
+  U32 gsi_candidate_count;
+  U32 proc_ref_count;
+  B32 symbol_summary_valid;
+} CV_DebugSProvNode;
+
+typedef struct CV_DebugSProvList
+{
+  CV_DebugSProvNode *first;
+  CV_DebugSProvNode *last;
+  U64                count;
+} CV_DebugSProvList;
+
 typedef struct CV_DebugS
 {
-  String8List data_list[CV_C13SubSectionIdxKind_COUNT];
+  String8List       data_list[CV_C13SubSectionIdxKind_COUNT];
+  CV_DebugSProvList prov_list[CV_C13SubSectionIdxKind_COUNT]; // parallel to data_list (see above)
 } CV_DebugS;
 
 typedef struct CV_DebugH
@@ -232,6 +266,20 @@ typedef struct CV_DebugT
   String8  data;
   U64      count;
   U32     *offsets;
+  // Optional container sidecar.  Keeping these as mapped arrays avoids both
+  // scanning compressed leaf bodies and privately allocating the index.
+  U16     *sidecar_sizes;
+  U16     *sidecar_kinds;
+  U32     *sidecar_packed_v2_offset_groups;
+  U8      *sidecar_packed_v2_offset_payload;
+  U16     *sidecar_packed_kind_dictionary;
+  U8      *sidecar_packed_kind_codes;
+  B8       sidecar_packed;
+  U8       sidecar_offset_checkpoint_shift;
+  U32      sidecar_leaf_bias;
+  U64      sidecar_raw_base;
+  U64     *sidecar_complete_udt_hashes;
+  U64      sidecar_complete_udt_hash_count;
 
   // type server
   U64     source_counts [CV_TypeIndexSource_COUNT];
@@ -390,6 +438,13 @@ internal String8List * cv_sub_section_ptr_from_debug_s(CV_DebugS *debug_s, CV_C1
 internal String8List   cv_sub_section_from_debug_s(CV_DebugS debug_s, CV_C13SubSectionKind kind);
 internal String8       cv_string_table_from_debug_s(CV_DebugS debug_s);
 internal String8       cv_file_chksms_from_debug_s(CV_DebugS debug_s);
+internal U64           cv_total_sub_section_size_from_debug_s(CV_DebugS *debug_s);
+
+internal CV_DebugSProvList * cv_sub_section_prov_ptr_from_debug_s(CV_DebugS *debug_s, CV_C13SubSectionKind kind);
+internal void                cv_debug_s_push_synthetic_sub_section(Arena *arena, CV_DebugS *debug_s, CV_C13SubSectionKind kind, String8 data);
+internal void                cv_debug_s_concat_sub_section_in_place(CV_DebugS *dst, CV_DebugS *src, CV_C13SubSectionKind kind);
+internal void                cv_debug_s_tag_prov_sect(CV_DebugS *debug_s, U32 sect_idx);
+internal void                cv_debug_s_validate_prov(CV_DebugS *debug_s);
 
 ////////////////////////////////
 //~ .debug$T helpers
@@ -398,9 +453,12 @@ internal CV_DebugT       cv_debug_t_from_data         (Arena *arena, String8 dat
 internal U64             cv_leaf_idx_from_ti          (CV_DebugT *debug_t, CV_TypeIndexSource source, CV_TypeIndex ti);
 internal CV_TypeIndex    cv_ti_from_leaf_idx          (CV_DebugT *debug_t, CV_TypeIndexSource source, U64 leaf_idx);
 internal CV_Leaf         cv_debug_t_get_leaf          (CV_DebugT *debug_t, U64 leaf_idx);
+internal U64             cv_debug_t_get_leaf_offset   (CV_DebugT *debug_t, U64 leaf_idx);
 internal CV_Leaf         cv_debug_t_get_leaf_from_ti  (CV_DebugT *debug_t, CV_TypeIndexSource source, CV_TypeIndex ti);
 internal String8         cv_debug_t_get_raw_leaf      (CV_DebugT *debug_t, U64 leaf_idx);
 internal CV_LeafHeader * cv_debug_t_get_leaf_header   (CV_DebugT *debug_t, U64 leaf_idx);
+internal CV_LeafKind     cv_debug_t_get_leaf_kind     (CV_DebugT *debug_t, U64 leaf_idx);
+internal U64             cv_debug_t_get_raw_leaf_size (CV_DebugT *debug_t, U64 leaf_idx);
 internal CV_TypeIndex    cv_debug_t_get_type_index    (CV_DebugT *debug_t, CV_TypeIndexSource ti_source, U64 leaf_idx);
 internal U64             cv_debug_t_get_leaf_index    (CV_DebugT *debug_t, CV_TypeIndexSource ti_source, CV_TypeIndex ti);
 internal B32             cv_debug_t_is_pch            (CV_DebugT *debug_t);

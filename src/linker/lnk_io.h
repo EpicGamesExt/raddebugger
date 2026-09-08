@@ -30,10 +30,21 @@ typedef struct
 {
   Arena              *queue_arena;
   GuardedRing        *queue;
+  GuardedRing        *decommit_queue;
   Thread              thread;
+  Thread              decommit_thread;
   LNK_BackgroundFile *file_first;
   LNK_BackgroundFile *file_last;
   B32                 is_running;
+  B32                 is_decommit_running;
+  U64                 begin_time_us;   // Timers telemetry anchor
+  U64                 bytes_enqueued;  // atomic; producer side
+  U64                 bytes_completed; // atomic; writer thread
+  U64                 decommit_bytes_enqueued;  // atomic; writer thread
+  U64                 decommit_bytes_completed; // atomic; decommit thread
+  U64                 jobs_enqueued;   // atomic; producer side
+  U64                 jobs_completed;  // writer thread
+  U64                 writes_issued;   // writer thread; post-coalesce WriteFile count
 } LNK_BackgroundFileWriter;
 
 // --- Shared File API ---------------------------------------------------------
@@ -62,6 +73,6 @@ internal String8 lnk_data_from_file_artifact(Arena *arena, LNK_FileArtifact *art
 
 internal void lnk_background_file_writer_begin      (LNK_BackgroundFileWriter *writer);
 internal LNK_BackgroundFile *lnk_background_file_writer_begin_file(LNK_BackgroundFileWriter *writer, String8 path, String8 temp_path);
-internal void lnk_background_file_writer_enqueue    (LNK_BackgroundFileWriter *writer, LNK_BackgroundFile *file, U64 file_off, String8 data);
+internal void lnk_background_file_writer_enqueue    (LNK_BackgroundFileWriter *writer, LNK_BackgroundFile *file, U64 file_off, String8 data, B32 decommit_after_write);
 internal void lnk_background_file_writer_end_file   (LNK_BackgroundFileWriter *writer, LNK_BackgroundFile *file, U64 expected_byte_count);
 internal void lnk_background_file_writer_end        (LNK_BackgroundFileWriter *writer);
