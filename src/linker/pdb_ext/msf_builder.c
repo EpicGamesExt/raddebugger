@@ -490,14 +490,17 @@ msf_alloc_pn_arr(Arena *arena, MSF_Context *msf, MSF_UInt alloc_count)
 {
   // make sure FPM has enough space for new page numbers
   // 
-  // we grow FPM at correct intervals here because we pre-alloc unused FPM pages ahead of time
+  // grow FPM at correct intervals here because we pre-alloc unused FPM pages ahead of time
   MSF_UInt curr_page_cap = msf_get_page_count_cap(msf->page_data_list, msf->page_size);
-  MSF_UInt new_page_count = msf->page_count + alloc_count;
-  if (new_page_count > curr_page_cap) {
-    B32 is_fpm_alloced = msf_grow(msf, new_page_count);
-    if (!is_fpm_alloced) {
+  for (;;) {
+    U64 new_page_count = (U64)msf->page_count + alloc_count;
+    if (new_page_count <= curr_page_cap) {
+      break;
+    }
+    if (new_page_count > MSF_PN_MAX || !msf_grow(msf, (MSF_PageNumber)new_page_count)) {
       return 0;
     }
+    curr_page_cap = msf_get_page_count_cap(msf->page_data_list, msf->page_size);
   }
 
   Temp scratch = scratch_begin(&arena, 1);
@@ -635,9 +638,10 @@ msf_find_max_pn_(MSF_PageDataList page_data_list, MSF_UInt page_size, MSF_PageNu
       // FPM is empty
       if (msb_idx >= hi) { break; }
 
-      // hit FPM page -- keep going
+      // Skip reserved FPM pages, but not slot 0: after the file header's
+      // interval, that slot can contain stream data.
       U64 k = msb_idx % fpm_interval_wrong;
-      if (k < 3) {
+      if (k == MSF_FPM0 || k == MSF_FPM1) {
         hi = msb_idx;
         continue;
       }
@@ -648,7 +652,7 @@ msf_find_max_pn_(MSF_PageDataList page_data_list, MSF_UInt page_size, MSF_PageNu
 
     // stop if there is a page
     if (bit_idx != max_U64) {
-      max_pn = Max(bit_idx, 2) + fpm_pn_idx * fpm_interval_correct;
+      max_pn = Max(bit_idx + fpm_pn_idx * fpm_interval_correct, MSF_FPM1);
       break;
     }
   }
@@ -1607,7 +1611,9 @@ msf_build_header(MSF_Context *msf, MSF_UInt stream_table_size)
   MemoryCopy(&header.magic[0], &msf_msf70_magic[0], sizeof(msf_msf70_magic));
   header.page_size         = msf->page_size;
   header.active_fpm        = msf->active_fpm;
-  header.page_count        = msf->page_count;
+  // The allocator also counts reserved FPM pages beyond the serialized extent.
+  // The stream table and root are finalized; use the same extent as the writer.
+  header.page_count        = (MSF_UInt)(msf_get_save_size(msf) / msf->page_size);
   header.stream_table_size = stream_table_size;
   header.unknown           = 0;
   header.root_pn           = msf->root_page_list.first->pn;

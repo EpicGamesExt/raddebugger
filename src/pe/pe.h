@@ -526,7 +526,7 @@ struct PE_IntelPdata
 
 #define PE_CODEVIEW_PDB20_MAGIC 0x3031424e
 #define PE_CODEVIEW_PDB70_MAGIC 0x53445352
-#define PE_CODEVIEW_RDI_MAGIC   '0IDR' 
+#define PE_CODEVIEW_RDI_MAGIC   0x30494452 // 0IDR
 
 typedef struct PE_CvHeaderPDB20 PE_CvHeaderPDB20;
 struct PE_CvHeaderPDB20

@@ -24,7 +24,7 @@
 #define RSFORCEINLINE __forceinline __declspec(safebuffers)
 #define CompilerReset(ptr) __assume(ptr)
 #else
-#define RSFORCEINLINE __attribute__((always_inline))
+#define RSFORCEINLINE inline __attribute__((always_inline))
 #define CompilerReset(ptr)
 #endif
 
@@ -137,7 +137,7 @@ radsortmovesize( sizeof( (start)[0] ) ), \
 //===================================================================================================
 // small heap sort - this sort is around 200 bytes compiled - can use directly when size is important
 
-RSFORCEINLINE void radheapsortinteral( void * start, size_t len, size_t element_size, is_before_func * is_before, swap_func * swapper )
+internal RSFORCEINLINE void radheapsortinteral( void * start, size_t len, size_t element_size, is_before_func * is_before, swap_func * swapper )
 {
   void * left;
   void * right;
@@ -430,7 +430,7 @@ rs_es = element_size;
 
 #define RSS_MAX_RECURSE        128 
 
-RSFORCEINLINE void radsortinternal( void * start, size_t len, size_t element_size, is_before_func * is_before, swap_func * swapper, move_func * mover, rs_small_sort_func * small_sort, size_t small_sort_thres, void * tmp )
+static RSFORCEINLINE void radsortinternal( void * start, size_t len, size_t element_size, is_before_func * is_before, swap_func * swapper, move_func * mover, rs_small_sort_func * small_sort, size_t small_sort_thres, void * tmp )
 {
   void * left;
   size_t length;

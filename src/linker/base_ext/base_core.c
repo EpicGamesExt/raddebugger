@@ -23,7 +23,7 @@ make_version(U64 major, U64 minor)
   return version;
 }
 
-internal int
+internal force_inline int
 version_compar(Version a, Version b)
 {
   int cmp = 0;
@@ -48,7 +48,7 @@ isect_off(U32 isect, U32 off)
   return result;
 }
 
-internal int
+internal force_inline int
 u16_compar(const void *raw_a, const void *raw_b)
 {
   U16 a = *(U16*)raw_a;
@@ -59,7 +59,7 @@ u16_compar(const void *raw_a, const void *raw_b)
   return result;
 }
 
-internal int
+internal force_inline int
 u32_compar(const void *raw_a, const void *raw_b)
 {
   U32 a = *(U32*)raw_a;
@@ -70,7 +70,7 @@ u32_compar(const void *raw_a, const void *raw_b)
   return result;
 }
 
-internal int
+internal force_inline int
 u64_compar(const void *raw_a, const void *raw_b)
 {
   U64 a = *(const U64*)raw_a;
@@ -79,7 +79,7 @@ u64_compar(const void *raw_a, const void *raw_b)
   return result;
 }
 
-internal int
+internal force_inline int
 u64_compar_inv(const void *raw_a, const void *raw_b)
 {
   U64 a = *(const U64*)raw_a;
@@ -88,7 +88,7 @@ u64_compar_inv(const void *raw_a, const void *raw_b)
   return result;
 }
 
-internal int
+internal force_inline int
 u16_compar_is_before(void *raw_a, void *raw_b)
 {
   U16 *a = (U16 *)raw_a;
@@ -97,7 +97,7 @@ u16_compar_is_before(void *raw_a, void *raw_b)
   return is_before; 
 }
 
-internal int
+internal force_inline int
 u32_compar_is_before(void *raw_a, void *raw_b)
 {
   U32 *a = (U32 *)raw_a;
@@ -106,7 +106,7 @@ u32_compar_is_before(void *raw_a, void *raw_b)
   return is_before; 
 }
 
-internal int
+internal force_inline int
 u64_compar_is_before(void *raw_a, void *raw_b)
 {
   U64 *a = (U64 *)raw_a;
@@ -115,7 +115,7 @@ u64_compar_is_before(void *raw_a, void *raw_b)
   return is_before; 
 }
 
-internal int
+internal force_inline int
 u8_is_before(void *raw_a, void *raw_b)
 {
   U8 *a = (U8 *) raw_a;
@@ -123,7 +123,7 @@ u8_is_before(void *raw_a, void *raw_b)
   return *a < *b;
 }
 
-internal int
+internal force_inline int
 u16_is_before(void *raw_a, void *raw_b)
 {
   U16 *a = (U16 *) raw_a;
@@ -131,7 +131,7 @@ u16_is_before(void *raw_a, void *raw_b)
   return *a < *b;
 }
 
-internal int
+internal force_inline int
 u32_is_before(void *raw_a, void *raw_b)
 {
   U32 *a = (U32 *) raw_a;
@@ -139,7 +139,7 @@ u32_is_before(void *raw_a, void *raw_b)
   return *a < *b;
 }
 
-internal int
+internal force_inline int
 u64_is_before(void *raw_a, void *raw_b)
 {
   U64 *a = (U64 *) raw_a;
@@ -147,7 +147,7 @@ u64_is_before(void *raw_a, void *raw_b)
   return *a < *b;
 }
 
-internal int
+internal force_inline int
 pair_u32_is_before_v0(void *raw_a, void *raw_b)
 {
   PairU32 *a = raw_a;
@@ -155,7 +155,7 @@ pair_u32_is_before_v0(void *raw_a, void *raw_b)
   return a->v0 < b->v0;
 }
 
-internal int
+internal force_inline int
 pair_u32_is_before(void *raw_a, void *raw_b)
 {
   PairU32 *a = raw_a;
@@ -163,7 +163,7 @@ pair_u32_is_before(void *raw_a, void *raw_b)
   return a->v1 < b->v1;
 }
 
-internal int
+internal force_inline int
 pair_u64_is_before_v0(void *raw_a, void *raw_b)
 {
   PairU64 *a = raw_a;
@@ -171,7 +171,7 @@ pair_u64_is_before_v0(void *raw_a, void *raw_b)
   return a->v0 < b->v0;
 }
 
-internal int
+internal force_inline int
 pair_u64_is_before_v1(void *raw_a, void *raw_b)
 {
   PairU64 *a = raw_a;
@@ -179,7 +179,7 @@ pair_u64_is_before_v1(void *raw_a, void *raw_b)
   return a->v1 < b->v1;
 }
 
-internal int
+internal force_inline int
 pair_u32_compar_v0(const void *raw_a, const void *raw_b)
 {
   const PairU32 *a = raw_a;
@@ -187,7 +187,7 @@ pair_u32_compar_v0(const void *raw_a, const void *raw_b)
   return u32_compar(&a->v0, &b->v0);
 }
 
-internal int
+internal force_inline int
 pair_u64_compar_v0(const void *raw_a, const void *raw_b)
 {
   const PairU64 *a = raw_a;
@@ -195,7 +195,7 @@ pair_u64_compar_v0(const void *raw_a, const void *raw_b)
   return u64_compar(&a->v0, &b->v0);
 }
 
-internal int
+internal force_inline int
 pair_u64_compar_v1(const void *raw_a, const void *raw_b)
 {
   const PairU64 *a = raw_a;
