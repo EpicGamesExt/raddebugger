@@ -3253,6 +3253,65 @@ TEST(image_base)
   T_Ok(str8_match(text_data, str8_array_fixed(expected_text), 0));
 }
 
+TEST(comdat_any_nonzero_prefix)
+{
+  // The symbol value is the prefix length, not the length of the function.
+  String8 plain    = str8_lit("\xB8\x01\x00\x00\x00\xC3");
+  String8 zero     = str8_lit("\x00\x00\x00\x00\xB8\x02\x00\x00\x00\xC3");
+  String8 nonzero  = str8_lit("\x00\x00\x00\xA5\xB8\x03\x00\x00\x00\xC3");
+  String8 nonzero2 = str8_lit("\x5A\x00\x00\x00\xB8\x04\x00\x00\x00\xC3");
+  struct {
+    String8 data[2];
+    U32 value[2];
+    COFF_ComdatSelectType selection[2];
+    S32 winner; // -1 means the first input must win.
+  } cases[] = {
+    {{plain, nonzero},    {0, 4},       {COFF_ComdatSelect_Any, COFF_ComdatSelect_Any}, 1},
+    {{zero, nonzero},     {4, 4},       {COFF_ComdatSelect_Any, COFF_ComdatSelect_Any}, 1},
+    {{nonzero, nonzero2}, {4, 4},       {COFF_ComdatSelect_Any, COFF_ComdatSelect_Any}, -1},
+    {{plain, zero},       {0, 4},       {COFF_ComdatSelect_Any, COFF_ComdatSelect_Any}, -1},
+    {{plain, plain},      {0, 0},       {COFF_ComdatSelect_Any, COFF_ComdatSelect_Any}, -1},
+    {{zero, zero},        {4, 4},       {COFF_ComdatSelect_Any, COFF_ComdatSelect_Any}, -1},
+    // Out-of-range values must not turn function bytes into a valid prefix.
+    {{plain, nonzero},    {7, 4},       {COFF_ComdatSelect_Any, COFF_ComdatSelect_Any}, 1},
+    {{plain, nonzero},    {max_U32, 4}, {COFF_ComdatSelect_Any, COFF_ComdatSelect_Any}, 1},
+    // Equal-sized Largest/SameSize and Any promoted to Largest retain input order.
+    {{zero, nonzero},     {4, 4},       {COFF_ComdatSelect_Largest, COFF_ComdatSelect_Largest}, -1},
+    {{zero, nonzero},     {4, 4},       {COFF_ComdatSelect_SameSize, COFF_ComdatSelect_SameSize}, -1},
+    {{zero, nonzero},     {4, 4},       {COFF_ComdatSelect_Any, COFF_ComdatSelect_Largest}, -1},
+  };
+  for (U64 case_idx = 0; case_idx < ArrayCount(cases); case_idx += 1) {
+    for (U32 obj_idx = 0; obj_idx < 2; obj_idx += 1) {
+      T_Ok(t_write_def_obj(obj_idx ? "second.obj" : "first.obj", (T_COFF_DefObj){
+        .machine = T_COFF_DefSetMachine(X64),
+        .sections = (T_COFF_DefSection[]){
+          {"text", ".text", cases[case_idx].data[obj_idx], .flags = "rx:code",
+           .raw_flags = COFF_SectionFlag_LnkCOMDAT}, {0}},
+        .symbols = (T_COFF_DefSymbol[]){
+          T_COFF_DefSymbol_Secdef("text", cases[case_idx].selection[obj_idx]),
+          T_COFF_DefSymbol_ExternFunc("entry", "text", cases[case_idx].value[obj_idx]), {0}},
+      }));
+    }
+    for (U32 reverse = 0; reverse < 2; reverse += 1) {
+      for (U32 workers = 1; workers <= 4; workers += 3) {
+        t_invoke_linkerf("/subsystem:console /entry:entry /nodefaultlib /opt:ref,noicf /rad_workers:%u /out:prefix.exe %s",
+                         workers, reverse ? "second.obj first.obj" : "first.obj second.obj");
+        T_Ok(g_last_exit_code == 0);
+        String8 image = t_read_file(arena, str8_lit("prefix.exe"));
+        PE_BinInfo bin = pe_bin_info_from_data(arena, image);
+        U32 winner = cases[case_idx].winner < 0 ? reverse : (U32)cases[case_idx].winner;
+        U64 entry_off = pe_foff_from_voff(image, &bin, bin.entry_point);
+        U32 prefix_size = cases[case_idx].value[winner];
+        T_Ok(entry_off >= prefix_size);
+        if (entry_off >= prefix_size) {
+          String8 actual = str8_substr(image, r1u64s(entry_off - prefix_size, cases[case_idx].data[winner].size));
+          T_Ok(str8_match(actual, cases[case_idx].data[winner], 0));
+        }
+      }
+    }
+  }
+}
+
 TEST(comdat_any)
 {
   T_Ok(t_write_def_obj("1.obj", (T_COFF_DefObj){

@@ -149,6 +149,28 @@ lnk_error_multiply_defined_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 }
 
 internal B32
+lnk_symbol_has_nonzero_prefix(LNK_Obj *obj, COFF_ParsedSymbol symbol)
+{
+  if (symbol.value == 0) {
+    return 0;
+  }
+  COFF_SectionHeader *section = lnk_coff_section_header_from_section_number(obj, symbol.section_number);
+  if (section->flags & COFF_SectionFlag_CntUninitializedData) {
+    return 0;
+  }
+  String8 data = lnk_obj_section_data_from_number(obj, symbol.section_number);
+  if (symbol.value > data.size) {
+    return 0;
+  }
+  for (U32 i = 0; i < symbol.value; i += 1) {
+    if (data.str[i] != 0) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+internal B32
 lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 {
   B32 can_replace = 0;
@@ -325,10 +347,17 @@ lnk_can_replace_symbol(LNK_Symbol *dst, LNK_Symbol *src)
 
       if (src_select == dst_select) {
         switch (src_select) {
-        case COFF_ComdatSelect_Null:
-        case COFF_ComdatSelect_Any: {
-          can_replace = lnk_obj_is_before(src_obj, dst_obj);
-        } break;
+          case COFF_ComdatSelect_Null: {
+            can_replace = lnk_obj_is_before(src_obj, dst_obj);
+          } break;
+          case COFF_ComdatSelect_Any: {
+            // LLVM emits prefix data before the function entry point (the symbol
+            // value). AutoRTFM uses a non-zero prefix to locate the closed function.
+            // Prefer it over an uninstrumented copy, regardless of input/insert order.
+            B32 src_has_prefix = lnk_symbol_has_nonzero_prefix(src_obj, src_parsed);
+            B32 dst_has_prefix = lnk_symbol_has_nonzero_prefix(dst_obj, dst_parsed);
+            can_replace = src_has_prefix != dst_has_prefix ? src_has_prefix : lnk_obj_is_before(src_obj, dst_obj);
+          } break;
         case COFF_ComdatSelect_NoDuplicates: {
           lnk_error_multiply_defined_symbol(dst, src);
         } break;
