@@ -711,6 +711,54 @@ semaphore_drop_count(Semaphore semaphore, U64 count)
   }
 }
 
+internal void
+semaphore_drop_if_room(Semaphore semaphore)
+{
+  // POSIX sem_t is unbounded, so a post can never be rejected for being "full".
+  semaphore_drop(semaphore);
+}
+
+internal B32
+semaphore_drop_prev(Semaphore semaphore, U32 *prev_count_out)
+{
+  // best-effort: sem_getvalue+sem_post is not atomic (unlike win32
+  // ReleaseSemaphore's lpPreviousCount); callers use this for advisory
+  // counters only
+  *prev_count_out = 0;
+  if(semaphore.u64[0] == 0) { return 0; }
+  int value = 0;
+  if(sem_getvalue((sem_t*)*semaphore.u64, &value) == 0 && value > 0) { *prev_count_out = (U32)value; }
+  int err = LNX_RETRY_ON_EINTR(sem_post((sem_t*)*semaphore.u64));
+  return err == 0;
+}
+
+internal void
+semaphore_drop_n(Semaphore semaphore, U32 count)
+{
+  if(semaphore.u64[0] != 0)
+  {
+    for(U32 i = 0; i < count; i += 1)
+    {
+      int err = LNX_RETRY_ON_EINTR(sem_post((sem_t*)semaphore.u64[0]));
+      Assert(err == 0);
+    }
+  }
+}
+
+internal B32
+semaphore_take_n(Semaphore semaphore, U32 count, U64 endt_us)
+{
+  for(U32 i = 0; i < count; i += 1)
+  {
+    if(!semaphore_take(semaphore, endt_us))
+    {
+      semaphore_drop_n(semaphore, i);
+      return 0;
+    }
+  }
+  return 1;
+}
+
 //- rjf: barriers
 
 internal Barrier

@@ -396,10 +396,9 @@ lnk_on_symbol_replace(LNK_Symbol *dst, LNK_Symbol *src)
     *dst_section.flags |= COFF_SectionFlag_LnkRemove;
 
     // remove associated sections from the output
-    for (U32Node *associated_section = dst_ref.obj->coff.sections.associated_section_numbers[dst_parsed.section_number];
-        associated_section != 0;
-        associated_section = associated_section->next) {
-      LNK_ObjSection section = lnk_obj_section_from_section_number(dst_ref.obj, associated_section->data);
+    U32Array associated_sections = lnk_obj_associated_sections_from_section_number(dst_ref.obj, dst_parsed.section_number);
+    for EachIndex(associated_idx, associated_sections.count) {
+      LNK_ObjSection section = lnk_obj_section_from_section_number(dst_ref.obj, associated_sections.v[associated_idx]);
       *section.flags |= COFF_SectionFlag_LnkRemove;
     }
   }
@@ -441,6 +440,7 @@ lnk_symbol_hash_trie_insert_or_replace(Arena                        *arena,
       LNK_SymbolHashTrie *new_trie = lnk_symbol_hash_trie_chunk_list_push(arena, chunks, 0x1000);
       new_trie->name               = &symbol->name;
       new_trie->symbol             = symbol;
+      new_trie->hash               = hash;
       MemoryZeroArray(new_trie->child);
 
       // try to insert new node
@@ -461,7 +461,8 @@ lnk_symbol_hash_trie_insert_or_replace(Arena                        *arena,
     // load current symbol
     String8 *curr_name = ins_atomic_ptr_eval(&curr_trie->name);
 
-    if (curr_name && str8_match(*curr_name, symbol->name, 0)) {
+    // fast-reject on stored hash before touching the name string (str8_match still gates)
+    if (curr_name && curr_trie->hash == hash && str8_match(*curr_name, symbol->name, 0)) {
       for (LNK_Symbol *src = symbol;;) {
         // try replacing current symbol with zero, otherwise loop back and retry
         LNK_Symbol *leader = ins_atomic_ptr_eval_assign(&curr_trie->symbol, 0);
@@ -507,7 +508,7 @@ lnk_symbol_hash_trie_search(LNK_SymbolHashTrie *trie, U64 hash, String8 name)
     if (curr == 0) {
       break;
     }
-    if (curr->name && str8_match(*curr->name, name, 0)) {
+    if (curr->name && curr->hash == hash && str8_match(*curr->name, name, 0)) {
       result = curr;
       break;
     }

@@ -24,7 +24,6 @@ global String8  g_errors;
 
 // tools
 global B32     g_gui;
-global String8 g_radbin_path;
 global String8 g_cl_path;
 global String8 g_clang_path;
 global String8 g_gcc_path;
@@ -52,18 +51,6 @@ t_test_layer_from_name(Arena *arena, String8 pattern)
   }
   scratch_end(scratch);
   return matches;
-}
-
-////////////////////////////////
-
-internal Linker
-t_id_linker(void)
-{
-  String8 name = str8_chop_last_dot(str8_skip_last_slash(g_linker_path));
-  if (str8_match(name, str8_lit("radlink"),  StringMatchFlag_CaseInsensitive)) { return Linker_radlink;  }
-  if (str8_match(name, str8_lit("link"),     StringMatchFlag_CaseInsensitive)) { return Linker_msvc; }
-  if (str8_match(name, str8_lit("lld-link"), StringMatchFlag_CaseInsensitive)) { return Linker_lld; }
-  return Linker_Null;
 }
 
 internal B32
@@ -162,69 +149,68 @@ t_run_caller(void *raw_ctx)
   
   g_is_first_print = 1;
   
-  T_RunCtx *ctx = raw_ctx;  
-  ctx->result.status = TestStatus_Pass;
+  T_RunCtx *run_ctx = raw_ctx;  
+  run_ctx->result.status = TestStatus_Pass;
   
   String8List test_out = {0};
   
-  if (ctx->test->skip) {
-    ctx->result.status = TestStatus_Skip;
+  if (run_ctx->test->skip) {
+    run_ctx->result.status = TestStatus_Skip;
   } else {
-    TestCtx test_ctx =
-    {
-      .cmdline = ctx->cmdline,
-      .exemplars_path = g_exemplar_dir,
-      .artifacts_path = g_wdir,
+
+    // run test
+    TestCtx test_ctx = {
+      .cmdline         = run_ctx->cmdline,
+      .exemplars_path  = g_exemplar_dir,
+      .artifacts_path  = g_wdir,
       .input_data_path = g_input_data_dir,
-      .result_out = &ctx->result,
-      .test_out = &test_out,
+      .user_data       = run_ctx->user_data,
+      .result_out      = &run_ctx->result,
+      .test_out        = &test_out,
     };
     log_scope_begin();
-    ctx->test->test_fn(scratch.arena, &test_ctx);
+    run_ctx->test->test_fn(scratch.arena, &test_ctx);
     LogScopeResult log_scope_result = log_scope_end(scratch.arena);
-    if(log_scope_result.strings[LogMsgKind_Info].size != 0)
-    {
-      String8 current_path = str8f(scratch.arena, "%S/current", g_wdir);
-      String8 exemplar_path = str8f(scratch.arena, "%S/exemplar_%S_%S", g_exemplar_dir, lower_from_str8(scratch.arena, string_from_operating_system(OperatingSystem_CURRENT)), lower_from_str8(scratch.arena, string_from_arch(Arch_CURRENT)));
-      String8 current = log_scope_result.strings[LogMsgKind_Info];
-      String8 exemplar = data_from_file_path(scratch.arena, exemplar_path);
+
+    // epilog for the diff runs
+    if (log_scope_result.strings[LogMsgKind_Info].size) {
+      String8 current_path  = str8f(scratch.arena, "%S/current", g_wdir);
+      String8 exemplar_path = str8f(scratch.arena, "%S/exemplar_%S_%S",
+                                    g_exemplar_dir,
+                                    lower_from_str8(scratch.arena, string_from_operating_system(OperatingSystem_CURRENT)),
+                                    lower_from_str8(scratch.arena, string_from_arch(Arch_CURRENT)));
+      String8 current       = log_scope_result.strings[LogMsgKind_Info];
+      String8 exemplar      = data_from_file_path(scratch.arena, exemplar_path);
       write_data_to_file_path(current_path, current);
-      if(exemplar.size == 0)
-      {
+
+      if (exemplar.size == 0) {
         make_directory(g_exemplar_dir);
         copy_file_path(exemplar_path, current_path);
-      }
-      else
-      {
-        // TODO(rjf): @hack, see below
-        TestCtx *ctx = &test_ctx;
-        String8List exemplar_lines = str8_split(scratch.arena, exemplar, (U8 *)"\n", 1, StringSplitFlag_KeepEmpties);
+      } else {
+        String8List exemplar_lines           = str8_split(scratch.arena, exemplar, (U8 *)"\n", 1, StringSplitFlag_KeepEmpties);
         String8List exemplar_lines_sanitized = {0};
-        for EachNode(n, String8Node, exemplar_lines.first)
-        {
+        for EachNode(n, String8Node, exemplar_lines.first) {
           String8 line_trimmed = n->string;
-          if(line_trimmed.size != 0 && line_trimmed.str[line_trimmed.size-1] == '\r')
-          {
+          if(line_trimmed.size != 0 && line_trimmed.str[line_trimmed.size-1] == '\r') {
             line_trimmed.size -= 1;
           }
           str8_list_push(scratch.arena, &exemplar_lines_sanitized, line_trimmed);
         }
-        StringJoin join = {.sep = s("\n"), .post = s("\n")};
-        String8 exemplar_sanitized = str8_list_join(scratch.arena, &exemplar_lines_sanitized, &join);
-        B32 current_matches_exemplar = str8_match(exemplar_sanitized, current, 0);
-        if(!current_matches_exemplar)
-        {
+
+        String8 exemplar_sanitized       = str8_list_join(scratch.arena, &exemplar_lines_sanitized, &(StringJoin){.sep = s("\n"), .post = s("\n")});
+        B32     current_matches_exemplar = str8_match(exemplar_sanitized, current, 0);
+        if(!current_matches_exemplar) {
           // TODO(rjf): @hack, because we need to do test things in the outer scope, but this is
           // not a test function - all test helpers should wrap a 100% parameterized layer
-          Arena *arena = scratch.arena;
           String8 diff_cmd = str8f(scratch.arena, "diff %S %S",
                                    path_normalized_from_string(scratch.arena, exemplar_path),
                                    path_normalized_from_string(scratch.arena, current_path));
-          test_outf("Current log does not match exemplar; run `%S`\n", diff_cmd);
+          str8_list_pushf(scratch.arena, &test_out, "Current log does not match exemplar; run `%S`\n", diff_cmd);
+
           // TODO(rjf): @hack need to hack this in, because TestCheck assumes `return`
-          ctx->result_out[0] = (TestResult){.fail_file = __FILE__, .fail_line = __LINE__, .fail_cond = "current_matches_exemplar"};
-          if(debugger_is_attached())
-          {
+          test_ctx.result_out[0] = (TestResult){.fail_file = __FILE__, .fail_line = __LINE__, .fail_cond = "current_matches_exemplar"};
+
+          if(debugger_is_attached()) {
             Trap();
           }
         }
@@ -232,16 +218,10 @@ t_run_caller(void *raw_ctx)
     }
   }
   
-  if (ctx->result.status == TestStatus_Fail || ctx->result.status == TestStatus_Crash) {
-    for EachNode(n, String8Node, test_out.first) {
-      t_errorf("%S", n->string);
-    }
-    if (g_errors.size) {
-      t_errorf("%S\n", g_errors);
-    }
-    if (g_output.size) {
-      t_errorf("%S\n", g_output);
-    }
+  if (run_ctx->result.status == TestStatus_Fail || run_ctx->result.status == TestStatus_Crash) {
+    for EachNode(n, String8Node, test_out.first) { t_errorf("%S", n->string); }
+    if (g_errors.size) { t_errorf("%S\n", g_errors); }
+    if (g_output.size) { t_errorf("%S\n", g_output); }
   }
   
   scratch_end(scratch);
@@ -265,22 +245,6 @@ t_run(CmdLine *cmdline, TestInfo *test, String8 user_data)
   fflush(stderr);
   
   return ctx.result;
-}
-
-internal String8
-t_radbin_path(void)
-{
-  if (g_radbin_path.size == 0) {
-    local_persist U8 buffer[4096];
-    Arena *arena = arena_alloc_(&(ArenaParams){ .reserve_size = sizeof(buffer), .commit_size = sizeof(buffer), .optional_backing_buffer = buffer });
-#if OS_WINDOWS
-    g_radbin_path = full_path_from_path(arena, str8_lit("radbin.exe"));
-#else
-    g_radbin_path = full_path_from_path(arena, str8_lit("radbin"));
-#endif
-  }
-  AssertAlways(g_radbin_path.size);
-  return g_radbin_path;
 }
 
 internal String8
@@ -885,82 +849,21 @@ t_invoke_linkerf(char *fmt, ...)
   return is_ok;
 }
 
-internal B32
-t_invoke_radbin(char *fmt, ...)
+internal inline int
+t_test_info_is_before(void *raw_a, void *raw_b)
 {
-  Temp scratch = scratch_begin(0,0);
-  va_list args;
-  va_start(args, fmt);
-  String8 cmdl = push_str8fv(scratch.arena, fmt, args);
-  va_end(args);
-  B32 is_ok = t_invoke(t_radbin_path(), cmdl, max_U64);
-  scratch_end(scratch);
-  return is_ok;
-}
-
-internal void
-t_kill_all(String8 pattern)
-{
-  Temp scratch = scratch_begin(0,0);
-  DMN_ProcessIter it = {0};
-  dmn_process_iter_begin(&it);
-  DMN_ProcessInfo info = {0};
-  while (dmn_process_iter_next(scratch.arena, &it, &info)) {
-    if (str8_match_wildcard(info.name, pattern, StringMatchFlag_CaseInsensitive|StringMatchFlag_SlashInsensitive)) {
-#if OS_WINDOWS
-      if (!t_invoke(str8_lit("taskkill"), str8f(scratch.arena, "/PID %u /F", info.pid), max_U64)) { fprintf(stderr, "ERROR: failed to invoke taskkill\n"); }
-#elif OS_LINUX
-      NotImplemented; // TODO: test
-      if (!t_invoke(str8_lit("kill"), str8f(scratch.arena, " -9 %u", info.pid), max_U64)) { fprintf(stderr, "ERROR: failed to invoke kill\n"); }
-#else
-# error NotImplemented
-#endif
-      if (g_last_exit_code != 0) { fprintf(stderr, "ERROR: failed to kill %u\n", info.pid); }
-    }
-  }
-  dmn_process_iter_end(&it);
-  scratch_end(scratch);
-}
-
-// TODO: obsolete
-internal String8
-t_chop_line(String8 *string)
-{
-  return str8_chop_line(string);
-}
-// TODO: obsolete
-internal B32
-t_match_line(String8 *output, String8 expected_line)
-{
-  return str8_match_wildcard(t_chop_line(output), expected_line, 0);
-}
-
-internal B32
-t_match_linef(String8 *output, char *fmt, ...)
-{
-  Temp scratch = scratch_begin(0, 0);
-  va_list args;
-  va_start(args, fmt);
-  String8 expected_line = push_str8fv(scratch.arena, fmt, args);
-  B32 is_match = t_match_line(output, expected_line);
-  va_end(args);
-  scratch_end(scratch);
-  return is_match;
-}
-
-internal force_inline int
-t_test_info_is_before(void *a_, void *b_)
-{
-  TestInfo **a = a_;
-  TestInfo **b = b_;
+  TestInfo **a = raw_a;
+  TestInfo **b = raw_b;
   String8 layer_a = a[0]->layer;
   String8 layer_b = b[0]->layer;
   int cmp = str8_compar(layer_a, layer_b, 0);
-  if(cmp == 0)
-  {
-    cmp = u64_compar(&a[0]->decl_line, &b[0]->decl_line);
+  if (cmp == 0) {
+    cmp = str8_compar(a[0]->label, b[0]->label, 0);
+    if (cmp == 0) {
+      cmp = u64_compar(&a[0]->decl_line, &b[0]->decl_line);
+    }
   }
-  return cmp;
+  return cmp < 0;
 }
 
 internal String8List
@@ -1075,6 +978,85 @@ t_errorf(char *fmt, ...)
   scratch_end(scratch);
 }
 
+////////////////////////////////
+
+internal void
+t_run_script_test(Arena *arena, TestCtx *ctx)
+{
+  T_Result run_status = {0};
+
+  // read script file
+  String8 path   = ctx->user_data;
+  String8 source = data_from_file_path(arena, path);
+  if (source.size == 0) { test_outf("failed to read script: '%S'\n", path); }
+  T_Ok(source.size != 0);
+
+  // parse the script
+  T_Context script = {0};
+  run_status = t_script_parse(arena, ctx, &t_codec_script_suite, path, source, &script);
+  if (!t_result_is_ok(run_status)) { goto exit; }
+
+  // execute the script if parsed
+  run_status = t_script_execute(&script);
+  if (!t_result_is_ok(run_status)) { goto exit; }
+
+  // report run diagnostics
+  exit:;
+  for EachNode(diagnostic, T_Diagnostic, run_status.diagnostics.first) {
+    test_outf("%S:%lld:%lld [%S]: %S\n",
+              diagnostic->file_path,
+              diagnostic->location.line,
+              diagnostic->location.column,
+              diagnostic->operation,
+              diagnostic->message);
+  }
+
+  T_Ok(t_result_is_ok(run_status));
+}
+
+internal void
+t_register_scripts(void)
+{
+  local_persist B32 registered;
+  if (registered) { return; }
+  registered = 1;
+
+  Temp scratch = scratch_begin(0,0);
+  Arena *arena = arena_alloc(.name="Torture Scripts Arena");
+
+  FileIter *iter = file_iter_begin(scratch.arena, t_src_path(), FileIterFlag_SkipFiles | FileIterFlag_SkipHiddenFiles);
+  for (FileInfo file = {0}; file_iter_next(scratch.arena, iter, &file); ) {
+    // skip third party folder because other projects can freely reserve the test extension
+    if (str8_matchi(file.name, str8_lit("third_party"))) { continue; }
+
+    String8      scripts_dir = str8f(arena, "%S/%S/tests", t_src_path(), file.name);
+    String8List  files       = t_file_paths_from_dir(arena, scripts_dir);
+    String8Array paths       = str8_array_from_list(arena, &files);
+    t_sort_str8_array(paths);
+
+    for EachIndex(i, paths.count) {
+      if ( ! str8_matchi(str8_skip_last_dot(paths.v[i]), str8_lit("tst"))) { continue; }
+
+      String8 layer = test_layer_from_file_path(paths.v[i]);
+      if (layer.size == 0) {
+        layer = str8_lit("<undefined-layer>");
+      }
+
+      TestInfo *test = &test_infos[test_infos_count++];
+      test->layer     = layer;
+      test->label     = str8_chop_last_dot(str8_skip_last_slash(paths.v[i]));
+      test->decl_line = (S64)i;
+      test->test_fn   = t_run_script_test;
+      test->user_data = paths.v[i];
+    }
+  }
+  file_iter_end(iter);
+
+  scratch_end(scratch);
+}
+
+////////////////////////////////
+
 internal void
 t_help(void)
 {
@@ -1106,8 +1088,10 @@ internal void
 t_entry_point(CmdLine *cmdline)
 {
   Temp scratch = scratch_begin(0,0);
+
   Log *log = log_alloc();
   log_select(log);
+
   U64 exit_code = max_U64;
   
   U64 dashes_size = 9999;
@@ -1127,12 +1111,15 @@ t_entry_point(CmdLine *cmdline)
   //
   {
     B32 print_help = cmd_line_has_flag(cmdline, str8_lit("help")) ||
-      cmd_line_has_flag(cmdline, str8_lit("h"));
+                     cmd_line_has_flag(cmdline, str8_lit("h"));
     if (print_help) {
       t_help();
       goto exit;
     }
   }
+
+  // Register Test Scripts
+  t_register_scripts();
   
   // Gather tests
   {
@@ -1284,14 +1271,28 @@ t_entry_point(CmdLine *cmdline)
   //
   // Run tests
   //
-  {  
-    U64Array target_indices = u64_array_from_list(scratch.arena, &targets);
+  {
+    // sort selected tests
+    U64Array target_indices = {0};
+    {
+      U64 count = 0;
+      TestInfo **v = push_array(scratch.arena, TestInfo*, targets.count);
+      for EachNode(n, U64Node, targets.first) {
+        v[count++] = g_sorted_test_infos[n->data];
+      }
+      radsort(v, count, t_test_info_is_before);
+
+      target_indices.v = push_array(scratch.arena, U64, count);
+      for EachIndex(i, count) {
+        target_indices.v[target_indices.count++] = IntFromPtr(v[i] - &test_infos[0]);
+      }
+    }
     
     U64 max_label_size = 0;
     U64 max_layer_size = 0;
     for EachIndex(i, target_indices.count) {
-      U64 test_idx = target_indices.v[i];
-      TestInfo *test_info = g_sorted_test_infos[test_idx];
+      U64       test_idx  = target_indices.v[i];
+      TestInfo *test_info = &test_infos[test_idx];
       max_label_size = Max(max_label_size, test_info->label.size);
       max_layer_size = Max(max_layer_size, test_info->layer.size);
     }
@@ -1310,7 +1311,7 @@ t_entry_point(CmdLine *cmdline)
       if (i == 0) { PrintHeader("Tests"); }
       
       U64 target_idx = target_indices.v[i];
-      TestInfo *test = g_sorted_test_infos[target_idx];
+      TestInfo *test = &test_infos[target_idx];
       
       // print run progress
       U64 dots_min = 10;
@@ -1353,7 +1354,7 @@ t_entry_point(CmdLine *cmdline)
       
       // run test
       U64 run_start_time = now_time_us();
-      TestResult result = t_run(cmdline, test, str8_zero());
+      TestResult result = t_run(cmdline, test, test->user_data);
       U64 run_end_time = now_time_us();
       
       // update
@@ -1438,8 +1439,8 @@ t_entry_point(CmdLine *cmdline)
         U64 layer_max = 0;
         for EachIndex(i, slow_count) {
           Slowest s = slowest[i];
-          label_max = Max(g_sorted_test_infos[s.target_idx]->label.size, label_max);
-          layer_max = Max(g_sorted_test_infos[s.target_idx]->layer.size, layer_max);
+          label_max = Max(test_infos[s.target_idx].label.size, label_max);
+          layer_max = Max(test_infos[s.target_idx].layer.size, layer_max);
         }
         
         fprintf(stderr, "  \nSlow Tests\n");
@@ -1447,7 +1448,7 @@ t_entry_point(CmdLine *cmdline)
           Slowest s = slowest[i];
           if (s.target_idx >= test_infos_count) { break; }
           
-          TestInfo *test_info    = g_sorted_test_infos[s.target_idx];
+          TestInfo *test_info    = &test_infos[s.target_idx];
           String8   elapsed_time = string_from_elapsed_time(scratch.arena, date_time_from_micro_seconds(s.d));
           
           fprintf(stderr, "    %.*s %.*s/ %.*s %.*s %.*s\n",

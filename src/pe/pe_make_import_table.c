@@ -286,11 +286,14 @@ pe_make_import_dll_obj_static(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mach
       str8_list_push(obj_writer->arena, &ilt_sect->data, ordinal_data);
       str8_list_push(obj_writer->arena, &iat_sect->data, ordinal_data);
     } break;
+    case COFF_ImportBy_NameNoPrefix:
+    case COFF_ImportBy_Undecorate:
     case COFF_ImportBy_Name: {
       COFF_ObjSection *int_sect = coff_obj_writer_push_section(obj_writer, str8_lit(".idata$6"), PE_IDATA_SECTION_FLAGS|COFF_SectionFlag_Align2Bytes|comdat_flags, str8_zero());
       coff_obj_writer_push_symbol_associative(obj_writer, int_sect, iat_sect);
       COFF_ObjSymbol *int_symbol = coff_obj_writer_push_symbol_static(obj_writer, int_sect->name, 0, int_sect);
-      String8 int_data = coff_make_import_lookup(obj_writer->arena, import_header.hint_or_ordinal, import_header.func_name);
+      String8 lookup_name = coff_import_lookup_name_from_import_by(import_header.func_name, import_header.import_by);
+      String8 int_data = coff_make_import_lookup(obj_writer->arena, import_header.hint_or_ordinal, lookup_name);
       str8_list_push(obj_writer->arena, &int_sect->data, int_data);
       str8_list_push_aligner(obj_writer->arena, &int_sect->data, 0, 2);
 
@@ -302,8 +305,6 @@ pe_make_import_dll_obj_static(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mach
       str8_list_push(obj_writer->arena, &ilt_sect->data, str8_array(import_entry, import_size));
       str8_list_push(obj_writer->arena, &iat_sect->data, str8_array(import_entry, import_size));
     } break;
-    case COFF_ImportBy_Undecorate: { NotImplemented; } break;
-    case COFF_ImportBy_NameNoPrefix: { NotImplemented; } break;
     default: { InvalidPath; } break;
     }
 
@@ -461,9 +462,12 @@ pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mac
         coff_obj_writer_section_push_reloc_addr(obj_writer, uiat_sect, uiat_offset, load_thunk_symbol);
       }
     } break;
+    case COFF_ImportBy_NameNoPrefix:
+    case COFF_ImportBy_Undecorate:
     case COFF_ImportBy_Name: {
       // put together name look up entry
-      String8 int_data = coff_make_import_lookup(obj_writer->arena, import_header.hint_or_ordinal, import_header.func_name);
+      String8 lookup_name = coff_import_lookup_name_from_import_by(import_header.func_name, import_header.import_by);
+      String8 int_data = coff_make_import_lookup(obj_writer->arena, import_header.hint_or_ordinal, lookup_name);
       U64 int_data_offset = int_sect->data.total_size;
       str8_list_push(obj_writer->arena, &int_sect->data, int_data);
 
@@ -503,8 +507,6 @@ pe_make_import_dll_obj_delayed(Arena *arena, COFF_TimeStamp time_stamp, COFF_Mac
         coff_obj_writer_section_push_reloc_addr(obj_writer, uiat_sect, uiat_data_offset, load_thunk_symbol);
       }
     } break;
-    case COFF_ImportBy_Undecorate: { NotImplemented; } break;
-    case COFF_ImportBy_NameNoPrefix: { NotImplemented; } break;
     }
   }
 

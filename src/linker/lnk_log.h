@@ -13,7 +13,8 @@
   X(SizeBreakdown)        \
   X(LinkStats)            \
   X(Timers)               \
-  X(Links)
+  X(Links)                \
+  X(Summary)
 
 typedef enum
 {

@@ -18,6 +18,20 @@ file_match(File a, File b)
   return result;
 }
 
+internal B32
+file_pair_ok(FilePair f)
+{
+  return !file_match(f.read, file_zero()) && !file_match(f.write, file_zero());
+}
+
+internal void
+file_pair_close(FilePair *p)
+{
+  file_close(p->read);
+  file_close(p->write);
+  MemoryZeroStruct(p);
+}
+
 ////////////////////////////////
 //~ rjf: Filesystem Helpers (Helpers, Implemented Once)
 

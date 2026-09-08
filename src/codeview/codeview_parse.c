@@ -588,180 +588,269 @@ cv_symbol_type_index_info_push(Arena *arena, CV_TypeIndexInfoList *list, CV_Type
   
   SLLQueuePush(list->first, list->last, info);
   list->count += 1;
-  
+
   return info;
 }
 
-internal CV_TypeIndexInfoList
-cv_get_symbol_type_index_offsets(Arena *arena, CV_SymKind kind, String8 data)
+////////////////////////////////
+//~ Type-index offset descriptors
+//
+// Static per-kind tables for fixed-shape records; homogeneous runs for
+// count-stride records. Table entry order mirrors the legacy
+// cv_symbol_type_index_info_push order exactly (incl. FUNC_ID IPI-before-TPI
+// and UDT_SRC_LINE TPI-then-IPI asymmetries) -- leaf hash streams depend on it.
+
+#define CV_TIOFF(s, o) { CV_TypeIndexSource_##s, (U32)(o) }
+
+// leaves
+read_only global CV_TiOff cv_tioffs_lf_modifier[]         = { CV_TIOFF(TPI, OffsetOf(CV_LeafModifier, itype)) };
+read_only global CV_TiOff cv_tioffs_lf_pointer[]          = { CV_TIOFF(TPI, OffsetOf(CV_LeafPointer, itype)) };
+read_only global CV_TiOff cv_tioffs_lf_pointer_ex[]       = { CV_TIOFF(TPI, OffsetOf(CV_LeafPointer, itype)), CV_TIOFF(TPI, sizeof(CV_LeafPointer) + 0) };
+read_only global CV_TiOff cv_tioffs_lf_array[]            = { CV_TIOFF(TPI, OffsetOf(CV_LeafArray, entry_itype)), CV_TIOFF(TPI, OffsetOf(CV_LeafArray, index_itype)) };
+read_only global CV_TiOff cv_tioffs_lf_struct[]           = { CV_TIOFF(TPI, OffsetOf(CV_LeafStruct, field_itype)), CV_TIOFF(TPI, OffsetOf(CV_LeafStruct, derived_itype)), CV_TIOFF(TPI, OffsetOf(CV_LeafStruct, vshape_itype)) };
+read_only global CV_TiOff cv_tioffs_lf_struct2[]          = { CV_TIOFF(TPI, OffsetOf(CV_LeafStruct2, field_itype)), CV_TIOFF(TPI, OffsetOf(CV_LeafStruct2, derived_itype)), CV_TIOFF(TPI, OffsetOf(CV_LeafStruct2, vshape_itype)) };
+read_only global CV_TiOff cv_tioffs_lf_union[]            = { CV_TIOFF(TPI, OffsetOf(CV_LeafUnion, field_itype)) };
+read_only global CV_TiOff cv_tioffs_lf_alias[]            = { CV_TIOFF(TPI, OffsetOf(CV_LeafAlias, itype)) };
+read_only global CV_TiOff cv_tioffs_lf_func_id[]          = { CV_TIOFF(IPI, OffsetOf(CV_LeafFuncId, scope_string_id)), CV_TIOFF(TPI, OffsetOf(CV_LeafFuncId, itype)) };
+read_only global CV_TiOff cv_tioffs_lf_mfunc_id[]         = { CV_TIOFF(TPI, OffsetOf(CV_LeafMFuncId, owner_itype)), CV_TIOFF(TPI, OffsetOf(CV_LeafMFuncId, itype)) };
+read_only global CV_TiOff cv_tioffs_lf_string_id[]        = { CV_TIOFF(IPI, OffsetOf(CV_LeafStringId, substr_list_id)) };
+read_only global CV_TiOff cv_tioffs_lf_udt_src_line[]     = { CV_TIOFF(TPI, OffsetOf(CV_LeafUDTSrcLine, udt_itype)), CV_TIOFF(IPI, OffsetOf(CV_LeafUDTSrcLine, src_string_id)) };
+read_only global CV_TiOff cv_tioffs_lf_udt_mod_src_line[] = { CV_TIOFF(TPI, OffsetOf(CV_LeafUDTModSrcLine, udt_itype)), CV_TIOFF(IPI, OffsetOf(CV_LeafUDTModSrcLine, src_string_id)) };
+read_only global CV_TiOff cv_tioffs_lf_enum[]             = { CV_TIOFF(TPI, OffsetOf(CV_LeafEnum, base_itype)), CV_TIOFF(TPI, OffsetOf(CV_LeafEnum, field_itype)) };
+read_only global CV_TiOff cv_tioffs_lf_procedure[]        = { CV_TIOFF(TPI, OffsetOf(CV_LeafProcedure, ret_itype)), CV_TIOFF(TPI, OffsetOf(CV_LeafProcedure, arg_itype)) };
+read_only global CV_TiOff cv_tioffs_lf_mfunction[]        = { CV_TIOFF(TPI, OffsetOf(CV_LeafMFunction, ret_itype)), CV_TIOFF(TPI, OffsetOf(CV_LeafMFunction, class_itype)), CV_TIOFF(TPI, OffsetOf(CV_LeafMFunction, this_itype)), CV_TIOFF(TPI, OffsetOf(CV_LeafMFunction, arg_itype)) };
+read_only global CV_TiOff cv_tioffs_lf_vftable[]          = { CV_TIOFF(TPI, OffsetOf(CV_LeafVFTable, owner_itype)), CV_TIOFF(TPI, OffsetOf(CV_LeafVFTable, base_table_itype)) };
+read_only global CV_TiOff cv_tioffs_lf_skip[]             = { CV_TIOFF(TPI, OffsetOf(CV_LeafSkip, itype)) };
+read_only global CV_TiOff cv_tioffs_lf_method[]           = { CV_TIOFF(TPI, OffsetOf(CV_LeafMethod, list_itype)) };
+read_only global CV_TiOff cv_tioffs_lf_onemethod[]        = { CV_TIOFF(TPI, OffsetOf(CV_LeafOneMethod, itype)) };
+read_only global CV_TiOff cv_tioffs_lf_bitfield[]         = { CV_TIOFF(TPI, OffsetOf(CV_LeafBitField, itype)) };
+read_only global CV_TiOff cv_tioffs_lf_index[]            = { CV_TIOFF(TPI, OffsetOf(CV_LeafIndex, itype)) };
+read_only global CV_TiOff cv_tioffs_lf_member[]           = { CV_TIOFF(TPI, OffsetOf(CV_LeafMember, itype)) };
+read_only global CV_TiOff cv_tioffs_lf_vfunctab[]         = { CV_TIOFF(TPI, OffsetOf(CV_LeafVFuncTab, itype)) };
+read_only global CV_TiOff cv_tioffs_lf_vfuncoff[]         = { CV_TIOFF(TPI, OffsetOf(CV_LeafVFuncOff, itype)) };
+read_only global CV_TiOff cv_tioffs_lf_nesttype[]         = { CV_TIOFF(TPI, OffsetOf(CV_LeafNestType, itype)) };
+read_only global CV_TiOff cv_tioffs_lf_nesttypeex[]       = { CV_TIOFF(TPI, OffsetOf(CV_LeafNestTypeEx, itype)) };
+
+// symbols
+read_only global CV_TiOff cv_tioffs_s_buildinfo[]     = { CV_TIOFF(IPI, OffsetOf(CV_SymBuildInfo, id)) };
+read_only global CV_TiOff cv_tioffs_s_data32[]        = { CV_TIOFF(TPI, OffsetOf(CV_SymData32, itype)) };
+read_only global CV_TiOff cv_tioffs_s_proc32_id[]     = { CV_TIOFF(IPI, OffsetOf(CV_SymProc32, itype)) };
+read_only global CV_TiOff cv_tioffs_s_proc32[]        = { CV_TIOFF(TPI, OffsetOf(CV_SymProc32, itype)) };
+read_only global CV_TiOff cv_tioffs_s_udt[]           = { CV_TIOFF(TPI, OffsetOf(CV_SymUDT, itype)) };
+read_only global CV_TiOff cv_tioffs_s_thread32[]      = { CV_TIOFF(TPI, OffsetOf(CV_SymThread32, itype)) };
+read_only global CV_TiOff cv_tioffs_s_filestatic[]    = { CV_TIOFF(TPI, OffsetOf(CV_SymFileStatic, itype)) };
+read_only global CV_TiOff cv_tioffs_s_local[]         = { CV_TIOFF(TPI, OffsetOf(CV_SymLocal, itype)) };
+read_only global CV_TiOff cv_tioffs_s_regrel32[]      = { CV_TIOFF(TPI, OffsetOf(CV_SymRegrel32, itype)) };
+read_only global CV_TiOff cv_tioffs_s_register[]      = { CV_TIOFF(TPI, OffsetOf(CV_SymRegister, itype)) };
+read_only global CV_TiOff cv_tioffs_s_constant[]      = { CV_TIOFF(TPI, OffsetOf(CV_SymConstant, itype)) };
+read_only global CV_TiOff cv_tioffs_s_callsiteinfo[]  = { CV_TIOFF(TPI, OffsetOf(CV_SymCallSiteInfo, itype)) };
+read_only global CV_TiOff cv_tioffs_s_inlinesite[]    = { CV_TIOFF(IPI, OffsetOf(CV_SymInlineSite, inlinee)) };
+read_only global CV_TiOff cv_tioffs_s_heapallocsite[] = { CV_TIOFF(TPI, OffsetOf(CV_SymHeapAllocSite, itype)) };
+
+#undef CV_TIOFF
+
+#define CV_TIOFFS_FIXED(result, table) do { (result).arr = (table); (result).arr_count = ArrayCount(table); } while (0)
+
+internal U64
+cv_ti_offsets_count(const CV_TiOffsets *offs)
 {
-  CV_TypeIndexInfoList list = {0};
+  return (U64)offs->arr_count + (U64)offs->run_count;
+}
+
+internal CV_TiOff
+cv_ti_offset_at(const CV_TiOffsets *offs, U64 idx)
+{
+  CV_TiOff result;
+  if (idx < offs->arr_count) {
+    result = offs->arr[idx];
+  } else {
+    result.source = offs->run_source;
+    result.offset = offs->run_base + (U32)(idx - offs->arr_count) * (U32)sizeof(CV_TypeIndex);
+  }
+  return result;
+}
+
+// grow-by-doubling scratch for member-walk kinds (FIELDLIST/METHODLIST/inlinee
+// lines); memory footprint stays comparable to the legacy per-node list
+typedef struct CV_TiOffBuilder
+{
+  Arena    *arena;
+  CV_TiOff *v;
+  U32       count;
+  U32       cap;
+} CV_TiOffBuilder;
+
+internal void
+cv_tioff_builder_put(CV_TiOffBuilder *b, CV_TypeIndexSource source, U64 offset)
+{
+  if (b->count == b->cap) {
+    U32       new_cap = b->cap ? b->cap * 2 : 16;
+    CV_TiOff *new_v   = push_array_no_zero(b->arena, CV_TiOff, new_cap);
+    MemoryCopy(new_v, b->v, sizeof(CV_TiOff) * b->count);
+    b->v   = new_v;
+    b->cap = new_cap;
+  }
+  b->v[b->count].source = source;
+  b->v[b->count].offset = (U32)offset;
+  b->count += 1;
+}
+
+internal CV_TiOffsets
+cv_symbol_ti_offsets(CV_SymKind kind, String8 data)
+{
+  CV_TiOffsets result = {0};
   switch (kind) {
     case CV_SymKind_BUILDINFO: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_IPI, OffsetOf(CV_SymBuildInfo, id));
+      CV_TIOFFS_FIXED(result, cv_tioffs_s_buildinfo);
     } break;
     case CV_SymKind_GDATA32:
     case CV_SymKind_LDATA32: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_SymData32, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_s_data32);
     } break;
     case CV_SymKind_LPROC32_ID:
-    case CV_SymKind_GPROC32_ID: 
+    case CV_SymKind_GPROC32_ID:
     case CV_SymKind_LPROC32_DPC_ID: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_IPI, OffsetOf(CV_SymProc32, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_s_proc32_id);
     } break;
     case CV_SymKind_GPROC32:
-    case CV_SymKind_LPROC32: 
+    case CV_SymKind_LPROC32:
     case CV_SymKind_LPROC32_DPC: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_SymProc32, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_s_proc32);
     } break;
     case CV_SymKind_UDT: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_SymUDT, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_s_udt);
     } break;
     case CV_SymKind_GTHREAD32:
     case CV_SymKind_LTHREAD32: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_SymThread32, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_s_thread32);
     } break;
     case CV_SymKind_FILESTATIC: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_SymFileStatic, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_s_filestatic);
     } break;
     case CV_SymKind_LOCAL: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_SymLocal, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_s_local);
     } break;
-    case CV_SymKind_REGREL32: 
+    case CV_SymKind_REGREL32:
     case CV_SymKind_BPREL32: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_SymRegrel32, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_s_regrel32);
     } break;
     case CV_SymKind_REGISTER: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_SymRegister, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_s_register);
     } break;
     case CV_SymKind_CONSTANT: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_SymConstant, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_s_constant);
     } break;
     case CV_SymKind_CALLSITEINFO: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_SymCallSiteInfo, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_s_callsiteinfo);
     } break;
     case CV_SymKind_CALLERS:
     case CV_SymKind_CALLEES:
     case CV_SymKind_INLINEES: {
       Assert(data.size >= sizeof(CV_SymFunctionList));
       CV_SymFunctionList *func_list = (CV_SymFunctionList*)data.str;
-      for (U64 i = 0; i < func_list->count; ++i) {
-        cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_IPI, sizeof(CV_SymFunctionList) + i * sizeof(CV_TypeIndex));
-      }
+      result.run_source = CV_TypeIndexSource_IPI;
+      result.run_base   = sizeof(CV_SymFunctionList);
+      result.run_count  = func_list->count;
     } break;
     case CV_SymKind_INLINESITE: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_IPI, OffsetOf(CV_SymInlineSite, inlinee));
+      CV_TIOFFS_FIXED(result, cv_tioffs_s_inlinesite);
     } break;
     case CV_SymKind_HEAPALLOCSITE: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_SymHeapAllocSite, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_s_heapallocsite);
     } break;
   }
-  return list;
+  return result;
 }
 
-internal CV_TypeIndexInfoList
-cv_get_leaf_type_index_offsets(Arena *arena, CV_LeafKind leaf_kind, String8 data)
+internal CV_TiOffsets
+cv_leaf_ti_offsets(Arena *arena, CV_LeafKind leaf_kind, String8 data)
 {
-  CV_TypeIndexInfoList list = {0};
+  CV_TiOffsets result = {0};
   switch (leaf_kind) {
     case CV_LeafKind_NOTYPE:
     case CV_LeafKind_VTSHAPE:
     case CV_LeafKind_LABEL:
-    case CV_LeafKind_NULL: 
+    case CV_LeafKind_NULL:
     case CV_LeafKind_NOTTRAN: {
       // no type indices
     } break;
     case CV_LeafKind_MODIFIER: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafModifier, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_modifier);
     } break;
     case CV_LeafKind_POINTER: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafPointer, itype));
-      CV_LeafPointer *ptr = (CV_LeafPointer *)data.str;
-      CV_PointerKind ptr_kind = CV_PointerAttribs_Extract_Kind(ptr->attribs);
+      CV_LeafPointer *ptr      = (CV_LeafPointer *)data.str;
+      CV_PointerKind  ptr_kind = CV_PointerAttribs_Extract_Kind(ptr->attribs);
       if (ptr_kind == CV_PointerKind_BaseType) {
         // TODO: add CV_LeafPointerBaseType
-        cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, sizeof(CV_LeafPointer) + 0);
+        CV_TIOFFS_FIXED(result, cv_tioffs_lf_pointer_ex);
       } else {
         CV_PointerMode ptr_mode = CV_PointerAttribs_Extract_Mode(ptr->attribs);
         if (ptr_mode == CV_PointerMode_PtrMem || ptr_mode == CV_PointerMode_PtrMethod) {
           // TODO: add type for the CvLeafPointerMember to syms_cv.mc
-          cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, sizeof(CV_LeafPointer) + 0);
+          CV_TIOFFS_FIXED(result, cv_tioffs_lf_pointer_ex);
+        } else {
+          CV_TIOFFS_FIXED(result, cv_tioffs_lf_pointer);
         }
       }
     } break;
     case CV_LeafKind_ARRAY: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafArray, entry_itype));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafArray, index_itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_array);
     } break;
-    case CV_LeafKind_CLASS: 
+    case CV_LeafKind_CLASS:
     case CV_LeafKind_STRUCTURE:
     case CV_LeafKind_INTERFACE: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafStruct, field_itype));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafStruct, derived_itype));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafStruct, vshape_itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_struct);
     } break;
     case CV_LeafKind_CLASS2:
     case CV_LeafKind_STRUCT2: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafStruct2, field_itype));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafStruct2, derived_itype));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafStruct2, vshape_itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_struct2);
     } break;
     case CV_LeafKind_UNION: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafUnion, field_itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_union);
     } break;
     case CV_LeafKind_ALIAS: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafAlias, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_alias);
     } break;
     case CV_LeafKind_FUNC_ID: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_IPI, OffsetOf(CV_LeafFuncId, scope_string_id));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafFuncId, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_func_id);
     } break;
     case CV_LeafKind_MFUNC_ID: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafMFuncId, owner_itype));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafMFuncId, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_mfunc_id);
     } break;
     case CV_LeafKind_STRING_ID: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_IPI, OffsetOf(CV_LeafStringId, substr_list_id));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_string_id);
     } break;
     case CV_LeafKind_UDT_SRC_LINE: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafUDTSrcLine, udt_itype));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_IPI, OffsetOf(CV_LeafUDTSrcLine, src_string_id));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_udt_src_line);
     } break;
     case CV_LeafKind_UDT_MOD_SRC_LINE: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafUDTModSrcLine, udt_itype));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_IPI, OffsetOf(CV_LeafUDTModSrcLine, src_string_id));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_udt_mod_src_line);
     } break;
     case CV_LeafKind_BUILDINFO: {
       Assert(data.size >= sizeof(CV_LeafBuildInfo));
       CV_LeafBuildInfo *build_info = (CV_LeafBuildInfo *)data.str;
-      for (U16 i = 0; i < build_info->count; ++i) {
-        cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_IPI, sizeof(CV_LeafBuildInfo) + i * sizeof(CV_ItemId));
-      }
+      result.run_source = CV_TypeIndexSource_IPI;
+      result.run_base   = sizeof(CV_LeafBuildInfo);
+      result.run_count  = build_info->count;
     } break;
     case CV_LeafKind_ENUM: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafEnum, base_itype));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafEnum, field_itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_enum);
     } break;
     case CV_LeafKind_PROCEDURE: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafProcedure, ret_itype));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafProcedure, arg_itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_procedure);
     } break;
     case CV_LeafKind_MFUNCTION: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafMFunction, ret_itype));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafMFunction, class_itype));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafMFunction, this_itype));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafMFunction, arg_itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_mfunction);
     } break;
     case CV_LeafKind_VFTABLE: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafVFTable, owner_itype));
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafVFTable, base_table_itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_vftable);
     } break;
     case CV_LeafKind_VFTPATH: {
       Assert(sizeof(CV_LeafVFPath) <= data.size);
       CV_LeafVFPath *vfpath = (CV_LeafVFPath *)data.str;
-      for (U32 i = 0; i < vfpath->count; ++i) {
-        cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, sizeof(CV_LeafVFPath) + i * sizeof(CV_TypeId));
-      }
+      result.run_source = CV_TypeIndexSource_TPI;
+      result.run_base   = sizeof(CV_LeafVFPath);
+      result.run_count  = vfpath->count;
     } break;
     case CV_LeafKind_TYPESERVER:
     case CV_LeafKind_TYPESERVER2:
@@ -769,76 +858,77 @@ cv_get_leaf_type_index_offsets(Arena *arena, CV_LeafKind leaf_kind, String8 data
       // no type indices
     } break;
     case CV_LeafKind_SKIP: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafSkip, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_skip);
     } break;
     case CV_LeafKind_SUBSTR_LIST: {
       Assert(sizeof(CV_LeafArgList) <= data.size);
       CV_LeafArgList *arg_list = (CV_LeafArgList*)data.str;
-      for (U32 i = 0; i < arg_list->count; ++i) {
-        cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_IPI, sizeof(CV_LeafArgList) + i * sizeof(CV_TypeIndex));
-      }
+      result.run_source = CV_TypeIndexSource_IPI;
+      result.run_base   = sizeof(CV_LeafArgList);
+      result.run_count  = arg_list->count;
     } break;
     case CV_LeafKind_ARGLIST: {
       Assert(sizeof(CV_LeafArgList) <= data.size);
       CV_LeafArgList *arg_list = (CV_LeafArgList*)data.str;
-      for (U32 i = 0; i < arg_list->count; ++i) {
-        cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, sizeof(CV_LeafArgList) + i * sizeof(CV_TypeIndex));
-      }
+      result.run_source = CV_TypeIndexSource_TPI;
+      result.run_base   = sizeof(CV_LeafArgList);
+      result.run_count  = arg_list->count;
     } break;
-    case CV_LeafKind_LIST: 
+    case CV_LeafKind_LIST:
     case CV_LeafKind_FIELDLIST: {
+      CV_TiOffBuilder b = { arena };
       for (U64 cursor = 0; cursor < data.size; ) {
         CV_LeafKind list_member_kind = 0;
         U64 read_size = str8_deserial_read_struct(data, cursor, &list_member_kind);
-        
+
         if(read_size != sizeof(list_member_kind)) {
           Assert(!"malformed LF_FIELDLIST");
           break;
         }
         cursor += read_size;
-        
+
         switch (list_member_kind) {
           default: Assert(!"TODO: handle malformed field member"); break;
           case CV_LeafKind_INDEX: {
-            cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafIndex, itype));
+            cv_tioff_builder_put(&b, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafIndex, itype));
             cursor += sizeof(CV_LeafIndex);
           } break;
           case CV_LeafKind_MEMBER: {
-            cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafMember, itype));
+            cv_tioff_builder_put(&b, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafMember, itype));
             cursor += sizeof(CV_LeafMember);
-            
+
             CV_NumericParsed size;
             cursor += cv_read_numeric(data, cursor, &size);
-            
+
             String8 name;
             cursor += str8_deserial_read_cstr(data, cursor, &name);
           } break;
           case CV_LeafKind_STMEMBER: {
-            cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafStMember, itype));
+            cv_tioff_builder_put(&b, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafStMember, itype));
             cursor += sizeof(CV_LeafStMember);
-            
+
             String8 name;
             cursor += str8_deserial_read_cstr(data, cursor, &name);
           } break;
           case CV_LeafKind_METHOD: {
-            cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafMethod, list_itype));
+            cv_tioff_builder_put(&b, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafMethod, list_itype));
             cursor += sizeof(CV_LeafMethod);
-            
+
             String8 name;
             cursor += str8_deserial_read_cstr(data, cursor, &name);
           } break;
           case CV_LeafKind_ONEMETHOD: {
-            cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafOneMethod, itype));
-            
+            cv_tioff_builder_put(&b, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafOneMethod, itype));
+
             CV_LeafOneMethod onemethod;
             cursor += str8_deserial_read_struct(data, cursor, &onemethod);
-            
+
             CV_MethodProp prop = CV_FieldAttribs_Extract_MethodProp(onemethod.attribs);
             if(prop == CV_MethodProp_PureIntro || prop == CV_MethodProp_Intro)
             {
               cursor += sizeof(U32); // virtoff
             }
-            
+
             String8 name;
             cursor += str8_deserial_read_cstr(data, cursor, &name);
           } break;
@@ -851,134 +941,140 @@ cv_get_leaf_type_index_offsets(Arena *arena, CV_LeafKind leaf_kind, String8 data
             cursor += str8_deserial_read_cstr(data, cursor, &name);
           } break;
           case CV_LeafKind_NESTTYPE: {
-            cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafNestType, itype));
+            cv_tioff_builder_put(&b, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafNestType, itype));
             cursor += sizeof(CV_LeafNestType);
-            
+
             String8 name;
             cursor += str8_deserial_read_cstr(data, cursor, &name);
           } break;
           case CV_LeafKind_NESTTYPEEX: {
-            cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafNestTypeEx, itype));
-            
+            cv_tioff_builder_put(&b, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafNestTypeEx, itype));
+
             cursor += sizeof(CV_LeafNestTypeEx);
             String8 name;
             cursor += str8_deserial_read_cstr(data, cursor, &name);
           } break;
           case CV_LeafKind_BCLASS: {
-            cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafBClass, itype));
-            
+            cv_tioff_builder_put(&b, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafBClass, itype));
+
             cursor += sizeof(CV_LeafBClass);
             CV_NumericParsed offset;
             cursor += cv_read_numeric(data, cursor, &offset);
           } break;
           case CV_LeafKind_VBCLASS:
           case CV_LeafKind_IVBCLASS: {
-            cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafVBClass, itype));
+            cv_tioff_builder_put(&b, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafVBClass, itype));
             cursor += sizeof(CV_LeafVBClass);
-            
+
             CV_NumericParsed virtual_base_pointer;
             cursor += cv_read_numeric(data, cursor, &virtual_base_pointer);
-            
+
             CV_NumericParsed virtual_base_offset;
             cursor += cv_read_numeric(data, cursor, &virtual_base_offset);
           } break;
           case CV_LeafKind_VFUNCTAB: {
-            cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafVFuncTab, itype));
+            cv_tioff_builder_put(&b, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafVFuncTab, itype));
             cursor += sizeof(CV_LeafVFuncTab);
           } break;
           case CV_LeafKind_VFUNCOFF: {
-            cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafVFuncOff, itype));
+            cv_tioff_builder_put(&b, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafVFuncOff, itype));
             cursor += sizeof(CV_LeafVFuncOff);
           } break;
         }
         cursor = AlignPow2(cursor, 4);
       }
+      result.arr       = b.v;
+      result.arr_count = b.count;
     } break;
     case CV_LeafKind_METHOD: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafMethod, list_itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_method);
     } break;
     case CV_LeafKind_METHODLIST: {
+      CV_TiOffBuilder b = { arena };
       for (U64 cursor = 0; cursor < data.size; ) {
         // read method
         CV_LeafMethodListMember method;
         U64 read_size = str8_deserial_read_struct(data, cursor, &method);
-        
+
         // error check read
         if (read_size != sizeof(method)) {
           Assert(!"malformed LF_METHODLIST");
           break;
         }
-        
+
         // push type index offset
-        cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafMethodListMember, itype));
-        
+        cv_tioff_builder_put(&b, CV_TypeIndexSource_TPI, cursor + OffsetOf(CV_LeafMethodListMember, itype));
+
         // take into account intro virtual offset
         CV_MethodProp mprop = CV_FieldAttribs_Extract_MethodProp(method.attribs);
         if (mprop == CV_MethodProp_Intro || mprop == CV_MethodProp_PureIntro) {
           read_size += sizeof(U32);
         }
-        
+
         // advance
         cursor += read_size;
       }
+      result.arr       = b.v;
+      result.arr_count = b.count;
     } break;
     case CV_LeafKind_ONEMETHOD: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafOneMethod, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_onemethod);
     } break;
     case CV_LeafKind_BITFIELD: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafBitField, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_bitfield);
     } break;
     case CV_LeafKind_PRECOMP:
     case CV_LeafKind_REFSYM: {
       // no type indices
     } break;
     case CV_LeafKind_INDEX: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafIndex, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_index);
     } break;
     case CV_LeafKind_MEMBER: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafMember, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_member);
     } break;
     case CV_LeafKind_VFUNCTAB: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafVFuncTab, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_vfunctab);
     } break;
     case CV_LeafKind_VFUNCOFF: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafVFuncOff, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_vfuncoff);
     } break;
     case CV_LeafKind_NESTTYPE: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafNestType, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_nesttype);
     } break;
     case CV_LeafKind_NESTTYPEEX: {
-      cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_TPI, OffsetOf(CV_LeafNestTypeEx, itype));
+      CV_TIOFFS_FIXED(result, cv_tioffs_lf_nesttypeex);
     } break;
     default: {
       NotImplemented;
     } break;
   }
-  return list;
+  return result;
 }
 
-internal CV_TypeIndexInfoList
-cv_get_inlinee_type_index_offsets(Arena *arena, String8 raw_data)
+internal CV_TiOffsets
+cv_inlinee_ti_offsets(Arena *arena, String8 raw_data)
 {
-  CV_TypeIndexInfoList list = {0};
-  
+  CV_TiOffsets    result = {0};
+  CV_TiOffBuilder b      = { arena };
+
   U64 cursor = 0;
-  
+
   // first four bytes are always signature
   CV_C13InlineeLinesSig sig = max_U32;
   cursor += str8_deserial_read_struct(raw_data, cursor, &sig);
-  
+
   while(cursor < raw_data.size)
   {
     // read header
     CV_C13InlineeSourceLineHeader *header = (CV_C13InlineeSourceLineHeader *) str8_deserial_get_raw_ptr(raw_data, cursor, sizeof(CV_C13InlineeSourceLineHeader));
-    
+
     // store type index offset
-    cv_symbol_type_index_info_push(arena, &list, CV_TypeIndexSource_IPI, cursor + OffsetOf(CV_C13InlineeSourceLineHeader, inlinee));
-    
+    cv_tioff_builder_put(&b, CV_TypeIndexSource_IPI, cursor + OffsetOf(CV_C13InlineeSourceLineHeader, inlinee));
+
     // advance past header
     cursor += sizeof(*header);
-    
+
     // skip extra files
     B32 has_extra_files = (sig == CV_C13InlineeLinesSig_EXTRA_FILES);
     if (has_extra_files)
@@ -988,8 +1084,39 @@ cv_get_inlinee_type_index_offsets(Arena *arena, String8 raw_data)
       cursor += /* file id: */ sizeof(U32) * file_count;
     }
   }
-  
+
+  result.arr       = b.v;
+  result.arr_count = b.count;
+  return result;
+}
+
+internal CV_TypeIndexInfoList
+cv_ti_offsets_to_list(Arena *arena, CV_TiOffsets offs)
+{
+  CV_TypeIndexInfoList list = {0};
+  for (U64 i = 0, count = cv_ti_offsets_count(&offs); i < count; i += 1) {
+    CV_TiOff ti = cv_ti_offset_at(&offs, i);
+    cv_symbol_type_index_info_push(arena, &list, ti.source, ti.offset);
+  }
   return list;
+}
+
+internal CV_TypeIndexInfoList
+cv_get_symbol_type_index_offsets(Arena *arena, CV_SymKind kind, String8 data)
+{
+  return cv_ti_offsets_to_list(arena, cv_symbol_ti_offsets(kind, data));
+}
+
+internal CV_TypeIndexInfoList
+cv_get_leaf_type_index_offsets(Arena *arena, CV_LeafKind leaf_kind, String8 data)
+{
+  return cv_ti_offsets_to_list(arena, cv_leaf_ti_offsets(arena, leaf_kind, data));
+}
+
+internal CV_TypeIndexInfoList
+cv_get_inlinee_type_index_offsets(Arena *arena, String8 raw_data)
+{
+  return cv_ti_offsets_to_list(arena, cv_inlinee_ti_offsets(arena, raw_data));
 }
 
 internal String8Array

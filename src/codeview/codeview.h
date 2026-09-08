@@ -2701,6 +2701,32 @@ struct CV_TypeIndexInfoList
   CV_TypeIndexInfo *last;
 };
 
+typedef struct CV_TiOff CV_TiOff;
+struct CV_TiOff
+{
+  CV_TypeIndexSource source;
+  U32                offset;
+};
+
+// Flat, allocation-free view over a record's type-index sites. For any record kind at
+// most one of the two parts is populated:
+//  - `arr`: fixed-shape kinds point at a static per-kind table (zero allocation);
+//    member-walk kinds (FIELDLIST/METHODLIST/inlinee lines) point at an arena-
+//    materialized array.
+//  - homogeneous run (count-stride kinds: ARGLIST, SUBSTR_LIST, BUILDINFO, VFTPATH,
+//    CALLERS/CALLEES/INLINEES): offset(i) = run_base + i*sizeof(CV_TypeIndex).
+// Emission order (arr order, then ascending run) matches the legacy
+// CV_TypeIndexInfoList push order exactly; hash streams depend on it.
+typedef struct CV_TiOffsets CV_TiOffsets;
+struct CV_TiOffsets
+{
+  const CV_TiOff    *arr;
+  U32                arr_count;
+  CV_TypeIndexSource run_source;
+  U32                run_base;
+  U32                run_count;
+};
+
 typedef struct CV_TypeIndexArray CV_TypeIndexArray;
 struct CV_TypeIndexArray
 {
