@@ -4106,6 +4106,81 @@ TEST(comdat_largest)
   }
 }
 
+TEST(asan_discarded_associative_metadata)
+{
+  // ASan can share a filename across metadata belonging to different COMDATs.
+  // link.exe tombstones references to a discarded associative child at RVA 0;
+  // it does not redirect them to the winning owner's child or retain the loser.
+  U8 pointers[24] = {5};
+  pointers[8] = 7;
+  pointers[12] = 9;
+  pointers[16] = 2;
+  pointers[20] = 11;
+  for (U32 obj_idx = 0; obj_idx < 2; obj_idx += 1) {
+    T_Ok(t_write_def_obj(obj_idx ? "second.obj" : "first.obj", (T_COFF_DefObj){
+      .machine = T_COFF_DefSetMachine(X64),
+      .sections = (T_COFF_DefSection[]){
+        {"owner", ".owner", obj_idx ? str8_lit("OWNER_B") : str8_lit("OWNER_A"),
+         .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT},
+        {"meta", ".names", obj_idx ? str8_lit("SECOND.c\0") : str8_lit("FIRST.c\0"),
+         .flags = "r:data@1", .raw_flags = COFF_SectionFlag_LnkCOMDAT},
+        {obj_idx ? "pointers" : 0, ".data", str8_array_fixed(pointers), .flags = "rw:data@8",
+         .relocs = (T_COFF_DefReloc[]){
+           T_COFF_DefReloc(X64_Addr64, 0, "filename"),
+           T_COFF_DefReloc(X64_Addr32Nb, 8, "filename"),
+           T_COFF_DefReloc(X64_SecRel, 12, "filename"),
+           T_COFF_DefReloc(X64_Section, 16, "filename"),
+           T_COFF_DefReloc(X64_Rel32, 20, "filename"), {0}}},
+        {"entry", ".text", str8_lit("\xC3"), .flags = "rx:code@1"}, {0}},
+      .symbols = (T_COFF_DefSymbol[]){
+        T_COFF_DefSymbol_Secdef("owner", COFF_ComdatSelect_Any),
+        T_COFF_DefSymbol_Extern("shared", "owner", 0),
+        T_COFF_DefSymbol_Associative("meta", "owner"),
+        T_COFF_DefSymbol_Static("filename", "meta", 3),
+        {.type = obj_idx ? T_COFF_DefSymbol_Extern : 0, .name = "pointers", .section = "pointers"},
+        T_COFF_DefSymbol_ExternFunc("entry", "entry", 0), {0}},
+    }));
+  }
+  for (U32 reverse = 0; reverse < 2; reverse += 1) {
+    for (U32 ref = 0; ref < 2; ref += 1) {
+      t_invoke_linkerf("/subsystem:console /entry:entry /nodefaultlib /fixed:no /include:shared /include:pointers /out:assoc.exe /opt:%s,noicf %s",
+                       ref ? "ref" : "noref", reverse ? "second.obj first.obj" : "first.obj second.obj");
+      T_Ok(g_last_exit_code == 0);
+      String8 image = t_read_file(arena, str8_lit("assoc.exe"));
+      PE_BinInfo bin = pe_bin_info_from_data(arena, image);
+      COFF_SectionHeader *sections = (COFF_SectionHeader *)(image.str + bin.section_table_range.min);
+      COFF_SectionHeader *data = 0, *names = 0, *owner = 0, *base_relocs = 0;
+      U32 names_number = 0;
+      for EachIndex(i, bin.section_count) {
+        if (MemoryMatch(sections[i].name, ".data", 6)) { data = &sections[i]; }
+        if (MemoryMatch(sections[i].name, ".names", 7)) { names = &sections[i]; names_number = i+1; }
+        if (MemoryMatch(sections[i].name, ".owner", 7)) { owner = &sections[i]; }
+        if (MemoryMatch(sections[i].name, ".reloc", 7)) { base_relocs = &sections[i]; }
+      }
+      T_Ok(data && names && owner && base_relocs);
+      T_Ok(MemoryMatch(image.str + owner->foff, reverse ? "OWNER_B" : "OWNER_A", 7));
+      T_Ok(MemoryMatch(image.str + names->foff, reverse ? "SECOND.c" : "FIRST.c", reverse ? 8 : 7));
+      U64 addr64; U32 addr32nb, secrel, rel32; U16 section;
+      MemoryCopy(&addr64, image.str + data->foff, 8);
+      MemoryCopy(&addr32nb, image.str + data->foff + 8, 4);
+      MemoryCopy(&secrel, image.str + data->foff + 12, 4);
+      MemoryCopy(&section, image.str + data->foff + 16, 2);
+      MemoryCopy(&rel32, image.str + data->foff + 20, 4);
+      U32 target_voff = reverse ? names->voff + 3 : 0;
+      T_Ok(addr64 == bin.image_base + target_voff + 5);
+      T_Ok(addr32nb == target_voff + 7);
+      T_Ok(secrel == (reverse ? 3 : 0) + 9);
+      T_Ok(section == (reverse ? names_number : 0) + 2);
+      T_Ok(rel32 == (U32)(target_voff - data->voff - 24 + 11));
+      // Even the tombstoned ADDR64 still needs loader rebasing.
+      U32 page; U16 fixup;
+      MemoryCopy(&page, image.str + base_relocs->foff, 4);
+      MemoryCopy(&fixup, image.str + base_relocs->foff + 8, 2);
+      T_Ok((fixup >> 12) == 10 && page + (fixup & 0xfff) == data->voff);
+    }
+  }
+}
+
 TEST(comdat_associative)
 {
   T_Ok(t_write_def_obj("a.obj", (T_COFF_DefObj){

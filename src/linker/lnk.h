@@ -119,6 +119,8 @@ typedef struct LNK_LinkResult
 
 #define LNK_REMOVED_SECTION_NUMBER_32 (U32)-3
 #define LNK_REMOVED_SECTION_NUMBER_16 (U16)-3
+// Internal tag carried through symbol fixups, not an output address.
+#define LNK_REMOVED_ASSOCIATIVE_SYMBOL_VALUE (max_U32 - 1)
 
 typedef struct LNK_ImageContext
 {
