@@ -208,9 +208,30 @@ cv_write_symbol_buf(String8Node *buf, U64 *buf_pos, CV_Symbol *symbol, U64 align
 internal U64
 cv_write_symbol(U8 *buffer, U64 buffer_cursor, U64 buffer_size, CV_Symbol *symbol, U64 align)
 {
-  String8Node dummy_curr = { .string = str8(buffer + buffer_cursor, buffer_size - buffer_cursor) };
-  U64         dummy_pos  = 0;
-  return cv_write_symbol_buf(&dummy_curr, &dummy_pos, symbol, align);
+  U64 raw_size   = sizeof(CV_SymbolHeader) + symbol->data.size;
+  U64 pad_size   = AlignPadPow2(raw_size, align);
+  U64 write_size = raw_size + pad_size;
+
+  if (buffer) {
+    Assert(buffer_cursor <= buffer_size && write_size <= buffer_size - buffer_cursor);
+    U8 *dst = buffer + buffer_cursor;
+
+    // copy header
+    CV_SymbolHeader header = { .size = sizeof(CV_SymKind) + symbol->data.size + pad_size, .kind = symbol->kind };
+    MemoryCopy(dst, &header, sizeof(header));
+
+    // copy body (optionally zero out)
+    if (symbol->data.str) {
+      MemoryCopyStr8(dst + sizeof(header), symbol->data);
+    } else {
+      MemoryZero(dst + sizeof(header), symbol->data.size);
+    }
+
+    // zero out padding
+    MemoryZero(dst + raw_size, pad_size);
+  }
+
+  return write_size;
 }
 
 internal U64
