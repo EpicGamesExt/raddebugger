@@ -171,168 +171,51 @@ lnk_log_read(String8 path, U64 size)
 }
 
 internal String8
-lnk_read_data_from_file_path(Arena *arena, LNK_IO_Flags io_flags, String8 path, B8 *was_read_out)
+lnk_read_data_from_file_path(Arena *arena, String8 path, B8 *was_read_out)
 {
   Temp scratch = scratch_begin(&arena, 1);
   TP_Context *single_thread_ctx = tp_alloc(scratch.arena, 1, 1, str8_zero());
-  String8Array data_arr = lnk_read_data_from_file_path_parallel(single_thread_ctx, arena, io_flags, (String8Array){ .count = 1, .v = &path }, was_read_out);
+  String8Array data_arr = lnk_read_data_from_file_path_parallel(single_thread_ctx, arena, (String8Array){ .count = 1, .v = &path }, was_read_out);
   scratch_end(scratch);
   return data_arr.v[0];
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_data_size_from_file_path_task)
-{
-  LNK_DiskReader *task = raw_task;
-  String8         path = task->path_arr.v[task_id];
-
-  File handle = {0};
-  U64       size   = 0;
-
-  int is_open = lnk_open_file_read((char*)path.str, path.size, &handle, sizeof(handle));
-  if (is_open) {
-    size = lnk_size_from_file(&handle);
-  }
-
-  task->handle_arr[task_id] = handle;
-  task->size_arr[task_id]   = size;
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_data_from_file_path_task)
-{
-  LNK_DiskReader *task   = raw_task;
-  File            handle = task->handle_arr[task_id];
-  if ( ! MemoryIsZeroStruct(&handle)) {
-    U64  buffer_size = task->size_arr[task_id];
-    U8  *buffer      = task->buffer + task->off_arr[task_id];
-    U64  read_size   = lnk_read_file(&handle, buffer, buffer_size);
-    AssertAlways(read_size == buffer_size); // TODO: handle partial loads as invalid
-
-    task->data_arr.v[task_id] = str8(buffer, read_size);
-
-    if (task->was_read) {
-      task->was_read[task_id] = 1;
-    }
-  }
 }
 
 internal
 THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
 {
   LNK_DiskReader *task = raw_task;
-  Temp scratch = scratch_begin(&arena, 1);
-
-#if OS_WINDOWS
-  String16 path16 = str16_from_8(scratch.arena, task->path_arr.v[task_id]);
-
-  // TODO: deprecate CoW file maps; they count against private byte space and * by design * do not allow over-commit;
-  // and if program's total file map size exceeds the cap, kernel terminates the whole process with an out-of-memory error;
-  // exception handler helpes us work-around this limitation but we stil cannot link on devices with small private byte space;
-  if (task->io_flags & LNK_IO_Flags_MemoryMapFilesReadWrite) {
-    HANDLE file_handle = CreateFileW(path16.str, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-
-    if (file_handle != INVALID_HANDLE_VALUE) {
-      HANDLE mapping_handle = CreateFileMappingA(file_handle, 0, PAGE_READWRITE, 0, 0, 0);
-      if (mapping_handle != INVALID_HANDLE_VALUE) {
-        LARGE_INTEGER file_size = {0};
-        GetFileSizeEx(file_handle, &file_size);
-
-        void *file_data = MapViewOfFile(mapping_handle, FILE_MAP_READ | FILE_MAP_WRITE, 0, 0, file_size.QuadPart);
-        if (file_data) {
-          task->data_arr.v[task_id] = str8(file_data, file_size.QuadPart);
-          if (task->was_read) {
-            task->was_read[task_id] = 1;
-          }
+  if (task->was_read) { task->was_read[task_id] = 0; }
+  File file = file_open(AccessFlag_Read | AccessFlag_ShareRead, task->path_arr.v[task_id]);
+  if (!file_match(file, file_zero())) {
+    FileProperties props = properties_from_file(file);
+    B32 success = props.size == 0;
+    if (props.size != 0) {
+      FileMap map = file_map_open(AccessFlag_Read, file);
+      if (!MemoryIsZeroStruct(&map)) {
+        void *data = file_map_view_open(map, AccessFlag_Read, r1u64(0, props.size));
+        if (data) {
+          task->data_arr.v[task_id] = str8(data, props.size);
+          success = 1;
         }
-
-        CloseHandle(mapping_handle);
+        file_map_close(map);
       }
-
-      CloseHandle(file_handle);
     }
-  } else {
-    HANDLE file_handle = CreateFileW(path16.str, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
-    if (file_handle != INVALID_HANDLE_VALUE) {
-      HANDLE mapping_handle = CreateFileMappingA(file_handle, 0, PAGE_WRITECOPY, 0, 0, 0);
-      if (mapping_handle != INVALID_HANDLE_VALUE) {
-        LARGE_INTEGER file_size = {0};
-        GetFileSizeEx(file_handle, &file_size);
-        void *file_data = MapViewOfFile(mapping_handle, FILE_MAP_COPY, 0, 0, file_size.QuadPart);
-        if (file_data) {
-          task->data_arr.v[task_id] = str8(file_data, file_size.QuadPart);
-          if (task->was_read) {
-            task->was_read[task_id] = 1;
-          }
-        }
-        CloseHandle(mapping_handle);
-      }
-      CloseHandle(file_handle);
-    }
+    file_close(file);
+    if (task->was_read) { task->was_read[task_id] = success; }
   }
-#elif OS_LINUX
-  int fd = open((char *)push_cstr(scratch.arena, task->path_arr.v[task_id]).str, O_RDONLY);
-  if (fd != -1) {
-    struct stat st = {0};
-    if (fstat(fd, &st) == 0) {
-      void *file_data = mmap(0, st.st_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
-      if (file_data != MAP_FAILED) {
-        task->data_arr.v[task_id] = str8(file_data, st.st_size);
-        if (task->was_read) {
-          task->was_read[task_id] = 1;
-        }
-      }
-    }
-    close(fd);
-  }
-#else
-# error "memory mapping files is not supported on this platform"
-#endif
-  scratch_end(scratch);
 }
 
 internal String8Array
-lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, LNK_IO_Flags io_flags, String8Array path_arr, B8 *was_read)
+lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, String8Array path_arr, B8 *was_read)
 {
   ProfBeginFunction();
   LNK_DiskReader reader = {0};
 
-  if (io_flags & (LNK_IO_Flags_MemoryMapFilesReadWrite|LNK_IO_Flags_MemoryMapFilesReadOnly)) {
-    reader.io_flags       = io_flags;
-    reader.path_arr       = path_arr;
-    reader.data_arr.count = path_arr.count;
-    reader.data_arr.v     = push_array(arena, String8, path_arr.count);
-    reader.was_read       = was_read;
-    tp_for_parallel(tp, 0, path_arr.count, lnk_memory_map_file_task, &reader);
-  } else {
-    Temp scratch = scratch_begin(&arena,1);
-
-    reader.path_arr   = path_arr;
-    reader.handle_arr = push_array_no_zero(scratch.arena, File, path_arr.count);
-    reader.size_arr   = push_array_no_zero(scratch.arena, U64, path_arr.count);
-    reader.was_read   = was_read;
-
-    // open handles and get sizes
-    tp_for_parallel(tp, 0, path_arr.count, lnk_data_size_from_file_path_task, &reader);
-
-    // compute file buffer size
-    U64 total_data_size = sum_array_u64(path_arr.count, reader.size_arr);
-
-    // assign offsets into file buffer
-    U64 *off_arr = push_array_no_zero(scratch.arena, U64, path_arr.count);
-    MemoryCopyTyped(off_arr, reader.size_arr, path_arr.count);
-    u64_array_counts_to_offsets(path_arr.count, off_arr);
-
-    reader.io_flags = io_flags;
-    reader.data_arr = str8_array_reserve(arena, path_arr.count);
-    reader.off_arr  = off_arr;
-    reader.buffer   = push_array_no_zero(arena, U8, total_data_size);
-
-    // read files and close handles
-    tp_for_parallel(tp, 0, path_arr.count, lnk_data_from_file_path_task, &reader);
-
-    scratch_end(scratch);
-  }
+  reader.path_arr       = path_arr;
+  reader.data_arr.count = path_arr.count;
+  reader.data_arr.v     = push_array(arena, String8, path_arr.count);
+  reader.was_read       = was_read;
+  tp_for_parallel(tp, 0, path_arr.count, lnk_memory_map_file_task, &reader);
   
   String8Array result = {0};
   result.count        = path_arr.count;

@@ -199,7 +199,7 @@ THREAD_POOL_TASK_FUNC(lnk_read_type_servers_task)
   case LNK_TypeServerKind_PDB: {
     // read PDB from disk
     B8      msf_data_read = 0;
-    String8 msf_data      = lnk_read_data_from_file_path(scratch.arena, task->config->io_flags, ts->ts_path, &msf_data_read);
+    String8 msf_data      = lnk_read_data_from_file_path(scratch.arena, ts->ts_path, &msf_data_read);
 
     if ( ! msf_data_read) {
       LNK_Obj *dep_obj = 0;
@@ -648,7 +648,7 @@ lnk_rrt_array_from_config(Arena *arena, LNK_Config *config)
   for EachNode(n, String8Node, config->input_list[LNK_Input_RRT].first) {
     B8      was_rrt_read = 0;
     String8 rrt_path     = n->string;
-    String8 raw_rrt      = lnk_read_data_from_file_path(arena, config->io_flags, rrt_path, &was_rrt_read);
+    String8 raw_rrt      = lnk_read_data_from_file_path(arena, rrt_path, &was_rrt_read);
     if (raw_rrt.size == 0 || was_rrt_read == 0) {
       lnk_error(LNK_Error_IllData, "ERROR: failed to open \"%S\"", rrt_path);
       continue;
@@ -3531,7 +3531,7 @@ lnk_build_pdb(TP_Context *tp, Arena *arena, String8 image_data, LNK_Config *conf
     {
       String8Array  natvis_file_path_arr = str8_array_from_list(scratch.arena, &config->natvis_list);
       B8           *natvis_was_read      = push_array(scratch.arena, B8, natvis_file_path_arr.count);
-      String8Array  natvis_file_data_arr = lnk_read_data_from_file_path_parallel(tp, scratch.arena, config->io_flags, natvis_file_path_arr, natvis_was_read);
+      String8Array  natvis_file_data_arr = lnk_read_data_from_file_path_parallel(tp, scratch.arena, natvis_file_path_arr, natvis_was_read);
 
       for EachIndex(i, natvis_file_data_arr.count) {
         String8 natvis_file_path = natvis_file_path_arr.v[i];

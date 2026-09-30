@@ -124,7 +124,6 @@ typedef enum
   LNK_CmdSwitch_Rad_Log,
   LNK_CmdSwitch_Rad_Logo,
   LNK_CmdSwitch_Rad_MapLinesForUnresolvedSymbols,
-  LNK_CmdSwitch_Rad_MemoryMapFiles,
   LNK_CmdSwitch_Rad_Mode,
   LNK_CmdSwitch_Rad_MtPath,
   LNK_CmdSwitch_Rad_OsVer,
@@ -408,7 +407,6 @@ typedef struct LNK_Config
   String8                     temp_type_server_name;
   String8                     delay_load_helper_name;
   String8List                 remove_sections;
-  LNK_IO_Flags                io_flags;
   HashMap                     export_ht;
   HashMap                     alt_name_ht;
   HashMap                     include_symbol_ht;

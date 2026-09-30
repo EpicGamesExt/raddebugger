@@ -6075,7 +6075,7 @@ TEST(first_member_header)
   String8 lib_before = t_read_file(arena, str8_lit("test.lib"));
   String8 obj_before = t_read_file(arena, str8_lit("entry.obj"));
 
-  t_invoke_linkerf("/RAD_MEMORY_MAP_FILES:READ_WRITE /subsystem:console /entry:entry /out:a.exe test.lib entry.obj /include:1 /include:2 /include:3 /include:4 /include:5 /include:6 /include:7 /include:8 /include:9");
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe test.lib entry.obj /include:1 /include:2 /include:3 /include:4 /include:5 /include:6 /include:7 /include:8 /include:9");
   T_Ok(g_last_exit_code == 0);
   T_Ok(str8_match(lib_before, t_read_file(arena, str8_lit("test.lib")), 0));
   T_Ok(str8_match(obj_before, t_read_file(arena, str8_lit("entry.obj")), 0));

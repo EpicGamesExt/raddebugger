@@ -288,7 +288,6 @@ lnk_merge_manifest_files(String8 mt_path, String8 out_name, String8List manifest
 
 internal String8
 lnk_manifest_from_inputs(Arena       *arena,
-                         LNK_IO_Flags io_flags,
                          String8      mt_path,
                          String8      manifest_name,
                          B32          manifest_uac,
@@ -323,7 +322,7 @@ lnk_manifest_from_inputs(Arena       *arena,
 
     // read mt.exe output from disk
     B8 was_manifest_read;
-    manifest_data = lnk_read_data_from_file_path(arena, io_flags, merged_manifest_path, &was_manifest_read);
+    manifest_data = lnk_read_data_from_file_path(arena, merged_manifest_path, &was_manifest_read);
     if (was_manifest_read == 0) {
       lnk_error(LNK_Error_Mt, "unable to find mt.exe output manifest on disk, expected path \"%S\"", merged_manifest_path);
     }
@@ -998,7 +997,7 @@ lnk_has_pending_input_work(LNK_Inputer *inputer, LNK_Link *link)
 }
 
 internal LNK_InputPtrArray
-lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Flags io_flags, LNK_InputList *all_inputs, LNK_InputList *new_inputs)
+lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_InputList *all_inputs, LNK_InputList *new_inputs)
 {
   ProfBeginFunction();
 
@@ -1029,12 +1028,11 @@ lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_IO_Fla
   ProfBegin("Load Inputs From Disk"); 
 
   B8           *thin_input_was_read = push_array(scratch.arena, B8, thin_input_paths.count);
-  String8Array  thin_input_datas    = lnk_read_data_from_file_path_parallel(tp, inputer->arena, io_flags, thin_input_paths, thin_input_was_read);
-  B32           is_mapped           = !!(io_flags & (LNK_IO_Flags_MemoryMapFilesReadWrite|LNK_IO_Flags_MemoryMapFilesReadOnly));
+  String8Array  thin_input_datas    = lnk_read_data_from_file_path_parallel(tp, inputer->arena, thin_input_paths, thin_input_was_read);
 
   for EachIndex(thin_input_idx, thin_inputs_count) {
     thin_inputs[thin_input_idx]->has_disk_read_failed = !thin_input_was_read[thin_input_idx];
-    thin_inputs[thin_input_idx]->owns_file_map        = is_mapped && !thin_inputs[thin_input_idx]->has_disk_read_failed;
+    thin_inputs[thin_input_idx]->owns_file_map        = thin_input_datas.v[thin_input_idx].size != 0;
     thin_inputs[thin_input_idx]->data                 = thin_input_datas.v[thin_input_idx];
   }
 
@@ -1170,7 +1168,7 @@ lnk_load_objs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *
   Temp scratch = scratch_begin(arena->v, arena->count);
 
   // load obj inputer from disk
-  LNK_InputPtrArray new_input_objs = lnk_inputer_flush(arena->v[0], tp, inputer, config->io_flags, &inputer->objs, &inputer->new_objs);
+  LNK_InputPtrArray new_input_objs = lnk_inputer_flush(arena->v[0], tp, inputer, &inputer->objs, &inputer->new_objs);
 
   if (lnk_get_log_status(LNK_Log_InputObj) && new_input_objs.count) {
     U64 input_size = 0;
@@ -1218,7 +1216,7 @@ lnk_load_libs(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer *
   for EachIndex(input_source, LNK_InputSource_Count) {
     ProfBegin("Input Libs [Count %llu]", inputer->new_libs[input_source].count);
 
-    LNK_InputPtrArray new_input_libs = lnk_inputer_flush(arena->v[0], tp, inputer, config->io_flags, &inputer->libs, &inputer->new_libs[input_source]);
+    LNK_InputPtrArray new_input_libs = lnk_inputer_flush(arena->v[0], tp, inputer, &inputer->libs, &inputer->new_libs[input_source]);
 
     if (lnk_get_log_status(LNK_Log_InputLib) && new_input_libs.count) {
       U64 input_size = 0;
@@ -2178,7 +2176,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
       ProfBegin("Embed Manifest");
       // TODO: currently we convert manifest to res and parse res again, this unnecessary instead push manifest 
       // resource to the tree directly
-      String8 manifest_data = lnk_manifest_from_inputs(scratch.arena, config->io_flags, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, config->input_list[LNK_Input_Manifest], config->manifest_dependency_list);
+      String8 manifest_data = lnk_manifest_from_inputs(scratch.arena, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, config->input_list[LNK_Input_Manifest], config->manifest_dependency_list);
       String8 manifest_res  = pe_make_manifest_resource(scratch.arena, *config->manifest_resource_id, manifest_data);
       str8_list_push(scratch.arena, &res_data_list, manifest_res);
       str8_list_push(scratch.arena, &res_path_list, str8_lit("* Manifest *"));
@@ -2187,7 +2185,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
     case LNK_ManifestOpt_WriteToFile: {
       ProfBeginDynamic("Write Manifest To: %.*s", str8_varg(config->manifest_name));
       Temp temp = temp_begin(scratch.arena);
-      String8 manifest_data = lnk_manifest_from_inputs(temp.arena, config->io_flags, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, config->input_list[LNK_Input_Manifest], config->manifest_dependency_list);
+      String8 manifest_data = lnk_manifest_from_inputs(temp.arena, config->mt_path, config->manifest_name, config->manifest_uac, config->manifest_level, config->manifest_ui_access, config->input_list[LNK_Input_Manifest], config->manifest_dependency_list);
       lnk_write_data_to_file_path(config->manifest_name, str8_zero(), manifest_data);
       temp_end(temp);
       ProfEnd();
@@ -2204,7 +2202,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
     ProfBegin("Load .res files from disk");
     for EachNode(node, String8Node, config->input_list[LNK_Input_Res].first) {
       B8      was_read = 0;
-      String8 res_data = lnk_read_data_from_file_path(scratch.arena, config->io_flags, node->string, &was_read);
+      String8 res_data = lnk_read_data_from_file_path(scratch.arena, node->string, &was_read);
 
       if (was_read == 0) {
         lnk_error(LNK_Error_LoadRes, "unable to open res file: %S", node->string);

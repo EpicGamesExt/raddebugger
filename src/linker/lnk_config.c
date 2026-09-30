@@ -75,7 +75,6 @@ global LNK_CmdSwitch g_cmd_switch_map[] =
   { LNK_CmdSwitch_Rad_CheckUnusedDelayLoadDll,      0, LNK_CmdValueKind_Scalar, "RAD_CHECK_UNUSED_DELAY_LOAD_DLL",      "[:NO]",                "Check for unused delay load dlls."                                                },
   { LNK_CmdSwitch_Rad_DataDirCount,                 0, LNK_CmdValueKind_Scalar, "RAD_DATA_DIR_COUNT",                   ":#",                   "Internal default for PE optional header data directory count."                    },
   { LNK_CmdSwitch_Rad_MapLinesForUnresolvedSymbols, 0, LNK_CmdValueKind_Scalar, "RAD_MAP_LINES_FOR_UNRESOLVED_SYMBOLS", "[:NO]",                "Use debug info to print source file location for unresolved symbol"               },
-  { LNK_CmdSwitch_Rad_MemoryMapFiles,               0, LNK_CmdValueKind_Scalar, "RAD_MEMORY_MAP_FILES",                 "[:{NO|READ_ONLY|READ_WRITE}]", "When enabled, files are memory-mapped instead of being read entirely on request." },
   { LNK_CmdSwitch_Rad_BootMode,                     0, LNK_CmdValueKind_Scalar, "RAD_BOOT_MODE",                        "[:LINKER|TYPE_SERVER]", "Overrides default boot program."                                                 },
   { LNK_CmdSwitch_Rad_Debug,                        0, LNK_CmdValueKind_Scalar, "RAD_DEBUG",                            "[:NO]",                "Emit RAD debug info file."                                                        },
   { LNK_CmdSwitch_Rad_DebugAltPath,                 0, LNK_CmdValueKind_Scalar, "RAD_DEBUGALTPATH",                     ":PATH",                "Alternative output path for the RDI."                                             },
@@ -2013,25 +2012,6 @@ lnk_apply_cmd_option_to_config(LNK_Config *config, String8 cmd_name, String8 val
     lnk_cmd_switch_parse_flag(obj, cmd_switch, value, &config->map_lines_for_unresolved_symbols);
   } break;
 
-  case LNK_CmdSwitch_Rad_MemoryMapFiles: {
-    if (value.size == 0) {
-      config->io_flags &= ~LNK_IO_Flags_MemoryMapFilesReadWrite;
-      config->io_flags |=  LNK_IO_Flags_MemoryMapFilesReadOnly;
-    } else {
-      if (str8_matchi(value, str8_lit("no"))) {
-        config->io_flags &= ~(LNK_IO_Flags_MemoryMapFilesReadOnly|LNK_IO_Flags_MemoryMapFilesReadWrite);
-      } else if (str8_matchi(value, str8_lit("yes")) || str8_matchi(value, str8_lit("read_only"))) {
-        config->io_flags &= ~LNK_IO_Flags_MemoryMapFilesReadWrite;
-        config->io_flags |=  LNK_IO_Flags_MemoryMapFilesReadOnly;
-      } else if (str8_matchi(value, str8_lit("read_write"))) {
-        config->io_flags &= ~LNK_IO_Flags_MemoryMapFilesReadOnly;
-        config->io_flags |=  LNK_IO_Flags_MemoryMapFilesReadWrite;
-      } else {
-        lnk_error_cmd_switch(LNK_Error_Cmdl, obj, cmd_switch, "invalid parameter: \"%S\", expected NO, READ_ONLY, or READ_WRITE", value);
-      }
-    }
-  } break;
-
   case LNK_CmdSwitch_Rad_BootMode: {
     if (value.size > 0) {
       if (str8_matchi(value, str8_lit("linker"))) {
@@ -2443,7 +2423,7 @@ lnk_apply_def_file_to_config(LNK_Config *config, String8 path, LNK_Obj *obj)
 
   // load DEF file
   B8      file_read = 0;
-  String8 raw_file  = lnk_read_data_from_file_path(scratch.arena, config->io_flags, path, &file_read);
+  String8 raw_file  = lnk_read_data_from_file_path(scratch.arena, path, &file_read);
   if ( ! file_read) {
     lnk_error(LNK_Error_Cmdl, "failed to read DEF file: %S", path);
     goto exit;
@@ -2749,7 +2729,7 @@ lnk_unwrap_cmd_line(Arena *arena, String8List arg_list)
 
       // read rsp from disk
       B8 is_file_read = 0;
-      String8 file_data = lnk_read_data_from_file_path(scratch.arena, 0, file_name, &is_file_read);
+      String8 file_data = lnk_read_data_from_file_path(scratch.arena, file_name, &is_file_read);
       if ( ! is_file_read) {
         lnk_error(LNK_Error_Cmdl, "unable to find RSP: %S", file_name);
         continue;
@@ -2810,7 +2790,6 @@ lnk_make_default_cmd_line(Arena *arena, LNK_CmdLine user_cmd_line)
     "/RAD_PDB_HASH_TYPE_NAMES:NONE",
     "/RAD_PDB_HASH_TYPE_NAME_LENGTH:8",
     "/RAD_DEBUGALTPATH:%_RAD_RDI_PATH%",
-    "/RAD_MEMORY_MAP_FILES",
     "/RAD_MAP_LINES_FOR_UNRESOLVED_SYMBOLS",
     "/RAD_UNRESOLVED_SYMBOL_LIMIT:1000",
     "/RAD_UNRESOLVED_SYMBOL_REF_LIMIT:10",
