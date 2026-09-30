@@ -109,12 +109,14 @@ typedef struct
   Rng1U64        *ranges;
   PDB_TypeServer *type_server;
   PDB_TypeBucket *udt_buckets;
+  U64             base_type_index;
 } PDB_PushLeafTask;
 
 typedef struct
 {
   PDB_TypeServer *ts;
   U32            *map;
+  U64             leaf_count;
 } PDB_WriteTypeToBucketMap;
 
 typedef struct
@@ -441,13 +443,15 @@ internal U32                      pdb_strtab_hash(PDB_StringTable *strtab, Strin
 
 internal PDB_TypeServer *        pdb_type_server_alloc(U64 bucket_count);
 internal void                    pdb_type_server_build(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strtab, MSF_Context *msf, MSF_StreamNumber sn);
+internal void                    pdb_type_server_finalize(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strtab, MSF_Context *msf, MSF_StreamNumber sn, U64 leaf_count, U64 leaf_data_size, PDB_TpiOffHint *hint_arr, U64 hint_count);
 internal void                    pdb_type_server_release(PDB_TypeServer **serv_ptr);
 internal void                    pdb_type_server_push(PDB_TypeServer *ts, String8 raw_leaf);
 internal void                    pdb_type_server_push_parallel(TP_Context *tp, PDB_TypeServer *ts, U64 leaf_count, U8 **leaf_arr);
+internal void                    pdb_type_server_index_leaves(TP_Context *tp, PDB_TypeServer *ts, U64 base_type_index, U64 leaf_count, U8 **leaf_arr);
 internal String8Node *           pdb_type_server_reserve(PDB_TypeServer *ts, U64 count);
 internal String8Node *           pdb_type_server_make_leaf(PDB_TypeServer *ts, CV_LeafKind kind, String8 data);
 internal void                    pdb_type_server_push_bucket(PDB_TypeServer *ts, CV_Leaf *leaf);
-internal PDB_TypeHashStreamInfo  pdb_type_hash_stream_build(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strtab, MSF_Context *msf, PDB_TpiOffHint *hint_arr, U64 hint_count);
+internal PDB_TypeHashStreamInfo  pdb_type_hash_stream_build(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strtab, MSF_Context *msf, U64 leaf_count, PDB_TpiOffHint *hint_arr, U64 hint_count);
 
 ////////////////////////////////
 // Enum -> String

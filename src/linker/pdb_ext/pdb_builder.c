@@ -873,7 +873,7 @@ THREAD_POOL_TASK_FUNC(pdb_write_type_to_bucket_map_32_task)
   PDB_TypeBucket *head = ts->buckets[bucket_idx];
   for (PDB_TypeBucket *bucket = head; bucket != 0; bucket = bucket->next) {
     Assert(bucket->type_index >= ts->ti_lo);
-    Assert(bucket->type_index - ts->ti_lo < ts->leaf_list.node_count);
+    Assert(bucket->type_index - ts->ti_lo < task->leaf_count);
     CV_TypeIndex type_idx = bucket->type_index - ts->ti_lo;
     Assert(task->map[type_idx] == 0);
     task->map[type_idx] = bucket_idx32;
@@ -885,6 +885,7 @@ pdb_type_hash_stream_build(TP_Context      *tp,
                            PDB_TypeServer  *ts,
                            PDB_StringTable *strtab,
                            MSF_Context     *msf,
+                           U64              leaf_count,
                            PDB_TpiOffHint  *hint_arr,
                            U64              hint_count)
 {
@@ -896,7 +897,7 @@ pdb_type_hash_stream_build(TP_Context      *tp,
     hash_adj_data = pdb_data_from_hash_adj_hash_table(scratch.arena, &ts->hash_adj, strtab);
   }
 
-  PDB_OffsetSize hash_vals = { .off = 0, .size = sizeof(U32) * ts->leaf_list.node_count };
+  PDB_OffsetSize hash_vals = { .off = 0, .size = sizeof(U32) * leaf_count };
   PDB_OffsetSize hint_offs = { .off = hash_vals.size, .size = sizeof(hint_arr[0]) * hint_count };
   PDB_OffsetSize hash_adj  = {0};
   
@@ -922,6 +923,7 @@ pdb_type_hash_stream_build(TP_Context      *tp,
     PDB_WriteTypeToBucketMap type_to_bucket_task;
     type_to_bucket_task.ts  = ts;
     type_to_bucket_task.map = type_to_bucket_map;
+    type_to_bucket_task.leaf_count = leaf_count;
     tp_for_parallel(tp, 0, ts->bucket_cap, pdb_write_type_to_bucket_map_32_task, &type_to_bucket_task);
     ProfEnd();
   }
@@ -983,8 +985,8 @@ pdb_type_server_build(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strta
 
   U64             hint_count    = CeilIntegerDiv(ts->leaf_list.node_count, PDB_TYPE_HINT_STEP);
   PDB_TpiOffHint *hint_arr      = push_array_no_zero(scratch.arena, PDB_TpiOffHint, hint_count);
-  String8Node   **lf_arr        = push_array_no_zero(scratch.arena, String8Node *, tp->worker_count);
-  U64            *lf_cursor_arr = push_array_no_zero(scratch.arena, U64, tp->worker_count);
+  String8Node   **lf_arr        = push_array(scratch.arena, String8Node *, tp->worker_count);
+  U64            *lf_cursor_arr = push_array(scratch.arena, U64, tp->worker_count);
   Rng1U64        *lf_range_arr  = tp_divide_work(scratch.arena, ts->leaf_list.node_count, tp->worker_count);
 
   U64 lf_buf_size = 0;
@@ -1004,7 +1006,7 @@ pdb_type_server_build(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strta
 
   ProfBegin("Write Type Data & Hints");
 
-  PDB_WriteTypesTask write_types_task;
+  PDB_WriteTypesTask write_types_task = {0};
   write_types_task.ti_lo         = ts->ti_lo;
   write_types_task.ti_hi         = ts->ti_lo + ts->leaf_list.node_count;
   write_types_task.hint_count    = hint_count;
@@ -1019,16 +1021,26 @@ pdb_type_server_build(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strta
 
   ProfEnd();
   
+  pdb_type_server_finalize(tp, ts, strtab, msf, sn, ts->leaf_list.node_count, lf_buf_size, hint_arr, hint_count);
+
+  scratch_end(scratch);
+  ProfEnd();
+}
+
+internal void
+pdb_type_server_finalize(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strtab, MSF_Context *msf, MSF_StreamNumber sn, U64 leaf_count, U64 leaf_data_size, PDB_TpiOffHint *hint_arr, U64 hint_count)
+{
+  ProfBeginFunction();
   // build type lookup accelerator
-  PDB_TypeHashStreamInfo hash_stream_info = pdb_type_hash_stream_build(tp, ts, strtab, msf, hint_arr, hint_count);
+  PDB_TypeHashStreamInfo hash_stream_info = pdb_type_hash_stream_build(tp, ts, strtab, msf, leaf_count, hint_arr, hint_count);
   
   // fill out header
   PDB_TpiHeader header;
   header.version           = PDB_TpiVersion_IMPV80;
   header.header_size       = sizeof(header);
   header.ti_lo             = ts->ti_lo;
-  header.ti_hi             = ts->ti_lo + ts->leaf_list.node_count;
-  header.leaf_data_size    = safe_cast_u32(lf_buf_size);
+  header.ti_hi             = ts->ti_lo + leaf_count;
+  header.leaf_data_size    = safe_cast_u32(leaf_data_size);
   header.hash_sn           = ts->hash_sn;
   header.hash_sn_aux       = MSF_INVALID_STREAM_NUMBER;
   header.hash_key_size     = sizeof(U32);
@@ -1041,10 +1053,9 @@ pdb_type_server_build(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strta
   ProfBegin("MSF Commit");
   msf_stream_seek_start(msf, sn);
   msf_stream_write_struct(msf, sn, &header);
-  msf_stream_seek(msf, sn, sizeof(header) + lf_buf_size);
+  msf_stream_seek(msf, sn, sizeof(header) + leaf_data_size);
   ProfEnd();
   
-  scratch_end(scratch);
   ProfEnd();
 }
 
@@ -1194,7 +1205,7 @@ THREAD_POOL_TASK_FUNC(pdb_push_udt_leaf_task)
 
   U64              type_ht_cap     = type_server->bucket_cap;
   PDB_TypeBucket **type_ht_buckets = type_server->buckets;
-  U64              base_type_index = type_server->ti_lo + type_server->leaf_list.node_count;
+  U64              base_type_index = task->base_type_index;
 
   for EachInRange(leaf_idx, task->ranges[task_id]) {
     CV_Leaf leaf;
@@ -1237,7 +1248,7 @@ THREAD_POOL_TASK_FUNC(pdb_str8_list_from_leaf_array_task)
 }
 
 internal void
-pdb_type_server_push_parallel(TP_Context *tp, PDB_TypeServer *type_server, U64 leaf_count, U8 **leaf_arr)
+pdb_type_server_index_leaves(TP_Context *tp, PDB_TypeServer *type_server, U64 base_type_index, U64 leaf_count, U8 **leaf_arr)
 {
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
@@ -1247,6 +1258,7 @@ pdb_type_server_push_parallel(TP_Context *tp, PDB_TypeServer *type_server, U64 l
   task.leaf_arr         = leaf_arr;
   task.type_server      = type_server;
   task.ranges           = tp_divide_work(scratch.arena, leaf_count, tp->worker_count);
+  task.base_type_index  = base_type_index;
 
   ProfBegin("Count UDT");
   task.udt_counts = push_array(scratch.arena, U64, tp->worker_count);
@@ -1259,6 +1271,16 @@ pdb_type_server_push_parallel(TP_Context *tp, PDB_TypeServer *type_server, U64 l
   task.udt_buckets = push_array_no_zero(type_server->arena, PDB_TypeBucket, total_udt_count);
   tp_for_parallel(tp, 0, tp->worker_count, pdb_push_udt_leaf_task, &task);
   ProfEnd();
+
+  scratch_end(scratch);
+  ProfEnd();
+}
+
+internal void
+pdb_type_server_push_parallel(TP_Context *tp, PDB_TypeServer *type_server, U64 leaf_count, U8 **leaf_arr)
+{
+  Temp scratch = scratch_begin(0, 0);
+  pdb_type_server_index_leaves(tp, type_server, type_server->ti_lo + type_server->leaf_list.node_count, leaf_count, leaf_arr);
 
   ProfBegin("Append New Leaves");
   {
@@ -1276,7 +1298,6 @@ pdb_type_server_push_parallel(TP_Context *tp, PDB_TypeServer *type_server, U64 l
   ProfEnd();
 
   scratch_end(scratch);
-  ProfEnd();
 }
 
 ////////////////////////////////
