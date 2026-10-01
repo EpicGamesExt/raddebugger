@@ -120,6 +120,7 @@ typedef enum
   LNK_Warning_UndefinedSectionSymbol,
   LNK_Warning_CyclicSymbol,
   LNK_Warning_RelocationAgainstRemovedAssociativeSection,
+  LNK_Warning_UnsortedRelocations,
   LNK_Warning_Last,
   
   LNK_Error_Count

@@ -262,6 +262,8 @@ internal U64                  lnk_obj_foff_from_section_data_ptr(LNK_Obj *obj, v
 internal String8              lnk_obj_section_name_from_section_number(LNK_Obj *obj, U64 section_number);
 internal LNK_ObjSection       lnk_obj_section_from_section_number(LNK_Obj *obj, U64 section_number);
 internal COFF_RelocArray      lnk_coff_relocs_from_section_header(LNK_Obj *obj, COFF_SectionHeader *section_header);
+internal B32                  lnk_resolve_reloc_value(LNK_Obj *obj, U64 section_number, COFF_Reloc *reloc, U64 reloc_idx, U64 image_base, COFF_SectionHeader **image_section_table, U64 image_section_table_count, COFF_RelocValue *value_out);
+internal void                 lnk_apply_reloc_value(void *dst, COFF_RelocValue value);
 internal String8              lnk_coff_string_table_from_obj(LNK_Obj *obj);
 internal String8              lnk_coff_symbol_table_from_obj(LNK_Obj *obj);
 internal B32                  lnk_try_comdat_props_from_section_number(LNK_Obj *obj, U32 section_number, COFF_ComdatSelectType *select_out, U32 *section_number_out, U32 *section_length_out, U32 *check_sum_out);

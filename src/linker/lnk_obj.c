@@ -419,6 +419,15 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
   obj->exclude_from_debug_info = input->exclude_from_debug_info;
   obj->self                    = &task->objs[task_id];
   obj->link_member             = input->link_member;
+
+  for EachIndex(i, header.section_count_no_null) {
+    COFF_SectionHeader *section = &section_headers[i + 1];
+    COFF_RelocInfo info = coff_reloc_info_from_section_header(input->data, section);
+    if (info.array_off > input->data.size || info.count > (input->data.size - info.array_off) / sizeof(COFF_Reloc)) {
+      lnk_error_input_obj(LNK_Error_IllData, input, "relocation table outside file (section %llu)", i + 1);
+      continue;
+    }
+  }
 }
 
 internal LNK_ObjNode *
@@ -762,11 +771,88 @@ lnk_coff_symbol_table_from_obj(LNK_Obj *obj)
 internal COFF_RelocArray
 lnk_coff_reloc_info_from_section_number(LNK_Obj *obj, U64 section_number)
 {
-  LNK_ObjSection   section    = lnk_obj_section_from_section_number(obj, section_number);
-  COFF_RelocInfo   reloc_info = coff_reloc_info_from_section_header(obj->coff.data, section.header);
-  COFF_Reloc      *relocs     = str8_deserial_get_raw_ptr(obj->coff.data, reloc_info.array_off, sizeof(*relocs)*reloc_info.count);
-  COFF_RelocArray  result     = { .count = reloc_info.count, .v = relocs };
-  return result;
+  return lnk_coff_relocs_from_section_header(obj, lnk_coff_section_header_from_section_number(obj, section_number));
+}
+
+internal B32
+lnk_resolve_reloc_value(LNK_Obj *obj, U64 section_number, COFF_Reloc *reloc, U64 reloc_idx, U64 image_base, COFF_SectionHeader **image_section_table, U64 image_section_table_count, COFF_RelocValue *value_out)
+{
+  MemoryZeroStruct(value_out);
+
+  switch (obj->coff.header.machine) {
+  case COFF_MachineType_Unknown: return 0;
+  case COFF_MachineType_X64: {
+    if (reloc->type > COFF_Reloc_X64_Last) {
+      lnk_error_obj(LNK_Error_IllegalRelocation, obj, "unknown relocation type 0x%x", reloc->type);
+      return 0;
+    }
+  } break;
+  default: {
+    lnk_not_implemented("relocation patching is not implemented for %S", coff_string_from_machine_type(obj->coff.header.machine));
+    return 0;
+  } break;
+  }
+
+  U32 symbol_secnum = 0;
+  U32 symbol_secoff = 0;
+  S64 symbol_voff   = 0;
+  COFF_SectionHeader         *section = lnk_coff_section_header_from_section_number(obj, section_number);
+  COFF_ParsedSymbol           symbol  = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, reloc->isymbol);
+  COFF_SymbolValueInterpType  interp  = coff_interp_from_parsed_symbol(symbol);
+
+  switch (interp) {
+  case COFF_SymbolValueInterp_Regular: {
+    if (symbol.section_number == lnk_obj_get_removed_section_number(obj)) {
+      // debug records keep their original addends when the target was removed
+      if (section->flags & LNK_SECTION_FLAG_DEBUG) { return 0; }
+
+      String8       sect_name   = lnk_obj_section_name_from_section_number(obj, section_number);
+      String8       symbol_name = lnk_symbol_name_from_coff_symbol_idx(obj, reloc->isymbol);
+      B32           associative = symbol.value == LNK_REMOVED_ASSOCIATIVE_SYMBOL_VALUE;
+      LNK_ErrorCode code        = associative ? LNK_Warning_RelocationAgainstRemovedAssociativeSection : LNK_Error_RelocationAgainstRemovedSection;
+      lnk_error_obj(code, obj, "relocating against symbol that is in a removed section (symbol: %S, reloc-section: %S 0x%llx, reloc-index: 0x%llx)", symbol_name, sect_name, section_number, reloc_idx);
+
+      // MSVC permits discarded associative targets in image relocations; use
+      // section zero, section offset zero, and RVA zero for those references
+      if (!associative) { return 0; }
+    } else {
+      symbol_secnum = symbol.section_number;
+      symbol_secoff = symbol.value;
+      if (symbol_secnum >= image_section_table_count || image_section_table[symbol_secnum] == 0) {
+        lnk_error_obj(LNK_Error_IllegalRelocation, obj, "relocation references invalid section %u", symbol_secnum);
+        return 0;
+      }
+      symbol_voff = safe_cast_u32((U64)image_section_table[symbol_secnum]->voff + symbol_secoff);
+    }
+  } break;
+  case COFF_SymbolValueInterp_Abs: {
+    // COFF symbols cannot hold the full 64-bit image base
+    if (str8_match(lnk_symbol_name_from_coff_symbol_idx(obj, reloc->isymbol), str8_lit("__ImageBase"), 0)) {
+      symbol.value = image_base;
+    }
+    symbol_voff = (S64)symbol.value - (S64)image_base;
+  } break;
+  case COFF_SymbolValueInterp_Weak:
+  case COFF_SymbolValueInterp_Undefined: {
+    // unresolved symbols retain the zero target values
+  } break;
+  default: { InvalidPath; return 0; } break;
+  }
+
+  U64 reloc_voff = (U64)section->voff + reloc->apply_off;
+  *value_out = coff_pick_reloc_value_x64(reloc->type, image_base, reloc_voff, symbol_secnum, symbol_secoff, symbol_voff);
+  return 1;
+}
+
+internal void
+lnk_apply_reloc_value(void *dst, COFF_RelocValue value)
+{
+  if (value.size == 0) { return; }
+  U64 raw_addend = 0;
+  Assert(value.size <= sizeof(raw_addend));
+  MemoryCopy(&raw_addend, dst, value.size);
+  U64 result = value.value + extend_sign64(raw_addend, value.size);
+  MemoryCopy(dst, &result, value.size);
 }
 
 internal B32
