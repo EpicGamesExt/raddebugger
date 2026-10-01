@@ -1729,7 +1729,11 @@ lnk_merge_types(TP_Context *tp, Arena *arena, LNK_CodeViewInput *input, LNK_Merg
 {
   ProfBeginFunction();
 
-  Temp scratch = lnk_get_huge_arena() != arena ? temp_begin(lnk_get_huge_arena()) : scratch_begin(&arena, 1);
+  // dedup tables can be much larger than the eventual PDB; give them their
+  // own lifetime instead of retaining their backing in the PDB arena's cache
+  Arena *merge_arena = arena_alloc(.name = "TYPE_MERGE");
+  
+  Temp scratch = temp_begin(merge_arena);
 
   LNK_MergeTypes task = { .input = input, .result.input = input };
 
@@ -1928,6 +1932,8 @@ lnk_merge_types(TP_Context *tp, Arena *arena, LNK_CodeViewInput *input, LNK_Merg
   MemoryCopyTyped(task.result.min_type_indices, input->min_type_indices, CV_TypeIndexSource_COUNT);
 
   temp_end(scratch);
+  arena_release(merge_arena);
+  tp_release_scratch_free_blocks(tp);
   ProfEnd();
   return task.result;
 }
@@ -3479,6 +3485,10 @@ lnk_build_pdb(TP_Context *tp, Arena *arena, String8 image_data, LNK_Config *conf
     }
   }
   
+  // global-symbol indexing has finished with its temporary tables; reclaim
+  // only popped scratch blocks; module views and queued PDB pages remain live
+  tp_release_scratch_free_blocks(tp);
+
   if (builder_flags & LNK_PDB_BuilderFlag_SC) {
     ProfBegin("Build Section Contrib Map");
     {

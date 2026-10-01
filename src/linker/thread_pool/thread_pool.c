@@ -180,6 +180,26 @@ tp_temp_begin(TP_Arena *arena)
   return temp;
 }
 
+internal
+THREAD_POOL_TASK_FUNC(tp_release_scratch_free_blocks_task)
+{
+  TCTX *tctx = tctx_selected();
+  for EachElement(i, tctx->arenas) {
+    arena_release_free_blocks(tctx->arenas[i]);
+  }
+  // keep each worker in its task until every worker has reclaimed its own
+  // scratch blocks; otherwise one worker could consume multiple task IDs
+  barrier_wait(tp->barrier);
+}
+
+internal void
+tp_release_scratch_free_blocks(TP_Context *pool)
+{
+  ProfBeginFunction();
+  tp_for_parallel(pool, 0, pool->worker_count, tp_release_scratch_free_blocks_task, 0);
+  ProfEnd();
+}
+
 internal void
 tp_temp_end(TP_Temp temp)
 {

@@ -187,6 +187,21 @@ arena_release(Arena *arena)
   ProfEnd();
 }
 
+internal void
+arena_release_free_blocks(Arena *arena)
+{
+  ProfBeginFunction();
+#if ARENA_FREE_LIST
+  Arena *free_last = arena->free_last;
+  arena->free_last = 0;
+  if(free_last != 0)
+  {
+    arena_release(free_last);
+  }
+#endif
+  ProfEnd();
+}
+
 //- rjf: arena push/pop core functions
 
 internal void *

@@ -53,6 +53,7 @@ internal TP_Context * tp_alloc(Arena *arena, U32 worker_count, U32 max_worker_co
 internal void         tp_release(TP_Context *pool);
 internal TP_Arena *   tp_arena_alloc(TP_Context *pool);
 internal void         tp_arena_release(TP_Arena **arena_ptr);
+internal void         tp_release_scratch_free_blocks(TP_Context *pool);
 internal TP_Temp      tp_temp_begin(TP_Arena *arena);
 internal void         tp_temp_end(TP_Temp temp);
 #define tp_for_parallel_prof(pool, arena, task_count, task_func, task_data, zone_name) ProfBegin(zone_name); tp_for_parallel(pool, arena, task_count, task_func, task_data); ProfEnd();
