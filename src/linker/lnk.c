@@ -1056,18 +1056,22 @@ lnk_inputer_flush(Arena *arena, TP_Context *tp, LNK_Inputer *inputer, LNK_InputL
 }
 
 internal
-THREAD_POOL_TASK_FUNC(lnk_release_file_map_task)
+THREAD_POOL_TASK_FUNC(lnk_release_file_maps_task)
 {
-  LNK_Input **mapped_inputs = raw_task;
-  LNK_Input  *input         = mapped_inputs[task_id];
-  file_map_view_close((FileMap){0}, input->data.str, r1u64(0, input->data.size));
-  input->data          = str8_zero();
-  input->owns_file_map = 0;
+  LNK_ReleaseFileMapsTask *task = raw_task;
+  for (U64 input_idx; (input_idx = ins_atomic_u64_inc_eval(&task->next_input_idx) - 1) < task->inputs.count;) {
+    LNK_Input *input = task->inputs.v[input_idx];
+    file_map_view_close((FileMap){0}, input->data.str, r1u64(0, input->data.size));
+    input->data          = str8_zero();
+    input->owns_file_map = 0;
+  }
 }
 
 internal void
 lnk_inputer_release_file_maps(TP_Context *tp, LNK_Inputer *inputer)
 {
+  ProfBeginFunction();
+
   Temp scratch = scratch_begin(0, 0);
 
   U64 mapped_input_count = 0;
@@ -1078,8 +1082,8 @@ lnk_inputer_release_file_maps(TP_Context *tp, LNK_Inputer *inputer)
     mapped_input_count += input->owns_file_map;
   }
 
-  LNK_Input **mapped_inputs = push_array_no_zero(scratch.arena, LNK_Input *, mapped_input_count);
-  U64 mapped_input_idx = 0;
+  LNK_Input **mapped_inputs    = push_array_no_zero(scratch.arena, LNK_Input *, mapped_input_count);
+  U64         mapped_input_idx = 0;
   for EachNode(input, LNK_Input, inputer->objs.first) {
     if (input->owns_file_map) {
       mapped_inputs[mapped_input_idx++] = input;
@@ -1092,9 +1096,12 @@ lnk_inputer_release_file_maps(TP_Context *tp, LNK_Inputer *inputer)
   }
   Assert(mapped_input_idx == mapped_input_count);
 
-  tp_for_parallel(tp, 0, mapped_input_count, lnk_release_file_map_task, mapped_inputs);
+  LNK_ReleaseFileMapsTask task = { .inputs = { mapped_input_count, mapped_inputs } };
+  U64 task_count = Min(mapped_input_count, Min(tp->worker_count, 20));
+  tp_for_parallel(tp, 0, task_count, lnk_release_file_maps_task, &task);
 
   scratch_end(scratch);
+  ProfEnd();
 }
 
 internal void
@@ -6662,9 +6669,7 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
 
 #if OS_WINDOWS
   // for unexplained reasons, file mappings on Windows cause slow process exit times
-  ProfBegin("Release Input File Maps");
   lnk_inputer_release_file_maps(tp, inputer);
-  ProfEnd();
 #endif
 
   // wait for the thread to finish writing image to disk

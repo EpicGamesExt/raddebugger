@@ -114,6 +114,9 @@ typedef struct
 ////////////////////////////////
 // Type Merging
 
+// must be power of two
+#define LNK_LEAF_HT_MIN_CAP 16
+
 typedef U64 LNK_LeafRef;
 typedef struct { U64 count; LNK_LeafRef *v; } LNK_LeafRefArray;
 
@@ -121,9 +124,20 @@ typedef struct { U64 count; LNK_LeafRef *v; } LNK_LeafRefArray;
 
 typedef struct
 {
+  Arena       *arena;
   U64          cap;
+  U64          count;
+  U64          initial_cap;
+  U64          grow_count;
   LNK_LeafRef *bucket_arr;
 } LNK_LeafHashTable;
+
+typedef struct
+{
+  U32 obj_idx;
+  U64 cursor;
+  U64 opl;
+} LNK_LeafDedupWork;
 
 typedef struct
 {
@@ -173,8 +187,9 @@ typedef struct
   U64          *obj_ti_map_offsets;
   CV_TypeIndex *obj_ti_batch;
 
-  U64        pop_obj_idx;
-  Rng1U64   *pop_range;
+  LNK_LeafDedupWork *dedup_work;
+  B32                skip_dedup; // seed deduped RRT; also skip discarded-leaf filtering
+  U32                grow_mask;
 
   LNK_MergedTypes result;
 } LNK_MergeTypes;

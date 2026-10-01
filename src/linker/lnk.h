@@ -70,6 +70,12 @@ typedef struct LNK_Inputer
   LNK_InputList  new_libs[LNK_InputSource_Count];
 } LNK_Inputer;
 
+typedef struct LNK_ReleaseFileMapsTask
+{
+  LNK_InputPtrArray inputs;
+  U64              next_input_idx;
+} LNK_ReleaseFileMapsTask;
+
 // --- Image Link -------------------------------------------------------------
 
 #define LNK_IMPORT_STUB "*** RAD_IMPORT_STUB ***"

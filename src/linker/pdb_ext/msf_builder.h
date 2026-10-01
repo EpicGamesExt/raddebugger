@@ -61,20 +61,21 @@ struct MSF_PageBlock
 
 typedef struct MSF_Context
 {
-  Arena          *arena;
-  MSF_UInt        page_size;
-  MSF_UInt        active_fpm;
-  MSF_PageNumber  fpm_rover;
-  MSF_UInt        block_count;
-  MSF_PageBlock  *first_block;
-  MSF_PageBlock  *last_block;
-  U8             *zero_page;
-  U8             *empty_fpm;
-  MSF_PageList    page_pool;
-  MSF_Stream      header;
-  MSF_Stream      root;
-  MSF_Stream      stream_table;
-  MSF_StreamList  sectab;
+  Arena           *arena;
+  MSF_UInt         page_size;
+  MSF_UInt         active_fpm;
+  MSF_PageNumber   fpm_rover;
+  MSF_UInt         block_count;
+  MSF_PageBlock   *first_block;
+  MSF_PageBlock   *last_block;
+  U8              *zero_page;
+  U8              *empty_fpm;
+  MSF_PageList     page_pool;
+  MSF_Stream       header;
+  MSF_Stream       root;
+  MSF_Stream       stream_table;
+  MSF_StreamList   sectab;
+  MSF_StreamNode **stream_from_sn;
 } MSF_Context;
 
 typedef enum MSF_Error

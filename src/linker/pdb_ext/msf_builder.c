@@ -196,10 +196,7 @@ msf_stream_resize_ex(MSF_Context *msf, MSF_Stream *stream, MSF_UInt size)
 internal MSF_StreamNode *
 msf_find_stream_node(MSF_Context *msf, MSF_StreamNumber sn)
 {
-  for EachNode(node, MSF_StreamNode, msf->sectab.first) {
-    if (node->data.sn == sn) { return node; }
-  }
-  return 0;
+  return sn < msf->sectab.count ? msf->stream_from_sn[sn] : 0;
 }
 
 internal MSF_Stream *
@@ -212,11 +209,12 @@ msf_find_stream(MSF_Context *msf, MSF_StreamNumber sn)
 internal MSF_StreamNumber
 msf_stream_alloc_ex(MSF_Context *msf, MSF_UInt size)
 {
-  Assert(msf->sectab.count < MSF_STREAM_NUMBER_MAX);
+  if (msf->sectab.count >= MSF_STREAM_NUMBER_MAX) { return MSF_INVALID_STREAM_NUMBER; }
   MSF_StreamNode *node = push_array(msf->arena, MSF_StreamNode, 1);
   node->data.sn = safe_cast_u16(msf->sectab.count);
   if (!msf_stream_resize_ex(msf, &node->data, size)) { return MSF_INVALID_STREAM_NUMBER; }
   DLLPushBack(msf->sectab.first, msf->sectab.last, node);
+  msf->stream_from_sn[node->data.sn] = node;
   msf->sectab.count += 1;
   return node->data.sn;
 }
@@ -398,11 +396,12 @@ msf_alloc_(Arena *arena, MSF_UInt page_size, MSF_UInt active_fpm)
   Assert(active_fpm == MSF_FPM0 || active_fpm == MSF_FPM1);
 
   MSF_Context *msf = push_array(arena, MSF_Context, 1);
-  msf->arena      = arena;
-  msf->page_size  = page_size;
-  msf->active_fpm = active_fpm;
-  msf->zero_page  = push_array(arena, U8, page_size);
-  msf->empty_fpm  = push_array_no_zero(arena, U8, page_size);
+  msf->arena          = arena;
+  msf->page_size      = page_size;
+  msf->active_fpm     = active_fpm;
+  msf->stream_from_sn = push_array(arena, MSF_StreamNode *, MSF_STREAM_NUMBER_MAX);
+  msf->zero_page      = push_array(arena, U8, page_size);
+  msf->empty_fpm      = push_array_no_zero(arena, U8, page_size);
   MemorySet(msf->empty_fpm, 0xff, page_size);
 
   AssertAlways(msf_stream_resize_ex(msf, &msf->header, page_size));
