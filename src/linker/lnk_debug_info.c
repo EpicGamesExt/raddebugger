@@ -1683,7 +1683,7 @@ THREAD_POOL_TASK_FUNC(lnk_assign_type_indices_task)
 
     B32 is_inserted = 0;
     do {
-      CV_TypeIndex curr_type_index = assigned->ti_arr[idx];
+      CV_TypeIndex curr_type_index = ins_atomic_u32_eval(&assigned->ti_arr[idx]);
       if (curr_type_index == 0) {
         CV_TypeIndex cmp_type_index = ins_atomic_u32_eval_cond_assign(&assigned->ti_arr[idx], type_index, curr_type_index);
         if (cmp_type_index == curr_type_index) {
