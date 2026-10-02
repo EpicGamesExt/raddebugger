@@ -40,7 +40,7 @@ lnk_make_symbol(Arena *arena, String8 name, LNK_Obj *obj, U32 symbol_idx, LNK_Sy
 internal B32
 lnk_obj_symbol_ref_match(LNK_ObjSymbolRef a, LNK_ObjSymbolRef b)
 {
-  return MemoryMatchStruct(&a, &b);
+  return a.obj == b.obj && a.symbol_idx == b.symbol_idx;
 }
 
 internal LNK_ObjSymbolRefNode *
