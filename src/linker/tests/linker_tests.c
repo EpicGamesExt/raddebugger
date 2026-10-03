@@ -10870,6 +10870,33 @@ TEST(coff_section_name_offsets)
   T_Ok(coff_name_from_section_header(str8_zero(), &inline_header).size == 0);
 }
 
+// TODO: linker currenlty skips over the IFC records and should instead load the .ifc; type merger also has to expand type index space with the help of IFC records
+#if 0 && OS_WINDOWS
+TEST(msvc_cpp_module)
+{
+  char *types_h = "#pragma once\n\
+  struct Point {\n\
+    int x;\n\
+    int y;\n\
+    __declspec(noinline) int sum() const {\n\
+        return x + y;\n\
+    }\n\
+  };\n";
+
+  char *main_cpp = "import \"types.h\";\n\
+  int main() {\n\
+    Point p{20, 22};\n\
+    return p.sum();\n\
+  }\n";
+
+  T_Ok(t_write_file(str8_lit("types.h"), str8_cstring(types_h)));
+  T_Ok(t_write_file(str8_lit("main.cpp"), str8_cstring(main_cpp)));
+
+  T_Ok(t_invoke_cl("/experimental:ifcDebugRecords /nologo /std:c++20 /EHsc /MD /Od /Z7 /c /exportHeader /headerName:quote types.h /ifcOutput types.ifc /Fotypes.obj"));
+  T_Ok(t_invoke_cl("/experimental:ifcDebugRecords /nologo /std:c++20 /EHsc /MD /Od /Z7 /c main.cpp /headerUnit:quote types.h=types.ifc /Fomain.obj"));
+}
+#endif
+
 #if 0
 TEST(defer_imp_link)
 {
