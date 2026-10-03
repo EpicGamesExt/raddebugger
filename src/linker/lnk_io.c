@@ -184,7 +184,9 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
 {
   LNK_DiskReader *task = raw_task;
+
   if (task->was_read) { task->was_read[task_id] = 0; }
+
   File file = file_open(AccessFlag_Read | AccessFlag_ShareRead, task->path_arr.v[task_id]);
   if (!file_match(file, file_zero())) {
     FileProperties props = properties_from_file(file);
@@ -201,6 +203,7 @@ THREAD_POOL_TASK_FUNC(lnk_memory_map_file_task)
       }
     }
     file_close(file);
+
     if (task->was_read) { task->was_read[task_id] = success; }
   }
 }
@@ -209,26 +212,22 @@ internal String8Array
 lnk_read_data_from_file_path_parallel(TP_Context *tp, Arena *arena, String8Array path_arr, B8 *was_read)
 {
   ProfBeginFunction();
-  LNK_DiskReader reader = {0};
 
+  LNK_DiskReader reader = {0};
   reader.path_arr       = path_arr;
   reader.data_arr.count = path_arr.count;
   reader.data_arr.v     = push_array(arena, String8, path_arr.count);
   reader.was_read       = was_read;
   tp_for_parallel(tp, 0, path_arr.count, lnk_memory_map_file_task, &reader);
-  
-  String8Array result = {0};
-  result.count        = path_arr.count;
-  result.v            = reader.data_arr.v;
 
   if (lnk_get_log_status(LNK_Log_IO_Read)) {
-    for (U64 i = 0; i < result.count; ++i) {
-      lnk_log_read(path_arr.v[i], result.v[i].size);
+    for EachIndex(i, path_arr.count) {
+      lnk_log_read(path_arr.v[i], reader.data_arr.v[i].size);
     }
   }
 
   ProfEnd();
-  return result;
+  return (String8Array){ .count = path_arr.count, .v = reader.data_arr.v };
 }
 
 internal void
@@ -410,7 +409,6 @@ internal void
 lnk_background_file_writer_begin(LNK_BackgroundFileWriter *writer)
 {
   ProfBegin("Background File Writer Begin");
-
   writer->queue_arena = arena_alloc(.reserve_size = MB(2), .commit_size = MB(2), .name = "BACKGROUND_FILE_WRITE_QUEUE");
   writer->queue       = guarded_ring_alloc(writer->queue_arena, MB(1));
   ProfEnd();

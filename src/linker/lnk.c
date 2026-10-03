@@ -2245,7 +2245,7 @@ lnk_link_image(TP_Context *tp, TP_Arena *arena, LNK_Config *config, LNK_Inputer 
     }
 
     ProfBegin("Build * Debug Directories *");
-    if (lnk_do_debug_info(config)) {
+    if (config->debug_mode == LNK_DebugMode_Full) {
       String8 pdb_dir_obj = pe_make_debug_directory_pdb_obj(arena->v[0], config->machine, config->guid, config->age, config->time_stamp, config->pdb_alt_path);
       lnk_inputer_push_obj_linkgen(inputer, 0, str8_lit("* Debug Directory PDB *"), pdb_dir_obj);
     }
@@ -6400,42 +6400,30 @@ lnk_build_map(Arena *arena, String8 image_data, LNK_Config *config, LNK_SymbolTa
 }
 
 internal void
-lnk_write_thread(void *raw_ctx)
-{
-  ProfBeginFunction();
-  LNK_WriteThreadContext *ctx = raw_ctx;
-  lnk_write_data_to_file_path(ctx->path, ctx->temp_path, ctx->data);
-  ProfEnd();
-}
-
-internal void
 lnk_log_timers(void)
 {
-  Temp scratch = scratch_begin(0, 0);
+  Temp scratch = scratch_begin(0,0);
   
-  U64 total_build_time_micro = 0;
-  for (U64 i = 0; i < LNK_Timer_Count; ++i) {
-    total_build_time_micro += g_timers[i].end - g_timers[i].begin;
-  }
+  U64 total_build_us = 0;
+  for EachIndex(i, LNK_Timer_Count) { total_build_us = lnk_timer_dt(i); }
   
   String8List output_list = {0};
+
   str8_list_pushf(scratch.arena, &output_list, "------ Link Times --------------------------------------------------------------");
-  for (U64 i = 0; i < LNK_Timer_Count; ++i) {
-    U64 build_time_micro = g_timers[i].end - g_timers[i].begin;
-    if (build_time_micro != 0) {
-      String8  timer_name = lnk_string_from_timer_type(i);
-      DateTime time       = date_time_from_micro_seconds(build_time_micro);
-      String8  time_str   = string_from_elapsed_time(scratch.arena, time);
-      str8_list_pushf(scratch.arena, &output_list, "  %-5S Time: %S", timer_name, time_str);
-    }
+
+  for EachIndex(i, LNK_Timer_Count) {
+    U64      build_us = lnk_timer_dt(i);
+    DateTime time     = date_time_from_micro_seconds(build_us);
+    String8  time_str = string_from_elapsed_time(scratch.arena, time);
+    str8_list_pushf(scratch.arena, &output_list, "  %-5S Time: %S",
+                    lnk_string_from_timer_type(i), // name
+                    time_str);                     // time
   }
   
-  DateTime total_time = date_time_from_micro_seconds(total_build_time_micro);
-  String8 total_time_str = string_from_elapsed_time(scratch.arena, total_time);
-  str8_list_pushf(scratch.arena, &output_list, "  Total Time: %S", total_time_str);
+  DateTime total_time = date_time_from_micro_seconds(total_build_us);
+  str8_list_pushf(scratch.arena, &output_list, "  Total Time: %S", string_from_elapsed_time(scratch.arena, total_time));
   
-  StringJoin new_line_join = { str8_lit_comp(""), str8_lit_comp("\n"), str8_lit_comp("") };
-  String8 output = str8_list_join(scratch.arena, &output_list, &new_line_join);
+  String8 output = str8_list_join(scratch.arena, &output_list, &(StringJoin){ str8_lit_comp("\n") });
   lnk_log(LNK_Log_Timers, "%S\n", output);
   
   scratch_end(scratch);
@@ -6448,29 +6436,47 @@ THREAD_POOL_TASK_FUNC(lnk_p2r_worker)
 
   LNK_P2R *ctx = raw_task;
 
+  // P2R input params
   P2R_ConvertParams p2r_params = {0};
   if (task_id == 0) {
-    p2r_params.input_pdb_name = lnk_get_pdb_name(ctx->config);
-    p2r_params.input_pdb_data = ctx->pdb_data;
     p2r_params.input_exe_name = lnk_get_image_name(ctx->config);
     p2r_params.input_exe_data = ctx->image_data;
+    p2r_params.input_pdb_name = lnk_get_pdb_name(ctx->config);
+    p2r_params.input_pdb_data = ctx->pdb_data;
     p2r_params.subset_flags   = max_U32;
   }
   tp_broadcast(&p2r_params);
 
-  LaneCtx lctx = { .lane_idx = task_id, .lane_count = tp->worker_count, .barrier = tp->barrier, .broadcast_memory = tp->broadcast };
-  lane_ctx(lctx);
+  // P2R lane adapter
+  LaneCtx lane_ctx = {
+    .lane_idx         = task_id,
+    .lane_count       = tp->worker_count,
+    .barrier          = tp->barrier,
+    .broadcast_memory = tp->broadcast
+  };
+  lane_ctx(lane_ctx);
 
-  Arena *bake_arena = arena_alloc();
-  RDIM_BakeParams bake_params = p2r_convert2(bake_arena, &p2r_params);
+  // convert PDB to RDI
+  RDIM_BakeParams bake_params = p2r_convert2(scratch.arena, &p2r_params);
   barrier_wait(tp->barrier);
 
+  // serialize RDI
   RDIM_BakeResults bake_results = rdim_bake(arena, &bake_params);
   barrier_wait(tp->barrier);
 
   if (task_id == 0) {
-    ctx->bake_results = bake_results;
+    Temp temp = temp_begin(lnk_get_huge_arena());
+
+    // join serialized RDI
+    String8List rdi_blobs = rdim_file_blobs_from_section_bundle(temp.arena, &bake_results.section_bundle);
+
+    // write RDI to the desk
+    LNK_Config *config = ctx->config;
+    lnk_write_data_list_to_file_path(config->rad_debug_name, config->temp_rad_debug_name, rdi_blobs);
+
+    temp_end(temp);
   }
+  barrier_wait(tp->barrier);
 
   scratch_end(scratch);
 }
@@ -6518,22 +6524,25 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   //
   LNK_LinkResult link = lnk_link_image(tp, arena, config, inputer, symtab);
 
+  // unpack linked objs and libs
   U64       objs_count = link.objs.count;
   U64       libs_count = link.libs.count;
   LNK_Obj **objs       = lnk_array_from_obj_list(scratch.arena, link.objs);
   LNK_Lib **libs       = lnk_array_from_lib_list(scratch.arena, link.libs);
 
   //
-  // Layout Image
+  // Build Image
   //
   LNK_ImageContext image_ctx = lnk_build_image(arena, tp, config, symtab, objs_count, objs);
 
   // Write image in the background
-  LNK_WriteThreadContext *image_write_ctx = push_array(scratch.arena, LNK_WriteThreadContext, 1);
-  image_write_ctx->path      = config->out_path;
-  image_write_ctx->temp_path = config->temp_out_path;
-  image_write_ctx->data      = image_ctx.image_data;
-  Thread image_write_thread = thread_launch(lnk_write_thread, image_write_ctx);
+  LNK_BackgroundFileWriter background_file_writer = {0};
+  lnk_background_file_writer_begin(&background_file_writer);
+  LNK_BackgroundFile *image_file = lnk_background_file_writer_begin_file(&background_file_writer, config->out_path, config->temp_out_path);
+  if (image_file != 0) {
+    lnk_background_file_writer_enqueue(&background_file_writer, image_file, 0, image_ctx.image_data);
+    lnk_background_file_writer_end_file(&background_file_writer, image_file, image_ctx.image_data.size);
+  }
 
   //
   // Map
@@ -6547,49 +6556,56 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   // Import Library
   //
   if (config->build_imp_lib && (config->file_characteristics & PE_ImageFileCharacteristic_DLL)) {
-    ProfBegin("Build Import Library");
     lnk_timer_begin(LNK_Timer_Lib);
     String8 linker_debug_symbols = lnk_make_linker_debug_symbols(scratch.arena, config->machine);
     String8 lib                  = pe_make_import_lib(arena->v[0], config->machine, config->time_stamp, lnk_get_image_name(config), linker_debug_symbols, config->export_symbol_list);
     lnk_write_data_to_file_path(config->imp_lib_name, str8_zero(), lib);
     lnk_timer_end(LNK_Timer_Lib);
-    ProfEnd();
   }
 
   //
   // Debug Info
   //
+  Temp huge_temp = {0};
   if (lnk_do_debug_info(config)) {
-    ProfBegin("Debug Info");
     lnk_timer_begin(LNK_Timer_Debug);
 
     U64       debug_info_objs_count = 0;
     LNK_Obj **debug_info_objs       = lnk_debug_filter_objs(scratch.arena, objs, objs_count, &debug_info_objs_count);
 
     //
+    // RRT
+    //
+    LNK_RRT_Array rrt_input = lnk_rrt_array_from_config(arena->v[0], config);
+
+    //
     // CodeView
     //
-    LNK_RRT_Array     rrt_input   = lnk_rrt_array_from_config(arena->v[0], config);
-    LNK_CodeViewInput cv          = lnk_make_code_view_input(tp, arena, config, debug_info_objs_count, debug_info_objs, rrt_input);
-    LNK_MergedTypes   cv_types    = lnk_merge_types(tp, arena->v[0], &cv, 0);
-    LNK_PdbModules    pdb_modules = {0};
+    LNK_CodeViewInput cv       = lnk_make_code_view_input(tp, arena, config, debug_info_objs_count, debug_info_objs, rrt_input);
+    LNK_MergedTypes   cv_types = lnk_merge_types(tp, arena->v[0], &cv, 0);
 
-    Temp pdb_huge_temp = temp_begin(lnk_get_huge_arena());
+    huge_temp = temp_begin(lnk_get_huge_arena());
 
     // set up PDB file writer
-    LNK_BackgroundFileWriter background_file_writer = {0};
-    LNK_PdbWriter            pdb_writer             = {0};
+    LNK_PdbWriter pdb_writer = {0};
     pdb_writer.file_writer      = &background_file_writer;
     pdb_writer.output_path      = config->debug_mode == LNK_DebugMode_Full ? config->pdb_name      : str8_zero();
     pdb_writer.temp_output_path = config->debug_mode == LNK_DebugMode_Full ? config->temp_pdb_name : str8_zero();
-    lnk_background_file_writer_begin(pdb_writer.file_writer);
 
     //
     // PDB
     //
     lnk_timer_begin(LNK_Timer_Pdb);
+    LNK_PdbModules pdb_modules = {0};
     LNK_FileArtifact pdb_artifact = lnk_build_pdb(tp, lnk_get_huge_arena(), image_ctx.image_data, config, symtab, &cv, cv_types, pdb_writer, LNK_PDB_BuilderFlag_All, config->pdb_stripped_name.size ? &pdb_modules : 0);
     lnk_timer_end(LNK_Timer_Pdb);
+
+    //
+    // stripped PDB
+    //
+    if (config->pdb_stripped_name.size) {
+      lnk_build_stripped_pdb(tp, lnk_get_huge_arena(), image_ctx.image_data, config, symtab, cv.obj_count, cv.obj_arr, pdb_modules);
+    }
 
     //
     // RDI
@@ -6597,86 +6613,36 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     if (config->rad_debug == LNK_SwitchState_Yes) {
       lnk_timer_begin(LNK_Timer_Rdi);
 
-      LNK_P2R p2r = { .config = config, .pdb_data = lnk_data_from_file_artifact(lnk_get_huge_arena(), &pdb_artifact), .image_data = image_ctx.image_data };
+      LNK_P2R p2r = {
+        .config     = config,
+        .pdb_data   = lnk_data_from_file_artifact(lnk_get_huge_arena(), &pdb_artifact),
+        .image_data = image_ctx.image_data
+      };
       tp_for_parallel(tp, arena, tp->worker_count, lnk_p2r_worker, &p2r);
-
-      String8List rdi_blobs = rdim_file_blobs_from_section_bundle(scratch.arena, &p2r.bake_results.section_bundle);
-      lnk_write_data_list_to_file_path(config->rad_debug_name, config->temp_rad_debug_name, rdi_blobs);
 
       lnk_timer_end(LNK_Timer_Rdi);
     }
 
-    //
-    // stripped PDB
-    //
-    if (config->pdb_stripped_name.size) {
-      // emit static symbol info (PSI is for externals only)
-      CV_DebugS *stripped_debug_s_arr = push_array(scratch.arena, CV_DebugS, cv.obj_count);
-      for EachIndex(obj_idx, cv.obj_count) {
-        CV_DebugS *debug_s_dst = &stripped_debug_s_arr[obj_idx];
-        U64        proc_size   = lnk_size_stripped_symbols(pdb_modules.modules[obj_idx].symbols, PDB_SYMBOL_ALIGN);
-        if (proc_size) {
-          String8  symbols       = pdb_modules.modules[obj_idx].symbols;
-          U64      buffer_size   = proc_size;
-          U8      *buffer        = cv_debug_s_alloc_subsection(scratch.arena, debug_s_dst, CV_C13SubSectionKind_Symbols, buffer_size).str;
-          U64      buffer_cursor = 0;
-          for (U64 cursor = 0; cursor < symbols.size; ) {
-            // parse symbol form PDB module
-            CV_Symbol symbol = {0};
-            TryReadBreak(cv_read_symbol(symbols, cursor, PDB_SYMBOL_ALIGN, &symbol), cursor);
-
-            // skip everything but static procedure symbols 
-            if (cv_is_lproc(symbol) == 0) { continue; }
-
-            // copy the procedure symbol to output buffer
-            U8 *dst_proc = buffer + buffer_cursor;
-            buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &symbol, PDB_SYMBOL_ALIGN);
-
-            // strip procedure symbol
-            CV_SymProc32 *proc32 = (CV_SymProc32 *)(dst_proc + sizeof(CV_SymbolHeader));
-            memory_write32(&proc32->parent, 0);
-            memory_write32(&proc32->end, 0);
-            memory_write32(&proc32->next, 0);
-            memory_write32(&proc32->itype, 0);
-
-            // close procedure scope with S_END
-            buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &(CV_Symbol){ .kind = CV_SymKind_END }, PDB_SYMBOL_ALIGN);
-          }
-
-          Assert(buffer_cursor == buffer_size);
-        }
-      }
-
-      LNK_CodeViewInput stripped_cv = {
-        .config      = config,
-        .is_stripped = 1,
-        .obj_arr     = cv.obj_arr,
-        .obj_count   = cv.obj_count,
-        .count       = cv.obj_count,
-        .debug_s_arr = stripped_debug_s_arr
-      };
-      LNK_FileArtifact pdb_artifact = lnk_build_pdb(tp, lnk_get_huge_arena(), image_ctx.image_data, config, symtab, &stripped_cv, (LNK_MergedTypes){0}, (LNK_PdbWriter){0}, LNK_PDB_BuilderFlag_All, 0);
-      lnk_write_data_list_to_file_path(config->pdb_stripped_name, str8f(scratch.arena, "%S.tmp", config->pdb_stripped_name), pdb_artifact.data);
-    }
-
-    // PDB output borrows pages from the huge arena, so drain after map release
-    lnk_background_file_writer_end(pdb_writer.file_writer);
-    temp_end(pdb_huge_temp);
-
     lnk_timer_end(LNK_Timer_Debug);
-    ProfEnd();
   }
 
+  //
+  // fater to release file maps in parallel on Windows
+  //
 #if OS_WINDOWS
-  // for unexplained reasons, file mappings on Windows cause slow process exit times
   lnk_inputer_release_file_maps(tp, inputer);
 #endif
 
-  // wait for the thread to finish writing image to disk
-  thread_join(image_write_thread, -1);
+  //
+  // drain the image and PDB writes before releasing their backing memory
+  //
+  lnk_background_file_writer_end(&background_file_writer);
+  if (huge_temp.arena) {
+    temp_end(huge_temp);
+  }
 
   //
-  // Timers
+  // log timers
   //
   if (lnk_get_log_status(LNK_Log_Timers)) {
     lnk_log_timers();

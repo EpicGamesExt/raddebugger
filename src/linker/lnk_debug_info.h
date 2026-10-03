@@ -286,3 +286,4 @@ internal LNK_MergedTypes lnk_merge_types            (TP_Context *tp, Arena *aren
 // PDB
 
 internal LNK_FileArtifact lnk_build_pdb(TP_Context *tp, Arena *arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags, LNK_PdbModules *prepared_out);
+internal LNK_FileArtifact lnk_build_stripped_pdb(TP_Context *tp, Arena *arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, U64 obj_count, LNK_Obj **obj_arr, LNK_PdbModules pdb_modules);

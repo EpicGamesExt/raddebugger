@@ -1,29 +1,41 @@
 // Copyright (c) Epic Games Tools
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
-global LNK_Timer g_timers[LNK_Timer_Count];
-
-internal void
-lnk_timer_begin(LNK_TimerType timer)
+internal LNK_Timer *
+lnk_timers(void)
 {
-  g_timers[timer].begin = now_time_us();
+  local_persist LNK_Timer timers[LNK_Timer_Count];
+  return timers;
 }
 
 internal void
-lnk_timer_end(LNK_TimerType timer)
+lnk_timer_begin(LNK_TimerType t)
 {
-  g_timers[timer].end = now_time_us();
+  ProfBeginV("%.*s", str8_varg(lnk_string_from_timer_type(t)));
+  lnk_timers()[t].begin_us = now_time_us();
+}
+
+internal void
+lnk_timer_end(LNK_TimerType t)
+{
+  lnk_timers()[t].end_us = now_time_us();
+  ProfEnd();
+}
+
+internal U64
+lnk_timer_dt(LNK_TimerType t)
+{
+  LNK_Timer *timers = lnk_timers();
+  return timers[t].end_us - timers[t].begin_us;
 }
 
 internal String8
 lnk_string_from_timer_type(LNK_TimerType type)
 {
   switch (type) {
-  case LNK_Timer_Image: return str8_lit("Image");
-  case LNK_Timer_Pdb:   return str8_lit("PDB");
-  case LNK_Timer_Rdi:   return str8_lit("RDI");
-  case LNK_Timer_Lib:   return str8_lit("Lib");
-  case LNK_Timer_Debug: return str8_lit("Debug");
+#define X(n,...) case LNK_Timer_##n: return str8_lit(Stringify(n));
+    LNK_TimerType_XList
+#undef X
   default: InvalidPath;
   }
   return str8_zero();

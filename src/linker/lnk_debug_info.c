@@ -3724,3 +3724,63 @@ lnk_build_pdb(TP_Context *tp, Arena *arena, String8 image_data, LNK_Config *conf
   ProfEnd();
   return artifact;
 }
+
+internal LNK_FileArtifact
+lnk_build_stripped_pdb(TP_Context *tp, Arena *arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, U64 obj_count, LNK_Obj **obj_arr, LNK_PdbModules pdb_modules)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+
+  // emit static symbol info (PSI is for externals only)
+  CV_DebugS *stripped_debug_s_arr = push_array(arena, CV_DebugS, obj_count);
+  for EachIndex(obj_idx, obj_count) {
+    CV_DebugS *debug_s_dst = &stripped_debug_s_arr[obj_idx];
+    U64        proc_size   = lnk_size_stripped_symbols(pdb_modules.modules[obj_idx].symbols, PDB_SYMBOL_ALIGN);
+    if (proc_size) {
+      String8  symbols       = pdb_modules.modules[obj_idx].symbols;
+      U64      buffer_size   = proc_size;
+      U8      *buffer        = cv_debug_s_alloc_subsection(arena, debug_s_dst, CV_C13SubSectionKind_Symbols, buffer_size).str;
+      U64      buffer_cursor = 0;
+      for (U64 cursor = 0; cursor < symbols.size; ) {
+        // parse symbol form PDB module
+        CV_Symbol symbol = {0};
+        TryReadBreak(cv_read_symbol(symbols, cursor, PDB_SYMBOL_ALIGN, &symbol), cursor);
+
+        // skip everything but static procedure symbols 
+        if (cv_is_lproc(symbol) == 0) { continue; }
+
+        // copy the procedure symbol to output buffer
+        U8 *dst_proc = buffer + buffer_cursor;
+        buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &symbol, PDB_SYMBOL_ALIGN);
+
+        // strip procedure symbol
+        CV_SymProc32 *proc32 = (CV_SymProc32 *)(dst_proc + sizeof(CV_SymbolHeader));
+        memory_write32(&proc32->parent, 0);
+        memory_write32(&proc32->end, 0);
+        memory_write32(&proc32->next, 0);
+        memory_write32(&proc32->itype, 0);
+
+        // close procedure scope with S_END
+        buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &(CV_Symbol){ .kind = CV_SymKind_END }, PDB_SYMBOL_ALIGN);
+      }
+
+      Assert(buffer_cursor == buffer_size);
+    }
+  }
+
+  LNK_CodeViewInput stripped_cv = {
+    .config      = config,
+    .is_stripped = 1,
+    .obj_arr     = obj_arr,
+    .obj_count   = obj_count,
+    .count       = obj_count,
+    .debug_s_arr = stripped_debug_s_arr
+  };
+  LNK_MergedTypes  null_types      = {0};
+  LNK_PdbWriter    null_pdb_writer = {0};
+  LNK_FileArtifact pdb_artifact    = lnk_build_pdb(tp, lnk_get_huge_arena(), image_data, config, symtab, &stripped_cv, null_types, null_pdb_writer, LNK_PDB_BuilderFlag_All, 0);
+  lnk_write_data_list_to_file_path(config->pdb_stripped_name, str8f(scratch.arena, "%S.tmp", config->pdb_stripped_name), pdb_artifact.data);
+
+  scratch_end(scratch);
+  return pdb_artifact;
+}
+

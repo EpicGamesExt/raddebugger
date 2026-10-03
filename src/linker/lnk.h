@@ -314,13 +314,6 @@ typedef struct
 
 typedef struct
 {
-  String8 path;
-  String8 temp_path;
-  String8 data;
-} LNK_WriteThreadContext;
-
-typedef struct
-{
   String8  data;
   Rng1U64 *ranges;
   U128    *hashes;

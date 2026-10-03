@@ -3138,7 +3138,7 @@ lnk_config_init(U64 argc, char **argv)
       { str8_lit("_ext"),           str8_skip_last_dot(config->out_path)         },
       { str8_lit("_rad_pdb_path"),  config->pdb_name                             },
       { str8_lit("_rad_rdi"),       str8_skip_last_slash(config->rad_debug_name) },
-      { str8_lit("_radi_rdi_path"), config->rad_debug_name                       },
+      { str8_lit("_rad_rdi_path"),  config->rad_debug_name                       },
     };
     for EachElement(i, key_value_str8_table) {
       if (lnk_env_var_from_map(&env_vars, key_value_str8_table[i].key)) {
