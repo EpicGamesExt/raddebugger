@@ -2469,11 +2469,11 @@ cv_format_debug_sections(Arena *arena, String8List *out, String8 indent, String8
       if (str8_match_lit(".debug$S", sect_name, 0)) {
         Temp scratch = scratch_begin(&arena, 1);
         CV_DebugS debug_s = cv_debug_s_from_data(scratch.arena, raw_sect);
-        for (String8Node *string_n = debug_s.data_list[CV_C13SubSectionIdxKind_Symbols].first;
-             string_n != 0 && keep_parsing; string_n = string_n->next) {
+        CV_DebugS_Iter it = cv_debug_s_iter_init(&debug_s);
+        while (keep_parsing && cv_debug_s_iter_next_kind(&it, CV_C13SubSectionKind_Symbols)) {
           Temp temp = temp_begin(scratch.arena);
           CV_SymbolList symbol_list = {0};
-          cv_parse_symbol_sub_section(temp.arena, &symbol_list, 0, string_n->string, CV_SymbolAlign);
+          cv_parse_symbol_sub_section(temp.arena, &symbol_list, 0, it.data, CV_SymbolAlign);
           for (CV_SymbolNode *symbol_n = symbol_list.first; symbol_n != 0 && keep_parsing; symbol_n = symbol_n->next) {
             CV_Symbol symbol = symbol_n->data;
             if (symbol.kind == CV_SymKind_COMPILE) {
@@ -4190,5 +4190,4 @@ elf_print_dwarf_expressions(Arena *arena, String8List *out, String8 indent, Stri
   scratch_end(scratch);
 }
 #endif
-
 

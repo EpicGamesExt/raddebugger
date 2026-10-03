@@ -4522,119 +4522,30 @@ THREAD_POOL_TASK_FUNC(lnk_obj_reloc_patcher)
   LNK_ObjRelocPatcher *task = raw_task;
   LNK_Obj             *obj  = task->objs[task_id];
 
-  COFF_FileHeaderInfo  obj_header    = obj->coff.header;
-  String8              string_table  = lnk_coff_string_table_from_obj(obj);
-
-  U32 closest_sect  = 0;
-  U32 closest_reloc = 0;
-  U32 closest_foff  = max_U32;
-
+  COFF_SectionFlags filter = COFF_SectionFlag_LnkInfo | COFF_SectionFlag_LnkRemove | COFF_SectionFlag_CntUninitializedData | LNK_SECTION_FLAG_DEBUG;
   for LNK_EachCoffSection(it, obj) {
     COFF_SectionHeader *section_header = it.v.header;
     COFF_SectionFlags   section_flags  = *it.v.flags;
 
-    if (section_flags & COFF_SectionFlag_LnkInfo)              { continue; }
-    if (section_flags & COFF_SectionFlag_LnkRemove)            { continue; }
-    if (section_flags & COFF_SectionFlag_CntUninitializedData) { continue; }
+    if (section_flags & filter) { continue; }
 
-    // get section bytes (special case debug info because it is not copied to the image)
+    // get output section bytes
     Rng1U64 section_frange = rng_1u64(section_header->foff, section_header->foff + section_header->fsize);
-    String8 section_data   = section_flags & LNK_SECTION_FLAG_DEBUG ? lnk_obj_section_data_from_number(obj, it.v.section_number) : str8_substr(task->image_data, section_frange);
+    String8 section_data   = str8_substr(task->image_data, section_frange);
 
     // apply relocs
     COFF_RelocArray relocs = lnk_coff_relocs_from_section_header(obj, section_header);
     for EachIndex(reloc_idx, relocs.count) {
       COFF_Reloc *reloc = &relocs.v[reloc_idx];
 
-      // error check relocation
-      if (obj->coff.header.machine == COFF_MachineType_X64) {
-        if (reloc->type > COFF_Reloc_X64_Last) {
-          lnk_error_obj(LNK_Error_IllegalRelocation, obj, "unknown relocation type 0x%x", reloc->type);
-        }
-      } else if (obj->coff.header.machine != COFF_MachineType_Unknown) {
-        lnk_not_implemented("relocation patching is not implemented for %S", coff_string_from_machine_type(obj->coff.header.machine));
+      COFF_RelocValue value;
+      if (!lnk_resolve_reloc_value(obj, it.v.section_number, reloc, reloc_idx, task->image_base, task->image_section_table, task->image_section_table_count, &value)) { continue; }
+      if (value.size == 0) { continue; }
+      if (reloc->apply_off > section_data.size || value.size > section_data.size - reloc->apply_off) {
+        lnk_error_obj(LNK_Error_IllegalRelocation, obj, "relocation at 0x%x crosses section %llu boundary", reloc->apply_off, it.v.section_number);
         continue;
       }
-
-      // compute virtual offsets
-      U64 reloc_voff = section_header->voff + reloc->apply_off;
-
-      // compute symbol location values
-      U32 symbol_secnum = 0;
-      U32 symbol_secoff = 0;
-      S64 symbol_voff   = 0;
-      {
-        COFF_ParsedSymbol          symbol = lnk_parsed_symbol_from_coff_symbol_idx_no_name(obj, reloc->isymbol);
-        COFF_SymbolValueInterpType interp = coff_interp_from_parsed_symbol(symbol);
-        if (interp == COFF_SymbolValueInterp_Regular) {
-          if (symbol.section_number == lnk_obj_get_removed_section_number(obj)) {
-
-            // With /OPT:REF, linkers may partially discard functions. In this case, relocations referencing those symbols must be left unchanged.
-            // the rule is to leave the relocations to those symbols as they are.
-            if (section_flags & LNK_SECTION_FLAG_DEBUG) { continue; }
-
-            {
-              Temp scratch = scratch_begin(0,0);
-
-              String8 sect_name     = coff_name_from_section_header(string_table, section_header);
-              String8 symbol_name   = lnk_symbol_name_from_coff_symbol_idx(obj, reloc->isymbol);
-              String8 error_message = str8f(scratch.arena, "relocating against symbol that is in a removed section (symbol: %S, reloc-section: %S 0x%llx, reloc-index: 0x%llx)", symbol_name, sect_name, it.v.section_number, reloc_idx);
-
-              // MSVC allows relocations to reference discarded associative sections
-              if (symbol.value == LNK_REMOVED_ASSOCIATIVE_SYMBOL_VALUE) {
-                lnk_error_obj(LNK_Warning_RelocationAgainstRemovedAssociativeSection, obj, "%S", error_message);
-                goto next_reloc;
-              }
-
-              lnk_error_obj(LNK_Error_RelocationAgainstRemovedSection, obj, "%S", error_message);
-              goto next_reloc;
-
-              next_reloc:;
-                         scratch_end(scratch);
-            }
-          } else {
-            symbol_secnum = symbol.section_number;
-            symbol_secoff = symbol.value;
-            symbol_voff   = safe_cast_u32((U64)task->image_section_table[symbol.section_number]->voff + (U64)symbol_secoff);
-          }
-        } else if (interp == COFF_SymbolValueInterp_Abs) {
-          // There aren't enough bits in COFF symbol to store full image base address,
-          // so we special case __ImageBase. A better solution would be to add
-          // a 64-bit symbol format to COFF.
-          if (str8_match(lnk_symbol_name_from_coff_symbol_idx(obj, reloc->isymbol), str8_lit("__ImageBase"), 0)) {
-            symbol.value = task->image_base;
-          }
-          symbol_secnum = 0;
-          symbol_secoff = 0;
-          symbol_voff   = (S64)symbol.value - (S64)task->image_base;
-        } else if (interp == COFF_SymbolValueInterp_Weak) {
-          // unresolved weak
-        } else if (interp == COFF_SymbolValueInterp_Undefined) {
-          // unresolved undefined
-        } else {
-          InvalidPath;
-        }
-      }
-
-      // pick reloc value
-      COFF_RelocValue reloc_value = {0};
-      switch (obj_header.machine) {
-      case COFF_MachineType_Unknown: {} break;
-      case COFF_MachineType_X64: { reloc_value = coff_pick_reloc_value_x64(reloc->type, task->image_base, reloc_voff, symbol_secnum, symbol_secoff, symbol_voff); } break;
-      default: { NotImplemented; } break;
-      }
-
-      // read addend
-      Assert(reloc_value.size <= section_data.size);
-      U64 raw_addend = 0;
-      str8_deserial_read(section_data, reloc->apply_off, &raw_addend, reloc_value.size, 1);
-
-      // compute new reloc value
-      S64 addend       = extend_sign64(raw_addend, reloc_value.size);
-      U64 reloc_result = reloc_value.value + addend;
-
-      // commit new reloc value
-      MemoryCopy(section_data.str + reloc->apply_off, &reloc_result, reloc_value.size);
+      lnk_apply_reloc_value(section_data.str + reloc->apply_off, value);
     }
   }
 
@@ -6033,7 +5944,7 @@ lnk_build_image(TP_Arena *arena, TP_Context *tp, LNK_Config *config, LNK_SymbolT
 
     // patch relocs
     {
-      LNK_ObjRelocPatcher task = { .image_data = image_data, .objs = objs, .image_base = pe.image_base, .image_section_table = image_section_table };
+      LNK_ObjRelocPatcher task = { .image_data = image_data, .objs = objs, .image_base = pe.image_base, .image_section_table = image_section_table, .image_section_table_count = pe.section_count + 1 };
       tp_for_parallel_prof(tp, 0, objs_count, lnk_obj_reloc_patcher, &task, "Patch Relocs");
     }
 
@@ -6619,11 +6530,6 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   image_write_ctx->data      = image_ctx.image_data;
   Thread image_write_thread = thread_launch(lnk_write_thread, image_write_ctx);
 
-  LNK_BackgroundFileWriter background_file_writer = {0};
-  LNK_PdbWriter            pdb_writer = { .file_writer = &background_file_writer };
-  Temp                     pdb_huge_temp = temp_begin(lnk_get_huge_arena());
-  lnk_background_file_writer_begin(pdb_writer.file_writer);
-
   //
   // Map
   //
@@ -6658,118 +6564,99 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
     //
     // CodeView
     //
-    LNK_RRT_Array     rrt_input = lnk_rrt_array_from_config(arena->v[0], config);
-    LNK_CodeViewInput cv        = lnk_make_code_view_input(tp, arena, config, debug_info_objs_count, debug_info_objs, rrt_input);
-    LNK_MergedTypes   cv_types  = lnk_merge_types(tp, arena, &cv, 0);
+    LNK_RRT_Array     rrt_input   = lnk_rrt_array_from_config(arena->v[0], config);
+    LNK_CodeViewInput cv          = lnk_make_code_view_input(tp, arena, config, debug_info_objs_count, debug_info_objs, rrt_input);
+    LNK_MergedTypes   cv_types    = lnk_merge_types(tp, arena->v[0], &cv, 0);
+    LNK_PdbModules    pdb_modules = {0};
+
+    Temp pdb_huge_temp = temp_begin(lnk_get_huge_arena());
+
+    // set up PDB file writer
+    LNK_BackgroundFileWriter background_file_writer = {0};
+    LNK_PdbWriter            pdb_writer             = {0};
+    pdb_writer.file_writer      = &background_file_writer;
+    pdb_writer.output_path      = config->debug_mode == LNK_DebugMode_Full ? config->pdb_name      : str8_zero();
+    pdb_writer.temp_output_path = config->debug_mode == LNK_DebugMode_Full ? config->temp_pdb_name : str8_zero();
+    lnk_background_file_writer_begin(pdb_writer.file_writer);
 
     //
-    // Debug Info
+    // PDB
     //
-    // TODO: Parallel debug info builds are currently blocked by the patch
-    // strings in $$FILE_CHECKSUM step in `lnk_process_c13_data_task`.
-    if (config->debug_mode == LNK_DebugMode_Full || config->rad_debug == LNK_SwitchState_Yes) {
-      LNK_FileArtifact pdb_artifact = {0};
-      {
-        lnk_timer_begin(LNK_Timer_Pdb);
+    lnk_timer_begin(LNK_Timer_Pdb);
+    LNK_FileArtifact pdb_artifact = lnk_build_pdb(tp, lnk_get_huge_arena(), image_ctx.image_data, config, symtab, &cv, cv_types, pdb_writer, LNK_PDB_BuilderFlag_All, config->pdb_stripped_name.size ? &pdb_modules : 0);
+    lnk_timer_end(LNK_Timer_Pdb);
 
-        if (config->pdb_hash_type_names != LNK_TypeNameHashMode_None) {
-          lnk_replace_type_names_with_hashes(tp,
-                                             arena,
-                                             cv_types.count[CV_TypeIndexSource_TPI],
-                                             cv_types.v    [CV_TypeIndexSource_TPI],
-                                             config->pdb_hash_type_names,
-                                             config->pdb_hash_type_name_length,
-                                             config->pdb_hash_type_name_map);
-        }
+    //
+    // RDI
+    //
+    if (config->rad_debug == LNK_SwitchState_Yes) {
+      lnk_timer_begin(LNK_Timer_Rdi);
 
-        pdb_writer.output_path      = config->debug_mode == LNK_DebugMode_Full ? config->pdb_name      : str8_zero();
-        pdb_writer.temp_output_path = config->debug_mode == LNK_DebugMode_Full ? config->temp_pdb_name : str8_zero();
-        pdb_artifact                = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &cv, cv_types, pdb_writer, LNK_PDB_BuilderFlag_All);
+      LNK_P2R p2r = { .config = config, .pdb_data = lnk_data_from_file_artifact(lnk_get_huge_arena(), &pdb_artifact), .image_data = image_ctx.image_data };
+      tp_for_parallel(tp, arena, tp->worker_count, lnk_p2r_worker, &p2r);
 
-        lnk_timer_end(LNK_Timer_Pdb);
-      }
+      String8List rdi_blobs = rdim_file_blobs_from_section_bundle(scratch.arena, &p2r.bake_results.section_bundle);
+      lnk_write_data_list_to_file_path(config->rad_debug_name, config->temp_rad_debug_name, rdi_blobs);
 
-      if (config->rad_debug == LNK_SwitchState_Yes) {
-        lnk_timer_begin(LNK_Timer_Rdi);
-
-        LNK_P2R p2r = { .config = config, .pdb_data = lnk_data_from_file_artifact(lnk_get_huge_arena(), &pdb_artifact), .image_data = image_ctx.image_data };
-        tp_for_parallel(tp, arena, tp->worker_count, lnk_p2r_worker, &p2r);
-
-        String8List rdi_blobs = rdim_file_blobs_from_section_bundle(scratch.arena, &p2r.bake_results.section_bundle);
-        lnk_write_data_list_to_file_path(config->rad_debug_name, config->temp_rad_debug_name, rdi_blobs);
-
-        lnk_timer_end(LNK_Timer_Rdi);
-      }
+      lnk_timer_end(LNK_Timer_Rdi);
     }
 
     //
     // stripped PDB
     //
-    if (config->pdb_stripped_name.size != 0) {
-      CV_DebugS *debug_s_arr = push_array(scratch.arena, CV_DebugS, cv.obj_count);
+    if (config->pdb_stripped_name.size) {
+      // emit static symbol info (PSI is for externals only)
+      CV_DebugS *stripped_debug_s_arr = push_array(scratch.arena, CV_DebugS, cv.obj_count);
       for EachIndex(obj_idx, cv.obj_count) {
-
-        CV_DebugS   *debug_s_dst = &debug_s_arr[obj_idx];
-        CV_DebugS   *debug_s_src = &cv.debug_s_arr[obj_idx];
-        String8List *dst         = &debug_s_dst->data_list[CV_C13SubSectionIdxKind_Symbols];
-        String8List *src         = &debug_s_src->data_list[CV_C13SubSectionIdxKind_Symbols];
-
-        U64 proc_count = 0;
-        U64 proc_size  = 0;
-        U64 section = 0;
-        for EachNode(n, String8Node, src->first) {
-          for (U64 cursor = 0; cursor < n->string.size; ) {
-            U64 c = cursor;
+        CV_DebugS *debug_s_dst = &stripped_debug_s_arr[obj_idx];
+        U64        proc_size   = lnk_size_stripped_symbols(pdb_modules.modules[obj_idx].symbols, PDB_SYMBOL_ALIGN);
+        if (proc_size) {
+          String8  symbols       = pdb_modules.modules[obj_idx].symbols;
+          U64      buffer_size   = proc_size;
+          U8      *buffer        = cv_debug_s_alloc_subsection(scratch.arena, debug_s_dst, CV_C13SubSectionKind_Symbols, buffer_size).str;
+          U64      buffer_cursor = 0;
+          for (U64 cursor = 0; cursor < symbols.size; ) {
+            // parse symbol form PDB module
             CV_Symbol symbol = {0};
-            TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
-            if (symbol.kind == CV_SymKind_SKIP) { continue; }
-            if (cv_is_lproc(symbol)) {
-              proc_count += 1;
-              proc_size += AlignPow2(sizeof(CV_SymbolHeader) + symbol.data.size, CV_SymbolAlign);
-              proc_size += AlignPow2(sizeof(CV_SymbolHeader), CV_SymbolAlign); // S_END
-            }
-          }
-          section += 1;
-        }
+            TryReadBreak(cv_read_symbol(symbols, cursor, PDB_SYMBOL_ALIGN, &symbol), cursor);
 
-        if (proc_count) {
-          U64 end_count     = proc_count;
-          U64 symbol_count  = proc_count + end_count;
-          U64 buffer_size   = proc_size;
-          U8 *buffer        = push_array(scratch.arena, U8, buffer_size);
-          U64 buffer_cursor = 0;
+            // skip everything but static procedure symbols 
+            if (cv_is_lproc(symbol) == 0) { continue; }
 
-          for EachNode(n, String8Node, src->first) {
-            for (U64 cursor = 0; cursor < n->string.size; ) {
-              CV_Symbol symbol = {0};
-              TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
-              if (symbol.kind == CV_SymKind_SKIP) { continue; }
-              if (cv_is_lproc(symbol)) {
-                CV_SymProc32 *src_proc = str8_deserial_get_raw_ptr(symbol.data, 0, sizeof(*src_proc));
-                memory_write32(&src_proc->itype, 0); // strip type index
-                buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &symbol, CV_SymbolAlign);
-                buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &(CV_Symbol){ .kind = CV_SymKind_END }, CV_SymbolAlign);
-              }
-            }
+            // copy the procedure symbol to output buffer
+            U8 *dst_proc = buffer + buffer_cursor;
+            buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &symbol, PDB_SYMBOL_ALIGN);
+
+            // strip procedure symbol
+            CV_SymProc32 *proc32 = (CV_SymProc32 *)(dst_proc + sizeof(CV_SymbolHeader));
+            memory_write32(&proc32->parent, 0);
+            memory_write32(&proc32->end, 0);
+            memory_write32(&proc32->next, 0);
+            memory_write32(&proc32->itype, 0);
+
+            // close procedure scope with S_END
+            buffer_cursor += cv_write_symbol(buffer, buffer_cursor, buffer_size, &(CV_Symbol){ .kind = CV_SymKind_END }, PDB_SYMBOL_ALIGN);
           }
+
           Assert(buffer_cursor == buffer_size);
-
-          str8_list_push(scratch.arena, dst, str8(buffer, buffer_size));
         }
       }
 
-      LNK_CodeViewInput stripped_cv = {0};
-      stripped_cv.config              = config;
-      stripped_cv.is_stripped         = 1;
-      stripped_cv.obj_arr             = cv.obj_arr;
-      stripped_cv.obj_count           = cv.obj_count; 
-      stripped_cv.count               = cv.obj_count;
-      stripped_cv.debug_s_arr         = debug_s_arr;
-      stripped_cv.symbol_input_ranges = push_array(scratch.arena, Rng1U64, tp->worker_count);
-
-      LNK_FileArtifact pdb_artifact = lnk_build_pdb(tp, arena, image_ctx.image_data, config, symtab, &stripped_cv, (LNK_MergedTypes){0}, (LNK_PdbWriter){0}, LNK_PDB_BuilderFlag_All);
+      LNK_CodeViewInput stripped_cv = {
+        .config      = config,
+        .is_stripped = 1,
+        .obj_arr     = cv.obj_arr,
+        .obj_count   = cv.obj_count,
+        .count       = cv.obj_count,
+        .debug_s_arr = stripped_debug_s_arr
+      };
+      LNK_FileArtifact pdb_artifact = lnk_build_pdb(tp, lnk_get_huge_arena(), image_ctx.image_data, config, symtab, &stripped_cv, (LNK_MergedTypes){0}, (LNK_PdbWriter){0}, LNK_PDB_BuilderFlag_All, 0);
       lnk_write_data_list_to_file_path(config->pdb_stripped_name, str8f(scratch.arena, "%S.tmp", config->pdb_stripped_name), pdb_artifact.data);
     }
+
+    // PDB output borrows pages from the huge arena, so drain after map release
+    lnk_background_file_writer_end(pdb_writer.file_writer);
+    temp_end(pdb_huge_temp);
 
     lnk_timer_end(LNK_Timer_Debug);
     ProfEnd();
@@ -6781,10 +6668,6 @@ lnk_run_linker(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   lnk_inputer_release_file_maps(tp, inputer);
   ProfEnd();
 #endif
-
-  // PDB output borrows pages from the huge arena, so drain after map release
-  lnk_background_file_writer_end(pdb_writer.file_writer);
-  temp_end(pdb_huge_temp);
 
   // wait for the thread to finish writing image to disk
   thread_join(image_write_thread, -1);
@@ -6827,7 +6710,7 @@ THREAD_POOL_TASK_FUNC(lnk_serialize_rrt_type_data_task)
   // compute size of each source per task
   for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
     for EachInRange(i, ranges[ti_source][task_id]) {
-      CV_LeafHeader *leaf      = (CV_LeafHeader *)cv_types->v[ti_source][i];
+      CV_LeafHeader *leaf      = (CV_LeafHeader *)lnk_raw_type_from_index(cv_types, ti_source, i).str;
       String8        leaf_data = str8((U8 *)(leaf + 1), leaf->size - sizeof(leaf->kind));
       U64            leaf_size = cv_size_from_leaf(leaf_data, PDB_LEAF_ALIGN);
       source_sizes[ti_source][task_id] += leaf_size;
@@ -6882,9 +6765,14 @@ THREAD_POOL_TASK_FUNC(lnk_serialize_rrt_type_data_task)
   for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
     U64 cursor = source_task_offsets[ti_source*tp->worker_count + task_id];
     for EachInRange(i, ranges[ti_source][task_id]) {
-      CV_LeafHeader *leaf      = (CV_LeafHeader *)cv_types->v[ti_source][i];
-      String8        leaf_data = str8((U8 *)(leaf + 1), leaf->size - sizeof(leaf->kind));
-      U64 write_size = cv_write_leaf(type_data_ptr, cursor, type_data_max, leaf->kind, leaf_data, PDB_LEAF_ALIGN);
+      CV_LeafHeader *leaf       = (CV_LeafHeader *)lnk_raw_type_from_index(cv_types, ti_source, i).str;
+      String8        leaf_data  = str8((U8 *)(leaf + 1), leaf->size - sizeof(leaf->kind));
+      U64            write_size = cv_write_leaf(type_data_ptr, cursor, type_data_max, leaf->kind, leaf_data, PDB_LEAF_ALIGN);
+
+      Temp leaf_temp = temp_begin(scratch.arena);
+      lnk_patch_type_copy(leaf_temp.arena, cv_types, ti_source, i, type_data_ptr + cursor);
+      temp_end(leaf_temp);
+      
       cursor += write_size;
       chunk_cursor += write_size;
     }
@@ -6936,7 +6824,8 @@ lnk_run_type_server(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
 
   // parse & merge types
   LNK_CodeViewInput cv       = lnk_make_code_view_input(tp, arena, config, objs_count, objs, (LNK_RRT_Array){0});
-  LNK_MergedTypes   cv_types = lnk_merge_types(tp, arena, &cv, LNK_MergeTypeFlag_SkipSymbolTypeFixup | LNK_MergeTypeFlag_BuildObjTiMap | LNK_MergeTypeFlag_ExportHashes);
+  Temp types_temp = temp_begin(arena->v[0]);
+  LNK_MergedTypes cv_types = lnk_merge_types(tp, types_temp.arena, &cv, LNK_MergeTypeFlag_BuildObjTiMap | LNK_MergeTypeFlag_ExportHashes);
 
   U64Array include_objs = {0};
   {
@@ -7047,6 +6936,7 @@ lnk_run_type_server(TP_Context *tp, TP_Arena *arena, LNK_Config *config)
   String8List rrt_data = lnk_string_list_from_rrt(scratch.arena, &rrt);
   lnk_write_data_list_to_file_path(config->type_server_name, config->temp_type_server_name, rrt_data);
 
+  temp_end(types_temp);
   scratch_end(scratch);
   ProfEnd();
 }

@@ -225,7 +225,7 @@ typedef struct
   LNK_Obj    **objs;
   String8      name;
   B32          collect_discarded;
-  String8List *out_lists;
+  U32List     *out_lists;
 } LNK_SectionCollector;
 
 // --- Error -------------------------------------------------------------------
@@ -273,8 +273,8 @@ internal force_inline B32 lnk_obj_symbol_iter_next(LNK_Obj *obj, LNK_ObjSymbolIt
 
 // --- Helpers ----------------------------------------------------------------- 
 
-internal String8List * lnk_collect_obj_sections(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded);
-internal B32           lnk_obj_is_before(void *raw_a, void *raw_b);
+internal U32List * lnk_collect_obj_section_numbers(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded);
+internal B32       lnk_obj_is_before(void *raw_a, void *raw_b);
 
 // --- Directive Parser --------------------------------------------------------
 

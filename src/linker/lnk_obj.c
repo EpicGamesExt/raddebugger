@@ -369,14 +369,15 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
         String8 name = str8_cstring_capped(sect_header->name, sect_header->name+sizeof(sect_header->name));
         if (str8_match(name, str8_lit(".debug$S"), 0)) {
           Temp temp = temp_begin(scratch.arena);
-          String8   debug_s_data = str8_substr(input->data, rng_1u64(sect_header->foff, sect_header->foff+sect_header->fsize));
-          CV_DebugS debug_s      = cv_debug_s_from_data(temp.arena, debug_s_data);
-          for EachNode(symbols_n, String8Node, debug_s.data_list[CV_C13SubSectionIdxKind_Symbols].first) {
-            for (U64 cursor = 0, count = 0; cursor < symbols_n->string.size && count < 2; count += 1) {
+          String8        debug_s_data = str8_substr(input->data, rng_1u64(sect_header->foff, sect_header->foff+sect_header->fsize));
+          CV_DebugS      debug_s      = cv_debug_s_from_data(temp.arena, debug_s_data);
+          CV_DebugS_Iter symbols      = cv_debug_s_iter_init(&debug_s);
+          while (cv_debug_s_iter_next_kind(&symbols, CV_C13SubSectionKind_Symbols)) {
+            for (U64 cursor = 0, count = 0; cursor < symbols.data.size && count < 2; count += 1) {
               CV_SymbolHeader symbol_header;
-              TryReadBreak(str8_deserial_read_struct(symbols_n->string, cursor, &symbol_header), cursor);
+              TryReadBreak(str8_deserial_read_struct(symbols.data, cursor, &symbol_header), cursor);
               if (symbol_header.kind == CV_SymKind_COMPILE3) {
-                String8 raw_symbol = str8_substr(symbols_n->string, r1u64(cursor, cursor + symbol_header.size + sizeof(CV_SymSize)));
+                String8 raw_symbol = str8_substr(symbols.data, r1u64(cursor, cursor + symbol_header.size + sizeof(CV_SymSize)));
                 comp_symbol = cv_symbol_from_ptr(raw_symbol.str);
                 goto found_comp_symbol;
               }
@@ -949,7 +950,7 @@ lnk_parsed_symbol_from_coff_symbol_idx(LNK_Obj *obj, U64 symbol_idx)
 }
 
 internal
-THREAD_POOL_TASK_FUNC(lnk_collect_obj_chunks_task)
+THREAD_POOL_TASK_FUNC(lnk_collect_obj_section_numbers_task)
 {
   LNK_SectionCollector *task = raw_task;
   LNK_Obj              *obj  = task->objs[task_id];
@@ -963,22 +964,21 @@ THREAD_POOL_TASK_FUNC(lnk_collect_obj_chunks_task)
 
     String8 section_name = lnk_obj_section_name_from_section_number(obj, section.section_number);
     if (str8_match(section_name, task->name, 0)) {
-      String8 section_data = lnk_obj_section_data_from_number(obj, section.section_number);
-      str8_list_push(arena, &task->out_lists[task_id], section_data);
+      u32_list_push(arena, &task->out_lists[task_id], safe_cast_u32(section.section_number));
     }
   }
 }
 
-internal String8List *
-lnk_collect_obj_sections(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded)
+internal U32List *
+lnk_collect_obj_section_numbers(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded)
 {
   ProfBeginFunction();
   LNK_SectionCollector task = {0};
   task.objs              = objs;
   task.name              = name;
   task.collect_discarded = collect_discarded;
-  task.out_lists         = push_array(arena->v[0], String8List, objs_count);
-  tp_for_parallel(tp, arena, objs_count, lnk_collect_obj_chunks_task, &task);
+  task.out_lists         = push_array(arena->v[0], U32List, objs_count);
+  tp_for_parallel(tp, arena, objs_count, lnk_collect_obj_section_numbers_task, &task);
   ProfEnd();
   return task.out_lists;
 }
@@ -1160,22 +1160,11 @@ lnk_debug_s_from_obj(Arena *arena, LNK_Obj *obj)
 
   CV_DebugS debug_s = {0};
   {
-    for (String8Node *node = raw_debug_s.first; node != 0; node = node->next) {
+    for EachNode(node, String8Node, raw_debug_s.first) {
       // parse & merge sub sections
-      CV_DebugS ds = cv_debug_s_from_data(arena, node->string);
+      CV_DebugS       ds    = cv_debug_s_from_data(arena, node->string);
+      CV_DebugS_Stats stats = cv_debug_s_stats(&ds);
       cv_debug_s_concat_in_place(&debug_s, &ds);
-
-      // make sure there is one string table
-      String8List string_data_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable);
-      if (string_data_list.node_count > 1) {
-        break;
-      }
-
-      // make sure there is one file checksum table
-      String8List checksum_data_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
-      if (checksum_data_list.node_count > 1) {
-        continue;
-      }
     }
   }
 
@@ -1249,32 +1238,31 @@ lnk_line_map_from_obj(Arena *arena, LNK_Obj *obj)
     }
   }
 
-  CV_DebugS   debug_s        = lnk_debug_s_from_obj(scratch.arena, obj);
-  String8List raw_lines_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Lines);
-  String8List raw_checksums  = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
-  String8List raw_strings    = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable);
+  CV_DebugS debug_s = lnk_debug_s_from_obj(scratch.arena, obj);
 
   //
   // estimate requried line table block capacity
   //
-  U64 line_table_blocks_cap = 0;
-  for EachNode(raw_lines_node, String8Node, raw_lines_list.first) {
+  U64            line_table_blocks_cap = 0;
+  CV_DebugS_Iter lines                 = cv_debug_s_iter_init(&debug_s);
+  while (cv_debug_s_iter_next_kind(&lines, CV_C13SubSectionKind_Lines)) {
     Temp temp = temp_begin(scratch.arena);
-    CV_C13LinesHeaderList parsed_list = cv_c13_lines_from_sub_sections(temp.arena, raw_lines_node->string, rng_1u64(0, raw_lines_node->string.size));
+    CV_C13LinesHeaderList parsed_list = cv_c13_lines_from_sub_sections(temp.arena, lines.data, rng_1u64(0, lines.data.size));
     line_table_blocks_cap += parsed_list.count;
     temp_end(temp);
   }
 
   LNK_ObjLineMap *map = push_array(arena, LNK_ObjLineMap, 1);
   map->arena             = arena;
-  map->debug_checksums   = str8_list_first(&raw_checksums);
-  map->debug_strings     = str8_list_first(&raw_strings);
+  map->debug_checksums   = cv_file_chksms_from_debug_s(&debug_s);
+  map->debug_strings     = cv_string_table_from_debug_s(&debug_s);
   map->line_table_blocks = push_array(arena, LNK_LineTableBlock, line_table_blocks_cap);
   map->tables            = push_array(arena, LNK_LineTable, line_table_blocks_cap);
 
-  for EachNode(raw_lines_node, String8Node, raw_lines_list.first) {
+  lines = cv_debug_s_iter_init(&debug_s);
+  while (cv_debug_s_iter_next_kind(&lines, CV_C13SubSectionKind_Lines)) {
     Temp temp = temp_begin(scratch.arena);
-    String8               raw_lines   = raw_lines_node->string;
+    String8               raw_lines   = lines.data;
     CV_C13LinesHeaderList parsed_list = cv_c13_lines_from_sub_sections(temp.arena, raw_lines, rng_1u64(0, raw_lines.size));
     for EachNode(header_node, CV_C13LinesHeaderNode, parsed_list.first) {
       if (header_node->v.line_count == 0) { continue; }
@@ -1376,19 +1364,18 @@ lnk_line_map_from_obj(Arena *arena, LNK_Obj *obj)
   //
   // build inlinee lines accelerator
   //
-  String8List                   raw_inlinee_lines   = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_InlineeLines);
-  CV_C13InlineeLinesParsedList  inlinee_lines       = cv_c13_inlinee_lines_from_sub_sections(scratch.arena, raw_inlinee_lines);
+  CV_C13InlineeLinesParsedList  inlinee_lines       = cv_c13_inlinee_lines_from_sub_sections(scratch.arena, &debug_s);
   CV_InlineeLinesAccel         *inlinee_lines_accel = cv_c13_make_inlinee_lines_accel(scratch.arena, inlinee_lines);
 
   //
   // estimate required inline site capacity
   //
-  String8List raw_symbols     = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
   U64         inline_site_cap = 0;
-  for EachNode(raw_symbols_node, String8Node, raw_symbols.first) {
-    for (U64 cursor = 0; cursor < raw_symbols_node->string.size;) {
+  CV_DebugS_Iter symbols = cv_debug_s_iter_init(&debug_s);
+  while (cv_debug_s_iter_next_kind(&symbols, CV_C13SubSectionKind_Symbols)) {
+    for (U64 cursor = 0; cursor < symbols.data.size;) {
       CV_Symbol symbol = {0};
-      TryReadBreak(cv_read_symbol(raw_symbols_node->string, cursor, CV_SymbolAlign, &symbol), cursor);
+      TryReadBreak(cv_read_symbol(symbols.data, cursor, CV_SymbolAlign, &symbol), cursor);
       inline_site_cap += symbol.kind == CV_SymKind_INLINESITE || symbol.kind == CV_SymKind_INLINESITE2;
     }
   }
@@ -1403,14 +1390,15 @@ lnk_line_map_from_obj(Arena *arena, LNK_Obj *obj)
   };
   LNK_InlineRangeNode *range_first = 0, *range_last = 0;
   map->inline_sites = push_array(arena, LNK_InlineSite, inline_site_cap);
-  for EachNode(raw_symbols_node, String8Node, raw_symbols.first) {
+  symbols = cv_debug_s_iter_init(&debug_s);
+  while (cv_debug_s_iter_next_kind(&symbols, CV_C13SubSectionKind_Symbols)) {
     U32  proc_section            = 0;
     U32  proc_offset             = 0;
     U64  inline_site_stack_count = 0;
     U32 *inline_site_stack       = push_array_no_zero(scratch.arena, U32, inline_site_cap);
-    for (U64 cursor = 0; cursor < raw_symbols_node->string.size;) {
+    for (U64 cursor = 0; cursor < symbols.data.size;) {
       CV_Symbol symbol = {0};
-      TryReadBreak(cv_read_symbol(raw_symbols_node->string, cursor, CV_SymbolAlign, &symbol), cursor);
+      TryReadBreak(cv_read_symbol(symbols.data, cursor, CV_SymbolAlign, &symbol), cursor);
 
       if (CV_IsProc32(symbol.kind)) {
         CV_SymProc32 *proc = str8_deserial_get_raw_ptr(symbol.data, 0, sizeof(*proc));

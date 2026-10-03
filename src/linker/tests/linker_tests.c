@@ -7750,8 +7750,11 @@ TEST(cyclic_type)
   str8_serial_push_string(arena, debug_t, cv_make_leaf(arena, CV_LeafKind_POINTER, str8_struct((&(CV_LeafPointer){ .itype = 0x1001 })), CV_LeafAlign));
   str8_serial_push_string(arena, debug_t, cv_make_leaf(arena, CV_LeafKind_POINTER, str8_struct((&(CV_LeafPointer){ .itype = 0x1000 })), CV_LeafAlign));
 
+  // make .debug$S with S_GPROC32 'foo'
   CV_DebugS debug_s = {0};
-  str8_list_push(arena, &debug_s.data_list[CV_C13SubSectionIdxKind_Symbols], cv_make_symbol(arena, CV_SymKind_GPROC32, cv_make_proc32(arena, (CV_SymProc32){ .itype = 0x1001 }, str8_lit("foo"))));
+  String8 foo_proc = cv_make_symbol(arena, CV_SymKind_GPROC32, cv_make_proc32(arena, (CV_SymProc32){ .itype = 0x1001 }, str8_lit("foo")));
+  String8 symbols = cv_debug_s_alloc_subsection(arena, &debug_s, CV_C13SubSectionKind_Symbols, foo_proc.size);
+  MemoryCopyStr8(symbols.str, foo_proc);
   String8List debug_s_string = cv_data_from_debug_s_c13(arena, &debug_s, 1);
 
   String8 raw_coff = t_coff_from_def_obj(arena, (T_COFF_DefObj){
@@ -8106,7 +8109,11 @@ TEST(validate_gsi)
   for EachElement(i, raw_symbols) { symbols[i] = cv_symbol_from_ptr(raw_symbols[i].str); }
 
   CV_DebugS debug_s = {0};
-  for EachElement(i, symbols) { str8_list_push(arena, &debug_s.data_list[CV_C13SubSectionIdxKind_Symbols], cv_data_from_symbol(arena, &symbols[i], CV_SymbolAlign)); }
+  for EachElement(i, symbols) {
+    U64 size = cv_size_from_symbol(&symbols[i], CV_SymbolAlign);
+    String8 payload = cv_debug_s_alloc_subsection(arena, &debug_s, CV_C13SubSectionKind_Symbols, size);
+    cv_write_symbol(payload.str, 0, payload.size, &symbols[i], CV_SymbolAlign);
+  }
   String8List raw_debug_s_list = cv_data_from_debug_s_c13(arena, &debug_s, 1);
   String8     raw_debug_s      = str8_list_join(arena, &raw_debug_s_list, 0);
 
@@ -8165,7 +8172,11 @@ TEST(validate_gsi_procs_and_typedefs)
   for EachElement(i, raw_symbols) { symbols[i] = cv_symbol_from_ptr(raw_symbols[i].str); }
 
   CV_DebugS debug_s = {0};
-  for EachElement(i, symbols) { str8_list_push(arena, &debug_s.data_list[CV_C13SubSectionIdxKind_Symbols], cv_data_from_symbol(arena, &symbols[i], CV_SymbolAlign)); }
+  for EachElement(i, symbols) {
+    U64 size = cv_size_from_symbol(&symbols[i], CV_SymbolAlign);
+    String8 payload = cv_debug_s_alloc_subsection(arena, &debug_s, CV_C13SubSectionKind_Symbols, size);
+    cv_write_symbol(payload.str, 0, payload.size, &symbols[i], CV_SymbolAlign);
+  }
   String8List raw_debug_s_list = cv_data_from_debug_s_c13(arena, &debug_s, 1);
   String8     raw_debug_s      = str8_list_join(arena, &raw_debug_s_list, 0);
 
@@ -8403,7 +8414,11 @@ TEST(pdbstripped)
     for EachElement(i, raw_symbols) { symbols[i] = cv_symbol_from_ptr(raw_symbols[i].str); }
 
     CV_DebugS debug_s = {0};
-    for EachElement(i, symbols) { str8_list_push(arena, &debug_s.data_list[CV_C13SubSectionIdxKind_Symbols], cv_data_from_symbol(arena, &symbols[i], CV_SymbolAlign)); }
+    for EachElement(i, symbols) {
+      U64 size = cv_size_from_symbol(&symbols[i], CV_SymbolAlign);
+      String8 payload = cv_debug_s_alloc_subsection(arena, &debug_s, CV_C13SubSectionKind_Symbols, size);
+      cv_write_symbol(payload.str, 0, payload.size, &symbols[i], CV_SymbolAlign);
+    }
     String8List raw_debug_s_list = cv_data_from_debug_s_c13(arena, &debug_s, 1);
     String8     raw_debug_s      = str8_list_join(arena, &raw_debug_s_list, 0);
 
@@ -8802,11 +8817,12 @@ TEST(patch_cv_symbol_tree)
   str8_list_push(arena, &raw_symbols, cv_make_symbol(arena, CV_SymKind_INLINESITE_END, cv_make_inline_site_end(arena)));
   str8_list_push(arena, &raw_symbols, cv_make_symbol(arena, CV_SymKind_END,            cv_make_end(arena)));
 
-  U64 tree_size = cv_patch_symbol_tree_offsets(raw_symbols, sizeof(CV_Signature), 4);
+  String8 symbol_data = str8_list_join(arena, &raw_symbols, 0);
+  U64 tree_size = cv_patch_symbol_tree_offsets(symbol_data, sizeof(CV_Signature), 4);
   T_Ok(tree_size == 84);
 
   {
-    String8Node buf     = *raw_symbols.first;
+    String8Node buf     = { .string = symbol_data };
     U64         buf_pos = 0;
 
     CV_SymbolHeader obj_header;

@@ -246,8 +246,16 @@ typedef struct PDB_DbiModule
   U64                   globrefs_size;
   String8               obj_path;
   String8               lib_path;
-  String8List           source_file_list;
+  String8               source_files; // borrowed, NUL-separated input names
+  U64                   source_file_count;
 } PDB_DbiModule;
+
+typedef struct PDB_ModuleView
+{
+  String8 symbols;
+  String8 c13;
+  String8 global_refs;
+} PDB_ModuleView;
 
 typedef struct PDB_DbiModuleList
 {
@@ -329,6 +337,9 @@ typedef struct
   U16                 *imod_arr;
   U16                 *source_file_name_count_arr;
   U32                **source_file_name_offset_arr;
+  U64                  mod_count;
+  String8              string_buffer;
+  String8List          data;
 } PDB_DbiBuildFileInfoTask;
 
 ////////////////////////////////
@@ -337,7 +348,7 @@ typedef struct
 internal PDB_Context *    pdb_alloc(U64 page_size, COFF_MachineType machine, COFF_TimeStamp time_stamp, U32 age, Guid guid);
 internal void             pdb_release(PDB_Context *pdb);
 internal void             pdb_build_types(TP_Context *tp, PDB_Context *pdb, PDB_BuildHooks *hooks);
-internal void             pdb_build_dbi_info(TP_Context *tp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped, PDB_BuildHooks *hooks);
+internal void             pdb_build_dbi_info(TP_Context *tp, PDB_Context *pdb, String8List file_info, B32 build_gsi, B32 is_stripped, PDB_BuildHooks *hooks);
 internal void             pdb_build(TP_Context *tp, TP_Arena *pool_temp, PDB_Context *pdb, CV_StringHashTable string_ht, B32 build_gsi, B32 is_stripped, PDB_BuildHooks *hooks);
 internal void             pdb_set_machine(PDB_Context *pdb, COFF_MachineType machine);
 internal void             pdb_set_guid(PDB_Context *pdb, Guid guid);
@@ -389,11 +400,12 @@ internal CV_SymbolNode *  psi_push(PDB_PsiContext *psi, CV_Pub32Flags flags, U32
 // DBI
 
 internal PDB_DbiContext *   dbi_alloc(COFF_MachineType machine, U32 age);
-internal void               dbi_build(TP_Context *tp, PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumber dbi_sn, CV_StringHashTable string_ht, B32 is_stripped);
+internal void               dbi_build(TP_Context *tp, PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumber dbi_sn, String8List file_info_list, B32 is_stripped);
 internal void               dbi_release(PDB_DbiContext *dbi);
 internal PDB_DbiModule *    dbi_push_module(PDB_DbiContext *dbi, String8 obj_path, String8 lib_path);
 internal void               dbi_module_push_section_contrib(PDB_DbiContext *dbi, PDB_DbiModule *mod, ISectOff isect_off, U32 size,  U32 data_crc, U32 reloc_crc, COFF_SectionFlags flags);
 internal void               dbi_build_section_header_stream(PDB_DbiContext *dbi, MSF_Context *msf, MSF_StreamNumber sn);
+internal PDB_ModuleView     dbi_module_view(PDB_DbiModule *mod, String8 module);
 
 ////////////////////////////////
 // Hash Table
@@ -444,6 +456,8 @@ internal U32                      pdb_strtab_hash(PDB_StringTable *strtab, Strin
 internal PDB_TypeServer *        pdb_type_server_alloc(U64 bucket_count);
 internal void                    pdb_type_server_build(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strtab, MSF_Context *msf, MSF_StreamNumber sn);
 internal void                    pdb_type_server_finalize(TP_Context *tp, PDB_TypeServer *ts, PDB_StringTable *strtab, MSF_Context *msf, MSF_StreamNumber sn, U64 leaf_count, U64 leaf_data_size, PDB_TpiOffHint *hint_arr, U64 hint_count);
+internal void                    pdb_type_server_write_header(PDB_TypeServer *ts, MSF_Context *msf, MSF_StreamNumber sn, U64 leaf_count, U64 leaf_data_size, PDB_TypeHashStreamInfo hash_info);
+internal PDB_TypeHashStreamInfo   pdb_type_hash_stream_prepare(PDB_TypeServer *ts, PDB_StringTable *strtab, MSF_Context *msf, U64 leaf_count, U64 hint_count);
 internal void                    pdb_type_server_release(PDB_TypeServer **serv_ptr);
 internal void                    pdb_type_server_push(PDB_TypeServer *ts, String8 raw_leaf);
 internal void                    pdb_type_server_push_parallel(TP_Context *tp, PDB_TypeServer *ts, U64 leaf_count, U8 **leaf_arr);

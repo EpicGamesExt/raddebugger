@@ -19,12 +19,10 @@ lnk_discard_cv_debug_info(LNK_CodeViewInput *input, U64 obj_idx)
   MemoryZeroStruct(&input->debug_t_arr[obj_idx]);
 
   // discard symbols
-  String8List *symbols_ptr = cv_sub_section_ptr_from_debug_s(&input->debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
-  MemoryZeroStruct(symbols_ptr);
+  cv_debug_s_exclude_kind(&input->debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
 
   // discard inline sites
-  String8List *inlineelines_ptr = cv_sub_section_ptr_from_debug_s(&input->debug_s_arr[obj_idx], CV_C13SubSectionKind_InlineeLines);
-  MemoryZeroStruct(inlineelines_ptr);
+  cv_debug_s_exclude_kind(&input->debug_s_arr[obj_idx], CV_C13SubSectionKind_InlineeLines);
 }
 
 internal
@@ -33,40 +31,51 @@ THREAD_POOL_TASK_FUNC(lnk_parse_debug_s_task)
   U64                obj_idx = task_id;
   LNK_CodeViewInput *task    = raw_task;
 
-  String8List sect_list = task->debug_s_list_arr[obj_idx];
-  CV_DebugS  *debug_s   = &task->debug_s_arr    [obj_idx];
+  U32List    sect_list      = task->debug_s_section_numbers[obj_idx];
+  CV_DebugS *debug_s        = &task->debug_s_arr[obj_idx];
+  LNK_Obj   *obj            = task->obj_arr[obj_idx];
+  U64        string_count   = 0;
+  U64        checksum_count = 0;
 
-  for EachNode(n, String8Node, sect_list.first) {
-    // parse & merge sub sections
-    CV_DebugS ds = cv_debug_s_from_data(arena, n->string);
-    cv_debug_s_concat_in_place(debug_s, &ds);
+  for EachNode(n, U32Node, sect_list.first) {
+    String8 raw_debug_s = lnk_obj_section_data_from_number(obj, n->data);
+
+    // Keep one block per section number, even when a section is skipped, so
+    // relocation consumers retain the correspondence with the source sections.
+    String8Node *block = str8_list_push(arena, &debug_s->data, str8_zero());
+
+    // skip empty .debug$S sections
+    if (raw_debug_s.size == 0) { continue; }
+
+    // skip unknown debug info formats
+    if (raw_debug_s.size < sizeof(CV_Signature) || cv_signature_from_debug_s(raw_debug_s) != CV_Signature_C13) {
+      lnk_error_obj(LNK_Error_IllData, obj, "unsupported .debug$S signature");
+      continue;
+    }
+
+    String8 data = str8_skip(raw_debug_s, sizeof(CV_Signature));
+    CV_DebugS_Iter it = { .debug_s = debug_s, .block = data };
+    while (cv_debug_s_iter_next(&it)) {
+      string_count   += it.kind == CV_C13SubSectionKind_StringTable;
+      checksum_count += it.kind == CV_C13SubSectionKind_FileChksms;
+    }
+    if (it.malformed) {
+      data.size = it.cursor;
+      lnk_error_obj(LNK_Error_IllData, obj, ".debug$S subsection outside section");
+    }
+    block->string = data;
+    debug_s->data.total_size += data.size;
 
     // make sure there is one string table
-    String8List string_data_list = cv_sub_section_from_debug_s(*debug_s, CV_C13SubSectionKind_StringTable);
-    if (string_data_list.node_count > 1) {
-      // TODO: print section index
-      lnk_error_obj(LNK_Warning_IllData, task->obj_arr[obj_idx], ".debug$S has %u string table sub-sections defined, picking first sub-section", string_data_list.node_count);
+    if (string_count > 1) {
+      lnk_error_obj(LNK_Warning_IllData, task->obj_arr[obj_idx], ".debug$S (No. %u) has %u string table sub-sections defined, picking first sub-section", n->data, string_count);
     }
 
     // make sure there is one file checksum table
-    String8List checksum_data_list = cv_sub_section_from_debug_s(*debug_s, CV_C13SubSectionKind_FileChksms);
-    if (checksum_data_list.node_count > 1) {
-      // TODO: print section index
-      lnk_error_obj(LNK_Warning_IllData, task->obj_arr[obj_idx], ".debug$S has %u file checksum sub-sections defined, picking first sub-section", checksum_data_list.node_count);
+    if (checksum_count > 1) {
+      lnk_error_obj(LNK_Warning_IllData, task->obj_arr[obj_idx], ".debug$S (No. %u) has %u file checksum sub-sections defined, picking first sub-section", n->data, checksum_count);
     }
   }
-}
-
-internal int
-lnk_symbol_input_task_is_before(void *raw_a, void *raw_b)
-{
-  LNK_SymbolInputTask *a = raw_a, *b = raw_b;
-
-  if (a->weight == b->weight) {
-    return a->input_range.min < b->input_range.min;
-  }
-
-  return a->weight > b->weight;
 }
 
 internal
@@ -723,14 +732,14 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
   }
   
   // collect debug info sections
-  input.debug_s_list_arr = lnk_collect_obj_sections(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$S"), 0);
+  input.debug_s_section_numbers = lnk_collect_obj_section_numbers(tp, tp_arena, obj_count, obj_arr, str8_lit(".debug$S"), 0);
 
   // profiler info
   if (lnk_get_log_status(LNK_Log_Debug) || PROFILE_TELEMETRY) {
     U64 total_debug_s_size = 0, total_debug_t_size = 0, total_debug_p_size = 0, total_debug_h_size = 0;
     for EachIndex(obj_idx, obj_count) {
       LNK_Obj *obj = obj_arr[obj_idx];
-      for EachNode(n, String8Node, input.debug_s_list_arr[obj_idx].first) { total_debug_s_size += n->string.size; }
+      for EachNode(n, U32Node, input.debug_s_section_numbers[obj_idx].first) { total_debug_s_size += lnk_obj_section_data_from_number(obj, n->data).size; }
       if (obj->coff.debug_t_section_number > 0) { total_debug_t_size += lnk_coff_section_header_from_section_number(obj, obj->coff.debug_t_section_number)->fsize; }
       if (obj->coff.debug_p_section_number > 0) { total_debug_p_size += lnk_coff_section_header_from_section_number(obj, obj->coff.debug_p_section_number)->fsize; }
       if (config->ghash) {
@@ -981,76 +990,6 @@ lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config,
     CV_DebugT *debug_t = &input.debug_t_arr[ts_idx];
     for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
       input.min_type_indices[ti_source] = Max(input.min_type_indices[ti_source], debug_t->ti_ranges[ti_source].min);
-    }
-  }
-
-  ProfScope("Make Symbol Inputs") {
-    // count symbol blocks
-    for EachIndex(obj_idx, input.count) {
-      String8List s = cv_sub_section_from_debug_s(input.debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
-      input.symbol_input_count += s.node_count;
-    }
-  
-    // alloc block pointers
-    input.symbol_inputs = push_array_no_zero(tp_arena->v[0], LNK_SymbolInput, input.symbol_input_count);
-
-    U64 symbol_input_count = 0;
-    for EachIndex(obj_idx, input.count) {
-      String8List s = cv_sub_section_from_debug_s(input.debug_s_arr[obj_idx], CV_C13SubSectionKind_Symbols);
-      for EachNode(n, String8Node, s.first) {
-        Assert(symbol_input_count < input.symbol_input_count);
-        LNK_SymbolInput *in = &input.symbol_inputs[symbol_input_count++];
-        in->obj_idx     = obj_idx;
-        in->raw_symbols = n->string;
-      }
-    }
-
-    ProfBegin("Make Ranges");
-
-    U64 total_input_size = 0;
-    for EachIndex(i, input.symbol_input_count) { total_input_size += input.symbol_inputs[i].raw_symbols.size; }
-
-    U64 max_weight = CeilIntegerDiv(total_input_size, tp->worker_count);
-    U64 cursor     = 0;
-    input.symbol_input_ranges = push_array(tp_arena->v[0], Rng1U64, tp->worker_count);
-    for EachIndex(i, tp->worker_count) {
-      if (cursor >= input.symbol_input_count) { break; }
-      U64 begin  = cursor;
-      U64 weight = 0;
-      for (; cursor < input.symbol_input_count; cursor += 1) {
-        if (weight >= max_weight) { break; }
-        weight += input.symbol_inputs[cursor].raw_symbols.size;
-      }
-      input.symbol_input_ranges[i] = r1u64(begin, cursor);
-    }
-
-    ProfEnd();
-
-    if (input.symbol_input_count) {
-      ProfBegin("Balance Symbol Inputs");
-
-      U64 task_cap    = Min(input.symbol_input_count, tp->worker_count * 16);
-      U64 task_weight = Max(1, CeilIntegerDiv(total_input_size, task_cap));
-
-      input.symbol_patch_task = push_array_no_zero(tp_arena->v[0], LNK_SymbolInputTask, task_cap);
-
-      cursor = 0;
-      while (cursor < input.symbol_input_count) {
-        U64 begin  = cursor;
-        U64 weight = 0;
-        do {
-          weight += input.symbol_inputs[cursor++].raw_symbols.size;
-        } while (cursor < input.symbol_input_count && weight < task_weight);
-
-        Assert(input.symbol_patch_task_count < task_cap);
-        LNK_SymbolInputTask *task = &input.symbol_patch_task[input.symbol_patch_task_count++];
-        task->input_range = r1u64(begin, cursor);
-        task->weight      = weight;
-      }
-
-      radsort(input.symbol_patch_task, input.symbol_patch_task_count, lnk_symbol_input_task_is_before);
-
-      ProfEnd();
     }
   }
 
@@ -1431,6 +1370,7 @@ lnk_hash_cv_leaf_deep(Arena               *arena,
 internal CV_TypeIndex
 lnk_assigned_ti_hash_search(LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref)
 {
+  if (ht->cap == 0) { return 0; }
   CV_DebugH *debug_h  = &input->debug_h_arr[lnk_leaf_ref_obj_idx(leaf_ref)];
   U64        hash     = debug_h->v[lnk_leaf_ref_leaf_idx(leaf_ref)];
   U64        best_idx = hash % ht->cap;
@@ -1438,7 +1378,7 @@ lnk_assigned_ti_hash_search(LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LN
   do {
     CV_TypeIndex ti = ht->ti_arr[idx];
     if (ti == 0) { break; }
-    if (ht->hash_arr[idx] == hash) { return ti; }
+    if (lnk_hash_from_leaf_ref(input, ht->leaf_refs[ti - ht->min_ti]) == hash) { return ti; }
     idx = (idx + 1) == ht->cap ? 0 : (idx + 1);
   } while (idx != best_idx);
 
@@ -1449,17 +1389,19 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_hash_debug_t_task)
 {
   ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
   LNK_MergeTypes *task         = raw_task;
   U32             obj_idx      = task->indices.v[task_id];
   CV_DebugT      *debug_t      = &task->input->debug_t_arr[obj_idx];
 
   for EachIndex(leaf_idx, debug_t->count) {
-    Temp                 temp    = temp_begin(task->fixed_arenas[worker_id]);
+    Temp                 temp    = temp_begin(scratch.arena);
     CV_Leaf              leaf    = cv_debug_t_get_leaf(debug_t, leaf_idx);
     CV_TypeIndexInfoList ti_list = cv_get_leaf_type_index_offsets(temp.arena, leaf.kind, leaf.data);
     lnk_hash_cv_leaf(task->input, lnk_leaf_ref_make(obj_idx, leaf_idx), ti_list, 1);
     temp_end(temp);
   }
+  scratch_end(scratch);
   ProfEnd();
 }
 
@@ -1467,17 +1409,19 @@ internal
 THREAD_POOL_TASK_FUNC(lnk_hash_debug_t_deep_task)
 {
   ProfBeginFunction();
+  Temp scratch = scratch_begin(&arena, 1);
   LNK_MergeTypes *task    = raw_task;
   U64             obj_idx = task->indices.v[task_id];
   CV_DebugT      *debug_t = &task->input->debug_t_arr[obj_idx];
   for EachIndex(leaf_idx, debug_t->count) {
     if (task->input->debug_h_arr[obj_idx].v[leaf_idx] != 0) { continue; }
-    Temp                 temp    = temp_begin(task->fixed_arenas[worker_id]);
+    Temp                 temp    = temp_begin(scratch.arena);
     CV_Leaf              leaf    = cv_debug_t_get_leaf(debug_t, leaf_idx);
     CV_TypeIndexInfoList ti_list = cv_get_leaf_type_index_offsets(temp.arena, leaf.kind, leaf.data);
     lnk_hash_cv_leaf_deep(temp.arena, task->input, lnk_leaf_ref_make(obj_idx, leaf_idx), ti_list);
     temp_end(temp);
   }
+  scratch_end(scratch);
   ProfEnd();
 }
 
@@ -1634,7 +1578,6 @@ THREAD_POOL_TASK_FUNC(lnk_assign_type_indices_task)
       if (curr_type_index == 0) {
         CV_TypeIndex cmp_type_index = ins_atomic_u32_eval_cond_assign(&assigned->ti_arr[idx], type_index, curr_type_index);
         if (cmp_type_index == curr_type_index) {
-          assigned->hash_arr[idx] = hash;
           is_inserted = 1;
           break;
         }
@@ -1647,10 +1590,15 @@ THREAD_POOL_TASK_FUNC(lnk_assign_type_indices_task)
 }
 
 internal void
-lnk_fixup_cv_type_indices(LNK_MergeTypes *ctx, U32 obj_idx, String8 data, CV_TypeIndexInfoList ti_info_list)
+lnk_fixup_cv_type_indices(LNK_MergedTypes *ctx, U32 obj_idx, String8 data, CV_TypeIndexInfoList ti_info_list)
 {
+  if (ctx == 0 || ctx->input == 0) { return; }
   for EachNode(n, CV_TypeIndexInfo, ti_info_list.first) {
     CV_TypeIndex *ti_ptr = str8_deserial_get_raw_ptr(data, n->offset, sizeof(*ti_ptr));
+    if (ti_ptr == 0) {
+      lnk_error_obj(LNK_Error_CvIllSymbolData, ctx->input->obj_arr[obj_idx], "type index outside debug record");
+      continue;
+    }
     CV_TypeIndex  ti     = memory_read32(ti_ptr);
 
     // skip basic types
@@ -1668,77 +1616,76 @@ lnk_fixup_cv_type_indices(LNK_MergeTypes *ctx, U32 obj_idx, String8 data, CV_Typ
   }
 }
 
-internal
-THREAD_POOL_TASK_FUNC(lnk_cv_patcher_symbols_task)
+internal void
+lnk_patch_type_copy(Arena *arena, LNK_MergedTypes *types, CV_TypeIndexSource source, U64 leaf_idx, U8 *dst)
 {
-  ProfBeginFunction();
-  LNK_MergeTypes *task = raw_task;
-  Rng1U64 range = task->input->symbol_patch_task[task_id].input_range;
-  for EachInRange(i, range) {
-    LNK_SymbolInput symbols = task->input->symbol_inputs[i];
-    for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
-      Temp temp = temp_begin(task->fixed_arenas[worker_id]);
+  CV_Leaf leaf = cv_leaf_from_ptr(dst);
+  U32 obj_idx = lnk_leaf_ref_obj_idx(types->leaf_refs[source].v[leaf_idx]);
+  CV_TypeIndexInfoList indices = cv_get_leaf_type_index_offsets(arena, leaf.kind, leaf.data);
+  lnk_fixup_cv_type_indices(types, obj_idx, leaf.data, indices);
+}
 
-      CV_Symbol symbol = {0};
-      TryReadBreak(cv_read_symbol(symbols.raw_symbols, cursor, CV_SymbolAlign, &symbol), cursor);
+internal String8
+lnk_raw_type_from_index(LNK_MergedTypes *types, CV_TypeIndexSource source, U64 idx)
+{
+  LNK_LeafRef ref = types->leaf_refs[source].v[idx];
+  CV_DebugT *debug_t = &types->input->debug_t_arr[lnk_leaf_ref_obj_idx(ref)];
+  return cv_debug_t_get_raw_leaf(debug_t, lnk_leaf_ref_leaf_idx(ref));
+}
 
-      CV_TypeIndexInfoList ti_info_list = cv_get_symbol_type_index_offsets(temp.arena, symbol.kind, symbol.data);
-      lnk_fixup_cv_type_indices(task, symbols.obj_idx, symbol.data, ti_info_list);
+internal void
+lnk_patch_symbol_copy(LNK_MergedTypes *types, U32 obj_idx, CV_Symbol symbol)
+{
+  CV_SymKind final_kind = cv_final_symbol_kind(symbol.kind);
 
-      temp_end(temp);
+  if (final_kind != symbol.kind) {
+    if (CV_IsProc32(symbol.kind)) {
+      CV_SymProc32 *proc32 = str8_deserial_get_raw_ptr(symbol.data, 0, sizeof(*proc32));
+      if (proc32 == 0) {
+        lnk_error_obj(LNK_Error_CvIllSymbolData, types->input->obj_arr[obj_idx], "truncated procedure record");
+        goto exit;
+      }
+
+      CV_TypeIndex id = memory_read32(&proc32->itype);
+      if (id >= types->input->min_type_indices[CV_TypeIndexSource_IPI]) {
+        // FUNC_ID and MFUNC_ID carry a TPI function type in their second field.
+        LNK_LeafRef id_ref     = lnk_leaf_ref_from_ti(types->input, obj_idx, CV_TypeIndexSource_IPI, id);
+        U32         id_obj_idx = lnk_leaf_ref_obj_idx(id_ref);
+        CV_Leaf     id_leaf    = cv_debug_t_get_leaf(&types->input->debug_t_arr[id_obj_idx], lnk_leaf_ref_leaf_idx(id_ref));
+
+        if (id_leaf.kind != CV_LeafKind_FUNC_ID && id_leaf.kind != CV_LeafKind_MFUNC_ID) {
+          lnk_error_obj(LNK_Error_InvalidTypeIndex, types->input->obj_arr[obj_idx], "procedure ID does not reference a function ID");
+          goto exit;
+        }
+        if (id_leaf.data.size < 2 * sizeof(CV_TypeIndex)) {
+          lnk_error_obj(LNK_Error_CvIllSymbolData, types->input->obj_arr[obj_idx], "truncated procedure ID id_leaf");
+          goto exit;
+        }
+
+        // extract procedure type ID type
+        CV_TypeIndex ti = memory_read32(id_leaf.data.str + sizeof(CV_TypeIndex));
+
+        // basic/no-type values are copied unchanged; only complex types need lookup
+        if (ti >= types->input->min_type_indices[CV_TypeIndexSource_TPI]) {
+          LNK_AssignedTiHash *tpi_ht   = &types->assigned_ti_arr[CV_TypeIndexSource_TPI];
+          LNK_LeafRef         type_ref = lnk_leaf_ref_from_ti(types->input, id_obj_idx, CV_TypeIndexSource_TPI, ti);
+          ti = lnk_assigned_ti_hash_search(tpi_ht, types->input, type_ref);
+        }
+
+        memory_write32(&proc32->itype, ti);
+      }
     }
-  }
-  ProfEnd();
-}
 
-internal
-THREAD_POOL_TASK_FUNC(lnk_cv_patcher_inlines_task)
-{
-  ProfBeginFunction();
-  LNK_MergeTypes *task          = raw_task;
-  U64             obj_idx       = task_id;
-  String8List     inlinee_lines = cv_sub_section_from_debug_s(task->input->debug_s_arr[obj_idx], CV_C13SubSectionKind_InlineeLines);
-  Arena          *fixed_arena   = task->fixed_arenas[worker_id];
-  for EachNode(inline_data_n, String8Node, inlinee_lines.first) {
-    Temp temp = temp_begin(fixed_arena);
-    CV_TypeIndexInfoList ti_info_list = cv_get_inlinee_type_index_offsets(temp.arena, inline_data_n->string);
-    lnk_fixup_cv_type_indices(task, obj_idx, inline_data_n->string, ti_info_list);
-    temp_end(temp);
+    // update symbol kind
+    memory_write16(cv_kind_ptr_from_symbol(symbol), final_kind);
+  } else {
+    Temp scratch = scratch_begin(0, 0);
+    CV_TypeIndexInfoList indices = cv_get_symbol_type_index_offsets(scratch.arena, symbol.kind, symbol.data);
+    lnk_fixup_cv_type_indices(types, obj_idx, symbol.data, indices);
+    scratch_end(scratch);
   }
-  ProfEnd();
-}
 
-internal
-THREAD_POOL_TASK_FUNC(lnk_cv_patcher_leaves_task)
-{
-  ProfBeginFunction();
-  LNK_MergeTypes *task        = raw_task;
-  Rng1U64         range       = task->ranges[task_id];
-  Arena          *fixed_arena = task->fixed_arenas[task_id];
-  for EachInRange(leaf_ref_idx, range) {
-    Temp temp = temp_begin(fixed_arena);
-    LNK_LeafRef           patch        = task->unique_leaf_refs_arr[task->ti_source].v[leaf_ref_idx];
-    U32                   obj_idx      = lnk_leaf_ref_obj_idx(patch);
-    CV_DebugT            *debug_t      = &task->input->debug_t_arr[obj_idx];
-    CV_Leaf               leaf         = cv_debug_t_get_leaf(debug_t, lnk_leaf_ref_leaf_idx(patch));
-    CV_TypeIndexInfoList  ti_info_list = cv_get_leaf_type_index_offsets(temp.arena, leaf.kind, leaf.data);
-    lnk_fixup_cv_type_indices(task, obj_idx, leaf.data, ti_info_list);
-    temp_end(temp);
-  }
-  ProfEnd();
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_unbucket_raw_leaves_task)
-{
-  LNK_MergeTypes *task = raw_task;
-  Rng1U64 range = task->ranges[task_id];
-  for EachInRange(i, range) {
-    LNK_LeafRef  leaf_ref = task->unique_leaf_refs_arr[task->ti_source].v[i];
-    CV_DebugT   *debug_t  = &task->input->debug_t_arr[lnk_leaf_ref_obj_idx(leaf_ref)];
-    String8      raw_leaf = cv_debug_t_get_raw_leaf(debug_t, lnk_leaf_ref_leaf_idx(leaf_ref));
-    task->result.v[task->ti_source][i] = raw_leaf.str;
-  }
+  exit:;
 }
 
 internal
@@ -1753,68 +1700,6 @@ THREAD_POOL_TASK_FUNC(lnk_unbucket_hashes_task)
     CV_DebugT   *debug_t  = &task->input->debug_t_arr[obj_idx];
     String8      raw_leaf = cv_debug_t_get_raw_leaf(debug_t, leaf_idx);
     task->result.hashes[task->ti_source][i] = task->input->debug_h_arr[obj_idx].v[leaf_idx];
-  }
-}
-
-internal
-THREAD_POOL_TASK_FUNC(lnk_fixup_symbols_task)
-{
-  LNK_MergeTypes *task = raw_task;
-
-  LNK_SymbolInput   symbols        = task->input->symbol_inputs[task_id];
-  U64               leaf_count_ipi = task->result.count    [CV_TypeIndexSource_IPI];
-  U8              **leaf_arr_ipi   = task->result.v        [CV_TypeIndexSource_IPI];
-  CV_TypeIndex      min_ti_ipi     = task->min_type_indices[CV_TypeIndexSource_IPI];
-
-  for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
-    CV_Symbol symbol = {0};
-    TryReadBreak(cv_read_symbol(symbols.raw_symbols, cursor, CV_SymbolAlign, &symbol), cursor);
-
-    // convert symbol to final type
-    CV_SymKind *sym_kind_ptr = cv_kind_ptr_from_symbol(symbol);
-    switch (*sym_kind_ptr) {
-    case CV_SymKind_PROC_ID_END: *sym_kind_ptr = CV_SymKind_END; break;
-
-    case CV_SymKind_LPROC32_ID:     *sym_kind_ptr = CV_SymKind_LPROC32;     goto fixup_id;
-    case CV_SymKind_GPROC32_ID:     *sym_kind_ptr = CV_SymKind_GPROC32;     goto fixup_id;
-    case CV_SymKind_LPROC32_DPC_ID: *sym_kind_ptr = CV_SymKind_LPROC32_DPC; goto fixup_id;
-    case CV_SymKind_LPROCMIPS_ID:   *sym_kind_ptr = CV_SymKind_LPROCMIPS;   goto fixup_id;
-    case CV_SymKind_GPROCMIPS_ID:   *sym_kind_ptr = CV_SymKind_GPROCMIPS;   goto fixup_id;
-    case CV_SymKind_LPROCIA64_ID:   *sym_kind_ptr = CV_SymKind_LPROCIA64;   goto fixup_id;
-    case CV_SymKind_GPROCIA64_ID:   *sym_kind_ptr = CV_SymKind_GPROCIA64;   goto fixup_id;
-    fixup_id:; {
-      CV_SymProc32 *proc32 = str8_deserial_get_raw_ptr(symbol.data, 0, sizeof(*proc32));
-      if (proc32->itype < min_ti_ipi) {
-        // TODO: in some cases destructors don't have a type, need a repro
-        break;
-      }
-
-      if ((proc32->itype - min_ti_ipi) > leaf_count_ipi) {
-        Assert(0 && "TODO: error handle corrupted type index");
-        break;
-      }
-
-      U64     leaf_idx  = proc32->itype - min_ti_ipi;
-      String8 leaf_data = str8(leaf_arr_ipi[leaf_idx], max_U64);
-
-      CV_Leaf leaf;
-      if (cv_read_leaf(leaf_data, 0, 1, &leaf) == 0) { InvalidPath; }
-
-      U64 min_leaf_size = cv_header_struct_size_from_leaf_kind(leaf.kind);
-      if (min_leaf_size > leaf.data.size) { Assert(!"TODO: error handle corrupt leaf"); break; }
-
-      if (leaf.kind == CV_LeafKind_FUNC_ID) {
-        CV_LeafFuncId *func_id = str8_deserial_get_raw_ptr(leaf.data, 0, sizeof(*func_id));
-        proc32->itype = func_id->itype;
-      } else if (leaf.kind == CV_LeafKind_MFUNC_ID) {
-        CV_LeafMFuncId *mfunc_id = str8_deserial_get_raw_ptr(leaf.data, 0, sizeof(*mfunc_id));
-        proc32->itype = mfunc_id->itype;
-      } else {
-        Assert(!"TODO: erorr handle unexpected leaf type");
-        break;
-      }
-    } break;
-    }
   }
 }
 
@@ -1840,16 +1725,15 @@ THREAD_POOL_TASK_FUNC(lnk_build_obj_ti_map)
 }
 
 internal LNK_MergedTypes
-lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK_MergeTypeFlags merge_flags)
+lnk_merge_types(TP_Context *tp, Arena *arena, LNK_CodeViewInput *input, LNK_MergeTypeFlags merge_flags)
 {
   ProfBeginFunction();
-  Temp scratch = temp_begin(lnk_get_huge_arena());
 
-  LNK_MergeTypes task = { .input = input };
-  U64 max_ti_list_size = sizeof(CV_TypeIndexInfo) * (max_U16 / sizeof(CV_TypeIndex));
-  task.fixed_arenas = alloc_fixed_size_arena_array(scratch.arena, tp->worker_count, max_ti_list_size, max_ti_list_size);
+  Temp scratch = lnk_get_huge_arena() != arena ? temp_begin(lnk_get_huge_arena()) : scratch_begin(&arena, 1);
 
-  ProfBegin("Produce Hashes");
+  LNK_MergeTypes task = { .input = input, .result.input = input };
+
+  ProfScope("Produce Hashes")
   {
     ProfBegin("Alloc Hashes");
     struct HashTarget {
@@ -1876,7 +1760,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
           // alloc hashes
           CV_DebugT *debug_t = &input->debug_t_arr[obj_idx];
           debug_h->count = debug_t->count;
-          debug_h->v     = push_array(scratch.arena, U64, debug_h->count);
+          debug_h->v     = push_array(arena, U64, debug_h->count);
 
           // schedule obj types to be hashed
           h->v[h->count++] = obj_idx;
@@ -1911,7 +1795,6 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
       *dst_debug_h = *src_debug_h;
     }
   }
-  ProfEnd();
 
   ProfBegin("Leaf Hash Table Init");
   for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
@@ -1931,7 +1814,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
 
   U32Array dedup_type_server_indices = input->type_server_indices;
 
-  ProfBegin("Prepopulate hash table with largest type-set");
+  ProfScope("Prepopulate hash table with largest type-set")
   {
     LNK_TypeServer *largest_ts = 0;
     for EachIndex(i, input->ts_arr.count) {
@@ -1945,7 +1828,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     if (largest_ts) {
       task.pop_obj_idx = input->ts_obj_range.min + largest_ts->ts_idx;
       task.pop_range   = tp_divide_work(scratch.arena, task.input->debug_t_arr[task.pop_obj_idx].count, tp->worker_count);
-      tp_for_parallel(tp, tp_temp, tp->worker_count, lnk_populate_leaf_ht, &task);
+      tp_for_parallel(tp, 0, tp->worker_count, lnk_populate_leaf_ht, &task);
 
       U32Array new_dedup_type_server_indices = { .v = push_array(scratch.arena, U32, input->type_server_indices.count) };
       for EachIndex(i, input->type_server_indices.count) {
@@ -1955,17 +1838,16 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
       dedup_type_server_indices = new_dedup_type_server_indices;
     }
   }
-  ProfEnd();
 
   ProfBegin("Leaf Dedup");
   task.indices = input->debug_p_indices;
-  tp_for_parallel_prof(tp, tp_temp, task.indices.count, lnk_leaf_dedup_task, &task, ".debug$P");
+  tp_for_parallel_prof(tp, 0, task.indices.count, lnk_leaf_dedup_task, &task, ".debug$P");
 
   task.indices = input->int_obj_indices;
-  tp_for_parallel_prof(tp, tp_temp, task.indices.count, lnk_leaf_dedup_task, &task, ".debug$T");
+  tp_for_parallel_prof(tp, 0, task.indices.count, lnk_leaf_dedup_task, &task, ".debug$T");
 
   task.indices = dedup_type_server_indices;
-  tp_for_parallel_prof(tp, tp_temp, task.indices.count, lnk_leaf_dedup_task, &task, "Type Servers");
+  tp_for_parallel_prof(tp, 0, task.indices.count, lnk_leaf_dedup_task, &task, "Type Servers");
   ProfEnd();
 
   ProfBegin("Extract present buckets from the leaf hash tables");
@@ -1977,7 +1859,7 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_count_present_buckets_task, &task, "Count present buckets");
 
     task.unique_leaf_refs_arr[ti_source].count = sum_array_u64(tp->worker_count, task.counts[ti_source]);
-    task.unique_leaf_refs_arr[ti_source].v     = push_array_no_zero(scratch.arena, LNK_LeafRef, task.unique_leaf_refs_arr[ti_source].count);
+    task.unique_leaf_refs_arr[ti_source].v     = push_array_no_zero(arena, LNK_LeafRef, task.unique_leaf_refs_arr[ti_source].count);
     task.offsets[ti_source]                    = offsets_from_counts_array_u64(scratch.arena, task.counts[ti_source], tp->worker_count);
     tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_get_present_buckets_task, &task, "Copy present buckets");
 
@@ -1998,14 +1880,11 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
   {
     ProfBegin("Assign type indices");
     for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
-      task.ti_source                         = ti_source;
-      task.assigned_ti_arr[ti_source].cap    = ((task.unique_leaf_refs_arr[ti_source].count * 13) / 10);
-      task.assigned_ti_arr[ti_source].ti_arr = push_array(scratch.arena, CV_TypeIndex, task.assigned_ti_arr[ti_source].cap);
-
-      // unique extraction is complete, so the dedup bucket slots can back the
-      // direct hash table without increasing peak memory
-      Assert(task.assigned_ti_arr[ti_source].cap <= task.leaf_ht_arr[ti_source].cap);
-      task.assigned_ti_arr[ti_source].hash_arr = task.leaf_ht_arr[ti_source].bucket_arr;
+      task.ti_source                            = ti_source;
+      task.assigned_ti_arr[ti_source].cap       = ((task.unique_leaf_refs_arr[ti_source].count * 13) / 10);
+      task.assigned_ti_arr[ti_source].ti_arr    = push_array(arena, CV_TypeIndex, task.assigned_ti_arr[ti_source].cap);
+      task.assigned_ti_arr[ti_source].min_ti    = CV_MinComplexTypeIndex;
+      task.assigned_ti_arr[ti_source].leaf_refs = task.unique_leaf_refs_arr[ti_source].v;
 
       task.min_type_indices[ti_source] = CV_MinComplexTypeIndex;
       task.ranges = tp_divide_work(scratch.arena, task.unique_leaf_refs_arr[ti_source].count, tp->worker_count);
@@ -2013,25 +1892,13 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
     }
     ProfEnd();
 
-    if (~merge_flags & LNK_MergeTypeFlag_SkipSymbolTypeFixup) {
-      tp_for_parallel_prof(tp, 0, input->symbol_patch_task_count, lnk_cv_patcher_symbols_task, &task, "Fixup Symbol Type Indices");
-
-      task.ranges      = 0;
-      task.debug_s_arr = input->debug_s_arr;
-      tp_for_parallel_prof(tp, 0, input->count, lnk_cv_patcher_inlines_task, &task, "Fixup Inlines Type Indices");
-    }
-
-    for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
-      task.ti_source = ti_source;
-      task.ranges    = tp_divide_work(scratch.arena, task.unique_leaf_refs_arr[ti_source].count, tp->worker_count);
-      tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_cv_patcher_leaves_task, &task, "Fixup Types Type Indices");
-    }
+    MemoryCopyArray(task.result.assigned_ti_arr, task.assigned_ti_arr);
+    MemoryCopyArray(task.result.leaf_refs, task.unique_leaf_refs_arr);
   }
   ProfEnd();
 
   // @type_server
   if (merge_flags & LNK_MergeTypeFlag_BuildObjTiMap) {
-    task.result.obj_ti_maps = push_array(tp_temp->v[0], CV_TypeIndex *, input->obj_count);
     task.obj_ti_map_counts = push_array(scratch.arena, U64, input->obj_count);
     for EachIndex(obj_idx, input->obj_count) {
       task.obj_ti_map_counts[obj_idx] = input->debug_t_arr[obj_idx].count;
@@ -2039,8 +1906,8 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
 
     U64 total_ti_count = sum_array_u64(input->obj_count, task.obj_ti_map_counts);
     task.obj_ti_map_offsets = offsets_from_counts_array_u64(scratch.arena, task.obj_ti_map_counts, input->obj_count);
-    task.obj_ti_batch       = push_array_no_zero(tp_temp->v[0], CV_TypeIndex, total_ti_count);
-    task.result.obj_ti_maps = push_array_no_zero(tp_temp->v[0], CV_TypeIndex *, input->obj_count);
+    task.obj_ti_batch       = push_array_no_zero(arena, CV_TypeIndex, total_ti_count);
+    task.result.obj_ti_maps = push_array_no_zero(arena, CV_TypeIndex *, input->obj_count);
       
     tp_for_parallel_prof(tp, 0, input->obj_count, lnk_build_obj_ti_map, &task, "Build TI Map");
   }
@@ -2048,20 +1915,14 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
   for EachIndex(ti_source, CV_TypeIndexSource_COUNT) {
     LNK_LeafRefArray unique_leaf_refs = task.unique_leaf_refs_arr[ti_source];
 
-    task.ti_source               = ti_source;
     task.result.count[ti_source] = unique_leaf_refs.count;
-    task.result.v    [ti_source] = push_array(tp_temp->v[0], U8 *, unique_leaf_refs.count);
-    task.ranges                  = tp_divide_work(scratch.arena, unique_leaf_refs.count, tp->worker_count);
-    tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_unbucket_raw_leaves_task, &task, "Unbucket Leaves");
 
     if (merge_flags & LNK_MergeTypeFlag_ExportHashes) {
-      task.result.hashes[ti_source] = push_array_no_zero(tp_temp->v[0], U64, unique_leaf_refs.count);
+      task.ti_source = ti_source;
+      task.ranges = tp_divide_work(scratch.arena, unique_leaf_refs.count, tp->worker_count);
+      task.result.hashes[ti_source] = push_array_no_zero(arena, U64, unique_leaf_refs.count);
       tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_unbucket_hashes_task, &task, "Export Hashes");
     }
-  }
-
-  if (~merge_flags & LNK_MergeTypeFlag_SkipSymbolTypeFixup) {
-    tp_for_parallel_prof(tp, 0, input->symbol_input_count, lnk_fixup_symbols_task, &task, "Fixup ID Symbols");
   }
 
   MemoryCopyTyped(task.result.min_type_indices, input->min_type_indices, CV_TypeIndexSource_COUNT);
@@ -2071,30 +1932,17 @@ lnk_merge_types(TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK
   return task.result;
 }
 
-internal
-THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
+internal void
+lnk_hash_type_name_lenient(U8 *raw_leaf, U64 hash_length, Arena *map_arena, String8List *map)
 {
   ProfBeginFunction();
-
-  LNK_TypeNameReplacer *task        = raw_task;
-  Rng1U64               range       = task->ranges[task_id];
-  U64                   leaf_count  = task->leaf_count;
-  U8                  **leaf_arr    = task->leaf_arr;
-  U64                   hash_length = task->hash_length;
-
-  B32          make_map  = task->make_map;
-  Arena       *map_arena = 0;
-  String8List *map       = 0;
-  if (make_map) {
-    map_arena = task->map_arena->v[task_id];
-    map       = &task->maps[task_id];
-  }
+  B32 make_map = map_arena != 0;
 
   U64  hash_max_chars = hash_length*2;
   char temp[128];
 
-  for EachInRange(leaf_idx, range) {
-    CV_Leaf leaf = cv_leaf_from_ptr(leaf_arr[leaf_idx]);
+  {
+    CV_Leaf leaf = cv_leaf_from_ptr(raw_leaf);
     if (leaf.kind == CV_LeafKind_STRUCTURE || leaf.kind == CV_LeafKind_CLASS) {
       CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
 
@@ -2109,7 +1957,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
 
         // emit hash -> unique name map
         if (make_map) {
-          str8_list_pushf(map_arena, map, "%llx %S\n", name_hash, str8_varg(udt_info.unique_name));
+          str8_list_pushf(map_arena, map, "%llx %S\n", name_hash, udt_info.unique_name);
         }
 
         // parse leaf size
@@ -2135,7 +1983,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
                                 numeric_size +
                                 udt_info.name.size + 1 +
                                 udt_info.unique_name.size + 1;
-          CV_LeafHeader *header = (CV_LeafHeader *)leaf_arr[leaf_idx];
+          CV_LeafHeader *header = (CV_LeafHeader *)raw_leaf;
           Assert(new_size <= max_U16);
           memory_write16(MemberFromPtr(CV_LeafHeader, header, size), (U16)new_size);
         } else {
@@ -2149,7 +1997,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
                                 numeric_size +
                                 udt_info.name.size + 1 +
                                 udt_info.unique_name.size + 1;
-          CV_LeafHeader *header = (CV_LeafHeader *)leaf_arr[leaf_idx];
+          CV_LeafHeader *header = (CV_LeafHeader *)raw_leaf;
           Assert(new_size <= max_U16);
           memory_write16(MemberFromPtr(CV_LeafHeader, header, size), (U16)new_size);
         }
@@ -2160,29 +2008,16 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_lenient_task)
   ProfEnd();
 }
 
-internal
-THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_full_task)
+internal void
+lnk_hash_type_name_full(U8 *raw_leaf, U64 hash_length, Arena *map_arena, String8List *map)
 {
   ProfBeginFunction();
-
-  LNK_TypeNameReplacer *task        = raw_task;
-  Rng1U64               range       = task->ranges[task_id];
-  U64                   leaf_count  = task->leaf_count;
-  U8                  **leaf_arr    = task->leaf_arr;
-  U64                   hash_length = task->hash_length;
-
-  B32          make_map  = task->make_map;
-  Arena       *map_arena = 0;
-  String8List *map       = 0;
-  if (make_map) {
-    map_arena = task->map_arena->v[task_id];
-    map       = &task->maps[task_id];
-  }
+  B32 make_map = map_arena != 0;
 
   U64 hash_max_chars = hash_length*2;
 
-  for EachInRange(leaf_idx, range) {
-    CV_Leaf leaf = cv_leaf_from_ptr(leaf_arr[leaf_idx]);
+  {
+    CV_Leaf leaf = cv_leaf_from_ptr(raw_leaf);
     if (leaf.kind == CV_LeafKind_STRUCTURE || leaf.kind == CV_LeafKind_CLASS) {
       CV_UDTInfo udt_info = cv_get_udt_info(leaf.kind, leaf.data);
 
@@ -2215,7 +2050,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_full_task)
 
         // update header
         U64            new_size = sizeof(CV_LeafKind) + sizeof(CV_LeafStruct) + numeric_size + udt_info.name.size + 1;
-        CV_LeafHeader *header   = (CV_LeafHeader *)leaf_arr[leaf_idx];
+        CV_LeafHeader *header   = (CV_LeafHeader *)raw_leaf;
         Assert(new_size <= max_U16);
         memory_write16(MemberFromPtr(CV_LeafHeader, header, size), (U16)new_size);
 
@@ -2229,49 +2064,299 @@ THREAD_POOL_TASK_FUNC(lnk_replace_type_names_with_hashes_full_task)
   ProfEnd();
 }
 
+internal LNK_DebugRelocs
+lnk_debug_relocs_init(Arena *arena, LNK_Obj *obj, U64 section_number)
+{
+  COFF_RelocArray relocs = lnk_coff_reloc_info_from_section_number(obj, section_number);
+  B32 sorted = 1;
+  for (U64 i = 1; i < relocs.count; ++i) {
+    if (relocs.v[i - 1].apply_off > relocs.v[i].apply_off) { sorted = 0; break; }
+  }
+
+  if (!sorted) {
+    lnk_error_obj(LNK_Warning_UnsortedRelocations,
+                  obj,
+                  "relocations are not sorted in section %S (%llu); sorting by offset",
+                  lnk_obj_section_name_from_section_number(obj, section_number),
+                  section_number);
+
+    // copy & sort the relocations
+    COFF_Reloc *copy = push_array_no_zero(arena, COFF_Reloc, relocs.count);
+    Temp temp = temp_begin(arena);
+    U64 *keys = push_array_no_zero(temp.arena, U64, relocs.count);
+    for EachIndex(i, relocs.count) { keys[i] = ((U64)relocs.v[i].apply_off << 32) | i; }
+    radsort(keys, relocs.count, u64_is_before);
+    for EachIndex(i, relocs.count) { copy[i] = relocs.v[(U32)keys[i]]; }
+    temp_end(temp);
+
+    relocs.v = copy;
+  }
+
+  LNK_DebugRelocs result = {
+    .obj            = obj,
+    .section_number = section_number,
+    .section_data   = lnk_obj_section_data_from_number(obj, section_number),
+    .first          = relocs.count ? relocs.v : 0,
+    .cursor         = relocs.count ? relocs.v : 0,
+    .opl            = relocs.count ? relocs.v + relocs.count : 0,
+  };
+  return result;
+}
+
 internal void
-lnk_replace_type_names_with_hashes(TP_Context *tp, TP_Arena *arena, U64 leaf_count, U8 **leaf_arr, LNK_TypeNameHashMode mode, U64 hash_length, String8 map_name)
+lnk_relocate_debug_copy(LNK_BuildPdb *task, LNK_DebugRelocs *relocs, String8 source, U8 *dst)
+{
+  if (relocs->cursor == relocs->opl) { return; }
+
+  LNK_Obj     *obj        = relocs->obj;
+  U64          image_base = lnk_get_base_addr(task->cv->config);
+  U64          source_off = source.str - relocs->section_data.str;
+  COFF_Reloc **cursor     = &relocs->cursor;
+  COFF_Reloc  *opl        = relocs->opl;
+
+  while (*cursor < opl && (*cursor)->apply_off < source_off) { ++*cursor; }
+
+  for (; *cursor < opl && (*cursor)->apply_off < source_off + source.size; ++*cursor) {
+    COFF_Reloc *reloc = *cursor;
+
+    COFF_RelocValue value;
+    if (!lnk_resolve_reloc_value(obj, relocs->section_number, reloc, reloc - relocs->first, image_base, task->image_section_table, task->image_section_table_count, &value)) { continue; }
+
+    if (value.size == 0) { continue; }
+
+    U64 off = reloc->apply_off - source_off;
+    if (value.size > source.size - off) {
+      lnk_error_obj(LNK_Error_IllegalRelocation, obj, "debug relocation at 0x%x crosses a record boundary", reloc->apply_off);
+      continue;
+    }
+
+    lnk_apply_reloc_value(dst + off, value);
+  }
+}
+
+internal U64
+lnk_write_pdb_type(LNK_WritePdbTypes *ctx, U64 leaf_idx, String8 source, String8 dst, Arena *map_arena, String8List *map)
+{
+  LNK_Config *config = ctx->types->input->config;
+  B32 hash_names = ctx->source == CV_TypeIndexSource_TPI && config->pdb_hash_type_names != LNK_TypeNameHashMode_None && config->pdb_hash_type_names != LNK_TypeNameHashMode_Null;
+  if (dst.str == 0 && !hash_names) { return source.size; }
+
+  Temp scratch = scratch_begin(&map_arena, 1);
+  String8 data = source;
+
+  if (hash_names) {
+    data = push_str8_copy(scratch.arena, source);
+
+    U64 hash_length = Clamp(1, config->pdb_hash_type_name_length, 16);
+    if (config->pdb_hash_type_names == LNK_TypeNameHashMode_Lenient) {
+      lnk_hash_type_name_lenient(data.str, hash_length, map_arena, map);
+    } else {
+      lnk_hash_type_name_full(data.str, hash_length, map_arena, map);
+    }
+
+    data = cv_raw_leaf_from_ptr(data.str);
+  }
+
+  if (dst.str) {
+    AssertAlways(data.size <= dst.size);
+    MemoryCopy(dst.str, data.str, data.size);
+    lnk_patch_type_copy(scratch.arena, ctx->types, ctx->source, leaf_idx, dst.str);
+  }
+
+  U64 size = data.size;
+
+  scratch_end(scratch);
+  return size;
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_measure_pdb_types_task)
+{
+  LNK_WritePdbTypes *task = raw_task;
+  for EachInRange(i, task->ranges[task_id]) {
+    Temp scratch = scratch_begin(0, 0);
+    String8List map = {0};
+    String8 source = lnk_raw_type_from_index(task->types, task->source, i);
+    task->offsets[task_id] += lnk_write_pdb_type(task, i, source, str8_zero(), task->write_name_map ? scratch.arena : 0, &map);
+    if (task->write_name_map) { task->map_offsets[task_id] += map.total_size; }
+    scratch_end(scratch);
+  }
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_write_pdb_types_task)
+{
+  LNK_WritePdbTypes *task = raw_task;
+
+  U64 offset     = task->offsets[task_id];
+  U64 map_cursor = task->write_name_map ? task->map_offsets[task_id] : 0;
+
+  for EachInRange(i, task->ranges[task_id]) {
+    Temp scratch = scratch_begin(0, 0);
+
+    String8List map     = {0};
+    String8     dst     = str8_substr(task->output, r1u64(offset, task->offsets[task_id + 1]));
+    String8     source  = lnk_raw_type_from_index(task->types, task->source, i);
+    U64         written = lnk_write_pdb_type(task, i, source, dst, task->write_name_map ? scratch.arena : 0, &map);
+    CV_Leaf     leaf    = cv_leaf_from_ptr(dst.str);
+    U32         hash    = 0;
+
+    if (cv_is_udt(leaf.kind)) {
+      CV_UDTInfo udt = cv_get_udt_info(leaf.kind, leaf.data);
+      if (!(udt.props & CV_TypeProp_FwdRef)) {
+        hash = pdb_hash_udt(udt, leaf.data) % task->hash_bucket_count;
+      }
+    }
+    task->hashes[i] = hash;
+
+    if (task->write_name_map) {
+      Assert(map_cursor <= task->map_offsets[task_id + 1] && map.total_size <= task->map_offsets[task_id + 1] - map_cursor);
+      for EachNode(n, String8Node, map.first) {
+        MemoryCopy(task->map_data.str + map_cursor, n->string.str, n->string.size);
+        map_cursor += n->string.size;
+      }
+    }
+
+    if (i % PDB_TYPE_HINT_STEP == 0) {
+      Assert(offset < PDB_TYPE_OFFSET_MAX);
+      task->hints[i / PDB_TYPE_HINT_STEP] = (PDB_TpiOffHint){
+        .itype = task->types->min_type_indices[task->source] + i,
+        .off   = (PDB_TypeOffset)offset,
+      };
+    }
+    offset += written;
+
+    scratch_end(scratch);
+  }
+  Assert(offset == task->offsets[task_id + 1]);
+
+  if (task->write_name_map) {
+    Assert(map_cursor == task->map_offsets[task_id + 1]);
+  }
+}
+
+internal void
+lnk_build_pdb_type_stream(Arena *arena, TP_Context *tp, PDB_Context *pdb, LNK_MergedTypes *types, CV_TypeIndexSource source, U64 leaf_count, String8 *name_map_out)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(arena->v, arena->count);
+  Temp scratch = scratch_begin(&arena, 1);
 
-  // init task context
-  LNK_TypeNameReplacer task = {0};
-  task.leaf_count           = leaf_count;
-  task.leaf_arr             = leaf_arr;
-  task.ranges               = tp_divide_work(scratch.arena, leaf_count, tp->worker_count);
-  task.hash_length          = Clamp(1, hash_length, 16);
+  PDB_TypeServer   *ts         = pdb->type_servers[source];
+  MSF_StreamNumber  sn         = source == CV_TypeIndexSource_TPI ? PDB_FixedStream_Tpi : PDB_FixedStream_Ipi;
+  U64               hint_count = CeilIntegerDiv(leaf_count, PDB_TYPE_HINT_STEP);
+  LNK_WritePdbTypes task = {
+    .types             = types,
+    .source            = source,
+    .write_name_map    = name_map_out != 0,
+    .map_offsets       = name_map_out ? push_array(scratch.arena, U64, tp->worker_count + 1) : 0,
+    .ranges            = tp_divide_work(scratch.arena, leaf_count, tp->worker_count),
+    .offsets           = push_array(scratch.arena, U64, tp->worker_count + 1),
+    .hash_bucket_count = ts->bucket_cap,
+  };
 
-  if (map_name.size > 0) {
-    task.make_map  = 1;
-    task.map_arena = tp_arena_alloc(tp);
-    task.maps      = push_array(scratch.arena, String8List, tp->worker_count);
+  // first measure the final records, including any shortened type names
+  tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_measure_pdb_types_task, &task, "Measure PDB Types");
+  u64_array_counts_to_offsets(tp->worker_count + 1, task.offsets);
+  U64 data_size = task.offsets[tp->worker_count];
+  if (task.write_name_map) {
+    u64_array_counts_to_offsets(tp->worker_count + 1, task.map_offsets);
+    U64 map_size = task.map_offsets[tp->worker_count];
+    task.map_data = str8(push_array_no_zero(arena, U8, map_size), map_size);
+    *name_map_out = task.map_data;
   }
 
-  // pick task function
-  TP_TaskFunc *func = 0;
-  switch (mode) {
-  case LNK_TypeNameHashMode_Null: 
-  case LNK_TypeNameHashMode_None:
-    break;
+  // allocate once and write into disjoint ranges of the final TPI/IPI stream
+  AssertAlways(msf_stream_resize(pdb->msf, sn, safe_cast_u32(sizeof(PDB_TpiHeader) + data_size)));
+  task.output = str8_skip(msf_stream_data(pdb->msf, sn), sizeof(PDB_TpiHeader));
 
-  case LNK_TypeNameHashMode_Lenient: func = lnk_replace_type_names_with_hashes_lenient_task; break;
-  case LNK_TypeNameHashMode_Full:    func = lnk_replace_type_names_with_hashes_full_task;    break;
-  }
+  PDB_TypeHashStreamInfo hash_info = pdb_type_hash_stream_prepare(ts, &pdb->info->strtab, pdb->msf, leaf_count, hint_count);
+  String8 hash_data = msf_stream_data(pdb->msf, ts->hash_sn);
+  task.hashes = (U32 *)hash_data.str;
+  task.hints  = hash_data.str ? (PDB_TpiOffHint *)(hash_data.str + hash_info.ti_offs.off) : 0;
+  tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_write_pdb_types_task, &task, "Write PDB Types");
 
-  // run task
-  tp_for_parallel(tp, arena, tp->worker_count, func, &task);
-
-  // optionally write out map file 
-  if (task.make_map) {
-    String8List map = {0};
-    str8_list_concat_in_place_array(&map, task.maps, tp->worker_count);
-    lnk_write_data_list_to_file_path(map_name, str8_zero(), map);
-    tp_arena_release(&task.map_arena);
-  }
+  // hash values and hints were written alongside their finalized records
+  pdb_type_server_write_header(ts, pdb->msf, sn, leaf_count, data_size, hash_info);
 
   scratch_end(scratch);
   ProfEnd();
+}
+
+internal B32
+lnk_global_symbol_is_kept(CV_Symbol symbol, U64 *depth)
+{
+  B32 keep = cv_is_global_symbol(symbol.kind) || (*depth == 0 && cv_is_typedef(symbol.kind));
+  CV_SymKind kind = cv_final_symbol_kind(symbol.kind);
+  if      (cv_is_scope_symbol(kind)) { *depth += 1;                      }
+  else if (cv_is_end_symbol(kind))   { Assert(*depth != 0); *depth -= 1; }
+  return keep;
+}
+
+internal U64
+lnk_count_global_symbols(LNK_CodeViewInput *cv, U32Array objs)
+{
+  U64 count = 0;
+  for EachIndex(i, objs.count) {
+    U64 depth = 0;
+    CV_DebugS_Iter it = cv_debug_s_iter_init(&cv->debug_s_arr[objs.v[i]]);
+    while (cv_debug_s_iter_next_kind(&it, CV_C13SubSectionKind_Symbols)) {
+      for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= it.data.size; ) {
+        CV_Symbol symbol = {0};
+        TryReadBreak(cv_read_symbol(it.data, cursor, CV_SymbolAlign, &symbol), cursor);
+
+        if (lnk_global_symbol_is_kept(symbol, &depth)) {
+          count += 1;
+        }
+      }
+    }
+  }
+  return count;
+}
+
+internal B32
+lnk_insert_global_symbol(void **buckets, U64 cap, String8 raw)
+{
+  U64        first  = u64_hash_from_str8(raw) % cap;
+  U64        idx    = first;
+  CV_Symbol  symbol = cv_symbol_from_ptr(raw.str);
+
+  for (U64 probes = 0; probes < cap; ) {
+    void *curr = ins_atomic_ptr_eval_cond_assign(&buckets[idx], 0, 0);
+    if (curr == 0) {
+      // insert only the patched symbol; inserted records are never replaced,
+      // so the caller may rollback its candidate only when insertion returns false
+      if (ins_atomic_ptr_eval_cond_assign(&buckets[idx], raw.str, 0) != 0) { continue; }
+      return 1;
+    }
+
+    // symbol is already in the hash table -> stop
+    if (cv_symbol_match(cv_symbol_from_ptr(curr), symbol)) { return 0; }
+
+    idx = (idx + 1) == cap ? 0 : idx + 1;
+    probes += 1;
+  }
+
+  // table is sized incorrectly when hit
+  InvalidPath;
+  return 0;
+}
+
+internal B32
+lnk_is_pdb_module_symbol(CV_Symbol *symbol, U64 *scope_depth)
+{
+  symbol->kind = cv_final_symbol_kind(symbol->kind);
+
+  if (symbol->kind == CV_SymKind_SKIP                    ||
+      cv_is_global_symbol(symbol->kind)                  ||
+      (cv_is_typedef(symbol->kind) && *scope_depth == 0) ||
+      symbol->kind == 0x1176) {
+    return 0;
+  }
+
+  if      (cv_is_scope_symbol(symbol->kind)) { *scope_depth += 1; }
+  else if (cv_is_end_symbol(symbol->kind))   { *scope_depth -= 1; }
+
+  return 1;
 }
 
 internal
@@ -2284,46 +2369,51 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
   PDB_PsiContext *psi         = task->pdb->psi;
   U32Array        obj_indices = task->obj_indices[task_id];
 
-  ProfBegin("Global Symbols");
+  if (!task->cv->is_stripped) ProfScope("Global Symbols")
   {
-    VoidList global_symbols = {0};
-    for EachInRange(i, task->cv->symbol_input_ranges[task_id]) {
-      LNK_SymbolInput symbols = task->cv->symbol_inputs[i];
-      for (U64 cursor = 0, depth = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.raw_symbols.size; ) {
-        CV_Symbol symbol = {0};
-        TryReadBreak(cv_read_symbol(symbols.raw_symbols, cursor, CV_SymbolAlign, &symbol), cursor);
+    U64    global_count = tp_sum_u64(tp, task_id, lnk_count_global_symbols(task->cv, obj_indices));
+    U64    bucket_cap   = Max(1, global_count * 13 / 10);
+    void **buckets      = 0;
 
-        if (cv_is_global_symbol(symbol.kind) || (depth == 0 && cv_is_typedef(symbol.kind))) {
-          void *ptr = cv_ptr_from_symbol(symbol);
-          void_list_push(scratch.arena, &global_symbols, ptr);
-        }
-
-        if (cv_is_scope_symbol(symbol.kind)) {
-          depth += 1;
-        } else if (cv_is_end_symbol(symbol.kind)) {
-          if (depth == 0) { Assert(0 && "malformed symbol stream"); break; }
-          depth -= 1;
-        }
-      }
-    }
-
-    // collect global data and global typedefs
-    U64 global_symbol_count = tp_sum_u64(tp, task_id, global_symbols.count);
-
-    U64    bucket_cap;
-    void **buckets;
     if (task_id == 0) {
-      bucket_cap = global_symbol_count * 13 / 10;
-      buckets    = push_array(scratch.arena, void *, bucket_cap);
+      buckets = push_array(scratch.arena, void *, bucket_cap);
     }
-    tp_broadcast(&bucket_cap);
     tp_broadcast(&buckets);
 
-    // insert symbols into hash table
-    for EachNode(n, VoidNode, global_symbols.first) {
-      String8 raw  = cv_raw_from_symbol(n->v);
-      U64     hash = u64_hash_from_str8(raw);
-      cv_symbol_deduper_insert_or_update(buckets, bucket_cap, hash, n->v);
+    for EachIndex(i, obj_indices.count) {
+      U32            obj_idx = obj_indices.v[i];
+      U64            depth   = 0;
+      CV_DebugS_Iter it = cv_debug_s_iter_init(&task->cv->debug_s_arr[obj_idx]);
+      for (U32Node *section = task->cv->debug_s_section_numbers[obj_idx].first; cv_debug_s_iter_next_block(&it); section = section->next) {
+        Assert(section != 0);
+        Temp section_temp = scratch_begin(&scratch.arena, 1);
+        
+        LNK_DebugRelocs relocs = lnk_debug_relocs_init(section_temp.arena, task->cv->obj_arr[obj_idx], section->data);
+        while (cv_debug_s_iter_next(&it)) {
+          if (it.kind != CV_C13SubSectionKind_Symbols) { continue; }
+
+          for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= it.data.size; ) {
+            CV_Symbol symbol = {0};
+            TryReadBreak(cv_read_symbol(it.data, cursor, CV_SymbolAlign, &symbol), cursor);
+
+            if (lnk_global_symbol_is_kept(symbol, &depth)) {
+              Temp candidate_temp = temp_begin(scratch.arena);
+
+              String8 symbol_read = cv_raw_from_symbol(cv_ptr_from_symbol(symbol));
+              String8 symbol_copy = push_str8_copy(scratch.arena, symbol_read);
+
+              lnk_relocate_debug_copy(task, &relocs, symbol_read, symbol_copy.str);
+              lnk_patch_symbol_copy(task->types, obj_idx, cv_symbol_from_ptr(symbol_copy.str));
+
+              if (!lnk_insert_global_symbol(buckets, bucket_cap, symbol_copy)) {
+                temp_end(candidate_temp);
+              }
+            }
+          }
+        }
+
+        scratch_end(section_temp);
+      }
     }
     barrier_wait(tp->barrier);
 
@@ -2359,105 +2449,75 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
 
     // push global symbols
     if (task_id == 0) {
-      CV_SymbolNode *nodes = push_array_no_zero(gsi->arena, CV_SymbolNode, symbol_count);
+      CV_SymbolNode *nodes = push_array_no_zero(scratch.arena, CV_SymbolNode, symbol_count);
       for EachIndex(i, symbol_count) {
         CV_SymbolNode *n = &nodes[i];
-        n->prev = n->next = 0;
-        n->data = cv_symbol_from_ptr(symbol_arr[i]);
+        n->prev        = n->next = 0;
+        n->data        = cv_symbol_from_ptr(symbol_arr[i]);
         n->data.offset = i;
         gsi_push_(gsi, symbol_hashes[i], n);
       }
     }
   }
-  ProfEnd();
 
-  ProfBegin("Proc Refs");
+  ProfScope("Proc Refs")
   {
-    U64 *proc_ref_sizes  = 0;
     U64 *proc_ref_counts = 0;
     if (task_id == 0) {
-      proc_ref_sizes  = push_array(scratch.arena, U64, tp->worker_count);
       proc_ref_counts = push_array(scratch.arena, U64, tp->worker_count);
     }
-    tp_broadcast(&proc_ref_sizes);
     tp_broadcast(&proc_ref_counts);
 
-    U64 proc_ref_size  = 0;
     U64 proc_ref_count = 0;
     for EachIndex(i, obj_indices.count) {
-      U64         obj_idx        = obj_indices.v[i];
-      CV_DebugS   debug_s        = task->cv->debug_s_arr[obj_idx];
-      String8List symbols        = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
-      for EachNode(n, String8Node, symbols.first) {
-        for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
-          CV_Symbol symbol = {0};
-          TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
-
-          if (symbol.kind == CV_SymKind_GPROC32 || symbol.kind == CV_SymKind_LPROC32) {
-            String8 name = cv_name_from_symbol(symbol.kind, symbol.data);
-            proc_ref_size  += AlignPow2(sizeof(CV_SymRef2) + name.size + 1, sizeof(void *));
-            proc_ref_count += 1;
-          }
+      U64     obj_idx = obj_indices.v[i];
+      String8 symbols = task->mod_views[obj_idx].symbols;
+      for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.size; ) {
+        CV_Symbol symbol = {0};
+        TryReadBreak(cv_read_symbol(symbols, cursor, PDB_SYMBOL_ALIGN, &symbol), cursor);
+        if (symbol.kind == CV_SymKind_GPROC32 || symbol.kind == CV_SymKind_LPROC32) {
+          proc_ref_count += 1;
         }
       }
     }
-    proc_ref_sizes[task_id]  = proc_ref_size;
     proc_ref_counts[task_id] = proc_ref_count;
     barrier_wait(tp->barrier);
 
-    U64 total_proc_ref_size  = tp_sum_u64(tp, task_id, proc_ref_size);
-    U64 total_proc_ref_count = tp_sum_u64(tp, task_id, proc_ref_count);
-
-    U64            *proc_ref_hashes  = 0;
-    U64            *proc_ref_indices = 0;
-    Arena         **proc_ref_arenas  = 0;
-    CV_SymbolNode  *proc_ref_nodes   = 0;
+    U64             total_proc_ref_count = tp_sum_u64(tp, task_id, proc_ref_count);
+    U32            *proc_ref_hashes      = 0;
+    U64            *proc_ref_indices     = 0;
+    CV_SymbolNode  *proc_ref_nodes       = 0;
     if (task_id == 0) {
-      proc_ref_hashes  = push_array(scratch.arena, U64, total_proc_ref_count);
+      proc_ref_hashes  = push_array(scratch.arena, U32, total_proc_ref_count);
       proc_ref_indices = offsets_from_counts_array_u64(scratch.arena, proc_ref_counts, tp->worker_count);
-      proc_ref_arenas  = alloc_arena_many(gsi->arena, tp->worker_count, proc_ref_sizes);
-      proc_ref_nodes   = push_array(gsi->arena, CV_SymbolNode, total_proc_ref_count);
+      proc_ref_nodes   = push_array(scratch.arena, CV_SymbolNode, total_proc_ref_count);
     }
     tp_broadcast(&proc_ref_hashes);
     tp_broadcast(&proc_ref_indices);
-    tp_broadcast(&proc_ref_arenas);
     tp_broadcast(&proc_ref_nodes);
 
-    Arena *proc_ref_arena = proc_ref_arenas[task_id];
-    U64    proc_ref_idx   = proc_ref_indices[task_id];
+    U64 proc_ref_idx = proc_ref_indices[task_id];
     for EachIndex(i, obj_indices.count) {
-      U64         obj_idx       = obj_indices.v[i];
-      CV_DebugS   debug_s       = task->cv->debug_s_arr[obj_idx];
-      String8List symbols       = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
-      CV_ModIndex imod          = task->mod_arr[obj_idx]->imod;
-      U64         symbol_cursor = sizeof(CV_Signature);
-      U64         scope_depth   = 0;
-      for EachNode(n, String8Node, symbols.first) {
-        for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
-          CV_Symbol symbol = {0};
-          TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
+      U64         obj_idx = obj_indices.v[i];
+      String8     symbols = task->mod_views[obj_idx].symbols;
+      CV_ModIndex imod    = task->mod_arr[obj_idx]->imod;
+      for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= symbols.size; ) {
+        CV_Symbol symbol = {0};
+        U64 symbol_offset = sizeof(CV_Signature) + cursor;
+        TryReadBreak(cv_read_symbol(symbols, cursor, PDB_SYMBOL_ALIGN, &symbol), cursor);
 
-          if      (symbol.kind == CV_SymKind_SKIP)                 { continue; }
-          else if (cv_is_global_symbol(symbol.kind))               { continue; }
-          else if (cv_is_typedef(symbol.kind) && scope_depth == 0) { continue; }
-          else if (symbol.kind == 0x1176)                          { continue; }
-
-          if      (cv_is_scope_symbol(symbol.kind)) { scope_depth += 1; }
-          else if (cv_is_end_symbol(symbol.kind))   { scope_depth -= 1; }
-
-          if (symbol.kind == CV_SymKind_GPROC32 || symbol.kind == CV_SymKind_LPROC32) {
-            String8 name = cv_name_from_symbol(symbol.kind, symbol.data);
-            proc_ref_nodes [proc_ref_idx].data = cv_make_proc_ref(proc_ref_arena, imod, symbol_cursor, name, cv_is_lproc(symbol));
-            proc_ref_nodes [proc_ref_idx].data.offset = symbol_cursor;
-            proc_ref_hashes[proc_ref_idx] = gsi_hash(gsi, name);
-            proc_ref_idx += 1;
-          }
-
-          symbol_cursor += cv_write_symbol_buf(0, 0, &symbol, PDB_SYMBOL_ALIGN);
+        if (symbol.kind == CV_SymKind_GPROC32 || symbol.kind == CV_SymKind_LPROC32) {
+          String8 name = cv_name_from_symbol(symbol.kind, symbol.data);
+          proc_ref_nodes [proc_ref_idx].data = cv_make_proc_ref(scratch.arena, imod, safe_cast_u32(symbol_offset), name, cv_is_lproc(symbol));
+          proc_ref_nodes [proc_ref_idx].data.offset = symbol_offset;
+          proc_ref_hashes[proc_ref_idx] = gsi_hash(gsi, name);
+          proc_ref_idx += 1;
         }
       }
     }
     barrier_wait(tp->barrier);
+
+    Assert(proc_ref_idx == proc_ref_indices[task_id] + proc_ref_counts[task_id]);
 
     // push proc refs
     if (task_id == 0) {
@@ -2466,62 +2526,20 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     }
     barrier_wait(tp->barrier);
   }
-  ProfEnd();
 
-  ProfBegin("Public Symbols");
+  ProfScope("Public Symbols")
   {
-    U64 *public_symbol_sizes       = 0; // [worker_count]
-    U64 *public_symbol_node_counts = 0; // [worker_count]
+    LNK_SymbolHashTrieChunkList   symbol_chunks        = task->symtab->chunks[task_id];
+    CV_SymbolList                *public_symbols       = 0; // [worker_count]
+    U32                         **public_symbol_hashes = 0; // [worker_count][public_symbol.count]
     if (task_id == 0) {
-      public_symbol_sizes       = push_array(scratch.arena, U64, tp->worker_count);
-      public_symbol_node_counts = push_array(scratch.arena, U64, tp->worker_count);
+      public_symbols       = push_array(scratch.arena, CV_SymbolList, tp->worker_count);
+      public_symbol_hashes = push_array(scratch.arena, U32 *,         tp->worker_count);
     }
-    tp_broadcast(&public_symbol_sizes);
-    tp_broadcast(&public_symbol_node_counts);
-
-    // compute buffer size for CV public symbols
-    LNK_SymbolHashTrieChunkList symbol_chunks       = task->symtab->chunks[task_id];
-    U64                         public_symbol_size  = 0;
-    U64                         public_symbol_count = 0;
-    for EachNode(chunk, LNK_SymbolHashTrieChunk, symbol_chunks.first) {
-      for EachIndex(i, chunk->count) {
-        LNK_Symbol        *symbol        = chunk->v[i].symbol;
-        LNK_ObjSymbolRef   symbol_ref    = lnk_ref_from_symbol(symbol);
-        COFF_ParsedSymbol  symbol_parsed = lnk_parsed_from_symbol(symbol);
-
-        if (symbol_parsed.section_number == lnk_obj_get_removed_section_number(symbol_ref.obj)) { continue; }
-        COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
-        if (symbol_interp != COFF_SymbolValueInterp_Regular) { continue; }
-
-        public_symbol_size  += AlignPow2(sizeof(CV_SymPub32) + symbol->name.size + 1, sizeof(void *));
-        public_symbol_count += 1;
-        public_symbol_node_counts[task_id] += 1;
-      }
-    }
-    public_symbol_sizes      [task_id] += public_symbol_size;
-    public_symbol_node_counts[task_id] += public_symbol_count;
-    barrier_wait(tp->barrier);
-
-    Arena         **public_symbol_arenas      = 0;
-    Arena         **public_symbol_node_arenas = 0;
-    CV_SymbolList  *public_symbols            = 0; // [worker_count]
-    U32           **public_symbol_hashes      = 0; // [worker_count][public_symbol.count]
-    if (task_id == 0) {
-      U64 public_symbol_total_count  = sum_array_u64(tp->worker_count, public_symbol_node_counts);
-      public_symbol_arenas      = alloc_arena_many(psi->gsi->arena, tp->worker_count, public_symbol_sizes);
-      public_symbol_node_arenas = alloc_arena_array(psi->gsi->arena, tp->worker_count, public_symbol_node_counts, CV_SymbolNode);
-      public_symbols            = push_array(scratch.arena, CV_SymbolList, tp->worker_count);
-      public_symbol_hashes      = push_array(scratch.arena, U32 *, tp->worker_count);
-    }
-    tp_broadcast(&public_symbol_arenas);
-    tp_broadcast(&public_symbol_node_arenas);
     tp_broadcast(&public_symbols);
     tp_broadcast(&public_symbol_hashes);
 
-    // make CV public symbols
-    Arena         *public_symbol_arena      = public_symbol_arenas     [task_id];
-    Arena         *public_symbol_node_arena = public_symbol_node_arenas[task_id];
-    CV_SymbolList *public_symbol_list       = &public_symbols          [task_id];
+    CV_SymbolList *public_symbol_list = &public_symbols[task_id];
     for EachNode(chunk, LNK_SymbolHashTrieChunk, symbol_chunks.first) {
       for EachIndex(i, chunk->count) {
         LNK_Symbol        *symbol        = chunk->v[i].symbol;
@@ -2533,10 +2551,11 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
         COFF_SymbolValueInterpType symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);
         if (symbol_interp != COFF_SymbolValueInterp_Regular) { continue; }
 
+        // make CV public symbols
         CV_Pub32Flags flags      = COFF_SymbolType_IsFunc(symbol_parsed.type) ? CV_Pub32Flag_Function : 0;
         ISectOff      sc         = lnk_sc_from_symbol(symbol);
-        CV_Symbol     pub_symbol = cv_make_pub32(public_symbol_arena, flags, safe_cast_u32(sc.off), safe_cast_u16(sc.isect), symbol->name);
-        cv_symbol_list_push(public_symbol_node_arena, public_symbol_list, pub_symbol);
+        CV_Symbol     pub_symbol = cv_make_pub32(scratch.arena, flags, safe_cast_u32(sc.off), safe_cast_u16(sc.isect), symbol->name);
+        cv_symbol_list_push(scratch.arena, public_symbol_list, pub_symbol);
       }
     }
     barrier_wait(tp->barrier);
@@ -2568,96 +2587,435 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
   }
   ProfEnd();
 
+  {
+    Temp serial_scratch = scratch_begin(&scratch.arena, 1);
+
+    PDB_Context                  *pdb        = task->pdb;
+    PDB_GsiContext               *contexts[] = { pdb->psi->gsi, pdb->gsi };
+    PDB_GsiSerializeSymbolsTask  *serial     = 0;
+    PDB_GsiHashRecord           **hashes     = 0;
+    U32                          *addr_map   = 0;
+    if (task_id == 0) {
+      serial = push_array(serial_scratch.arena, PDB_GsiSerializeSymbolsTask, 2);
+      hashes = push_array(serial_scratch.arena, PDB_GsiHashRecord *, 2);
+      for EachElement(c, contexts) {
+        serial[c].symbol_align    = contexts[c]->symbol_align;
+        serial[c].bucket_arr      = contexts[c]->bucket_arr;
+        serial[c].bucket_size_arr = push_array(serial_scratch.arena, U64, contexts[c]->bucket_count);
+      }
+    }
+    tp_broadcast(&serial);
+    tp_broadcast(&hashes);
+
+    for EachElement(c, contexts) {
+      for (U64 b = task_id; b < contexts[c]->bucket_count; b += tp->worker_count) {
+        gsi_size_buckets_task(scratch.arena, worker_id, b, &serial[c], tp);
+      }
+    }
+    barrier_wait(tp->barrier);
+
+    if (task_id == 0) {
+      U64 total_size = 0;
+      for EachElement(c, contexts) {
+        total_size += sum_array_u64(contexts[c]->bucket_count, serial[c].bucket_size_arr);
+      }
+
+      if (total_size) {
+        PDB_DbiContext *dbi = pdb->dbi;
+        if (dbi->symbols_sn == MSF_INVALID_STREAM_NUMBER) {
+          dbi->symbols_sn = msf_stream_alloc(pdb->msf);
+        }
+        AssertAlways(msf_stream_resize(pdb->msf, dbi->symbols_sn, safe_cast_u32(total_size)));
+
+        U8 *symbol_data = msf_stream_data(pdb->msf, dbi->symbols_sn).str;
+        U64 base        = 0;
+        for EachElement(c, contexts) {
+          PDB_GsiContext *gsi = contexts[c];
+          if (!gsi->symbol_count) { continue; }
+
+          PDB_GsiSerializeSymbolsTask *s = &serial[c];
+          s->symbol_data_base    = base;
+          s->buffer              = symbol_data + base;
+          s->bucket_off_arr      = offsets_from_counts_array_u64(serial_scratch.arena, s->bucket_size_arr, gsi->bucket_count);
+          s->sort_record_arr     = push_array_no_zero(serial_scratch.arena, PDB_GsiSortRecord, gsi->symbol_count);
+          s->sort_record_arr_arr = push_array_no_zero(serial_scratch.arena, PDB_GsiSortRecord *, gsi->bucket_count);
+
+          U64 occupied = 0, record_idx = 0;
+          for EachIndex(b, gsi->bucket_count) {
+            s->sort_record_arr_arr[b] = s->sort_record_arr + record_idx;
+            record_idx += gsi->bucket_arr[b].count;
+            occupied   += gsi->bucket_arr[b].count != 0;
+          }
+
+          U64 bitmap_count = gsi->bucket_count / gsi->word_size + 1;
+          PDB_GsiHeader header = {
+            .signature            = PDB_GsiSignature_Basic,
+            .version              = PDB_GsiVersion_V70,
+            .hash_record_arr_size = sizeof(PDB_GsiHashRecord) * gsi->symbol_count,
+            .bucket_data_size     = sizeof(U32) * (bitmap_count + occupied)
+          };
+          U64 hash_size = sizeof(header) + header.hash_record_arr_size + header.bucket_data_size;
+          U64 prefix    = c == 0 ? sizeof(PDB_PsiHeader) : 0;
+          U64 suffix    = c == 0 ? sizeof(U32) * gsi->symbol_count : 0;
+
+          MSF_StreamNumber *sn = c == 0 ? &dbi->publics_sn : &dbi->globals_sn;
+          if (*sn == MSF_INVALID_STREAM_NUMBER) { *sn = msf_stream_alloc(pdb->msf); }
+          AssertAlways(msf_stream_resize(pdb->msf, *sn, safe_cast_u32(prefix + hash_size + suffix)));
+
+          U8 *dst = msf_stream_data(pdb->msf, *sn).str;
+          if (c == 0) {
+            PDB_PsiHeader psi_header = { .sym_hash_size = hash_size, .addr_map_size = suffix };
+            MemoryCopy(dst, &psi_header, sizeof(psi_header));
+            addr_map = (U32 *)(dst + prefix + hash_size);
+          }
+
+          MemoryCopy(dst + prefix, &header, sizeof(header));
+          hashes[c] = (PDB_GsiHashRecord *)(dst + prefix + sizeof(header));
+
+          U32 *bitmap     = (U32 *)((U8 *)hashes[c] + header.hash_record_arr_size);
+          U32 *compressed = bitmap + bitmap_count;
+          MemoryZeroTyped(bitmap, bitmap_count);
+
+          U64 hash_idx = 0, compressed_idx = 0;
+          for EachIndex(b, gsi->bucket_count) {
+            U64 n = gsi->bucket_arr[b].count;
+            if (n) {
+              bitmap[b / gsi->word_size] |= 1u << (b % gsi->word_size);
+              compressed[compressed_idx++] = hash_idx * sizeof(PDB_GsiHashRecordOffsetCalc);
+            }
+            hash_idx += n;
+          }
+          base += sum_array_u64(gsi->bucket_count, s->bucket_size_arr);
+        }
+        Assert(base == total_size);
+        msf_stream_seek(pdb->msf, dbi->symbols_sn, total_size);
+      }
+    }
+    tp_broadcast(&addr_map);
+
+    for EachElement(c, contexts) {
+      PDB_GsiContext *gsi = contexts[c];
+      for (U64 b = task_id; b < gsi->bucket_count; b += tp->worker_count) {
+        U64 count = gsi->bucket_arr[b].count;
+        if (!count) { continue; }
+
+        if (c == 0) {
+          gsi_serialize_pub32(scratch.arena, worker_id, b, &serial[c], tp);
+        } else {
+          gsi_serialize_symbols_task(scratch.arena, worker_id, b, &serial[c], tp);
+        }
+
+        PDB_GsiSortRecord *records = serial[c].sort_record_arr_arr[b];
+        U64                first   = records - serial[c].sort_record_arr;
+        for EachIndex(i, count) {
+          hashes[c][first + i] = (PDB_GsiHashRecord){ .symbol_off = records[i].offset + 1, .cref = 1 };
+        }
+      }
+    }
+    barrier_wait(tp->barrier);
+
+    if (contexts[0]->symbol_count) {
+      PDB_GsiSortRecord *records = serial[0].sort_record_arr;
+      U64                count   = contexts[0]->symbol_count;
+      if (count < PDB_PSI_ADDR_MAP_RADIX_MIN_COUNT) {
+        if (task_id == 0) {
+          gsi_record_sort_by_sc(records, count);
+        }
+        barrier_wait(tp->barrier);
+
+        for (U64 i = task_id; i < count; i += tp->worker_count) {
+          addr_map[i] = safe_cast_u32(records[i].offset);
+        }
+      } else {
+        PDB_PsiAddrMapSortTask *sort = 0;
+        if (task_id == 0) {
+          sort                 = push_array(serial_scratch.arena, PDB_PsiAddrMapSortTask, 1);
+          sort->ranges         = tp_divide_work(serial_scratch.arena, count, tp->worker_count);
+          sort->gsi_record_arr = records;
+          sort->src            = push_array_no_zero(serial_scratch.arena, PDB_PsiAddrMapSortRecord, count);
+          sort->dst            = push_array_no_zero(serial_scratch.arena, PDB_PsiAddrMapSortRecord, count);
+          sort->counts         = push_array_no_zero(serial_scratch.arena, U64, tp->worker_count * PDB_PSI_ADDR_MAP_RADIX_COUNT);
+        }
+        tp_broadcast(&sort);
+
+        psi_addr_map_radix_init_task(serial_scratch.arena, worker_id, task_id, sort, tp);
+        barrier_wait(tp->barrier);
+
+        U32 shifts[] = { 0, 11, 22, 32, 43 };
+        U32 counts[] = { 1 << 11, 1 << 11, 1 << 10, 1 << 11, 1 << 5 };
+        for EachElement(pass, shifts) {
+          if (task_id == 0) { sort->digit_shift = shifts[pass]; sort->digit_count = counts[pass]; }
+          barrier_wait(tp->barrier);
+
+          psi_addr_map_radix_histogram_task(serial_scratch.arena, worker_id, task_id, sort, tp);
+          barrier_wait(tp->barrier);
+
+          if (task_id == 0) {
+            U64 cursor = 0;
+            for EachIndex(digit, sort->digit_count) {
+              for EachIndex(lane, tp->worker_count) {
+                U64 *n = &sort->counts[lane * PDB_PSI_ADDR_MAP_RADIX_COUNT + digit];
+                U64 size = *n;
+                *n = cursor;
+                cursor += size;
+              }
+            }
+            Assert(cursor == count);
+          }
+          barrier_wait(tp->barrier);
+
+          psi_addr_map_radix_sort_task(serial_scratch.arena, worker_id, task_id, sort, tp);
+          barrier_wait(tp->barrier);
+
+          if (task_id == 0) { Swap(PDB_PsiAddrMapSortRecord *, sort->src, sort->dst); }
+          barrier_wait(tp->barrier);
+        }
+
+        Rng1U64 *runs      = 0;
+        U64      run_count = 0;
+        U64     *next_run  = 0;
+        if (task_id == 0) {
+          for (U64 first = 0; first < count;) {
+            U64 opl = first + 1;
+            while (opl < count && sort->src[opl].key == sort->src[first].key) { ++opl; }
+            run_count += opl - first > 1;
+            first = opl;
+          }
+
+          runs = push_array_no_zero(serial_scratch.arena, Rng1U64, run_count);
+          U64 run_idx = 0;
+          for (U64 first = 0; first < count;) {
+            U64 opl = first + 1;
+            while (opl < count && sort->src[opl].key == sort->src[first].key) { ++opl; }
+            if (opl - first > 1) { runs[run_idx++] = r1u64(first, opl); }
+            first = opl;
+          }
+          next_run = push_array(serial_scratch.arena, U64, 1);
+        }
+        tp_broadcast(&runs);
+        tp_broadcast(&run_count);
+        tp_broadcast(&next_run);
+
+        for (;;) {
+          U64 i = ins_atomic_u64_inc_eval(next_run) - 1;
+          if (i >= run_count) { break; }
+          radsort(sort->src + runs[i].min, dim_1u64(runs[i]), psi_addr_map_name_compar_is_before);
+        }
+        barrier_wait(tp->barrier);
+
+        for EachInRange(i, sort->ranges[task_id]) {
+          addr_map[i] = safe_cast_u32(sort->src[i].record->offset);
+        }
+      }
+      barrier_wait(tp->barrier);
+    }
+    barrier_wait(tp->barrier);
+
+    scratch_end(serial_scratch);
+  }
   scratch_end(scratch);
 }
 
 internal U64
-lnk_write_debug_s_to_pdb_module(PDB_DbiModule *mod, CV_DebugS debug_s, String8Node *buf, U64 *buf_pos)
+lnk_write_debug_payload(LNK_BuildPdb *task, U32 obj_idx, LNK_DebugRelocs *relocs, CV_DebugS_Iter *it, String8 module, U64 offset)
 {
-  U64 mod_cursor = 0;
+  Assert(module.str != 0);
 
+  U64 size = str8_write(module, offset, it->data);
+
+  if (size) {
+    U8 *dst = module.str + offset;
+    lnk_relocate_debug_copy(task, relocs, it->data, dst);
+
+    if (it->kind == CV_C13SubSectionKind_InlineeLines) {
+      Temp scratch = scratch_begin(0, 0);
+      String8              data    = str8(dst, size);
+      CV_TypeIndexInfoList indices = cv_get_inlinee_type_index_offsets(scratch.arena, data);
+      lnk_fixup_cv_type_indices(task->types, obj_idx, data, indices);
+      scratch_end(scratch);
+    }
+  }
+
+  return size;
+}
+
+global read_only CV_C13SubSectionKind g_lnk_pdb_module_c13_layout[] =
+{
+  CV_C13SubSectionKind_FileChksms,
+  CV_C13SubSectionKind_FrameData,
+  CV_C13SubSectionKind_InlineeLines,
+  CV_C13SubSectionKind_CrossScopeImports,
+  CV_C13SubSectionKind_CrossScopeExports,
+  CV_C13SubSectionKind_IlLines,
+  CV_C13SubSectionKind_FuncMDTokenMap,
+  CV_C13SubSectionKind_TypeMDTokenMap,
+  CV_C13SubSectionKind_MergedAssemblyInput,
+  CV_C13SubSectionKind_CoffSymbolRVA,
+  CV_C13SubSectionKind_XfgHashType,
+  CV_C13SubSectionKind_XfgHashVirtual,
+};
+
+internal U64
+lnk_layout_debug_s_for_pdb_module(CV_DebugS debug_s, U64 symbol_size, Rng1U64 *ss_ranges)
+{
+  MemoryZeroTyped(ss_ranges, CV_C13SubSectionIdxKind_COUNT);
+  CV_DebugS_Stats stats = cv_debug_s_stats(&debug_s);
+
+  ss_ranges[CV_C13SubSectionIdxKind_Symbols] = r1u64(symbol_size ? sizeof(CV_Signature) : 0, symbol_size);
+
+  U64 cursor = symbol_size;
+
+  for EachElement(i, g_lnk_pdb_module_c13_layout) {
+    CV_C13SubSectionKind kind = g_lnk_pdb_module_c13_layout[i];
+    U64 idx = cv_c13_sub_section_idx_from_kind(kind);
+    if (stats.size[idx] == 0) { continue; }
+    ss_ranges[idx] = r1u64s(cursor + sizeof(CV_C13SubSectionHeader), stats.size[idx]);
+    cursor         = AlignPow2(ss_ranges[idx].max, CV_C13SubSectionAlign);
+  }
+
+  // lines have individual headers; their destination cursor includes those
+  // headers and padding; other C13 cursors cover only the combined payload
+  ss_ranges[CV_C13SubSectionIdxKind_Lines].min = cursor;
+  cursor += stats.lines_size;
+  ss_ranges[CV_C13SubSectionIdxKind_Lines].max = cursor;
+
+  if (symbol_size) {
+    ss_ranges[CV_C13SubSectionIdxKind_GlobalRefs] = r1u64s(cursor + sizeof(U32), stats.size[CV_C13SubSectionIdxKind_GlobalRefs]);
+    cursor = ss_ranges[CV_C13SubSectionIdxKind_GlobalRefs].max;
+  }
+
+  return cursor;
+}
+
+internal U64
+lnk_size_debug_s_for_pdb_module(PDB_DbiModule *mod, CV_DebugS debug_s)
+{
   mod->sym_data_size = 0;
   mod->c11_data_size = 0;
-  mod->c13_data_size = 0;
-  mod->globrefs_size = 0;
 
-  String8List symbols = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Symbols);
-
-  if (symbols.total_size) {
-    // signature
-    U64 sig_size = str8_buffer_write_u32(buf, buf_pos, CV_Signature_C13);
-    mod->sym_data_size += sig_size;
-    mod_cursor         += sig_size;
-
-    // write symbols
-    U64 scope_depth = 0;
-    for EachNode(n, String8Node, symbols.first) {
-      for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= n->string.size; ) {
-        CV_Symbol symbol = {0};
-        TryReadBreak(cv_read_symbol(n->string, cursor, CV_SymbolAlign, &symbol), cursor);
-
-        if      (symbol.kind == CV_SymKind_SKIP)                 { continue; }
-        else if (cv_is_global_symbol(symbol.kind))               { continue; }
-        else if (cv_is_typedef(symbol.kind) && scope_depth == 0) { continue; }
-        else if (symbol.kind == 0x1176)                          { continue; }
-
-        if      (cv_is_scope_symbol(symbol.kind)) { scope_depth += 1; }
-        else if (cv_is_end_symbol(symbol.kind))   { scope_depth -= 1; }
-
-        U64 symbol_size = cv_write_symbol_buf(buf, buf_pos, &symbol, PDB_SYMBOL_ALIGN);
-        mod_cursor         += symbol_size;
-        mod->sym_data_size += symbol_size;
+  CV_DebugS_Iter it = cv_debug_s_iter_init(&debug_s);
+  U64 scope_depth = 0;
+  while (cv_debug_s_iter_next_kind(&it, CV_C13SubSectionKind_Symbols)) {
+    if (it.data.size && mod->sym_data_size == 0) { mod->sym_data_size = sizeof(CV_Signature); }
+    for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= it.data.size; ) {
+      CV_Symbol symbol = {0};
+      TryReadBreak(cv_read_symbol(it.data, cursor, CV_SymbolAlign, &symbol), cursor);
+      if (lnk_is_pdb_module_symbol(&symbol, &scope_depth)) {
+        mod->sym_data_size += cv_size_from_symbol(&symbol, PDB_SYMBOL_ALIGN);
       }
     }
   }
 
-  // write file checksums, inlinee lines etc.
-  CV_C13SubSectionKind mod_c13_layout[] = {
-    CV_C13SubSectionKind_FileChksms,
-    CV_C13SubSectionKind_FrameData,
-    CV_C13SubSectionKind_InlineeLines,
-    CV_C13SubSectionKind_CrossScopeImports,
-    CV_C13SubSectionKind_CrossScopeExports,
-    CV_C13SubSectionKind_IlLines,
-    CV_C13SubSectionKind_FuncMDTokenMap,
-    CV_C13SubSectionKind_TypeMDTokenMap,
-    CV_C13SubSectionKind_MergedAssemblyInput,
-    CV_C13SubSectionKind_CoffSymbolRVA,
-    CV_C13SubSectionKind_XfgHashType,
-    CV_C13SubSectionKind_XfgHashVirtual,
-  };
-  for EachElement(i, mod_c13_layout) {
-    String8List data = cv_sub_section_from_debug_s(debug_s, mod_c13_layout[i]);
-    if (data.total_size == 0) { continue; }
-    U64 ss_size = 0;
-    ss_size += str8_buffer_write(buf, buf_pos, str8_struct((&(CV_C13SubSectionHeader ){ .kind = mod_c13_layout[i], .size = safe_cast_u32(data.total_size) })));
-    ss_size += str8_buffer_write_string_list(buf, buf_pos, data);
-    ss_size += str8_buffer_write_zeroes(buf, buf_pos, AlignPadPow2(mod_cursor + ss_size, CV_C13SubSectionAlign));
-    mod_cursor         += ss_size;
-    mod->c13_data_size += ss_size;
-  }
+  Rng1U64 ranges_c13[CV_C13SubSectionIdxKind_COUNT];
+  U64     size_c13 = lnk_layout_debug_s_for_pdb_module(debug_s, mod->sym_data_size, ranges_c13);
+  
+  mod->c13_data_size = ranges_c13[CV_C13SubSectionIdxKind_Lines].max - mod->sym_data_size;
+  mod->globrefs_size = size_c13 - ranges_c13[CV_C13SubSectionIdxKind_Lines].max;
+  
+  return size_c13;
+}
 
-  // write line tables
-  String8List lines = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Lines);
-  for EachNode(n, String8Node, lines.first) {
-    if (n->string.size == 0) { continue; }
-    U64 ss_size = 0;
-    ss_size += str8_buffer_write(buf, buf_pos, str8_struct((&(CV_C13SubSectionHeader){ .kind = CV_C13SubSectionKind_Lines, .size = safe_cast_u32(n->string.size) })));
-    ss_size += str8_buffer_write(buf, buf_pos, n->string);
-    ss_size += str8_buffer_write_zeroes(buf, buf_pos, AlignPadPow2(mod_cursor + ss_size, CV_C13SubSectionAlign));
-    mod_cursor         += ss_size;
-    mod->c13_data_size += ss_size;
-  }
+internal U64
+lnk_write_debug_s_to_pdb_module(LNK_BuildPdb *task, U32 obj_idx, String8 module)
+{
+  PDB_DbiModule *mod    = task->mod_arr[obj_idx];
+  CV_DebugS     debug_s = task->cv->debug_s_arr[obj_idx];
 
-  // write global refs
+  Rng1U64 ss_ranges[CV_C13SubSectionIdxKind_COUNT];
+  U64     module_size = lnk_layout_debug_s_for_pdb_module(debug_s, mod->sym_data_size, ss_ranges);
+  AssertAlways(module_size == module.size);
+  Assert(module_size == mod->sym_data_size + mod->c11_data_size + mod->c13_data_size + mod->globrefs_size);
+
   if (mod->sym_data_size) {
-    String8List globrefs = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_GlobalRefs);
-    mod->globrefs_size += str8_buffer_write_u32(buf, buf_pos, safe_cast_u32(globrefs.total_size));
-    mod->globrefs_size += str8_buffer_write_string_list(buf, buf_pos, globrefs);
-    mod_cursor += mod->globrefs_size;
+    CV_Signature signature = CV_Signature_C13;
+    str8_write(module, 0, str8_struct(&signature));
+
+    U64 idx  = CV_C13SubSectionIdxKind_GlobalRefs;
+    U32 size = safe_cast_u32(dim_1u64(ss_ranges[idx]));
+    str8_write(module, ss_ranges[idx].min - sizeof(size), str8_struct(&size));
   }
 
-  return mod_cursor;
+  // module storage is zero-initialized, including C13 alignment padding
+  for EachElement(i, g_lnk_pdb_module_c13_layout) {
+    CV_C13SubSectionKind kind = g_lnk_pdb_module_c13_layout[i];
+    U64                  idx  = cv_c13_sub_section_idx_from_kind(kind);
+    if (dim_1u64(ss_ranges[idx]) == 0) { continue; }
+
+    CV_C13SubSectionHeader header = { .kind = kind, .size = safe_cast_u32(dim_1u64(ss_ranges[idx])) };
+    str8_write(module, ss_ranges[idx].min - sizeof(header), str8_struct(&header));
+  }
+
+  if (task->cv->is_stripped) {
+    // stripped stubs are already relocated, type-free, and PDB-aligned
+    U64 *offset = &ss_ranges[CV_C13SubSectionIdxKind_Symbols].min;
+    CV_DebugS_Iter it = cv_debug_s_iter_init(&debug_s);
+    while (cv_debug_s_iter_next_kind(&it, CV_C13SubSectionKind_Symbols)) {
+      *offset += str8_write(module, *offset, it.data);
+    }
+  } else {
+    Temp scratch = scratch_begin(0, 0);
+
+    CV_DebugS_Iter it = cv_debug_s_iter_init(&debug_s);
+    U64 scope_depth = 0;
+    for (U32Node *section = task->cv->debug_s_section_numbers[obj_idx].first;
+         cv_debug_s_iter_next_block(&it);
+         section = section->next) {
+      Assert(section != 0);
+      Temp section_temp = temp_begin(scratch.arena);
+
+      LNK_DebugRelocs relocs = lnk_debug_relocs_init(section_temp.arena, task->cv->obj_arr[obj_idx], section->data);
+
+      while (cv_debug_s_iter_next(&it)) {
+        U64  kind   = cv_c13_sub_section_idx_from_kind(it.kind);
+        U64 *offset = &ss_ranges[kind].min;
+
+        if (it.kind == CV_C13SubSectionKind_Symbols) {
+          for (U64 cursor = 0; cursor + sizeof(CV_SymbolHeader) <= it.data.size; ) {
+            CV_Symbol symbol = {0};
+            TryReadBreak(cv_read_symbol(it.data, cursor, CV_SymbolAlign, &symbol), cursor);
+
+            CV_SymKind source_kind = symbol.kind;
+            if (lnk_is_pdb_module_symbol(&symbol, &scope_depth) == 0) { continue; }
+
+            U64  size = cv_write_symbol(module.str, *offset, module.size, &symbol, PDB_SYMBOL_ALIGN);
+            U8  *dst  = module.str + *offset;
+
+            U8      *symbol_ptr  = cv_ptr_from_symbol(symbol);
+            U64      symbol_size = sizeof(CV_SymbolHeader) + symbol.data.size;
+            String8  symbol_raw  = str8(symbol_ptr, symbol_size);
+            lnk_relocate_debug_copy(task, &relocs, symbol_raw, dst);
+
+            CV_Symbol copy = cv_symbol_from_ptr(dst);
+            copy.kind      = source_kind;
+
+            lnk_patch_symbol_copy(task->types, obj_idx, copy);
+
+            *offset += size;
+          }
+        } else if (it.data.size && *offset < ss_ranges[kind].max) {
+          if (it.kind == CV_C13SubSectionKind_Lines) {
+            CV_C13SubSectionHeader header = { .kind = it.kind, .size = safe_cast_u32(it.data.size) };
+            *offset += str8_write(module, *offset, str8_struct(&header));
+          }
+          *offset += lnk_write_debug_payload(task, obj_idx, &relocs, &it, module, *offset);
+          if (it.kind == CV_C13SubSectionKind_Lines) {
+            *offset = AlignPow2(*offset, CV_C13SubSectionAlign);
+          }
+        }
+      }
+      temp_end(section_temp);
+    }
+
+    scratch_end(scratch);
+  }
+
+  for EachElement(i, ss_ranges) { Assert(ss_ranges[i].min == ss_ranges[i].max); }
+
+  // patch code view tree offsets in symbols
+  String8 symbols = str8_substr(module, r1u64(sizeof(CV_Signature), mod->sym_data_size));
+  cv_patch_symbol_tree_offsets(symbols, sizeof(CV_Signature), PDB_SYMBOL_ALIGN);
+
+  return module_size;
 }
 
 internal
@@ -2671,7 +3029,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
   // compute sizes for module streams
   for EachIndex(i, obj_indices.count) {
     U64 obj_idx = obj_indices.v[i];
-    lnk_write_debug_s_to_pdb_module(task->mod_arr[obj_idx], task->cv->debug_s_arr[obj_idx], 0, 0);
+    lnk_size_debug_s_for_pdb_module(task->mod_arr[obj_idx], task->cv->debug_s_arr[obj_idx]);
   }
   barrier_wait(tp->barrier);
 
@@ -2689,64 +3047,21 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
 
   // write .debug$S to modules
   for EachIndex(i, obj_indices.count) {
-    Temp temp = temp_begin(scratch.arena);
-
     U64            obj_idx  = obj_indices.v[i];
     PDB_DbiModule *mod      = task->mod_arr[obj_idx];
 
     if (mod->sn == MSF_INVALID_STREAM_NUMBER) { continue; }
 
-    CV_DebugS      debug_s  = task->cv->debug_s_arr[obj_idx];
-    String8        mod_data = msf_stream_data(task->pdb->msf, mod->sn);
+    String8 mod_data = msf_stream_data(task->pdb->msf, mod->sn);
+    Assert(mod_data.size > 0);
 
-    if (mod_data.size) {
-      String8Node buf = { .string = mod_data };
-      U64         pos = 0;
-      lnk_write_debug_s_to_pdb_module(mod, debug_s, &buf, &pos);
+    U64 written = lnk_write_debug_s_to_pdb_module(task, obj_idx, mod_data);
+    Assert(written == mod_data.size);
 
-      // Patch the contiguous symbol buffer before handing it to output.
-      if (mod->sym_data_size) {
-        Rng1U64     sym_data_range = r1u64(sizeof(CV_Signature), mod->sym_data_size);
-        String8List mod_symbols    = {0};
-        str8_list_push(temp.arena, &mod_symbols, str8_substr(mod_data, sym_data_range));
-        Assert(mod_symbols.total_size == dim_1u64(sym_data_range));
-        cv_patch_symbol_tree_offsets(mod_symbols, sizeof(CV_Signature), PDB_SYMBOL_ALIGN);
-      }
-    }
-
-    temp_end(temp);
   }
   barrier_wait(tp->barrier);
 
   {
-    // count strings in string tables
-    U64 *string_counts;
-    {
-      if (task_id == 0) {
-        string_counts = push_array(scratch.arena, U64, tp->worker_count);
-      }
-      tp_broadcast(&string_counts);
-
-      for EachIndex(i, obj_indices.count) {
-        U64       obj_idx      = obj_indices.v[i];
-        CV_DebugS debug_s      = task->cv->debug_s_arr[obj_idx];
-        String8   string_table = cv_string_table_from_debug_s(debug_s);
-        U64       string_count = 0;
-        for (U64 cursor = 0; cursor < string_table.size; cursor += 1) {
-          if (string_table.str[cursor] == '\0') {
-            string_counts[task_id] += 1;
-          }
-        }
-      }
-      barrier_wait(tp->barrier);
-    }
-
-    Arena **string_arenas = 0;
-    if (task_id == 0) {
-      string_arenas = alloc_arena_array(task->pdb->dbi->arena, tp->worker_count, string_counts, String8Node);
-    }
-    tp_broadcast(&string_arenas);
-
     for EachIndex(i, obj_indices.count) {
       Temp temp = temp_begin(scratch.arena);
 
@@ -2760,7 +3075,7 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
       String8     c13_data       = str8_substr(mod_data, c13_data_range);
 
       CV_DebugS debug_s      = task->cv->debug_s_arr[obj_idx];
-      String8   string_table = cv_string_table_from_debug_s(debug_s);
+      String8   string_table = cv_string_table_from_debug_s(&debug_s);
 
       // checksum is always at the head of C13 data
       String8 file_chksms_raw = {0};
@@ -2790,15 +3105,93 @@ THREAD_POOL_TASK_FUNC(lnk_write_pdb_modules)
         }
       }
 
-      // collect mod source files
-      String8List source_file_list = str8_split_by_string_chars(string_arenas[task_id], string_table, str8_lit("\0"), 0);
-      str8_list_concat_in_place(&mod->source_file_list, &source_file_list);
+      // assign source files (file map is the backing)
+      mod->source_files      = string_table;
+      mod->source_file_count = dbi_count_source_files(string_table);
 
       temp_end(temp);
     }
     barrier_wait(tp->barrier);
   }
 
+  scratch_end(scratch);
+}
+
+internal
+THREAD_POOL_TASK_FUNC(lnk_build_pdb_strings_and_modules)
+{
+  LNK_BuildPdb *task = raw_task;
+  Temp scratch = scratch_begin(&task->build_arena, 1);
+  U32Array obj_indices = task->obj_indices[task_id];
+
+  // all lanes hold these scratch scopes until the final string-table consumer
+  U64 string_count = 0;
+  for EachIndex(i, obj_indices.count) {
+    String8 strings = cv_string_table_from_debug_s(&task->cv->debug_s_arr[obj_indices.v[i]]);
+    for EachIndex(j, strings.size) { string_count += strings.str[j] == 0; }
+  }
+
+  U64 total_string_count = tp_sum_u64(tp, task_id, string_count);
+  CV_DedupStringTablesTask *dedup = 0;
+  if (task_id == 0) {
+    dedup = push_array(scratch.arena, CV_DedupStringTablesTask, 1);
+    dedup->arr = task->cv->debug_s_arr;
+    dedup->bucket_cap = Max(1, total_string_count * 13 / 10);
+    dedup->buckets = push_array(scratch.arena, CV_StringBucket *, dedup->bucket_cap);
+  }
+  tp_broadcast(&dedup);
+
+  for EachIndex(i, obj_indices.count) {
+    cv_dedup_strings_in_debug_s_arr_task(scratch.arena, worker_id, obj_indices.v[i], dedup, tp);
+  }
+  barrier_wait(tp->barrier);
+
+  if (task_id == 0) {
+    task->string_ht = (CV_StringHashTable){
+      .total_string_size  = dedup->total_string_size,
+      .total_insert_count = dedup->total_insert_count,
+      .bucket_cap         = dedup->bucket_cap,
+      .buckets            = dedup->buckets,
+    };
+    cv_string_hash_table_assign_buffer_offsets(tp, task->string_ht);
+    task->string_table_base_offset = task->pdb->info->strtab.size;
+    pdb_strtab_add_cv_string_hash_table(&task->pdb->info->strtab, task->string_ht);
+  }
+  barrier_wait(tp->barrier);
+
+  if (task->build_modules) {
+    lnk_write_pdb_modules(scratch.arena, worker_id, task_id, task, tp);
+    barrier_wait(tp->barrier);
+  }
+  
+  PDB_DbiBuildFileInfoTask *file_info = 0;
+  if (task_id == 0) {
+    file_info = push_array(task->build_arena, PDB_DbiBuildFileInfoTask, 1);
+    *file_info = dbi_prepare_file_info(task->build_arena, task->pdb->dbi->module_list, task->string_ht);
+    task->file_info = file_info->data;
+  }
+  tp_broadcast(&file_info);
+
+  for (U64 i = task_id; i < file_info->mod_count; i += tp->worker_count) {
+    dbi_build_file_info_assign_file_offsets_task(0, worker_id, i, file_info, tp);
+  }
+
+  for (U64 i = task_id; i < task->string_ht.bucket_cap; i += tp->worker_count) {
+    CV_StringBucket *bucket = task->string_ht.buckets[i];
+    if (bucket) {
+      MemoryCopy(file_info->string_buffer.str + bucket->u.offset, bucket->string.str, bucket->string.size);
+      file_info->string_buffer.str[bucket->u.offset + bucket->string.size] = 0;
+    }
+  }
+  barrier_wait(tp->barrier);
+
+  if (task_id == 0) {
+    MemoryZeroStruct(&task->string_ht);
+    MemoryZeroStruct(&file_info->string_ht);
+    for EachNode(mod, PDB_DbiModule, task->pdb->dbi->module_list.first) { mod->source_files = str8_zero(); }
+  }
+  barrier_wait(tp->barrier);
+  
   scratch_end(scratch);
 }
 
@@ -2813,8 +3206,6 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
   LNK_Obj       *obj     = task->cv->obj_arr[obj_idx];
 
   PDB_DbiSCArray *sc_array = &task->sc_arrays[obj_idx];
-  sc_array->v   = push_array_no_zero(arena, PDB_DbiSC, obj->coff.sections.count_no_null);
-  sc_array->cap = obj->coff.sections.count_no_null;
 
   for LNK_EachCoffSection(it, obj) {
     // filter by section flags
@@ -2848,7 +3239,10 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
     U64 range_idx = search_result - 1;
 
     // fill out & push section contribution
-    PDB_DbiSC *sc = &sc_array->v[sc_array->count++];
+    U64 sc_idx = sc_array->count++;
+    if (sc_array->v == 0) { continue; } // count pass
+    Assert(sc_idx < sc_array->cap);
+    PDB_DbiSC *sc = &sc_array->v[sc_idx];
     sc->base.sec     = (U16)(is_virt ? range_idx : task->image_section_file_section_numbers[range_idx]);
     sc->base.pad0    = 0;
     sc->base.sec_off = section_range.min - image_ranges->v[range_idx].min;
@@ -2859,6 +3253,8 @@ THREAD_POOL_TASK_FUNC(lnk_push_dbi_sec_contrib_task)
     sc->data_crc     = is_virt ? 0 : crc32_from_string(str8_substr(task->image_data, section_range));
     sc->reloc_crc    = 0;
   }
+
+  if (sc_array->v == 0) { return; }
 
   // find first code section contribution for the Mod1::fUpdateSecContrib
   for EachIndex(i, sc_array->count) {
@@ -2967,10 +3363,10 @@ lnk_pdb_output_enqueue_remaining(LNK_PdbOutput *output, MSF_Context *msf)
 }
 
 internal LNK_FileArtifact
-lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags)
+lnk_build_pdb(TP_Context *tp, Arena *arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags, LNK_PdbModules *modules_out)
 {
   ProfBeginFunction();
-  Temp scratch = scratch_begin(tp_arena->v, tp_arena->count);
+  Temp scratch = scratch_begin(&arena, 1);
 
   if (builder_flags == LNK_PDB_BuilderFlag_All) {
     builder_flags = ~0;
@@ -2980,7 +3376,10 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
     .image_data                         = image_data,
     .symtab                             = symtab,
     .cv                                 = cv,
-    .pdb                                = pdb_alloc_(lnk_get_huge_arena(), config->pdb_page_size, config->machine, config->time_stamp, config->age, config->guid),
+    .types                              = &cv_types,
+    .pdb                                = pdb_alloc_(arena, config->pdb_page_size, config->machine, config->time_stamp, config->age, config->guid),
+    .build_arena                        = scratch.arena,
+    .build_modules                      = !!(builder_flags & LNK_PDB_BuilderFlag_Modules),
     .mod_arr                            = push_array(scratch.arena, PDB_DbiModule *, cv->obj_count),
     .pe                                 = pe_bin_info_from_data(scratch.arena, image_data),
     .image_section_table                = coff_section_table_from_data(scratch.arena, image_data, task.pe.section_table_range),
@@ -3023,39 +3422,56 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
     }
   }
 
-  // push types
-  if (builder_flags & LNK_PDB_BuilderFlag_Ipi) {
-    pdb_type_server_push_parallel(tp, task.pdb->type_servers[CV_TypeIndexSource_IPI], cv_types.count[CV_TypeIndexSource_IPI], cv_types.v[CV_TypeIndexSource_IPI]);
+  if (task.build_modules) {
+    for EachIndex(obj_idx, cv->obj_count) {
+      task.mod_arr[obj_idx] = dbi_push_module(task.pdb->dbi, cv->obj_arr[obj_idx]->path, lnk_obj_get_lib_path(cv->obj_arr[obj_idx]));
+    }
   }
-  if (builder_flags & LNK_PDB_BuilderFlag_Tpi) {
-    pdb_type_server_push_parallel(tp, task.pdb->type_servers[CV_TypeIndexSource_TPI], cv_types.count[CV_TypeIndexSource_TPI], cv_types.v[CV_TypeIndexSource_TPI]);
+  tp_for_parallel_prof(tp, 0, tp->worker_count, lnk_build_pdb_strings_and_modules, &task, "Build Strings and Modules");
+  
+  if (task.build_modules) {
+    Arena *prepared_arena = modules_out ? arena : scratch.arena;
+    task.mod_views = push_array(prepared_arena, PDB_ModuleView, cv->obj_count);
+   
+    for EachIndex(obj_idx, cv->obj_count) {
+      PDB_DbiModule *mod = task.mod_arr[obj_idx];
+      if (mod->sn == MSF_INVALID_STREAM_NUMBER) { continue; }
+      String8 module = msf_stream_data(task.pdb->msf, mod->sn);
+      task.mod_views[obj_idx] = dbi_module_view(mod, module);
+    }
+   
+    if (modules_out) {
+      *modules_out = (LNK_PdbModules){ .count = cv->obj_count, .modules = task.mod_views };
+    }
   }
 
-  ProfBegin("Merge String Tables");
-  task.string_ht = cv_dedup_string_tables(tp_arena, tp, cv->obj_count, cv->debug_s_arr);
-  cv_string_hash_table_assign_buffer_offsets(tp, task.string_ht);
-  ProfEnd();
+  if (output_ptr && task.build_modules) {
+    for EachIndex(obj_idx, cv->obj_count) { lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.mod_arr[obj_idx]->sn); }
+  }
 
-  task.string_table_base_offset = task.pdb->info->strtab.size;
-  ProfBegin("Add string tables");
-  pdb_strtab_add_cv_string_hash_table(&task.pdb->info->strtab, task.string_ht);
-  ProfEnd();
-  pdb_build_types(tp, task.pdb, &build_hooks);
+  String8 type_name_map = {0};
+  CV_TypeIndexSource sources[] = { CV_TypeIndexSource_TPI, CV_TypeIndexSource_IPI };
+  for EachElement(i, sources) {
+    CV_TypeIndexSource source = sources[i];
+
+    LNK_PDB_BuilderFlags flag       = source == CV_TypeIndexSource_TPI ? LNK_PDB_BuilderFlag_Tpi : LNK_PDB_BuilderFlag_Ipi;
+    U64                  leaf_count = (builder_flags & flag) ? cv_types.count[source] : 0;
+    String8             *map_out    = source == CV_TypeIndexSource_TPI && config->pdb_hash_type_name_map.size && cv_types.input ? &type_name_map : 0;
+    lnk_build_pdb_type_stream(scratch.arena, tp, task.pdb, &cv_types, source, leaf_count, map_out);
+
+    if (output_ptr) {
+      MSF_StreamNumber sn = source == CV_TypeIndexSource_TPI ? PDB_FixedStream_Tpi : PDB_FixedStream_Ipi;
+      lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, sn);
+      lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->type_servers[source]->hash_sn);
+    }
+  }
+
+  if (config->pdb_hash_type_name_map.size && cv_types.input) {
+    lnk_write_data_to_file_path(config->pdb_hash_type_name_map, str8_zero(), type_name_map);
+  }
 
   if (builder_flags & LNK_PDB_BuilderFlag_Modules) {
-    ProfScope ("Alloc Modules")
-      for EachIndex(obj_idx, cv->obj_count) {
-        task.mod_arr[obj_idx] = dbi_push_module(task.pdb->dbi, cv->obj_arr[obj_idx]->path, lnk_obj_get_lib_path(cv->obj_arr[obj_idx]));
-      }
-
-    ProfScope("Write Modules")       tp_for_parallel(tp, 0, tp->worker_count, lnk_write_pdb_modules, &task);
-    if (output_ptr != 0) {
-      for EachIndex(obj_idx, cv->obj_count) {
-        lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.mod_arr[obj_idx]->sn);
-      }
-    }
     ProfScope("Move Global Symbols") tp_for_parallel(tp, 0, tp->worker_count, lnk_move_global_symbols_to_gsi, &task);
-    ProfScope("Build GSI and PSI")   pdb_build_gsi_psi(tp, task.pdb);
     if (output_ptr != 0) {
       lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->publics_sn);
       lnk_pdb_output_enqueue_stream(output_ptr, task.pdb->msf, task.pdb->dbi->globals_sn);
@@ -3085,7 +3501,7 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
       }
 
       task.sc_arrays = push_array(scratch.arena, PDB_DbiSCArray, cv->obj_count);
-      tp_for_parallel(tp, tp_arena, cv->obj_count, lnk_push_dbi_sec_contrib_task, &task);
+      tp_for_parallel(tp, 0, cv->obj_count, lnk_push_dbi_sec_contrib_task, &task);
 
       PDB_DbiSCArray *sec_contribs = &task.pdb->dbi->sec_contribs;
       U64             new_count    = sec_contribs->count;
@@ -3097,9 +3513,12 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
       U64 cursor = sec_contribs->count;
       for EachIndex(obj_idx, cv->obj_count) {
         PDB_DbiSCArray *src = &task.sc_arrays[obj_idx];
-        MemoryCopyTyped(new_v + cursor, src->v, src->count);
+        src->v = new_v + cursor;
+        src->cap = src->count;
         cursor += src->count;
+        src->count = 0;
       }
+      tp_for_parallel(tp, 0, cv->obj_count, lnk_push_dbi_sec_contrib_task, &task);
       sec_contribs->v     = new_v;
       sec_contribs->count = new_count;
       sec_contribs->cap   = new_count;
@@ -3140,7 +3559,7 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
     ProfEnd();
   }
 
-  pdb_build_dbi_info(tp, task.pdb, task.string_ht, 0, cv->is_stripped, &build_hooks);
+  pdb_build_dbi_info(tp, task.pdb, task.file_info, 0, cv->is_stripped, &build_hooks);
 
   MSF_Error msf_err = msf_build(task.pdb->msf);
   if (msf_err != MSF_Error_Ok) {
@@ -3152,7 +3571,7 @@ lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config
   }
 
   ProfBegin("Get Page Nodes");
-  LNK_FileArtifact artifact = { .data = msf_get_page_data_nodes(tp_arena->v[0], task.pdb->msf) };
+  LNK_FileArtifact artifact = { .data = msf_get_page_data_nodes(arena, task.pdb->msf) };
   ProfEnd();
 
   if (output_ptr != 0) {

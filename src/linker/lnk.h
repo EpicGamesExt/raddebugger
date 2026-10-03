@@ -233,6 +233,7 @@ typedef struct
   LNK_Obj            **objs;
   U64                  image_base;
   COFF_SectionHeader **image_section_table;
+  U64                  image_section_table_count;
 } LNK_ObjRelocPatcher;
 
 typedef struct

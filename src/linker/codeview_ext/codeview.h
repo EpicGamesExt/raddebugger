@@ -196,6 +196,7 @@ typedef struct CV_C13InlineeLinesParsedList
 } CV_C13InlineeLinesParsedList;
 
 ////////////////////////////////
+// C13 Section
 
 typedef U32 CV_C13SubSectionIdxKind;
 enum
@@ -215,11 +216,34 @@ typedef struct CV_C13SubSectionList
 } CV_C13SubSectionList;
 
 ////////////////////////////////
+//~ Debug Section
 
 typedef struct CV_DebugS
 {
-  String8List data_list[CV_C13SubSectionIdxKind_COUNT];
+  // Each block contains complete C13 subsections, including headers and padding,
+  // without a leading CV_Signature. Payload bytes may be borrowed from input.
+  String8List data;
+  U32         excluded_kinds;
 } CV_DebugS;
+
+typedef struct CV_DebugS_Iter
+{
+  CV_DebugS            *debug_s;
+  String8Node          *next_block;
+  String8               block;
+  U64                   cursor;
+  B32                   malformed;
+  CV_C13SubSectionKind  kind;
+  String8               data;
+  U64                   data_offset;
+} CV_DebugS_Iter;
+
+typedef struct CV_DebugS_Stats
+{
+  U64 size[CV_C13SubSectionIdxKind_COUNT];
+  U64 count[CV_C13SubSectionIdxKind_COUNT];
+  U64 lines_size;
+} CV_DebugS_Stats;
 
 typedef struct CV_DebugH
 {
@@ -388,10 +412,20 @@ internal String8List  cv_data_from_debug_s_c13(Arena *arena, CV_DebugS *debug_s,
 internal CV_C13SubSectionKind    cv_c13_sub_section_kind_from_idx(CV_C13SubSectionIdxKind idx);
 internal CV_C13SubSectionIdxKind cv_c13_sub_section_idx_from_kind(CV_C13SubSectionKind kind);
 
-internal String8List * cv_sub_section_ptr_from_debug_s(CV_DebugS *debug_s, CV_C13SubSectionKind kind);
-internal String8List   cv_sub_section_from_debug_s(CV_DebugS debug_s, CV_C13SubSectionKind kind);
-internal String8       cv_string_table_from_debug_s(CV_DebugS debug_s);
-internal String8       cv_file_chksms_from_debug_s(CV_DebugS debug_s);
+internal String8 cv_debug_s_alloc_subsection(Arena *arena, CV_DebugS *debug_s, CV_C13SubSectionKind kind, U64 size);
+internal void    cv_debug_s_exclude_kind(CV_DebugS *debug_s, CV_C13SubSectionKind kind);
+
+// .debug$S iterator: next_block selects a block, next walks that block's
+// subsections, and next_kind searches across all remaining blocks.
+internal CV_DebugS_Iter cv_debug_s_iter_init      (CV_DebugS *debug_s);
+internal B32            cv_debug_s_iter_next_block(CV_DebugS_Iter *it);
+internal B32            cv_debug_s_iter_next      (CV_DebugS_Iter *it);
+internal B32            cv_debug_s_iter_next_kind (CV_DebugS_Iter *it, CV_C13SubSectionKind kind);
+
+internal B32             cv_debug_s_find_first       (CV_DebugS *debug_s, CV_C13SubSectionKind kind, String8 *out);
+internal CV_DebugS_Stats cv_debug_s_stats            (CV_DebugS *debug_s);
+internal String8         cv_string_table_from_debug_s(CV_DebugS *debug_s);
+internal String8         cv_file_chksms_from_debug_s (CV_DebugS *debug_s);
 
 ////////////////////////////////
 //~ .debug$T helpers
@@ -415,7 +449,7 @@ internal B32             cv_debug_t_is_type_server_ref(CV_DebugT *debug_t);
 internal void            cv_symbol_list_push_node(CV_SymbolList *list, CV_SymbolNode *node);
 internal CV_SymbolNode * cv_symbol_list_push(Arena *arena, CV_SymbolList *list, CV_Symbol v);
 
-internal U64 cv_patch_symbol_tree_offsets(String8List raw_symbols, U64 base_offset, U64 align);
+internal U64 cv_patch_symbol_tree_offsets(String8 raw_symbols, U64 base_offset, U64 align);
 
 // $$FileChksms
 #define CV_MAP_STRING_TO_OFFSET_FUNC(name) U64 name(void *ud, String8 string)
@@ -429,7 +463,7 @@ internal CV_C13LinesHeaderList cv_c13_lines_from_sub_sections(Arena *arena, Stri
 internal CV_LineArray          cv_c13_line_array_from_data(Arena *arena, String8 c13_data, U64 sec_base, CV_C13LinesHeader parsed_lines);
 
 // $$InlineeLines
-internal CV_C13InlineeLinesParsedList cv_c13_inlinee_lines_from_sub_sections(Arena *arena, String8List raw_inlinee_lines);
+internal CV_C13InlineeLinesParsedList cv_c13_inlinee_lines_from_sub_sections(Arena *arena, CV_DebugS *debug_s);
 internal CV_InlineBinaryAnnotsParsed  cv_c13_parse_inline_binary_annots(Arena *arena, U64 parent_voff, CV_C13InlineeLinesParsed *inlinee_parsed, String8 binary_annots);
 
 // $$FrameData

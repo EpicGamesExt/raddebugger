@@ -1068,3 +1068,22 @@ cv_string_sec_off(Arena *arena, U32 sec, U32 off)
   return push_str8f(arena, "%04x:%08x", sec, off);
 }
 
+////////////////////////////////
+
+internal CV_SymKind
+cv_final_symbol_kind(CV_SymKind kind)
+{
+  switch (kind) {
+  case CV_SymKind_PROC_ID_END:    return CV_SymKind_END;
+  case CV_SymKind_LPROC32_ID:     return CV_SymKind_LPROC32;
+  case CV_SymKind_GPROC32_ID:     return CV_SymKind_GPROC32;
+  case CV_SymKind_LPROC32_DPC_ID: return CV_SymKind_LPROC32_DPC;
+  case CV_SymKind_LPROCMIPS_ID:   return CV_SymKind_LPROCMIPS;
+  case CV_SymKind_GPROCMIPS_ID:   return CV_SymKind_GPROCMIPS;
+  case CV_SymKind_LPROCIA64_ID:   return CV_SymKind_LPROCIA64;
+  case CV_SymKind_GPROCIA64_ID:   return CV_SymKind_GPROCIA64;
+  }
+  return kind;
+}
+
+
