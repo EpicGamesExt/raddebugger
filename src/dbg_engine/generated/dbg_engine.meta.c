@@ -8,7 +8,7 @@ String8 d_entity_kind_code_name_table[13] =
 {
 {0},
 str8_lit_comp("root"),
-str8_lit_comp("machine"),
+str8_lit_comp("server"),
 str8_lit_comp("process"),
 str8_lit_comp("thread"),
 str8_lit_comp("module"),
@@ -25,7 +25,7 @@ String8 d_entity_kind_display_string_table[13] =
 {
 {0},
 str8_lit_comp("Root"),
-str8_lit_comp("Machine"),
+str8_lit_comp("Server"),
 str8_lit_comp("Process"),
 str8_lit_comp("Thread"),
 str8_lit_comp("Module"),

@@ -915,10 +915,10 @@ d_entity_ctx_rw_store_alloc(void)
   store->ctx.hash_slots_count = 1024;
   store->ctx.hash_slots = push_array(arena, D_EntityHashSlot, store->ctx.hash_slots_count);
   D_Entity *root = store->ctx.root = d_entity_alloc(store, &d_entity_nil, D_EntityKind_Root, Arch_Null, d_handle_zero(), 0);
-  D_Entity *local_machine = d_entity_alloc(store, root, D_EntityKind_Machine, Arch_CURRENT, d_handle_from_dmn(D_DemonID_LocalHost, dmn_handle_zero()), 0);
+  D_Entity *local_server = d_entity_alloc(store, root, D_EntityKind_Server, Arch_CURRENT, d_handle_from_dmn(D_DemonID_LocalHost, dmn_handle_zero()), 0);
   Temp scratch = scratch_begin(0, 0);
-  String8 local_machine_name = push_str8f(scratch.arena, "This PC (%S)", get_system_info()->machine_name);
-  d_entity_equip_string(store, local_machine, local_machine_name);
+  String8 local_server_name = str8f(scratch.arena, "Local (%S)", get_system_info()->machine_name);
+  d_entity_equip_string(store, local_server, local_server_name);
   scratch_end(scratch);
   return store;
 }
@@ -2501,8 +2501,8 @@ d_ctrl_thread__entry_point(void *p)
           case D_MsgKind_COUNT:{}break;
           
           //- rjf: remote debuggers
-          case D_MsgKind_OpenRemoteDebugger:{}break;
-          case D_MsgKind_CloseRemoteDebugger:{}break;
+          case D_MsgKind_OpenRemoteServer: {d_ctrl_thread__open_remote_server(ctrl_ctx, msg);}break;
+          case D_MsgKind_CloseRemoteServer:{d_ctrl_thread__close_remote_server(ctrl_ctx, msg);}break;
           
           //- rjf: target operations
           case D_MsgKind_Launch:            {d_ctrl_thread__launch              (ctrl_ctx, msg);}break;
@@ -3567,12 +3567,12 @@ d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Enti
   {
     U64 eval_module_idx = 0;
     U64 eval_dbg_info_idx = 0;
-    for(D_Entity *machine = entity_ctx->root->first;
-        machine != &d_entity_nil;
-        machine = machine->next)
+    for(D_Entity *server = entity_ctx->root->first;
+        server != &d_entity_nil;
+        server = server->next)
     {
-      if(machine->kind != D_EntityKind_Machine) { continue; }
-      for(D_Entity *process = machine->first;
+      if(server->kind != D_EntityKind_Server) { continue; }
+      for(D_Entity *process = server->first;
           process != &d_entity_nil;
           process = process->next)
       {
@@ -3809,6 +3809,18 @@ d_ctrl_thread__end_and_flush_log(void)
 }
 
 //- rjf: msg kind implementations
+
+internal void
+d_ctrl_thread__open_remote_server(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
+{
+  
+}
+
+internal void
+d_ctrl_thread__close_remote_server(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
+{
+  
+}
 
 internal void
 d_ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
@@ -4702,7 +4714,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         machine != &d_entity_nil;
         machine = machine->next)
     {
-      if(machine->kind != D_EntityKind_Machine) { continue; }
+      if(machine->kind != D_EntityKind_Server) { continue; }
       for(D_Entity *process = machine->first; process != &d_entity_nil; process = process->next)
       {
         if(process->kind != D_EntityKind_Process) { continue; }
@@ -4759,7 +4771,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         machine != &d_entity_nil;
         machine = machine->next)
     {
-      if(machine->kind != D_EntityKind_Machine) { continue; }
+      if(machine->kind != D_EntityKind_Server) { continue; }
       for(D_Entity *process = machine->first; process != &d_entity_nil; process = process->next)
       {
         if(process->kind != D_EntityKind_Process) { continue; }
@@ -4864,7 +4876,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
       machine != &d_entity_nil;
       machine = machine->next)
   {
-    if(machine->kind != D_EntityKind_Machine) { continue; }
+    if(machine->kind != D_EntityKind_Server) { continue; }
     for(D_Entity *process = machine->first; process != &d_entity_nil; process = process->next)
     {
       if(process->kind != D_EntityKind_Process) { continue; }

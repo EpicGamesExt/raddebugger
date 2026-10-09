@@ -1705,14 +1705,14 @@ E_TYPE_EXPAND_INFO_FUNCTION_DEF(unattached_processes)
     
     //- rjf: gather all machines we're searching through
     D_EntityArray machines = {0};
-    if(lhs_entity->kind == D_EntityKind_Machine)
+    if(lhs_entity->kind == D_EntityKind_Server)
     {
       machines.v = &lhs_entity;
       machines.count = 1;
     }
     else
     {
-      machines = d_entity_array_from_kind(D_EntityKind_Machine);
+      machines = d_entity_array_from_kind(D_EntityKind_Server);
     }
     
     //- rjf: gather system processes from this machine

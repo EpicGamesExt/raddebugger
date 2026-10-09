@@ -9,7 +9,7 @@
 typedef enum RD_RegSlot
 {
 RD_RegSlot_Null,
-RD_RegSlot_Machine,
+RD_RegSlot_Server,
 RD_RegSlot_Module,
 RD_RegSlot_Process,
 RD_RegSlot_Thread,
@@ -95,10 +95,10 @@ RD_CmdKind_FreezeThread,
 RD_CmdKind_ThawThread,
 RD_CmdKind_FreezeProcess,
 RD_CmdKind_ThawProcess,
-RD_CmdKind_FreezeMachine,
-RD_CmdKind_ThawMachine,
-RD_CmdKind_FreezeLocalMachine,
-RD_CmdKind_ThawLocalMachine,
+RD_CmdKind_FreezeServer,
+RD_CmdKind_ThawServer,
+RD_CmdKind_FreezeLocalServer,
+RD_CmdKind_ThawLocalServer,
 RD_CmdKind_FreezeEntity,
 RD_CmdKind_ThawEntity,
 RD_CmdKind_SetEntityColor,
@@ -106,8 +106,8 @@ RD_CmdKind_SetEntityName,
 RD_CmdKind_DownloadModuleDebugInfo,
 RD_CmdKind_Attach,
 RD_CmdKind_OpenCrashDump,
-RD_CmdKind_OpenRemoteDebugger,
-RD_CmdKind_CloseRemoteDebugger,
+RD_CmdKind_OpenRemoteServer,
+RD_CmdKind_CloseRemoteServer,
 RD_CmdKind_Exit,
 RD_CmdKind_OpenPalette,
 RD_CmdKind_RunCommand,
@@ -115,8 +115,6 @@ RD_CmdKind_RunExternalDriverTextCommand,
 RD_CmdKind_State,
 RD_CmdKind_Eval,
 RD_CmdKind_LineFromVAddr,
-RD_CmdKind_RemoteControllerConnect,
-RD_CmdKind_RemoteControllerDisconnect,
 RD_CmdKind_WMEvent,
 RD_CmdKind_SelectThread,
 RD_CmdKind_SelectUnwind,
@@ -319,7 +317,7 @@ RD_CmdKind_OpenWatchPins,
 RD_CmdKind_OpenDebugInfos,
 RD_CmdKind_OpenThreads,
 RD_CmdKind_OpenProcesses,
-RD_CmdKind_OpenMachines,
+RD_CmdKind_OpenServers,
 RD_CmdKind_OpenModules,
 RD_CmdKind_OpenFilePathMaps,
 RD_CmdKind_OpenTypeViews,
@@ -470,7 +468,7 @@ String8 schema;
 typedef struct RD_Regs RD_Regs;
 struct RD_Regs
 {
-D_Handle machine;
+D_Handle server;
 D_Handle module;
 D_Handle process;
 D_Handle thread;
@@ -561,7 +559,7 @@ X(watch_pins) \
 X(debug_infos) \
 X(threads) \
 X(processes) \
-X(machines) \
+X(servers) \
 X(modules) \
 X(file_path_maps) \
 X(type_views) \
@@ -575,7 +573,7 @@ Y(geo3d, geo3d, "")\
 Z(getting_started)\
 
 #define rd_regs_lit_init_top \
-.machine = rd_regs()->machine,\
+.server = rd_regs()->server,\
 .module = rd_regs()->module,\
 .process = rd_regs()->process,\
 .thread = rd_regs()->thread,\
@@ -634,7 +632,7 @@ Z(getting_started)\
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[25];
 extern String8 rd_tab_fast_path_query_name_table[25];
-extern RD_VocabInfo rd_vocab_info_table[374];
+extern RD_VocabInfo rd_vocab_info_table[373];
 extern RD_NameSchemaInfo rd_name_schema_info_table[39];
 extern String8 rd_reg_slot_code_name_table[56];
 extern Rng1U64 rd_reg_slot_range_table[56];

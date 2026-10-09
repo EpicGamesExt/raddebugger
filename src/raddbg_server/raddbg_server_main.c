@@ -43,17 +43,50 @@
 ////////////////////////////////
 //~ rjf: Globals
 
+typedef struct RDS_Msg RDS_Msg;
+struct RDS_Msg
+{
+  RDS_Msg *next;
+  SOCK_Endpoint endpoint;
+  String8 msg_raw;
+};
+
+typedef struct RDS_Client RDS_Client;
+struct RDS_Client
+{
+  RDS_Client *order_next;
+  RDS_Client *order_prev;
+  RDS_Client *hash_next;
+  RDS_Client *hash_prev;
+  SOCK_Endpoint endpoint;
+};
+
+typedef struct RDS_ClientSlot RDS_ClientSlot;
+struct RDS_ClientSlot
+{
+  RDS_Client *first;
+  RDS_Client *last;
+};
+
 typedef struct RDS_State RDS_State;
 struct RDS_State
 {
   Arena *arena;
   SOCK_Session sock_session;
   
+  //- rjf: connected clients
+  RDS_ClientSlot *client_slots;
+  U64 client_slots_count;
+  RDS_Client *first_client;
+  RDS_Client *last_client;
+  RDS_Client *free_client;
+  
   //- rjf: client -> demon messages
   RWMutex c2d_rw_mutex;
   CondVar c2d_cv;
   Arena *c2d_arena;
-  String8List c2d_msgs;
+  RDS_Msg *c2d_msg_first;
+  RDS_Msg *c2d_msg_last;
   
   //- rjf: demon run state
   B32 demon_is_running;
@@ -76,14 +109,21 @@ dmn_thread__entry_point(void *p)
     ////////////////////////////
     //- rjf: get next messages
     //
-    String8List msgs = {0};
+    RDS_Msg *msg_first = 0;
+    RDS_Msg *msg_last = 0;
     RWMutexScope(rds_state->c2d_rw_mutex, 1) for(;;)
     {
-      if(rds_state->c2d_msgs.node_count != 0)
+      if(rds_state->c2d_msg_first != 0)
       {
-        msgs = str8_list_copy(scratch.arena, &rds_state->c2d_msgs);
-        MemoryZeroStruct(&rds_state->c2d_msgs);
+        for EachNode(src, RDS_Msg, rds_state->c2d_msg_first)
+        {
+          RDS_Msg *dst = push_array(scratch.arena, RDS_Msg, 1);
+          SLLQueuePush(msg_first, msg_last, dst);
+          dst->endpoint = src->endpoint;
+          dst->msg_raw = str8_copy(scratch.arena, src->msg_raw);
+        }
         arena_clear(rds_state->c2d_arena);
+        rds_state->c2d_msg_first = rds_state->c2d_msg_last = 0;
         break;
       }
       cond_var_wait_rw_w(rds_state->c2d_cv, rds_state->c2d_rw_mutex, max_U64);
@@ -92,13 +132,14 @@ dmn_thread__entry_point(void *p)
     ////////////////////////////
     //- rjf: do messages, push responses
     //
-    for(String8Node *msg_n = msgs.first; msg_n != 0; msg_n = msg_n->next)
+    for(RDS_Msg *msg_n = msg_first; msg_n != 0; msg_n = msg_n->next)
     {
       //- rjf: unpack message
-      DS_Msg msg = ds_msg_from_serialized(scratch.arena, msg_n->string);
+      DS_Msg msg = ds_msg_from_serialized(scratch.arena, msg_n->msg_raw);
       
       //- rjf: do action, get response
       DS_Response response = {0};
+      DMN_EventList events = {0};
       switch(msg.kind)
       {
         default:{}break;
@@ -150,12 +191,26 @@ dmn_thread__entry_point(void *p)
             ctrls.run_entities_are_unfrozen  = !!(msg.flags & DS_MsgFlag_RunEntitiesAreUnfrozen);
             ctrls.run_entities_are_processes = !!(msg.flags & DS_MsgFlag_RunEntitiesAreProcesses);
           };
-          response.events = dmn_ctrl_run(scratch.arena, ctrl_ctx, &ctrls);
+          response.good = 1;
+          events = dmn_ctrl_run(scratch.arena, ctrl_ctx, &ctrls);
         }break;
       }
       
-      //- rjf: pack response & push
-      String8 data = ds_serialized_from_response(scratch.arena, &response);
+      //- rjf: pack response & send back to the originating endpoint of the message
+      {
+        String8 data = ds_serialized_from_response(scratch.arena, &response);
+        sock_send(rds_state->sock_session, SOCK_Protocol_TCP, msg_n->endpoint, data, max_U64);
+      }
+      
+      //- rjf: pack events & send to all connected client 
+      if(events.count != 0)
+      {
+        String8 data = ds_serialized_from_dmn_events(scratch.arena, events);
+        for(RDS_Client *c = rds_state->first_client; c != 0; c = c->order_next)
+        {
+          sock_send(rds_state->sock_session, SOCK_Protocol_TCP, c->endpoint, data, max_U64);
+        }
+      }
     }
     
     scratch_end(scratch);
@@ -203,16 +258,50 @@ entry_point(CmdLine *cmd_line)
     String8 data = {0};
     sock_recv(scratch.arena, rds_state->sock_session, &protocol, &endpoint, &data, max_U64);
     
-    //- rjf: parse magic prefix
-    U16 magic_maybe = 0;
-    str8_deserial_read_struct(data, 0, &magic_maybe);
+    //- rjf: store this client, if we don't have it
+    {
+      U64 hash = u64_hash_from_str8(str8_struct(&endpoint));
+      U64 slot_idx = hash%rds_state->client_slots_count;
+      RDS_Client *client = 0;
+      for(RDS_Client *c = rds_state->client_slots[slot_idx].first; c != 0; c = c->hash_next)
+      {
+        if(MemoryMatchStruct(&c->endpoint, &endpoint))
+        {
+          client = c;
+          break;
+        }
+      }
+      if(client == 0)
+      {
+        client = rds_state->free_client;
+        if(client != 0)
+        {
+          SLLStackPop_N(rds_state->free_client, order_next);
+        }
+        else
+        {
+          client = push_array(rds_state->arena, RDS_Client, 1);
+        }
+        DLLPushBack_NP(rds_state->client_slots[slot_idx].first, rds_state->client_slots[slot_idx].last, client, hash_next, hash_prev);
+        DLLPushBack_NP(rds_state->first_client, rds_state->last_client, client, order_next, order_prev);
+        client->endpoint = endpoint;
+      }
+    }
+    
+    //- rjf: get packet header
+    DS_PacketHeader header = {0};
+    if(data.size >= sizeof(header))
+    {
+      MemoryCopy(&header, data.str, sizeof(header));
+    }
+    B32 header_is_good = (header.magic == DS_PACKET_MAGIC && header.kind == DS_PacketKind_Msg && header.version == DS_PACKET_VERSION);
     
     //- rjf: log message info
     {
       String8 endpoint_string = sock_string_from_endpoint(scratch.arena, endpoint);
       fprintf(stderr, "[got message]\n");
       fprintf(stderr, "  sender: %.*s\n", str8_varg(endpoint_string));
-      fprintf(stderr, "  magic:  0x%x\n", (int)magic_maybe);
+      fprintf(stderr, "  magic:  0x%x\n", (int)header.magic);
     }
     
     //- rjf: try to handle this message on the main thread, before sending to
@@ -222,12 +311,14 @@ entry_point(CmdLine *cmd_line)
     // memory/registers, listing processes, and halting, we want to just do
     // on the main thread without interrupting the demon at all.
     DS_MsgKind peek_kind = DS_MsgKind_Null;
-    if(magic_maybe == DS_MSG_MAGIC)
+    if(header_is_good)
     {
-      str8_deserial_read_struct(data, 2, &peek_kind);
+      String8 msg_raw = str8_skip(data, sizeof(header));
+      str8_deserial_read_struct(msg_raw, 2, &peek_kind);
       if(peek_kind < DS_MsgKind_Launch || DS_MsgKind_SingleStep < peek_kind)
       {
         DS_Msg msg = ds_msg_from_serialized(scratch.arena, data);
+        DS_Response response = {0};
         switch(msg.kind)
         {
           default:{}break;
@@ -240,11 +331,14 @@ entry_point(CmdLine *cmd_line)
     }
     
     //- rjf: not handled by main thread? -> okay, send to demon thread, if it's ready.
-    if(magic_maybe == DS_MSG_MAGIC && !rds_state->demon_is_running && (DS_MsgKind_Launch <= peek_kind && peek_kind <= DS_MsgKind_SingleStep))
+    if(header_is_good && (DS_MsgKind_Launch <= peek_kind && peek_kind <= DS_MsgKind_SingleStep))
     {
       RWMutexScope(rds_state->c2d_rw_mutex, 1)
       {
-        str8_list_push(rds_state->c2d_arena, &rds_state->c2d_msgs, data);
+        String8 msg_raw = str8_skip(data, sizeof(header));
+        RDS_Msg *msg = push_array(rds_state->c2d_arena, RDS_Msg, 1);
+        msg->endpoint = endpoint;
+        msg->msg_raw = str8_copy(rds_state->c2d_arena, msg_raw);
       }
       cond_var_broadcast(rds_state->c2d_cv);
     }

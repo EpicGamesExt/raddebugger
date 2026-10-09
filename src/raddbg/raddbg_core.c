@@ -2496,7 +2496,7 @@ rd_view_ui(Rng2F32 rect)
                         else if(entity->kind == D_EntityKind_Thread)  { rd_regs()->thread = entity->handle; }
                         else if(entity->kind == D_EntityKind_Module)  { rd_regs()->module = entity->handle; }
                         else if(entity->kind == D_EntityKind_Process) { rd_regs()->process = entity->handle; }
-                        else if(entity->kind == D_EntityKind_Machine) { rd_regs()->machine = entity->handle; }
+                        else if(entity->kind == D_EntityKind_Server)  { rd_regs()->server = entity->handle; }
                         rd_cmd(RD_CmdKind_CompleteQuery);
                       }
                     }break;
@@ -4728,7 +4728,7 @@ rd_view_ui(Rng2F32 rect)
                             RD_RegsScope(.ctrl_entity = cell_info.entity->handle) switch(cell_info.entity->kind)
                             {
                               default:{rd_drag_begin(RD_RegSlot_CtrlEntity);}break;
-                              case D_EntityKind_Machine:{RD_RegsScope(.machine = cell_info.entity->handle) rd_drag_begin(RD_RegSlot_Machine);}break;
+                              case D_EntityKind_Server:{RD_RegsScope(.server = cell_info.entity->handle) rd_drag_begin(RD_RegSlot_Server);}break;
                               case D_EntityKind_Process:{RD_RegsScope(.process = cell_info.entity->handle) rd_drag_begin(RD_RegSlot_Process);}break;
                               case D_EntityKind_Module:{RD_RegsScope(.module = cell_info.entity->handle) rd_drag_begin(RD_RegSlot_Module);}break;
                               case D_EntityKind_Thread:{RD_RegsScope(.thread = cell_info.entity->handle) rd_drag_begin(RD_RegSlot_Thread);}break;
@@ -6141,7 +6141,7 @@ rd_window_frame(void)
         ////////////////////////
         //- rjf: control entity tooltips
         //
-        case RD_RegSlot_Machine:   {ctrl_entity = d_entity_from_handle(regs->machine);     }goto ctrl_entity_tooltip;
+        case RD_RegSlot_Server:    {ctrl_entity = d_entity_from_handle(regs->server);      }goto ctrl_entity_tooltip;
         case RD_RegSlot_Process:   {ctrl_entity = d_entity_from_handle(regs->process);     }goto ctrl_entity_tooltip;
         case RD_RegSlot_Module:    {ctrl_entity = d_entity_from_handle(regs->module);      }goto ctrl_entity_tooltip;
         case RD_RegSlot_Thread:    {ctrl_entity = d_entity_from_handle(regs->thread);      }goto ctrl_entity_tooltip;
@@ -6368,7 +6368,7 @@ rd_window_frame(void)
           ID(view);
 #undef ID
 #define Handle(name) ui_labelf("%s: [0x%x, 0x%x, 0x%I64x]", #name, (regs->name).demon_id, (regs->name).controller_kind, (regs->name).entity_id)
-          Handle(machine);
+          Handle(server);
           Handle(process);
           Handle(module);
           Handle(thread);
@@ -11078,7 +11078,7 @@ rd_regs_fill_slot_from_string(RD_RegSlot slot, String8 query_expr, String8 strin
     }break;
     
     //- rjf: ctrl entities
-    case RD_RegSlot_Machine:
+    case RD_RegSlot_Server:
     case RD_RegSlot_Module:
     case RD_RegSlot_Process:
     case RD_RegSlot_Thread:
@@ -12840,7 +12840,7 @@ rd_frame(void)
       //- rjf: add macros for evallable control entities
       String8 evallable_ctrl_names[] =
       {
-        str8_lit("machine"),
+        str8_lit("server"),
         str8_lit("process"),
         str8_lit("thread"),
         str8_lit("module"),
@@ -12863,9 +12863,9 @@ rd_frame(void)
           {
             e_string2expr_map_insert(scratch.arena, macro_map, entity->string, expr);
           }
-          if(kind == D_EntityKind_Machine && entity->handle.demon_id == D_DemonID_LocalHost)
+          if(kind == D_EntityKind_Server && entity->handle.demon_id == D_DemonID_LocalHost)
           {
-            e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("local_machine"), expr);
+            e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("local_server"), expr);
           }
           if(kind == D_EntityKind_Thread && d_handle_match(rd_base_regs()->thread, entity->handle))
           {
@@ -13623,7 +13623,7 @@ rd_frame(void)
             if(D_CmdKind_Null < (D_CmdKind)kind && (D_CmdKind)kind < D_CmdKind_COUNT)
             {
               D_CmdParams params = {0};
-              params.machine       = rd_regs()->machine;
+              params.server        = rd_regs()->server;
               params.process       = rd_regs()->process;
               params.thread        = rd_regs()->thread;
               params.entity        = rd_regs()->ctrl_entity;
@@ -13687,7 +13687,7 @@ rd_frame(void)
               str8_list_pushf(scratch.arena, &exprs, "query:targets");
               str8_list_pushf(scratch.arena, &exprs, "query:breakpoints");
               str8_list_pushf(scratch.arena, &exprs, "query:recent_projects");
-              str8_list_pushf(scratch.arena, &exprs, "query:machines");
+              str8_list_pushf(scratch.arena, &exprs, "query:servers");
               str8_list_pushf(scratch.arena, &exprs, "query:processes");
               str8_list_pushf(scratch.arena, &exprs, "query:threads");
               str8_list_pushf(scratch.arena, &exprs, "query:modules");
@@ -13974,24 +13974,6 @@ rd_frame(void)
               str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, " }\n");
             }
             str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "}\n");
-          }break;
-          case RD_CmdKind_RemoteControllerConnect:
-          {
-            CFG_Node *transient = cfg_node_child_from_string(cfg_node_root(), s("transient"));
-            CFG_Node *ctrlr = cfg_node_new(rd_state->cfg, transient, s("remote_controller"));
-            cfg_node_new(rd_state->cfg, ctrlr, sock_string_from_endpoint(scratch.arena, rd_state->ipc_sock_endpoint));
-          }break;
-          case RD_CmdKind_RemoteControllerDisconnect:
-          {
-            CFG_Node *transient = cfg_node_child_from_string(cfg_node_root(), s("transient"));
-            for(CFG_Node *child = transient; child != &cfg_nil_node; child = child->next)
-            {
-              if(str8_match(child->string, s("remote_controller"), 0) && str8_match(child->first->string, rd_regs()->string, 0))
-              {
-                cfg_node_release(rd_state->cfg, child);
-                break;
-              }
-            }
           }break;
           
           //- rjf: exiting
@@ -17366,13 +17348,13 @@ rd_frame(void)
             D_Entity *thread = d_entity_from_handle(rd_regs()->thread);
             D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
             D_Entity *module = d_module_from_process_vaddr(process, d_cached_ip_from_thread(thread->handle));
-            D_Entity *machine = d_entity_ancestor_from_kind(process, D_EntityKind_Machine);
+            D_Entity *server = d_entity_ancestor_from_kind(process, D_EntityKind_Server);
             rd_state->base_regs.v.unwind_count = 0;
             rd_state->base_regs.v.inline_depth = 0;
             rd_state->base_regs.v.thread  = thread->handle;
             rd_state->base_regs.v.module  = module->handle;
             rd_state->base_regs.v.process = process->handle;
-            rd_state->base_regs.v.machine = machine->handle;
+            rd_state->base_regs.v.server  = server->handle;
             rd_cmd(RD_CmdKind_FindThread, .thread = thread->handle, .unwind_count = 0, .inline_depth = 0);
           }break;
           case RD_CmdKind_SelectUnwind:
@@ -18381,6 +18363,24 @@ rd_frame(void)
           // rjf: push to keyed output
           MTX_Op op = {r1u64(max_U64, max_U64), evt->string};
           mtx_push_op(key, op);
+        }break;
+        case D_EventKind_RemoteControllerConnect:
+        {
+          CFG_Node *transient = cfg_node_child_from_string(cfg_node_root(), s("transient"));
+          CFG_Node *ctrlr = cfg_node_new(rd_state->cfg, transient, s("remote_controller"));
+          cfg_node_new(rd_state->cfg, ctrlr, sock_string_from_endpoint(scratch.arena, rd_state->ipc_sock_endpoint));
+        }break;
+        case D_EventKind_RemoteControllerDisconnect:
+        {
+          CFG_Node *transient = cfg_node_child_from_string(cfg_node_root(), s("transient"));
+          for(CFG_Node *child = transient; child != &cfg_nil_node; child = child->next)
+          {
+            if(str8_match(child->string, s("remote_controller"), 0) && str8_match(child->first->string, rd_regs()->string, 0))
+            {
+              cfg_node_release(rd_state->cfg, child);
+              break;
+            }
+          }
         }break;
       }
     }

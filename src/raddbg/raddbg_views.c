@@ -1607,7 +1607,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
       rd_watch_cell_list_push_new(arena, &info.cells, RD_WatchCellKind_Eval, row->eval,
                                   .flags = RD_WatchCellFlag_Expr|RD_WatchCellFlag_NoEval|RD_WatchCellFlag_Indented|RD_WatchCellFlag_Button,
                                   .pct = 1.f);
-      if(entity->kind == D_EntityKind_Machine ||
+      if(entity->kind == D_EntityKind_Server ||
          entity->kind == D_EntityKind_Process ||
          entity->kind == D_EntityKind_Thread)
       {

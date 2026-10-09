@@ -5,9 +5,30 @@
 #define DBG_SERVER_H
 
 ////////////////////////////////
-//~ rjf: Messages (Client -> Server)
+//~ rjf: Packet Headers
 
-#define DS_MSG_MAGIC 0x7273
+#define DS_PACKET_MAGIC 0x7273
+#define DS_PACKET_VERSION 0x0
+
+typedef U8 DS_PacketKind;
+enum
+{
+  DS_PacketKind_Msg,
+  DS_PacketKind_Response,
+  DS_PacketKind_Event,
+};
+
+typedef struct DS_PacketHeader DS_PacketHeader;
+struct DS_PacketHeader
+{
+  U16 magic;
+  DS_PacketKind kind;
+  U8 version;
+  U32 payload_size;
+};
+
+////////////////////////////////
+//~ rjf: Messages (Client -> Server)
 
 typedef enum DS_MsgKind
 {
@@ -86,11 +107,10 @@ typedef struct DS_Response DS_Response;
 struct DS_Response
 {
   U64 msg_id;
-  String8 data;
   DMN_Handle entity;
   U64 pid;
   B32 good;
-  DMN_EventList events;
+  String8 data;
 };
 
 typedef struct DS_ResponseNode DS_ResponseNode;
@@ -107,5 +127,7 @@ internal DS_Msg ds_msg_from_serialized(Arena *arena, String8 data);
 internal String8 ds_serialized_from_msg(Arena *arena, DS_Msg *msg);
 internal DS_Response ds_response_from_serialized(Arena *arena, String8 data);
 internal String8 ds_serialized_from_response(Arena *arena, DS_Response *response);
+internal DMN_EventList ds_dmn_events_from_serialized(Arena *arena, String8 data);
+internal String8 ds_serialized_from_dmn_events(Arena *arena, DMN_EventList evts);
 
 #endif // DBG_SERVER_H

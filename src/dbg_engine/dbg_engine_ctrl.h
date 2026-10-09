@@ -624,6 +624,8 @@ internal void d_ctrl_thread__eval_scope_end(D_EvalScope *scope);
 internal void d_ctrl_thread__end_and_flush_log(void);
 
 //- rjf: msg kind implementations
+internal void d_ctrl_thread__open_remote_server(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);
+internal void d_ctrl_thread__close_remote_server(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);
 internal void d_ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);
 internal void d_ctrl_thread__attach(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);
 internal void d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);

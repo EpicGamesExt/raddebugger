@@ -36,7 +36,7 @@ RD_WatchTabFastPathTable:
   {DebugInfos      "Debug Info"        debug_infos       1                 Module                "Displays, and allows editing of, the list of all debug info files that the debugger has loaded."}
   {Threads         "Threads"           threads           1                 Threads               "Displays the list of all threads in all processes to which the debugger is attached."}
   {Processes       "Processes"         processes         1                 Scheduler             "Displays the list of all processes to which the debugger is attached."}
-  {Machines        "Machines"          machines          1                 Machine               "Displays the list of all machines to which the debugger is connected."}
+  {Servers         "Servers"           servers           1                 Machine               "Displays the list of all servers to which the debugger is connected."}
   {Modules         "Modules"           modules           1                 Module                "Displays the list of all modules in all processes to which the debugger is attached."}
   {FilePathMaps    "File Path Map"     file_path_maps    1                 FileOutline           "Displays, and allows editing of, the list of all file path maps. This allows remapping source code paths referenced by debug information to other paths on your local machine."}
   {TypeViews       "Type Views"        type_views        1                 Binoculars            "Displays, and allows editing of, the list of all type views, which allow automatically adjusting the visualizations for evaluations of a certain type."}
@@ -147,6 +147,7 @@ RD_VocabTable:
   {process              processes                   "Process"                   "Processes"           Scheduler                                      }
   {processes            ""                          "Processes"                 ""                    Scheduler                                      }
   {machine              _                           "Machine"                   _                     Machine                                        }
+  {server               _                           "Server"                    _                     Machine                                        }
   {module               _                           "Module"                    _                     Module                                         }
   {getting_started      ""                          "Getting Started"           ""                    QuestionMark                                   }
   {disasm               ""                          "Disassembly"               ""                    Glasses                                        }
@@ -878,9 +879,9 @@ RD_VocabTable:
     ```x:{'path':path, 'name':string}```,
   }
   
-  //- rjf: @schema machine
+  //- rjf: @schema server
   {
-    machine, 0,
+    server, 0,
     ```x:{'label':code_string, @no_expand 'active':bool, 'unattached_processes':set, 'processes':set}```,
   }
   
@@ -922,7 +923,7 @@ RD_VocabTable:
 RD_RegTable:
 {
   // rjf: ctrl entities
-  {D_Handle          machine                          Machine                                 }
+  {D_Handle          server                           Server                                  }
   {D_Handle          module                           Module                                  }
   {D_Handle          process                          Process                                 }
   {D_Handle          thread                           Thread                                  }
@@ -1046,8 +1047,6 @@ RD_CmdTable:    //               |   |        |              |                  
   {State                          0   0        1              ""                                               Null               0  0  0  0  0  0  0                                                                  Null                  "state"                                                     "State"                                       ""                                                                                                                 ""                               ""                                                                                                                                      }
   {Eval                           0   0        1              ""                                               Expr               0  0  0  0  0  0  0                                                                  Null                  "eval"                                                      "Eval"                                        ""                                                                                                                 ""                               ""                                                                                                                                      }
   {LineFromVAddr                  0   0        1              ""                                               Vaddr              0  0  0  0  0  0  0                                                                  Null                  "line_from_vaddr"                                           "Line From Virtual Address"                   ""                                                                                                                 ""                               ""                                                                                                                                      }
-  {RemoteControllerConnect        0   0        1              ""                                               Null               0  0  0  0  0  0  0                                                                  Null                  "remote_controller_connect"                                 "Remote Controller Connect"                   ""                                                                                                                 ""                               ""                                                                                                                                      }
-  {RemoteControllerDisconnect     0   0        1              ""                                               Null               0  0  0  0  0  0  0                                                                  Null                  "remote_controller_disconnect"                              "Remote Controller Disconnect"                ""                                                                                                                 ""                               ""                                                                                                                                      }
   
   //- rjf: os event passthrough
   {WMEvent                        0   0        0              ""                                               Null               0  0  0  0  0  0  0                                                                  Null                  "wm_event"                                                  "OS Event"                                    ""                                                                                                                 ""                               ""                                                                                                                                      }
