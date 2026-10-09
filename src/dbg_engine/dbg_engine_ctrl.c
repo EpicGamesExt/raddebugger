@@ -2,33 +2,6 @@
 // Licensed under the MIT license (https://opensource.org/license/mit/)
 
 ////////////////////////////////
-//~ rjf: Local Host Demon Interface
-
-D_DemonInterface d_local_demon =
-{
-  dmn_ctrl_exclusive_access_begin,
-  dmn_ctrl_exclusive_access_end,
-  dmn_ctrl_launch,
-  dmn_ctrl_attach,
-  dmn_ctrl_kill,
-  dmn_ctrl_detach,
-  dmn_ctrl_run,
-  dmn_halt,
-  dmn_access_open,
-  dmn_access_close,
-  dmn_process_memory_reserve,
-  dmn_process_memory_commit,
-  dmn_process_memory_decommit,
-  dmn_process_memory_release,
-  dmn_process_memory_protect,
-  dmn_process_read,
-  dmn_process_write,
-  dmn_thread_read_reg_block,
-  dmn_thread_write_reg_block,
-  dmn_thread_get_module_tls_vaddr,
-};
-
-////////////////////////////////
 //~ rjf: Basic Type Functions
 
 internal U64

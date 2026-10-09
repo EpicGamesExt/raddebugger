@@ -314,68 +314,6 @@ struct D_ModuleReqCacheNode
 typedef D_WAKEUP_FUNCTION_DEF(D_WakeupFunctionType);
 
 ////////////////////////////////
-//~ rjf: Demon Interface V-Table
-
-typedef struct D_DemonInterface D_DemonInterface;
-struct D_DemonInterface
-{
-  //- rjf: control
-  void (*ctrl_exclusive_access_begin)(void);
-  void (*ctrl_exclusive_access_end)(void);
-  U32 (*launch)(DMN_CtrlCtx *ctx, ProcessLaunchParams *params);
-  B32 (*attach)(DMN_CtrlCtx *ctx, U32 pid);
-  B32 (*kill)(DMN_CtrlCtx *ctx, DMN_Handle process, U32 exit_code);
-  B32 (*detach)(DMN_CtrlCtx *ctx, DMN_Handle process);
-  DMN_EventList (*run)(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls);
-  
-  //- rjf: halting
-  void (*halt)(U64 code, U64 user_data);
-  
-  //- rjf: non-blocking-control-thread access barriers
-  B32 (*access_open)(void);
-  void (*access_close)(void);
-  
-  //- rjf: process memory
-  U64 (*reserve_memory)(DMN_Handle process, U64 vaddr, U64 size);
-  void (*commit_memory)(DMN_Handle process, U64 vaddr, U64 size);
-  void (*decommit_memory)(DMN_Handle process, U64 vaddr, U64 size);
-  void (*release_memory)(DMN_Handle process, U64 vaddr, U64 size);
-  void (*protect_memory)(DMN_Handle process, U64 vaddr, U64 size, AccessFlags flags);
-  U64 (*read_memory)(DMN_Handle process, Rng1U64 range, void *dst);
-  B32 (*write_memory)(DMN_Handle process, Rng1U64 range, void *src);
-  
-  //- rjf: threads
-  B32 (*thread_read_reg_block)(DMN_Handle thread, void *dst);
-  B32 (*thread_write_reg_block)(DMN_Handle thread, void *src);
-  B32 (*thread_get_module_tls_vaddr)(DMN_Handle thread, DMN_Handle module, U64 *vaddr_out);
-};
-
-typedef struct D_DemonState D_DemonState;
-struct D_DemonState
-{
-  D_DemonState *next;
-  D_DemonState *prev;
-  D_DemonID id;
-  D_DemonInterface *fn;
-  Arena *event_arena;
-  DMN_EventList events;
-};
-
-typedef struct D_DemonStateSlot D_DemonStateSlot;
-struct D_DemonStateSlot
-{
-  D_DemonState *first;
-  D_DemonState *last;
-};
-
-typedef struct D_DemonCache D_DemonCache;
-struct D_DemonCache
-{
-  U64 slots_count;
-  D_DemonStateSlot *slots;
-};
-
-////////////////////////////////
 //~ rjf: Main State Types
 
 typedef struct D_CtrlState D_CtrlState;

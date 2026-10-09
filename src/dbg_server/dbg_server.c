@@ -20,7 +20,7 @@ ds_msg_from_serialized(Arena *arena, String8 data)
     // rjf: read flat parts
     off += str8_deserial_read_struct(data, off, &msg.kind);
     off += str8_deserial_read_struct(data, off, &msg.flags);
-    off += str8_deserial_read_struct(data, off, &msg.id);
+    off += str8_deserial_read_struct(data, off, &msg.msg_id);
     off += str8_deserial_read_struct(data, off, &msg.vaddr_range);
     off += str8_deserial_read_struct(data, off, &msg.access_flags);
     off += str8_deserial_read_struct(data, off, &msg.entity);
@@ -90,5 +90,19 @@ ds_serialized_from_msg(Arena *arena, DS_Msg *msg)
   }
   scratch_end(scratch);
   String8 result = str8_list_join(arena, &srl, 0);
+  return result;
+}
+
+internal DS_Response
+ds_response_from_serialized(Arena *arena, String8 data)
+{
+  DS_Response result = {0};
+  return result;
+}
+
+internal String8
+ds_serialized_from_response(Arena *arena, DS_Response *response)
+{
+  String8 result = {0};
   return result;
 }

@@ -23,7 +23,7 @@
 #include "gnu/gnu_parse.h"
 #include "elf/elf_parse.h"
 #include "demon/demon_inc.h"
-#include "raddbg_server/raddbg_server.h"
+#include "dbg_server/dbg_server.h"
 
 //- rjf: [c]
 #include "base/base_inc.c"
@@ -38,7 +38,7 @@
 #include "gnu/gnu_parse.c"
 #include "elf/elf_parse.c"
 #include "demon/demon_inc.c"
-#include "raddbg_server/raddbg_server.c"
+#include "dbg_server/dbg_server.c"
 
 ////////////////////////////////
 //~ rjf: Globals
@@ -90,27 +90,72 @@ dmn_thread__entry_point(void *p)
     }
     
     ////////////////////////////
-    //- rjf: do messages
+    //- rjf: do messages, push responses
     //
     for(String8Node *msg_n = msgs.first; msg_n != 0; msg_n = msg_n->next)
     {
-      RDS_Msg msg = rds_msg_from_data(scratch.arena, msg_n->string);
+      //- rjf: unpack message
+      DS_Msg msg = ds_msg_from_serialized(scratch.arena, msg_n->string);
+      
+      //- rjf: do action, get response
+      DS_Response response = {0};
       switch(msg.kind)
       {
         default:{}break;
         
-        //- rjf: debuggee attaching/detaching ops
+        //- rjf: launching
+        case DS_MsgKind_Launch:
+        {
+          ProcessLaunchParams params = {0};
+          {
+            params.cmd_line           = msg.command_line;
+            params.path               = msg.path;
+            params.env                = msg.env;
+            params.inherit_env        = !!(msg.flags & DS_MsgFlag_InheritEnv);
+            params.debug_subprocesses = !!(msg.flags & DS_MsgFlag_DebugSubprocesses);
+          }
+          response.pid = dmn_ctrl_launch(ctrl_ctx, &params);
+        }break;
         
-        case RDS_MsgKind_Launch:{}break;
-        case RDS_MsgKind_Attach:{}break;
-        case RDS_MsgKind_Kill:{}break;
-        case RDS_MsgKind_Detach:{}break;
+        //- rjf: attaching
+        case DS_MsgKind_Attach:
+        {
+          response.good = dmn_ctrl_attach(ctrl_ctx, msg.pid);
+        }break;
+        
+        //- rjf: killing
+        case DS_MsgKind_Kill:
+        {
+          response.good = dmn_ctrl_kill(ctrl_ctx, msg.entity, (U32)msg.code);
+        }break;
+        
+        //- rjf: detaching
+        case DS_MsgKind_Detach:
+        {
+          response.good = dmn_ctrl_detach(ctrl_ctx, msg.entity);
+        }break;
         
         //- rjf: running ops
-        
-        case RDS_MsgKind_Run:{}break;
-        case RDS_MsgKind_SingleStep:{}break;
+        case DS_MsgKind_Run:
+        case DS_MsgKind_SingleStep:
+        {
+          DMN_RunCtrls ctrls = {0};
+          {
+            ctrls.priority_thread            = msg.entity;
+            ctrls.single_step_thread         = (msg.kind == DS_MsgKind_SingleStep) ? msg.entity : dmn_handle_zero();
+            ctrls.run_entities               = msg.run_entities.handles;
+            ctrls.run_entity_count           = msg.run_entities.count;
+            ctrls.traps                      = msg.traps;
+            ctrls.ignore_previous_exception  = !!(msg.flags & DS_MsgFlag_IgnorePreviousException);
+            ctrls.run_entities_are_unfrozen  = !!(msg.flags & DS_MsgFlag_RunEntitiesAreUnfrozen);
+            ctrls.run_entities_are_processes = !!(msg.flags & DS_MsgFlag_RunEntitiesAreProcesses);
+          };
+          response.events = dmn_ctrl_run(scratch.arena, ctrl_ctx, &ctrls);
+        }break;
       }
+      
+      //- rjf: pack response & push
+      String8 data = ds_serialized_from_response(scratch.arena, &response);
     }
     
     scratch_end(scratch);
@@ -176,17 +221,17 @@ entry_point(CmdLine *cmd_line)
     // attaching, detaching, and so on. other operations, like reading/writing
     // memory/registers, listing processes, and halting, we want to just do
     // on the main thread without interrupting the demon at all.
-    RDS_MsgKind peek_kind = RDS_MsgKind_Null;
-    if(magic_maybe == RDS_MSG_MAGIC)
+    DS_MsgKind peek_kind = DS_MsgKind_Null;
+    if(magic_maybe == DS_MSG_MAGIC)
     {
       str8_deserial_read_struct(data, 2, &peek_kind);
-      if(peek_kind < RDS_MsgKind_DemonThreadHandledFirst || RDS_MsgKind_DemonThreadHandledLast < peek_kind)
+      if(peek_kind < DS_MsgKind_Launch || DS_MsgKind_SingleStep < peek_kind)
       {
-        RDS_Msg msg = rds_msg_from_data(scratch.arena, data);
+        DS_Msg msg = ds_msg_from_serialized(scratch.arena, data);
         switch(msg.kind)
         {
           default:{}break;
-          case RDS_MsgKind_Halt:
+          case DS_MsgKind_Halt:
           {
             dmn_halt(0, 0);
           }break;
@@ -195,7 +240,7 @@ entry_point(CmdLine *cmd_line)
     }
     
     //- rjf: not handled by main thread? -> okay, send to demon thread, if it's ready.
-    if(magic_maybe == RDS_MSG_MAGIC && !rds_state->demon_is_running && (RDS_MsgKind_DemonThreadHandledFirst <= peek_kind && peek_kind <= RDS_MsgKind_DemonThreadHandledLast))
+    if(magic_maybe == DS_MSG_MAGIC && !rds_state->demon_is_running && (DS_MsgKind_Launch <= peek_kind && peek_kind <= DS_MsgKind_SingleStep))
     {
       RWMutexScope(rds_state->c2d_rw_mutex, 1)
       {

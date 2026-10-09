@@ -60,13 +60,14 @@ struct DS_Msg
 {
   DS_MsgKind kind;
   DS_MsgFlags flags;
-  U64 id;
+  U64 msg_id;
   
   //- rjf: general parameters
   Rng1U64 vaddr_range;
   AccessFlags access_flags;
   DMN_Handle entity;
   U64 pid;
+  U64 code;
   
   //- rjf: process launching parameters
   String8List command_line;
@@ -79,40 +80,32 @@ struct DS_Msg
 };
 
 ////////////////////////////////
-//~ rjf: Server Instance
-
-typedef enum DS_InstKind
-{
-  DS_InstKind_Host,
-  DS_InstKind_Remote,
-}
-DS_InstKind;
-
-typedef struct DS_Inst DS_Inst;
-struct DS_Inst
-{
-  DS_InstKind kind;
-  U64 u64[1];
-};
-
-////////////////////////////////
 //~ rjf: Responses (Server -> Client responses to messages)
 
 typedef struct DS_Response DS_Response;
 struct DS_Response
 {
-  U64 id;
-  DS_Inst inst;
+  U64 msg_id;
   String8 data;
   DMN_Handle entity;
   U64 pid;
+  B32 good;
   DMN_EventList events;
 };
 
+typedef struct DS_ResponseNode DS_ResponseNode;
+struct DS_ResponseNode
+{
+  DS_ResponseNode *next;
+  DS_Response v;
+};
+
 ////////////////////////////////
-//~ rjf: Message Parsing
+//~ rjf: Message/Response Parsing
 
 internal DS_Msg ds_msg_from_serialized(Arena *arena, String8 data);
-internal String8 ds_serialized_from_msg(Arena *arena, DS_Msg msg);
+internal String8 ds_serialized_from_msg(Arena *arena, DS_Msg *msg);
+internal DS_Response ds_response_from_serialized(Arena *arena, String8 data);
+internal String8 ds_serialized_from_response(Arena *arena, DS_Response *response);
 
 #endif // DBG_SERVER_H
