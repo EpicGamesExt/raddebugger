@@ -5509,7 +5509,7 @@ rd_push_window_title(Arena *arena)
     prof_path = str8_chop_last_dot(prof_path);
     project_name = str8_skip_last_slash(prof_path);
   }
-  String8 result = push_str8f(arena, "%S%s%s", project_name, project_name.size != 0 ? " - " : "", BUILD_TITLE " (" BUILD_VERSION_STRING_LITERAL " " BUILD_RELEASE_PHASE_STRING_LITERAL ")");
+  String8 result = str8f(arena, "%S%s%s", project_name, project_name.size != 0 ? " - " : "", BUILD_TITLE " (" BUILD_VERSION_STRING_LITERAL " " BUILD_RELEASE_PHASE_STRING_LITERAL ")");
   return result;
 }
 
@@ -5519,7 +5519,7 @@ rd_window_from_cfg(CFG_Node *cfg)
   CFG_Node *result = &cfg_nil_node;
   for(CFG_Node *c = cfg; c != &cfg_nil_node; c = c->parent)
   {
-    if(c->parent->parent == cfg_node_root() && str8_match(c->string, str8_lit("window"), 0))
+    if(c->parent->parent == cfg_node_root() && str8_match(c->string, s("window"), 0))
     {
       result = c;
       break;
@@ -5569,10 +5569,10 @@ rd_window_state_from_cfg(CFG_Node *cfg)
     Vec2F32 size = {0};
     WM_Monitor preferred_monitor = {0};
     {
-      CFG_Node *pos_cfg = cfg_node_child_from_string(window_cfg, str8_lit("pos"));
+      CFG_Node *pos_cfg = cfg_node_child_from_string(window_cfg, s("pos"));
       has_pos = (pos_cfg != &cfg_nil_node);
-      CFG_Node *size_cfg = cfg_node_child_from_string(window_cfg, str8_lit("size"));
-      CFG_Node *monitor_cfg = cfg_node_child_from_string(window_cfg, str8_lit("monitor"));
+      CFG_Node *size_cfg = cfg_node_child_from_string(window_cfg, s("size"));
+      CFG_Node *monitor_cfg = cfg_node_child_from_string(window_cfg, s("monitor"));
       pos.x = (F32)f64_from_str8(pos_cfg->first->string);
       pos.y = (F32)f64_from_str8(pos_cfg->first->next->string);
       size.x = (F32)f64_from_str8(size_cfg->first->string);
@@ -11311,9 +11311,10 @@ rd_init(CmdLine *cmdln)
   Arena *arena = arena_alloc();
   rd_state = push_array(arena, RD_State, 1);
   rd_state->arena = arena;
-  rd_state->quit_after_success = (cmd_line_has_flag(cmdln, str8_lit("quit_after_success")) ||
-                                  cmd_line_has_flag(cmdln, str8_lit("q")));
+  rd_state->quit_after_success = (cmd_line_has_flag(cmdln, s("quit_after_success")) ||
+                                  cmd_line_has_flag(cmdln, s("q")));
   rd_state->override_focus_on_stop = (cmd_line_has_flag(cmdln, s("no_focus_on_stop")));
+  rd_state->hidden_mode = cmd_line_has_flag(cmdln, s("hide_ui"));
   rd_state->user_path_arena = arena_alloc();
   rd_state->project_path_arena = arena_alloc();
   rd_state->theme_path_arena = arena_alloc();
@@ -13975,6 +13976,8 @@ rd_frame(void)
             }
             str8_list_pushf(rd_state->cmd_output_arena, &rd_state->cmd_outputs, "}\n");
           }break;
+          case RD_CmdKind_HideUI:{rd_state->hidden_mode = 1;}break;
+          case RD_CmdKind_ShowUI:{rd_state->hidden_mode = 0;}break;
           
           //- rjf: exiting
           case RD_CmdKind_Exit:
@@ -18709,7 +18712,7 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: submit rendering to all windows
   //
-  ProfScope("submit rendering to all windows")
+  ProfScope("submit rendering to all windows") if(!rd_state->hidden_mode)
   {
     r_begin_frame();
     for(RD_WindowState *w = rd_state->first_window_state; w != &rd_nil_window_state; w = w->order_next)
