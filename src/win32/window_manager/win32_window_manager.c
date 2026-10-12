@@ -1480,8 +1480,12 @@ internal WM_Monitor
 wm_monitor_from_window(WM_Window window)
 {
   W32_WM_Window *w = w32_wm_window_from_handle(window);
-  HMONITOR handle = MonitorFromWindow(w->hwnd, MONITOR_DEFAULTTOPRIMARY);
-  WM_Monitor result = {(U64)handle};
+  WM_Monitor result = {0};
+  if(w != 0)
+  {
+    HMONITOR handle = MonitorFromWindow(w->hwnd, MONITOR_DEFAULTTOPRIMARY);
+    result.u64[0] = (U64)handle;
+  }
   return result;
 }
 

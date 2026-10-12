@@ -5559,9 +5559,45 @@ rd_window_state_from_cfg(CFG_Node *cfg)
   }
   
   //- rjf: allocate/open new window if one was not found
+  B32 need_wm_state = !rd_state->hidden_mode;
   if(window_cfg != &cfg_nil_node && ws == &rd_nil_window_state)
   {
+    // rjf: allocate window
+    ws = rd_state->free_window_state;
+    if(ws != 0)
+    {
+      SLLStackPop_N(rd_state->free_window_state, order_next);
+    }
+    else
+    {
+      ws = push_array_no_zero(rd_state->arena, RD_WindowState, 1);
+    }
+    MemoryZeroStruct(ws);
+    
+    // rjf: fill out window
+    ws->cfg_id = id;
+    ws->arena = arena_alloc();
+    ws->ui = ui_state_alloc();
+    ws->drop_completion_arena = arena_alloc();
+    ws->query_arena = arena_alloc();
+    ws->hover_eval_arena = arena_alloc();
+    ws->autocomp_arena = arena_alloc();
+    
+    // rjf: hook up window links
+    U64 hash = d_hash_from_string(str8_struct(&id));
+    U64 slot_idx = hash%rd_state->window_state_slots_count;
+    RD_WindowStateSlot *slot = &rd_state->window_state_slots[slot_idx];
+    DLLPushBack_NPZ(&rd_nil_window_state, rd_state->first_window_state, rd_state->last_window_state, ws, order_next, order_prev);
+    DLLPushBack_NP(slot->first, slot->last, ws, hash_next, hash_prev);
+  }
+  
+  //- rjf: if we need a real window, and we don't have one -> create
+  if(ws != &rd_nil_window_state && need_wm_state && wm_window_match(ws->os, wm_window_zero()))
+  {
     Temp scratch = scratch_begin(0, 0);
+    
+    // rjf: reset 'frames alive' counter - controls first window show, etc.
+    ws->frames_alive = 0;
     
     // rjf: unpack configuration options
     B32 has_pos = 0;
@@ -5589,54 +5625,35 @@ rd_window_state_from_cfg(CFG_Node *cfg)
       }
     }
     
-    // rjf: allocate window
-    ws = rd_state->free_window_state;
-    if(ws != 0)
-    {
-      SLLStackPop_N(rd_state->free_window_state, order_next);
-    }
-    else
-    {
-      ws = push_array_no_zero(rd_state->arena, RD_WindowState, 1);
-    }
-    MemoryZeroStruct(ws);
-    
-    // rjf: fill out window
-    ws->cfg_id = id;
-    ws->arena = arena_alloc();
-    {
-      String8 title = rd_push_window_title(scratch.arena);
-      ws->os = wm_window_open(r2f32p(pos.x, pos.y, pos.x+size.x, pos.y+size.y), (!has_pos*WM_WindowFlag_UseDefaultPosition)|WM_WindowFlag_CustomBorder, title);
-    }
+    // rjf: create wm window, equip for rendering
+    String8 title = rd_push_window_title(scratch.arena);
+    ws->os = wm_window_open(r2f32p(pos.x, pos.y, pos.x+size.x, pos.y+size.y), (!has_pos*WM_WindowFlag_UseDefaultPosition)|WM_WindowFlag_CustomBorder, title);
     ws->r = r_window_equip(ws->os);
-    ws->ui = ui_state_alloc();
-    ws->drop_completion_arena = arena_alloc();
-    ws->query_arena = arena_alloc();
-    ws->hover_eval_arena = arena_alloc();
-    ws->autocomp_arena = arena_alloc();
     ws->last_dpi = wm_dpi_from_window(ws->os);
     WM_Monitor zero_monitor = {0};
     if(!wm_monitor_match(zero_monitor, preferred_monitor))
     {
       wm_window_set_monitor(ws->os, preferred_monitor);
     }
-    if(cfg_node_child_from_string(window_cfg, str8_lit("fullscreen")) != &cfg_nil_node)
+    if(cfg_node_child_from_string(window_cfg, s("fullscreen")) != &cfg_nil_node)
     {
       wm_window_set_fullscreen(ws->os, 1);
     }
-    if(cfg_node_child_from_string(window_cfg, str8_lit("maximized")) != &cfg_nil_node)
+    if(cfg_node_child_from_string(window_cfg, s("maximized")) != &cfg_nil_node)
     {
       wm_window_set_maximized(ws->os, 1);
     }
     
-    // rjf: hook up window links
-    U64 hash = d_hash_from_string(str8_struct(&id));
-    U64 slot_idx = hash%rd_state->window_state_slots_count;
-    RD_WindowStateSlot *slot = &rd_state->window_state_slots[slot_idx];
-    DLLPushBack_NPZ(&rd_nil_window_state, rd_state->first_window_state, rd_state->last_window_state, ws, order_next, order_prev);
-    DLLPushBack_NP(slot->first, slot->last, ws, hash_next, hash_prev);
-    
     scratch_end(scratch);
+  }
+  
+  //- rjf: if we don't want a real window, but we have one -> destroy
+  else if(ws != &rd_nil_window_state && !need_wm_state && !wm_window_match(ws->os, wm_window_zero()))
+  {
+    r_window_unequip(ws->os, ws->r);
+    wm_window_close(ws->os);
+    MemoryZeroStruct(&ws->os);
+    MemoryZeroStruct(&ws->r);
   }
   
   //- rjf: touch window for this frame
@@ -5682,9 +5699,9 @@ rd_window_frame(void)
   //////////////////////////////
   //- rjf: @window_frame_part unpack context
   //
-  CFG_Node *window          = cfg_node_from_id(rd_regs()->window);
+  CFG_Node *window        = cfg_node_from_id(rd_regs()->window);
   RD_WindowState *ws      = rd_window_state_from_cfg(cfg_node_from_id(rd_regs()->window));
-  CFG_PanelTree panel_tree = cfg_panel_tree_from_cfg(scratch.arena, window);
+  CFG_PanelTree panel_tree= cfg_panel_tree_from_cfg(scratch.arena, window);
   B32 window_is_focused   = (wm_window_is_focused(ws->os) || ws->window_temporarily_focused_ipc);
   B32 popup_is_open       = (rd_state->popup_active);
   B32 query_is_open       = (ws->query_top != 0);
@@ -18603,9 +18620,19 @@ rd_frame(void)
   //////////////////////////////
   //- rjf: update/render all windows
   //
+  if(rd_state->hidden_mode)
+  {
+    CFG_NodePtrList windows = cfg_node_top_level_list_from_string(scratch.arena, s("window"));
+    for(CFG_NodePtrNode *n = windows.first; n != 0; n = n->next)
+    {
+      CFG_Node *window = n->v;
+      rd_window_state_from_cfg(window);
+    }
+  }
+  else
   {
     dr_begin_frame(rd_font_from_slot(RD_FontSlot_Icons));
-    CFG_NodePtrList windows = cfg_node_top_level_list_from_string(scratch.arena, str8_lit("window"));
+    CFG_NodePtrList windows = cfg_node_top_level_list_from_string(scratch.arena, s("window"));
     for(CFG_NodePtrNode *n = windows.first; n != 0; n = n->next)
     {
       CFG_Node *window = n->v;
