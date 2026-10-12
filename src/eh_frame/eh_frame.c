@@ -30,23 +30,25 @@ eh_parse_frame_hdr(String8 data, U64 address_size, EH_PtrCtx *ptr_ctx)
     cursor += eh_read_ptr(data, cursor, cursor, ptr_ctx, header.eh_frame_ptr_enc, &header.eh_frame_ptr);
     cursor += eh_read_ptr(data, cursor, cursor, ptr_ctx, header.fde_count_enc, &header.fde_count);
     
-    switch (header.table_enc & EH_PtrEnc_TypeMask) {
-      case EH_PtrEnc_Ptr:     { header.field_byte_size = address_size; } break;
-      case EH_PtrEnc_ULEB128: { InvalidPath;                           } break; // TODO: when loading module convert these to UData8
-      case EH_PtrEnc_UData2:  { header.field_byte_size = 2;            } break;
-      case EH_PtrEnc_UData4:  { header.field_byte_size = 4;            } break;
-      case EH_PtrEnc_UData8:  { header.field_byte_size = 8;            } break;
-      case EH_PtrEnc_Signed:  { header.field_byte_size = address_size; } break;
-      case EH_PtrEnc_SLEB128: { InvalidPath;                           } break; // TODO: when loading module convert these to UData8
-      case EH_PtrEnc_SData2:  { header.field_byte_size = 2;            } break;
-      case EH_PtrEnc_SData4:  { header.field_byte_size = 4;            } break;
-      case EH_PtrEnc_SData8:  { header.field_byte_size = 8;            } break;
-      default: { InvalidPath; } break;
+    if (header.table_enc != EH_PtrEnc_Omit) {
+      switch (header.table_enc & EH_PtrEnc_TypeMask) {
+        case EH_PtrEnc_Ptr:     { header.field_byte_size = address_size; } break;
+        case EH_PtrEnc_ULEB128: { InvalidPath;                           } break; // TODO: when loading module convert these to UData8
+        case EH_PtrEnc_UData2:  { header.field_byte_size = 2;            } break;
+        case EH_PtrEnc_UData4:  { header.field_byte_size = 4;            } break;
+        case EH_PtrEnc_UData8:  { header.field_byte_size = 8;            } break;
+        case EH_PtrEnc_Signed:  { header.field_byte_size = address_size; } break;
+        case EH_PtrEnc_SLEB128: { InvalidPath;                           } break; // TODO: when loading module convert these to UData8
+        case EH_PtrEnc_SData2:  { header.field_byte_size = 2;            } break;
+        case EH_PtrEnc_SData4:  { header.field_byte_size = 4;            } break;
+        case EH_PtrEnc_SData8:  { header.field_byte_size = 8;            } break;
+        default: { InvalidPath; } break;
+      }
+      header.entry_byte_size = header.field_byte_size * 2;
+      
+      header.table = str8_skip(data, cursor);
+      AssertAlways(header.table.size == header.entry_byte_size * header.fde_count);
     }
-    header.entry_byte_size = header.field_byte_size * 2;
-    
-    header.table = str8_skip(data, cursor);
-    AssertAlways(header.table.size == header.entry_byte_size * header.fde_count);
   } else {
     Assert(0 && "unknown version");
   }
