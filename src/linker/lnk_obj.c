@@ -122,6 +122,16 @@ THREAD_POOL_TASK_FUNC(lnk_obj_initer)
         str8_ends_with(sect_name, str8_lit("$fo_bdd$"), 0)) {
       *section_flags |= COFF_SectionFlag_LnkInfo;
     }
+    if (~*section_flags & LNK_SECTION_FLAG_DEBUG) {
+      String8 sect_base_name, sect_postfix;
+      coff_parse_section_name(sect_name, &sect_base_name, &sect_postfix);
+      for EachNode(name_n, String8Node, task->remove_sections.first) {
+        if (str8_match(sect_base_name, name_n->string, 0)) {
+          *section_flags |= COFF_SectionFlag_LnkRemove;
+          break;
+        }
+      }
+    }
 
     if (str8_match(sect_name, str8_lit(".debug$T"), 0)) {
       debug_t_section_number = section_number;
@@ -421,6 +431,7 @@ lnk_obj_from_input_many(TP_Context *tp, TP_Arena *arena, LNK_Config *config, U64
       .inputs            = inputs,
       .objs              = objs,
       .machine           = config->machine,
+      .remove_sections   = config->remove_sections,
     };
     tp_for_parallel(tp, arena, inputs_count, lnk_obj_initer, &task);
   }
