@@ -11500,7 +11500,7 @@ rd_init(CmdLine *cmdln)
         {
           after_first_non_flag = 1;
         }
-        if(after_first_non_flag && !is_cfg && !is_dmp)
+        if(after_first_non_flag && !is_cfg && !is_dmp && (!is_flag || target_args.node_count != 0))
         {
           str8_list_push(scratch2.arena, &target_args, arg);
         }
