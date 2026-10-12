@@ -348,6 +348,7 @@ sock_session_open(U16 listener_port, SOCK_WakeupFunctionType *wakeup_hook)
   session->wakeup_hook = wakeup_hook;
   
   //- rjf: set up listener
+  if(listener_port != 0)
   {
     session->tcp_listen_socket = socket(AF_INET, SOCK_STREAM, 0);
     U32 ipv6only = 0;

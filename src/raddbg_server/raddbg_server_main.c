@@ -135,7 +135,7 @@ dmn_thread__entry_point(void *p)
     for(RDS_Msg *msg_n = msg_first; msg_n != 0; msg_n = msg_n->next)
     {
       //- rjf: unpack message
-      DS_Msg msg = ds_msg_from_serialized(scratch.arena, msg_n->msg_raw);
+      DS_Msg msg = ds_msg_from_packet(scratch.arena, msg_n->msg_raw);
       
       //- rjf: do action, get response
       DS_Response response = {0};
@@ -198,7 +198,7 @@ dmn_thread__entry_point(void *p)
       
       //- rjf: pack response & send back to the originating endpoint of the message
       {
-        String8 data = ds_serialized_from_response(scratch.arena, &response);
+        String8 data = ds_packet_from_response(scratch.arena, &response);
         sock_send(rds_state->sock_session, SOCK_Protocol_TCP, msg_n->endpoint, data, max_U64);
       }
       
@@ -317,7 +317,7 @@ entry_point(CmdLine *cmd_line)
       str8_deserial_read_struct(msg_raw, 2, &peek_kind);
       if(peek_kind < DS_MsgKind_Launch || DS_MsgKind_SingleStep < peek_kind)
       {
-        DS_Msg msg = ds_msg_from_serialized(scratch.arena, data);
+        DS_Msg msg = ds_msg_from_packet(scratch.arena, data);
         DS_Response response = {0};
         switch(msg.kind)
         {

@@ -321,6 +321,7 @@ struct D_CtrlState
 {
   Arena *arena;
   D_WakeupFunctionType *wakeup_hook;
+  SOCK_Session sock_session;
   
   // rjf: name -> register hash tables for eval
   E_String2NumMap arch_string2reg_tables[Arch_COUNT];
@@ -371,6 +372,7 @@ struct D_CtrlState
   U64 exception_code_filters[(D_ExceptionCodeKind_COUNT+63)/64];
   B32 auto_download_debug_info;
   U64 process_counter;
+  D_ServerID server_id_gen;
   Arena *dbg_dir_arena;
   D_DbgDirNode *dbg_dir_root;
   U64 module_req_cache_slots_count;
@@ -426,8 +428,8 @@ internal D_HandleArray d_handle_array_from_list(Arena  *arena, D_HandleList *src
 internal String8 d_string_from_handle(Arena *arena, D_Handle handle);
 internal D_Handle d_handle_from_string(String8 string);
 internal DMN_Handle d_dmn_from_handle(D_Handle handle);
-internal D_Handle d_handle_from_dmn(D_DemonID demon_id, DMN_Handle handle);
-internal D_Handle d_dump_handle_make(D_DemonID demon_id, U64 id);
+internal D_Handle d_handle_from_dmn(D_ServerID server_id, DMN_Handle handle);
+internal D_Handle d_dump_handle_make(D_ServerID server_id, U64 id);
 
 ////////////////////////////////
 //~ rjf: Trap Type Functions

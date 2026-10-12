@@ -34,6 +34,9 @@ typedef enum DS_MsgKind
 {
   DS_MsgKind_Null,
   
+  //- rjf: connection handshake
+  DS_MsgKind_Handshake,
+  
   //- rjf: debuggee attaching/detaching ops
   DS_MsgKind_Launch,
   DS_MsgKind_Attach,
@@ -123,11 +126,11 @@ struct DS_ResponseNode
 ////////////////////////////////
 //~ rjf: Message/Response Parsing
 
-internal DS_Msg ds_msg_from_serialized(Arena *arena, String8 data);
-internal String8 ds_serialized_from_msg(Arena *arena, DS_Msg *msg);
-internal DS_Response ds_response_from_serialized(Arena *arena, String8 data);
-internal String8 ds_serialized_from_response(Arena *arena, DS_Response *response);
-internal DMN_EventList ds_dmn_events_from_serialized(Arena *arena, String8 data);
+internal DS_Msg ds_msg_from_packet(Arena *arena, String8 data);
+internal String8 ds_packet_from_msg(Arena *arena, DS_Msg *msg);
+internal DS_Response ds_response_from_packet(Arena *arena, String8 data);
+internal String8 ds_packet_from_response(Arena *arena, DS_Response *response);
+internal DMN_EventList ds_dmn_events_from_packet(Arena *arena, String8 data);
 internal String8 ds_serialized_from_dmn_events(Arena *arena, DMN_EventList evts);
 
 #endif // DBG_SERVER_H

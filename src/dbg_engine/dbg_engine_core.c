@@ -104,6 +104,7 @@ d_init(void)
     Arena *arena = arena_alloc();
     d_ctrl_state = push_array(arena, D_CtrlState, 1);
     d_ctrl_state->arena = arena;
+    d_ctrl_state->sock_session = sock_session_open(0, 0);
     for EachEnumVal(Arch, arch)
     {
       ARCH_Info *arch_info = arch_info_from_arch(arch);

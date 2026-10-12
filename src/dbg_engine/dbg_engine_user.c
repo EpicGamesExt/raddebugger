@@ -2104,13 +2104,13 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         }break;
         case D_CmdKind_FreezeLocalServer:
         {
-          D_DemonID demon_id = D_DemonID_LocalHost;
-          d_cmd(D_CmdKind_FreezeServer, .entity = d_handle_from_dmn(demon_id, dmn_handle_zero()));
+          D_ServerID server_id = D_ServerID_LocalHost;
+          d_cmd(D_CmdKind_FreezeServer, .entity = d_handle_from_dmn(server_id, dmn_handle_zero()));
         }break;
         case D_CmdKind_ThawLocalServer:
         {
-          D_DemonID demon_id = D_DemonID_LocalHost;
-          d_cmd(D_CmdKind_ThawServer, .entity = d_handle_from_dmn(demon_id, dmn_handle_zero()));
+          D_ServerID server_id = D_ServerID_LocalHost;
+          d_cmd(D_CmdKind_ThawServer, .entity = d_handle_from_dmn(server_id, dmn_handle_zero()));
         }break;
         case D_CmdKind_FreezeEntity:
         case D_CmdKind_ThawEntity:

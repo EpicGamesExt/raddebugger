@@ -265,7 +265,11 @@ typedef enum D_EventKind
   D_EventKind_MemDecommit,
   D_EventKind_MemRelease,
   
-  //- rjf: remote connections
+  //- rjf: remote server connections
+  D_EventKind_ServerConnect,
+  D_EventKind_ServerDisconnect,
+  
+  //- rjf: remote controllers
   D_EventKind_RemoteControllerConnect,
   D_EventKind_RemoteControllerDisconnect,
   

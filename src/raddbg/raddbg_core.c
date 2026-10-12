@@ -711,7 +711,7 @@ rd_ctrl_entity_from_eval_space(E_Space space)
      space.kind == RD_EvalSpaceKind_MetaUnattachedProcess)
   {
     D_Handle handle;
-    handle.demon_id      = (U32)((space.u64s[0] & 0xffffffff00000000ull) >> 32);
+    handle.server_id      = (U32)((space.u64s[0] & 0xffffffff00000000ull) >> 32);
     handle.controller_kind = (U32)((space.u64s[0] & 0x00000000ffffffffull) >> 0);
     handle.entity_id       = space.u64s[1];
     entity = d_entity_from_handle(handle);
@@ -726,7 +726,7 @@ rd_eval_space_from_ctrl_entity(D_Entity *entity, E_SpaceKind kind)
   if(entity != &d_entity_nil)
   {
     space = e_space_make(kind);
-    space.u64s[0] = (((U64)entity->handle.demon_id) << 32) | (((U64)entity->handle.controller_kind) << 0);
+    space.u64s[0] = (((U64)entity->handle.server_id) << 32) | (((U64)entity->handle.controller_kind) << 0);
     space.u64s[1] = entity->handle.entity_id;
   }
   return space;
@@ -2828,7 +2828,7 @@ rd_view_ui(Rng2F32 rect)
                       CFG_Node *locked = cfg_node_child_from_string_or_alloc(rd_state->cfg, cfg, s("locked"));
                       cfg_node_release_all_children(rd_state->cfg, locked);
                       CFG_Node *mid = cfg_node_new(rd_state->cfg, locked, s("mid"));
-                      cfg_node_newf(rd_state->cfg, mid, "%I64u", entity->handle.demon_id);
+                      cfg_node_newf(rd_state->cfg, mid, "%I64u", entity->handle.server_id);
                       CFG_Node *pid = cfg_node_new(rd_state->cfg, locked, s("pid"));
                       cfg_node_newf(rd_state->cfg, pid, "%I64u", entity->id);
                       CFG_Node *addr = cfg_node_new(rd_state->cfg, locked, s("addr"));
@@ -4631,7 +4631,7 @@ rd_view_ui(Rng2F32 rect)
                                 CFG_Node *locked = cfg_node_child_from_string_or_alloc(rd_state->cfg, cfg, s("locked"));
                                 cfg_node_release_all_children(rd_state->cfg, locked);
                                 CFG_Node *mid = cfg_node_new(rd_state->cfg, locked, s("mid"));
-                                cfg_node_newf(rd_state->cfg, mid, "%I64u", entity->handle.demon_id);
+                                cfg_node_newf(rd_state->cfg, mid, "%I64u", entity->handle.server_id);
                                 CFG_Node *pid = cfg_node_new(rd_state->cfg, locked, s("pid"));
                                 cfg_node_newf(rd_state->cfg, pid, "%I64u", entity->id);
                                 CFG_Node *addr = cfg_node_new(rd_state->cfg, locked, s("addr"));
@@ -6367,7 +6367,7 @@ rd_window_frame(void)
           ID(panel);
           ID(view);
 #undef ID
-#define Handle(name) ui_labelf("%s: [0x%x, 0x%x, 0x%I64x]", #name, (regs->name).demon_id, (regs->name).controller_kind, (regs->name).entity_id)
+#define Handle(name) ui_labelf("%s: [0x%x, 0x%x, 0x%I64x]", #name, (regs->name).server_id, (regs->name).controller_kind, (regs->name).entity_id)
           Handle(server);
           Handle(process);
           Handle(module);
@@ -12863,7 +12863,7 @@ rd_frame(void)
           {
             e_string2expr_map_insert(scratch.arena, macro_map, entity->string, expr);
           }
-          if(kind == D_EntityKind_Server && entity->handle.demon_id == D_DemonID_LocalHost)
+          if(kind == D_EntityKind_Server && entity->handle.server_id == D_ServerID_LocalHost)
           {
             e_string2expr_map_insert(scratch.arena, macro_map, str8_lit("local_server"), expr);
           }

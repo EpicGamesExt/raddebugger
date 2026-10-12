@@ -368,6 +368,7 @@ sock_session_open(U16 listener_port, SOCK_WakeupFunctionType *wakeup_hook)
   session->iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0);
   
   //- rjf: set up listener(s)
+  if(listener_port != 0)
   {
     session->tcp_listen_socket = WSASocketA(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
     DWORD ipv6only = 0;

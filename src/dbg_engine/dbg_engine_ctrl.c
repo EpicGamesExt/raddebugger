@@ -7,7 +7,7 @@
 internal U64
 d_hash_from_handle(D_Handle handle)
 {
-  U64 buf[] = {handle.demon_id, handle.controller_kind, handle.entity_id};
+  U64 buf[] = {handle.server_id, handle.controller_kind, handle.entity_id};
   U64 hash = u64_hash_from_str8(str8_struct(&handle));
   return hash;
 }
@@ -182,7 +182,7 @@ d_handle_array_from_list(Arena  *arena, D_HandleList *src)
 internal String8
 d_string_from_handle(Arena *arena, D_Handle handle)
 {
-  String8 result = str8f(arena, "$%x$%x$%I64x", handle.demon_id, handle.controller_kind, handle.entity_id);
+  String8 result = str8f(arena, "$%x$%x$%I64x", handle.server_id, handle.controller_kind, handle.entity_id);
   return result;
 }
 
@@ -196,10 +196,10 @@ d_handle_from_string(String8 string)
     String8List parts = str8_split(scratch.arena, string, &split, 1, 0);
     if(parts.first && parts.first->next && parts.first->next->next)
     {
-      D_DemonID demon_id = (U32)u64_from_str8(parts.first->string, 16);
+      D_ServerID server_id = (U32)u64_from_str8(parts.first->string, 16);
       D_ControllerKind controller_kind = (U32)u64_from_str8(parts.first->next->string, 16);
       U64 entity_id = u64_from_str8(parts.first->next->next->string, 16);
-      handle.demon_id = demon_id;
+      handle.server_id = server_id;
       handle.controller_kind = controller_kind;
       handle.entity_id = entity_id;
     }
@@ -220,11 +220,11 @@ d_dmn_from_handle(D_Handle handle)
 }
 
 internal D_Handle
-d_handle_from_dmn(D_DemonID demon_id, DMN_Handle handle)
+d_handle_from_dmn(D_ServerID server_id, DMN_Handle handle)
 {
   D_Handle result = {0};
   {
-    result.demon_id = demon_id;
+    result.server_id = server_id;
     result.controller_kind = D_ControllerKind_Demon;
     result.entity_id = handle.u64[0];
   }
@@ -232,11 +232,11 @@ d_handle_from_dmn(D_DemonID demon_id, DMN_Handle handle)
 }
 
 internal D_Handle
-d_dump_handle_make(D_DemonID demon_id, U64 id)
+d_dump_handle_make(D_ServerID server_id, U64 id)
 {
   D_Handle result = {0};
   {
-    result.demon_id = demon_id;
+    result.server_id = server_id;
     result.controller_kind = D_ControllerKind_Dump;
     result.entity_id = id;
   }
@@ -915,7 +915,7 @@ d_entity_ctx_rw_store_alloc(void)
   store->ctx.hash_slots_count = 1024;
   store->ctx.hash_slots = push_array(arena, D_EntityHashSlot, store->ctx.hash_slots_count);
   D_Entity *root = store->ctx.root = d_entity_alloc(store, &d_entity_nil, D_EntityKind_Root, Arch_Null, d_handle_zero(), 0);
-  D_Entity *local_server = d_entity_alloc(store, root, D_EntityKind_Server, Arch_CURRENT, d_handle_from_dmn(D_DemonID_LocalHost, dmn_handle_zero()), 0);
+  D_Entity *local_server = d_entity_alloc(store, root, D_EntityKind_Server, Arch_CURRENT, d_handle_from_dmn(D_ServerID_LocalHost, dmn_handle_zero()), 0);
   Temp scratch = scratch_begin(0, 0);
   String8 local_server_name = str8f(scratch.arena, "Local (%S)", get_system_info()->machine_name);
   d_entity_equip_string(store, local_server, local_server_name);
@@ -1306,7 +1306,7 @@ d_entity_store_apply_events(D_EntityCtxRWStore *store, D_EventList *list)
       //- rjf: processes
       case D_EventKind_NewProc:
       {
-        D_Entity *machine = d_entity_from_handle(d_handle_from_dmn(event->entity.demon_id, dmn_handle_zero()));
+        D_Entity *machine = d_entity_from_handle(d_handle_from_dmn(event->entity.server_id, dmn_handle_zero()));
         if(machine != &d_entity_nil)
         {
           D_Entity *process = d_entity_alloc(store, machine, D_EntityKind_Process, event->arch, event->entity, (U64)event->entity_id);
@@ -1504,6 +1504,20 @@ d_entity_store_apply_events(D_EntityCtxRWStore *store, D_EventList *list)
         D_Entity *annotation = d_entity_alloc(store, process, D_EntityKind_AddressRangeAnnotation, Arch_Null, d_handle_zero(), 0);
         annotation->vaddr_range = event->vaddr_rng;
         d_entity_equip_string(store, annotation, event->string);
+      }break;
+      
+      //- rjf: remote server connections
+      case D_EventKind_ServerConnect:
+      {
+        D_Handle handle = {0};
+        handle.server_id = event->entity_id;
+        D_Entity *server = d_entity_alloc(store, d_entity_ctx->root, D_EntityKind_Server, Arch_Null, handle, 0);
+        d_entity_equip_string(store, server, event->string);
+      }break;
+      case D_EventKind_ServerDisconnect:
+      {
+        D_Entity *server = d_entity_from_handle(event->entity);
+        d_entity_release(store, server);
       }break;
     }
   }
@@ -2938,7 +2952,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
                (spoof == 0 || ev->instruction_pointer != spoof->new_ip_value))
             {
               Access *access = access_open();
-              D_Handle process_handle = d_handle_from_dmn(D_DemonID_LocalHost, ev->process);
+              D_Handle process_handle = d_handle_from_dmn(D_ServerID_LocalHost, ev->process);
               D_Entity *process = d_entity_from_handle(process_handle);
               D_Entity *module = d_module_from_process_vaddr(process, ev->instruction_pointer);
               if(module != &d_entity_nil)
@@ -3139,7 +3153,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
       out_evt->kind      = D_EventKind_NewProc;
       out_evt->msg_id    = msg_id;
-      out_evt->entity    = d_handle_from_dmn(D_DemonID_LocalHost, event->process);
+      out_evt->entity    = d_handle_from_dmn(D_ServerID_LocalHost, event->process);
       out_evt->arch      = event->arch;
       out_evt->entity_id = event->code;
       out_evt->os        = OperatingSystem_CURRENT; // TODO: operating system of the remote target machine
@@ -3152,8 +3166,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
       out_evt->kind       = D_EventKind_NewThread;
       out_evt->msg_id     = msg->msg_id;
-      out_evt->entity     = d_handle_from_dmn(D_DemonID_LocalHost, event->thread);
-      out_evt->parent     = d_handle_from_dmn(D_DemonID_LocalHost, event->process);
+      out_evt->entity     = d_handle_from_dmn(D_ServerID_LocalHost, event->thread);
+      out_evt->parent     = d_handle_from_dmn(D_ServerID_LocalHost, event->process);
       out_evt->arch       = event->arch;
       out_evt->entity_id  = event->code;
       out_evt->stack_base = event->stack_pointer;
@@ -3168,8 +3182,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       Temp scratch2 = scratch_begin(&scratch.arena, 1);
       
       //- rjf: unpack module
-      D_Handle process_handle = d_handle_from_dmn(D_DemonID_LocalHost, event->process);
-      D_Handle module_handle = d_handle_from_dmn(D_DemonID_LocalHost, event->module);
+      D_Handle process_handle = d_handle_from_dmn(D_ServerID_LocalHost, event->process);
+      D_Handle module_handle = d_handle_from_dmn(D_ServerID_LocalHost, event->module);
       String8 module_path = path_normalized_from_string(scratch2.arena, event->string);
       U64 exe_timestamp = properties_from_file_path(module_path).modified;
       DMN_ModuleInfo *module_info = event->module_info;
@@ -3334,7 +3348,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
       out_evt->kind       = D_EventKind_EndProc;
       out_evt->msg_id     = msg->msg_id;
-      out_evt->entity     = d_handle_from_dmn(D_DemonID_LocalHost, event->process);
+      out_evt->entity     = d_handle_from_dmn(D_ServerID_LocalHost, event->process);
       out_evt->u64_code   = event->code;
       d_ctrl_state->process_counter -= 1;
     }break;
@@ -3345,7 +3359,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
       out_evt->kind       = D_EventKind_EndThread;
       out_evt->msg_id     = msg->msg_id;
-      out_evt->entity     = d_handle_from_dmn(D_DemonID_LocalHost, event->thread);
+      out_evt->entity     = d_handle_from_dmn(D_ServerID_LocalHost, event->thread);
       out_evt->entity_id  = event->code;
     }break;
     
@@ -3353,7 +3367,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
     case DMN_EventKind_UnloadModule:
     {
       //- rjf: unpack module
-      D_Handle module_handle = d_handle_from_dmn(D_DemonID_LocalHost, event->module);
+      D_Handle module_handle = d_handle_from_dmn(D_ServerID_LocalHost, event->module);
       D_Entity *module_ent = d_entity_from_handle(module_handle);
       D_Entity *process_ent = d_process_from_entity(module_ent);
       String8 module_path = event->string;
@@ -3390,8 +3404,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
         D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
         out_evt->kind       = D_EventKind_DebugString;
         out_evt->msg_id     = msg->msg_id;
-        out_evt->entity     = d_handle_from_dmn(D_DemonID_LocalHost, event->thread);
-        out_evt->parent     = d_handle_from_dmn(D_DemonID_LocalHost, event->process);
+        out_evt->entity     = d_handle_from_dmn(D_ServerID_LocalHost, event->thread);
+        out_evt->parent     = d_handle_from_dmn(D_ServerID_LocalHost, event->process);
         out_evt->string     = str8_substr(event->string, r1u64(string_idx*d_ctrl_state->c2u_ring_max_string_size, (string_idx+1)*d_ctrl_state->c2u_ring_max_string_size));
       }
     }break;
@@ -3402,8 +3416,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
       out_evt->kind       = D_EventKind_ThreadName;
       out_evt->msg_id     = msg->msg_id;
-      out_evt->entity     = d_handle_from_dmn(D_DemonID_LocalHost, event->thread);
-      out_evt->parent     = d_handle_from_dmn(D_DemonID_LocalHost, event->process);
+      out_evt->entity     = d_handle_from_dmn(D_ServerID_LocalHost, event->thread);
+      out_evt->parent     = d_handle_from_dmn(D_ServerID_LocalHost, event->process);
       out_evt->string     = event->string;
       out_evt->entity_id  = event->code;
     }break;
@@ -3414,8 +3428,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
       out_evt->kind       = D_EventKind_ThreadColor;
       out_evt->msg_id     = msg->msg_id;
-      out_evt->entity     = d_handle_from_dmn(D_DemonID_LocalHost, event->thread);
-      out_evt->parent     = d_handle_from_dmn(D_DemonID_LocalHost, event->process);
+      out_evt->entity     = d_handle_from_dmn(D_ServerID_LocalHost, event->thread);
+      out_evt->parent     = d_handle_from_dmn(D_ServerID_LocalHost, event->process);
       out_evt->entity_id  = event->code;
       out_evt->rgba       = event->user_data;
     }break;
@@ -3425,7 +3439,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
     {
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
       out_evt->kind       = D_EventKind_SetVAddrRangeNote;
-      out_evt->parent     = d_handle_from_dmn(D_DemonID_LocalHost, event->process);
+      out_evt->parent     = d_handle_from_dmn(D_ServerID_LocalHost, event->process);
       out_evt->msg_id     = msg->msg_id;
       out_evt->vaddr_rng  = r1u64(event->address, event->address + event->size);
       out_evt->string     = event->string;
@@ -3436,8 +3450,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
     {
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
       out_evt->kind       = D_EventKind_SetBreakpoint;
-      out_evt->entity     = d_handle_from_dmn(D_DemonID_LocalHost, event->thread);
-      out_evt->parent     = d_handle_from_dmn(D_DemonID_LocalHost, event->process);
+      out_evt->entity     = d_handle_from_dmn(D_ServerID_LocalHost, event->thread);
+      out_evt->parent     = d_handle_from_dmn(D_ServerID_LocalHost, event->process);
       out_evt->vaddr_rng  = r1u64(event->address, event->address+event->size);
       out_evt->bp_flags   = d_breakpoint_flags_from_dmn_trap_flags(event->flags);
     }break;
@@ -3448,8 +3462,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       // TODO(rjf): this needs to be reflected in the resolved trap list too!!!!!!!!
       D_Event *out_evt = d_event_list_push(scratch.arena, &evts);
       out_evt->kind       = D_EventKind_UnsetBreakpoint;
-      out_evt->entity     = d_handle_from_dmn(D_DemonID_LocalHost, event->thread);
-      out_evt->parent     = d_handle_from_dmn(D_DemonID_LocalHost, event->process);
+      out_evt->entity     = d_handle_from_dmn(D_ServerID_LocalHost, event->thread);
+      out_evt->parent     = d_handle_from_dmn(D_ServerID_LocalHost, event->process);
       out_evt->vaddr_rng  = r1u64(event->address, event->address+event->size);
       out_evt->bp_flags   = d_breakpoint_flags_from_dmn_trap_flags(event->flags);
     }break;
@@ -3813,13 +3827,52 @@ d_ctrl_thread__end_and_flush_log(void)
 internal void
 d_ctrl_thread__open_remote_server(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
 {
+  SOCK_Endpoint endpoint = sock_endpoint_from_string(msg->path);
   
+  //- rjf: handshake & get state
+  {
+    Temp scratch = scratch_begin(0, 0);
+    DS_Msg msg = {0};
+    {
+      msg.kind   = DS_MsgKind_Handshake;
+      msg.msg_id = 1;
+    }
+    String8 msg_raw = ds_packet_from_msg(scratch.arena, &msg);
+    DS_PacketHeader header =
+    {
+      .magic        = DS_PACKET_MAGIC,
+      .kind         = DS_PacketKind_Msg,
+      .version      = DS_PACKET_VERSION,
+      .payload_size = msg_raw.size,
+    };
+    scratch_end(scratch);
+  }
+  
+  //- rjf: push connect event
+  {
+    Temp scratch = scratch_begin(0, 0);
+    D_EventList evts = {0};
+    D_Event *evt = d_event_list_push(scratch.arena, &evts);
+    d_ctrl_state->server_id_gen += 1;
+    evt->kind = D_EventKind_ServerConnect;
+    evt->entity_id = D_ServerID_LocalHost + d_ctrl_state->server_id_gen;
+    evt->string = msg->path;
+    d_c2u_push_events(&evts);
+    scratch_end(scratch);
+  }
 }
 
 internal void
 d_ctrl_thread__close_remote_server(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
 {
-  
+  Temp scratch = scratch_begin(0, 0);
+  D_Entity *machine = d_entity_from_handle(msg->entity);
+  D_EventList evts = {0};
+  D_Event *evt = d_event_list_push(scratch.arena, &evts);
+  evt->kind = D_EventKind_ServerDisconnect;
+  evt->entity_id = machine->handle.server_id;
+  d_c2u_push_events(&evts);
+  scratch_end(scratch);
 }
 
 internal void
@@ -4127,7 +4180,7 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         
         // rjf: create process handle
         d_ctrl_state->ctrl_thread_dump_handle_id_gen += 1;
-        process = d_dump_handle_make(D_DemonID_LocalHost, d_ctrl_state->ctrl_thread_dump_handle_id_gen);
+        process = d_dump_handle_make(D_ServerID_LocalHost, d_ctrl_state->ctrl_thread_dump_handle_id_gen);
         
         // rjf: gather threads
         dump_threads_count = threads_count;
@@ -4144,7 +4197,7 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         {
           d_ctrl_state->ctrl_thread_dump_handle_id_gen += 1;
           MDMP_Thread *thread = &threads[idx];
-          D_Handle thread_handle = d_dump_handle_make(D_DemonID_LocalHost, d_ctrl_state->ctrl_thread_dump_handle_id_gen);
+          D_Handle thread_handle = d_dump_handle_make(D_ServerID_LocalHost, d_ctrl_state->ctrl_thread_dump_handle_id_gen);
           dump_threads[idx].thread_handle = thread_handle;
           dump_threads[idx].id = thread->id;
           dump_threads[idx].context_foff = thread->thread_context.foff;
@@ -4249,7 +4302,7 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
           
           // rjf: store
           d_ctrl_state->ctrl_thread_dump_handle_id_gen += 1;
-          dump_modules[idx].module_handle = d_dump_handle_make(D_DemonID_LocalHost, d_ctrl_state->ctrl_thread_dump_handle_id_gen);
+          dump_modules[idx].module_handle = d_dump_handle_make(D_ServerID_LocalHost, d_ctrl_state->ctrl_thread_dump_handle_id_gen);
           dump_modules[idx].vaddr_range   = vaddr_range;
           dump_modules[idx].path          = str8_copy(arena, module_name);
           dump_modules[idx].file          = module_file;
@@ -4605,7 +4658,7 @@ d_ctrl_thread__kill_all(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         default:{}break;
         case DMN_EventKind_CreateProcess:
         {
-          D_Entity *new_process = d_entity_from_handle(d_handle_from_dmn(D_DemonID_LocalHost, event->process));
+          D_Entity *new_process = d_entity_from_handle(d_handle_from_dmn(D_ServerID_LocalHost, event->process));
           Task *t = push_array(scratch.arena, Task, 1);
           t->process = new_process;
           DLLPushBack(first_task, last_task, t);
@@ -4826,7 +4879,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         node != 0;
         node = node->next)
     {
-      D_Handle thread = d_handle_from_dmn(D_DemonID_LocalHost, node->v);
+      D_Handle thread = d_handle_from_dmn(D_ServerID_LocalHost, node->v);
       U64 thread_pre_rip = d_ip_from_thread(thread);
       U64 thread_post_rip = thread_pre_rip;
       for(B32 done = 0; !done;)
@@ -4845,7 +4898,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         {
           default:{}break;
           case DMN_EventKind_ExitThread:
-          if(d_handle_match(d_handle_from_dmn(D_DemonID_LocalHost, event->thread), thread))
+          if(d_handle_match(d_handle_from_dmn(D_ServerID_LocalHost, event->thread), thread))
           {
             stop_cause = D_EventCause_Error;
             goto stop;
@@ -5008,7 +5061,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
           D_EvalScope *eval_scope = d_ctrl_thread__eval_scope_begin(scratch.arena, &msg->user_bps, &d_entity_nil);
           {
             DMN_TrapChunkList new_traps = {0};
-            d_ctrl_thread__append_resolved_process_user_bp_traps(scratch.arena, eval_scope, d_handle_from_dmn(D_DemonID_LocalHost, event->process), &msg->user_bps, &new_traps);
+            d_ctrl_thread__append_resolved_process_user_bp_traps(scratch.arena, eval_scope, d_handle_from_dmn(D_ServerID_LocalHost, event->process), &msg->user_bps, &new_traps);
             log_infof("step_rule: create_process -> resolve traps\n");
             log_infof("new_traps:\n{\n");
             for(DMN_TrapChunkNode *n = new_traps.first; n != 0; n = n->next)
@@ -5027,11 +5080,11 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         }break;
         case DMN_EventKind_LoadModule:
         {
-          D_Entity *thread = d_entity_from_handle(d_handle_from_dmn(D_DemonID_LocalHost, event->thread));
+          D_Entity *thread = d_entity_from_handle(d_handle_from_dmn(D_ServerID_LocalHost, event->thread));
           D_EvalScope *eval_scope = d_ctrl_thread__eval_scope_begin(scratch.arena, &msg->user_bps, thread);
           {
             DMN_TrapChunkList new_traps = {0};
-            d_ctrl_thread__append_resolved_module_user_bp_traps(scratch.arena, eval_scope, d_handle_from_dmn(D_DemonID_LocalHost, event->process), d_handle_from_dmn(D_DemonID_LocalHost, event->module), &msg->user_bps, &new_traps);
+            d_ctrl_thread__append_resolved_module_user_bp_traps(scratch.arena, eval_scope, d_handle_from_dmn(D_ServerID_LocalHost, event->process), d_handle_from_dmn(D_ServerID_LocalHost, event->module), &msg->user_bps, &new_traps);
             log_infof("step_rule: load_module -> resolve traps\n");
             log_infof("new_traps:\n{\n");
             for(DMN_TrapChunkNode *n = new_traps.first; n != 0; n = n->next)
@@ -5052,7 +5105,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         {
           D_Entity *bp = &d_entity_nil;
           {
-            D_Entity *process = d_entity_from_handle(d_handle_from_dmn(D_DemonID_LocalHost, event->process));
+            D_Entity *process = d_entity_from_handle(d_handle_from_dmn(D_ServerID_LocalHost, event->process));
             for(D_Entity *child = process->first; child != &d_entity_nil; child = child->next)
             {
               if(child->kind == D_EntityKind_Breakpoint &&
@@ -5084,7 +5137,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         Access *access = access_open();
         
         //- rjf: unpack process/module info
-        D_Entity *process = d_entity_from_handle(d_handle_from_dmn(D_DemonID_LocalHost, event->process));
+        D_Entity *process = d_entity_from_handle(d_handle_from_dmn(D_ServerID_LocalHost, event->process));
         D_Entity *module = d_entity_child_from_kind(process, D_EntityKind_Module);
         U64 module_base_vaddr = module->vaddr_range.min;
         DI_Key dbgi_key = d_dbgi_key_from_module(module);
@@ -5310,8 +5363,8 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
       //////////////////////////
       //- rjf: unpack info about thread attached to event
       //
-      D_Entity *thread = d_entity_from_handle(d_handle_from_dmn(D_DemonID_LocalHost, event->thread));
-      D_Entity *process = d_entity_from_handle(d_handle_from_dmn(D_DemonID_LocalHost, event->process));
+      D_Entity *thread = d_entity_from_handle(d_handle_from_dmn(D_ServerID_LocalHost, event->thread));
+      D_Entity *process = d_entity_from_handle(d_handle_from_dmn(D_ServerID_LocalHost, event->process));
       Arch arch = thread->arch;
       U64 thread_rip_vaddr = d_ip_from_thread(thread->handle);
       D_Entity *module = d_module_from_process_vaddr(process, thread_rip_vaddr);
@@ -5499,7 +5552,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
       D_EventCause cond_bp_single_step_stop_cause = D_EventCause_Null;
       if(hit_conditional_bp_but_filtered) LogInfoNamedBlockF("conditional_bp_hit_single_step")
       {
-        D_Handle thread = d_handle_from_dmn(D_DemonID_LocalHost, event->thread);
+        D_Handle thread = d_handle_from_dmn(D_ServerID_LocalHost, event->thread);
         U64 thread_pre_rip = d_ip_from_thread(thread);
         U64 thread_post_rip = thread_pre_rip;
         for(B32 single_step_done = 0; !single_step_done;)
@@ -5529,7 +5582,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
             }break;
             case DMN_EventKind_SingleStep:
             {
-              single_step_done = d_handle_match(d_handle_from_dmn(D_DemonID_LocalHost, event->thread), thread);
+              single_step_done = d_handle_match(d_handle_from_dmn(D_ServerID_LocalHost, event->thread), thread);
               cond_bp_single_step_stop_cause = d_event_cause_from_dmn_event_kind(event->kind);
             }break;
           }
@@ -5690,7 +5743,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
       D_EventCause step_past_trap_net_stop_cause = D_EventCause_Null;
       if(step_past_trap_net) LogInfoNamedBlockF("trap_net__single_step_past_trap_net")
       {
-        D_Handle thread = d_handle_from_dmn(D_DemonID_LocalHost, event->thread);
+        D_Handle thread = d_handle_from_dmn(D_ServerID_LocalHost, event->thread);
         U64 thread_pre_rip = d_ip_from_thread(thread);
         U64 thread_post_rip = thread_pre_rip;
         for(B32 single_step_done = 0; single_step_done == 0;)
@@ -5719,7 +5772,7 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
             }break;
             case DMN_EventKind_SingleStep:
             {
-              single_step_done = d_handle_match(d_handle_from_dmn(D_DemonID_LocalHost, event->thread), thread);
+              single_step_done = d_handle_match(d_handle_from_dmn(D_ServerID_LocalHost, event->thread), thread);
               step_past_trap_net_stop_cause = d_event_cause_from_dmn_event_kind(event->kind);
             }break;
           }
@@ -5779,8 +5832,8 @@ d_ctrl_thread__run(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
     D_Event *event = d_event_list_push(scratch.arena, &evts);
     event->kind = D_EventKind_Stopped;
     event->cause = stop_cause;
-    event->entity = d_handle_from_dmn(D_DemonID_LocalHost, stop_event->thread);
-    event->parent = d_handle_from_dmn(D_DemonID_LocalHost, stop_event->process);
+    event->entity = d_handle_from_dmn(D_ServerID_LocalHost, stop_event->thread);
+    event->parent = d_handle_from_dmn(D_ServerID_LocalHost, stop_event->process);
     event->exception_code = stop_event->code;
     event->exception_kind = d_exception_kind_from_dmn(stop_event->exception_kind);
     event->vaddr_rng = r1u64(stop_event->address, stop_event->address);
@@ -5863,8 +5916,8 @@ d_ctrl_thread__single_step(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
     event->cause = stop_cause;
     if(stop_event != 0)
     {
-      event->entity = d_handle_from_dmn(D_DemonID_LocalHost, stop_event->thread);
-      event->parent = d_handle_from_dmn(D_DemonID_LocalHost, stop_event->process);
+      event->entity = d_handle_from_dmn(D_ServerID_LocalHost, stop_event->thread);
+      event->parent = d_handle_from_dmn(D_ServerID_LocalHost, stop_event->process);
       event->exception_code = stop_event->code;
       event->exception_kind = d_exception_kind_from_dmn(stop_event->exception_kind);
       event->vaddr_rng = r1u64(stop_event->address, stop_event->address);
