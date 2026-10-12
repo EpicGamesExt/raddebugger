@@ -16,7 +16,7 @@ internal void release_memory(void *ptr, U64 size);
 // memory placeholders
 internal B32   memory_placeholders_supported(void);
 internal void *reserve_memory_placeholders(U64 size, U64 block_size);
-internal void  release_memory_placeholders(void *ptr, U64 size, U64 block_size);
+internal B32   release_memory_placeholders(void *ptr, U64 size, U64 block_size);
 internal B32   unmap_memory_preserve_placeholder(void *ptr, U64 size);
 internal B32   split_memory_placeholder(void *ptr, U64 size, U64 first_size);
 internal B32   coalesce_memory_placeholders(void *ptr, U64 size);

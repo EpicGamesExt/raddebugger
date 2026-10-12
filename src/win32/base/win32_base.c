@@ -360,12 +360,12 @@ reserve_memory_placeholders(U64 size, U64 block_size)
   return base;
 }
 
-internal void
+internal B32
 release_memory_placeholders(void *ptr, U64 size, U64 block_size)
 {
   Assert(block_size > 0 && size > 0);
-  if (size > block_size && VirtualFree(ptr, size, MEM_RELEASE|MEM_COALESCE_PLACEHOLDERS) == 0) { return; }
-  VirtualFree(ptr, 0, MEM_RELEASE);
+  if (size > block_size && VirtualFree(ptr, size, MEM_RELEASE|MEM_COALESCE_PLACEHOLDERS) == 0) { return 0; }
+  return VirtualFree(ptr, 0, MEM_RELEASE) != 0;
 }
 
 internal void *
@@ -414,7 +414,7 @@ prefetch_memory_ranges(U64 count, Rng1U64 *ranges)
   }
 }
 
-internal LONG CALLBACK
+internal ASAN_NO_ADDR LONG CALLBACK
 w32_memory_read_fault(EXCEPTION_POINTERS *exception)
 {
   EXCEPTION_RECORD *record = exception->ExceptionRecord;
@@ -523,14 +523,11 @@ shared_memory_close(SharedMemory handle)
 internal void *
 shared_memory_view_open(SharedMemory handle, Rng1U64 range)
 {
-  HANDLE file = (HANDLE)(handle.u64[0]);
-  U64 offset = range.min;
-  U64 size = range.max-range.min;
-  void *ptr = MapViewOfFile(file, FILE_MAP_ALL_ACCESS,
-                            (U32)((offset & 0xffffffff00000000) >> 32),
-                            (U32)((offset & 0x00000000ffffffff)),
-                            size);
-  return ptr;
+  return MapViewOfFile((HANDLE)(handle.u64[0]),
+                       FILE_MAP_ALL_ACCESS,
+                       (U32)((range.min & 0xffffffff00000000) >> 32),
+                       (U32)((range.min & 0x00000000ffffffff)),
+                       dim_1u64(range));
 }
 
 internal void

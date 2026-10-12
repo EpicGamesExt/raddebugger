@@ -1030,10 +1030,10 @@ reserve_memory_placeholders(U64 size, U64 block_size)
   return reserve_memory(size);
 }
 
-internal void
+internal B32
 release_memory_placeholders(void *ptr, U64 size, U64 block_size)
 {
-  if(size && block_size) { release_memory(ptr, size); }
+  return size && block_size && munmap(ptr, size) == 0;
 }
 
 internal B32
