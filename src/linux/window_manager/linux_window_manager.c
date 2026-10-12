@@ -324,6 +324,64 @@ lnx_wm_key_from_keysym(KeySym ks, B32 *out_is_right_sided)
 }
 
 ////////////////////////////////
+//~ DPI Helpers
+
+internal F32
+lnx_wm_dpi_from_xresources(void)
+{
+  F32 result = 0;
+  Display *display = lnx_wm_state->display;
+  Atom type = 0;
+  int fmt = 0;
+  U64 num_items = 0;
+  U64 bytes_left = 0;
+  U8 *data = 0;
+  int r = XGetWindowProperty(display, XDefaultRootWindow(display), XA_RESOURCE_MANAGER,
+                             0, MB(8), 0, AnyPropertyType, &type, &fmt, &num_items, &bytes_left, &data);
+  if(r == Success && data != 0 && fmt == 8)
+  {
+    // xlib null-terminates property data, as needed by XrmGetStringDatabase
+    XrmDatabase db = XrmGetStringDatabase((char *)data);
+    if(db != 0)
+    {
+      char *resource_type = 0;
+      XrmValue value = {0};
+      if(XrmGetResource(db, "Xft.dpi", "Xft.Dpi", &resource_type, &value) != 0 && value.addr != 0)
+      {
+        U64 size = value.size != 0 ? value.size : strlen((char *)value.addr);
+        F64 dpi = f64_from_str8(str8((U8 *)value.addr, size));
+        if(dpi > 0)
+        {
+          result = (F32)dpi;
+        }
+      }
+      XrmDestroyDatabase(db);
+    }
+    XFree(data);
+  }
+  else if(data != 0)
+  {
+    XFree(data);
+  }
+  return result;
+}
+
+internal void
+lnx_wm_refresh_dpi(void)
+{
+  //- x11 exposes a single screen-global dpi, not per-window/per-monitor
+  // dpi, so this resolves the same value toolkits resolve: the Xft.dpi
+  // resource on the root window (kept in sync by the desktop's settings
+  // daemon), then 96
+  F32 dpi = lnx_wm_dpi_from_xresources();
+  if(dpi <= 0.f)
+  {
+    dpi = 96.f;
+  }
+  lnx_wm_state->dpi = Clamp(48.f, dpi, 512.f);
+}
+
+////////////////////////////////
 //~ rjf: @per_os_impl Main Initialization API (Implemented Per-OS)
 
 #if LNX_WM_ICON && !defined(STBI_INCLUDE_STB_IMAGE_H)
@@ -357,6 +415,16 @@ wm_init(void)
   lnx_wm_state->wm_delete_window_atom        = XInternAtom(lnx_wm_state->display, "WM_DELETE_WINDOW", 0);
   lnx_wm_state->wm_sync_request_atom         = XInternAtom(lnx_wm_state->display, "_NET_WM_SYNC_REQUEST", 0);
   lnx_wm_state->wm_sync_request_counter_atom = XInternAtom(lnx_wm_state->display, "_NET_WM_SYNC_REQUEST_COUNTER", 0);
+
+  //- resolve initial dpi from the Xft.dpi X resource
+  {
+    XrmInitialize();
+
+    // Xft.dpi resource updates arrive as PropertyNotify on the root
+    // window, delivered to clients selecting this mask
+    XSelectInput(lnx_wm_state->display, XDefaultRootWindow(lnx_wm_state->display), PropertyChangeMask);
+    lnx_wm_refresh_dpi();
+  }
   
   //- rjf: determine if we have xfixes extension, for clipboard notification events
   {
@@ -1048,8 +1116,11 @@ wm_client_rect_from_window(WM_Window handle)
 internal F32
 wm_dpi_from_window(WM_Window handle)
 {
-  // TODO(rjf)
-  return 96.f;
+  // x11 has a screen-global dpi model (no per-window dpi), so this is
+  // the cached value resolved from the Xft.dpi resource, refreshed on-the-fly
+  // by the event loop
+  F32 result = lnx_wm_state->dpi;
+  return result;
 }
 
 ////////////////////////////////
@@ -1113,8 +1184,11 @@ wm_dim_from_monitor(WM_Monitor monitor)
 internal F32
 wm_dpi_from_monitor(WM_Monitor monitor)
 {
-  // TODO(rjf)
-  return 96.f;
+  // monitor enumeration is not implemented on x11 yet; x11's dpi model
+  // is screen-global, so this reports the same cached value as
+  // wm_dpi_from_window
+  F32 result = lnx_wm_state->dpi;
+  return result;
 }
 
 ////////////////////////////////
@@ -1434,9 +1508,19 @@ wm_get_events(Arena *arena, B32 wait)
         case ConfigureNotify:
         {
           LNX_WM_Window *window = lnx_window_from_x11window(evt.xconfigure.window);
-          if(!window->resize_draw)
+          if(window != 0 && !window->resize_draw)
           {
             window->last_synced_rect = r2f32p((F32)evt.xconfigure.x, (F32)evt.xconfigure.y, (F32)evt.xconfigure.x + (F32)evt.xconfigure.width, (F32)evt.xconfigure.y + (F32)evt.xconfigure.height);
+          }
+        }break;
+
+        //- property changes (dpi-related: root RESOURCE_MANAGER / Xft.dpi)
+        case PropertyNotify:
+        {
+          if(evt.xproperty.window == XDefaultRootWindow(lnx_wm_state->display) &&
+             evt.xproperty.atom == XA_RESOURCE_MANAGER)
+          {
+            lnx_wm_refresh_dpi();
           }
         }break;
         

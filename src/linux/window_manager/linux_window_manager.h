@@ -15,6 +15,7 @@
 #include <X11/extensions/Xrandr.h>
 #include <X11/keysym.h>
 #include <X11/keysymdef.h>
+#include <X11/Xresource.h>
 #include <poll.h>
 #include <sys/eventfd.h>
 
@@ -84,6 +85,7 @@ struct LNX_WM_State
   Atom wm_delete_window_atom;
   Atom wm_sync_request_atom;
   Atom wm_sync_request_counter_atom;
+  F32 dpi;
   B32 xfixes_present;
   int xfixes_selection_event_code;
   Cursor cursors[WM_Cursor_COUNT];
@@ -117,5 +119,6 @@ internal LNX_WM_Window *lnx_window_from_x11window(Window window);
 internal int lnx_moveresize_code_from_pos(LNX_WM_Window *window, Vec2F32 pos, B32 *out_is_in_client_area);
 internal KeySym lnx_wm_keysym_from_key(WM_Key key);
 internal WM_Key lnx_wm_key_from_keysym(KeySym ks, B32 *out_is_right_sided);
+internal void lnx_wm_refresh_dpi(void);
 
 #endif // LINUX_WINDOW_MANAGER_H

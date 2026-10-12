@@ -5614,7 +5614,23 @@ rd_window_state_from_cfg(CFG_Node *cfg)
     ws->query_arena = arena_alloc();
     ws->hover_eval_arena = arena_alloc();
     ws->autocomp_arena = arena_alloc();
-    ws->last_dpi = wm_dpi_from_window(ws->os);
+
+    //- seed last-dpi from the dpi that this window's font size was
+    // authored for (96 by default), so that the first frame normalizes the
+    // font size when the window is opened on a differently-scaled desktop
+    {
+      F32 authored_dpi = 96.f;
+      CFG_Node *dpi_cfg = cfg_node_child_from_string(window_cfg, str8_lit("dpi"));
+      if(dpi_cfg != &cfg_nil_node && dpi_cfg->first != &cfg_nil_node)
+      {
+        F64 parsed = f64_from_str8(dpi_cfg->first->string);
+        if(parsed > 0)
+        {
+          authored_dpi = Clamp(48.f, (F32)parsed, 512.f);
+        }
+      }
+      ws->last_dpi = authored_dpi;
+    }
     WM_Monitor zero_monitor = {0};
     if(!wm_monitor_match(zero_monitor, preferred_monitor))
     {
@@ -5919,6 +5935,11 @@ rd_window_frame(void)
       new_font_size = Clamp(6.f, new_font_size, 72.f);
       CFG_Node *font_size_cfg = cfg_node_child_from_string_or_alloc(rd_state->cfg, window, str8_lit("font_size"));
       cfg_node_new_replacef(rd_state->cfg, font_size_cfg, "%I64u", (U64)new_font_size);
+
+      // record the dpi that the new font size was authored for, so that
+      // reopening this window does not rescale it again
+      CFG_Node *dpi_cfg = cfg_node_child_from_string_or_alloc(rd_state->cfg, window, str8_lit("dpi"));
+      cfg_node_new_replacef(rd_state->cfg, dpi_cfg, "%I64u", (U64)(dpi + 0.5f));
       ws->last_dpi = dpi;
     }
     
