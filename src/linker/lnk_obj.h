@@ -211,6 +211,7 @@ typedef struct
   LNK_ObjNode       *objs;
   U64                obj_id_base;
   U32                machine;
+  String8List        remove_sections;
 } LNK_ObjIniter;
 
 typedef struct
