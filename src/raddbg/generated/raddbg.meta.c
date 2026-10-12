@@ -62,7 +62,7 @@ str8_lit_comp(""),
 str8_lit_comp(""),
 };
 
-RD_VocabInfo rd_vocab_info_table[373] =
+RD_VocabInfo rd_vocab_info_table[375] =
 {
 {str8_lit_comp("type_view"), str8_lit_comp("type_views"), str8_lit_comp("Type View"), str8_lit_comp("Type Views"), RD_IconKind_Binoculars},
 {str8_lit_comp("file_path_map"), str8_lit_comp("file_path_maps"), str8_lit_comp("File Path Map"), str8_lit_comp("File Path Maps"), RD_IconKind_FileOutline},
@@ -224,6 +224,8 @@ RD_VocabInfo rd_vocab_info_table[373] =
 {str8_lit_comp("state"), str8_lit_comp(""), str8_lit_comp("State"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("eval"), str8_lit_comp(""), str8_lit_comp("Eval"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("line_from_vaddr"), str8_lit_comp(""), str8_lit_comp("Line From Virtual Address"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("enable_hidden_mode"), str8_lit_comp(""), str8_lit_comp("Enable Hidden Mode"), str8_lit_comp(""), RD_IconKind_Null},
+{str8_lit_comp("disable_hidden_mode"), str8_lit_comp(""), str8_lit_comp("Disable Hidden Mode"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("wm_event"), str8_lit_comp(""), str8_lit_comp("OS Event"), str8_lit_comp(""), RD_IconKind_Null},
 {str8_lit_comp("select_thread"), str8_lit_comp(""), str8_lit_comp("Select Thread"), str8_lit_comp(""), RD_IconKind_Thread},
 {str8_lit_comp("select_unwind"), str8_lit_comp(""), str8_lit_comp("Select Unwind"), str8_lit_comp(""), RD_IconKind_Null},
@@ -602,7 +604,7 @@ Rng1U64 rd_reg_slot_range_table[56] =
 {OffsetOf(RD_Regs, wm_event), OffsetOf(RD_Regs, wm_event) + sizeof(WM_Event *)},
 };
 
-RD_CmdKindInfo rd_cmd_kind_info_table[259] =
+RD_CmdKindInfo rd_cmd_kind_info_table[261] =
 {
 {0},
 { str8_lit_comp("launch_and_run"), str8_lit_comp("Starts debugging a new instance of a target, then runs."), str8_lit_comp("launch,start,run,target"), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Cfg, str8_lit_comp("query:targets")}},
@@ -650,6 +652,8 @@ RD_CmdKindInfo rd_cmd_kind_info_table[259] =
 { str8_lit_comp("state"), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("eval"), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Expr, str8_lit_comp("")}},
 { str8_lit_comp("line_from_vaddr"), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Vaddr, str8_lit_comp("")}},
+{ str8_lit_comp("enable_hidden_mode"), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
+{ str8_lit_comp("disable_hidden_mode"), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("wm_event"), str8_lit_comp(""), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*0), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("")}},
 { str8_lit_comp("select_thread"), str8_lit_comp("Selects a thread."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*1)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*1)|(RD_QueryFlag_Required*1), RD_RegSlot_Thread, str8_lit_comp("query:threads")}},
 { str8_lit_comp("select_unwind"), str8_lit_comp("Selects an unwind frame number for the selected thread."), str8_lit_comp(""), str8_lit_comp(""), (RD_CmdKindFlag_ListInUI*0)|(RD_CmdKindFlag_ListInIPCDocs*1), {(RD_QueryFlag_AllowFiles*0)|(RD_QueryFlag_AllowFolders*0)|(RD_QueryFlag_CodeInput*0)|(RD_QueryFlag_KeepOldInput*0)|(RD_QueryFlag_SelectOldInput*0)|(RD_QueryFlag_Floating*0)|(RD_QueryFlag_Required*0), RD_RegSlot_Null, str8_lit_comp("query:call_stack")}},

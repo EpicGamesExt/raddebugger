@@ -434,6 +434,9 @@ struct RD_State
   String8List update_check_response_body_pieces;
   GuardedRing *update_check_http_ring;
   
+  // rjf: hidden mode
+  B32 hidden_mode;
+  
   // rjf: config bucket paths
   Arena *user_path_arena;
   String8 user_path;
