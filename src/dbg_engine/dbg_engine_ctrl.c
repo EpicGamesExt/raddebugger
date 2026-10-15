@@ -380,7 +380,12 @@ d_serialized_string_from_msg_list(Arena *arena, D_MsgList *msgs)
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->env_inherit);
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->debug_subprocesses);
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->auto_download_debug_info);
+      str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->deploy);
       str8_serial_push_array (scratch.arena, &msgs_srlzed, &msg->exception_code_filters[0], ArrayCount(msg->exception_code_filters));
+      
+      // rjf: write address string
+      str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->address.size);
+      str8_serial_push_data(scratch.arena, &msgs_srlzed, msg->address.str, msg->address.size);
       
       // rjf: write path string
       str8_serial_push_struct(scratch.arena, &msgs_srlzed, &msg->path.size);
@@ -481,7 +486,13 @@ d_msg_list_from_serialized_string(Arena *arena, String8 string)
       read_off += str8_deserial_read_struct(string, read_off, &msg->env_inherit);
       read_off += str8_deserial_read_struct(string, read_off, &msg->debug_subprocesses);
       read_off += str8_deserial_read_struct(string, read_off, &msg->auto_download_debug_info);
+      read_off += str8_deserial_read_struct(string, read_off, &msg->deploy);
       read_off += str8_deserial_read_array (string, read_off, &msg->exception_code_filters[0], ArrayCount(msg->exception_code_filters));
+      
+      // rjf: read address string
+      read_off += str8_deserial_read_struct(string, read_off, &msg->address.size);
+      msg->address.str = push_array_no_zero(arena, U8, msg->address.size);
+      read_off += str8_deserial_read(string, read_off, msg->address.str, msg->address.size, 1);
       
       // rjf: read path string
       read_off += str8_deserial_read_struct(string, read_off, &msg->path.size);
@@ -2879,158 +2890,170 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
   ProfBeginFunction();
   DMN_Event *event = push_array(arena, DMN_Event, 1);
   Temp scratch = scratch_begin(&arena, 1);
-  D_EntityCtx *entity_ctx = &d_ctrl_state->ctrl_thread_entity_store->ctx;
   
-  //- rjf: loop -> try to get event, run, repeat
+  //////////////////////////////
+  //- rjf: loop -> try to get event, run if we don't have any, repeat
+  //
   U64 spoof_old_ip_value = 0;
-  ProfScope("loop -> try to get event, run, repeat") for(B32 got_event = 0; got_event == 0;)
+  ProfScope("loop -> try to get event, run, repeat") for(B32 got_event = 0; !got_event;)
   {
+    ////////////////////////////
     //- rjf: get next event
+    //
     ProfScope("get next event")
     {
-      // rjf: grab first event
-      DMN_EventNode *next_event_node = d_ctrl_state->first_dmn_event_node;
-      
-      // rjf: log event
-      if(next_event_node != 0)
+      B32 first = 1;
+      for(D_ServerState *ss = d_ctrl_state->next_dequeue_server;
+          ss != d_ctrl_state->next_dequeue_server || first;
+          (first = 0, ss = (ss->order_next == 0 ? d_ctrl_state->first_server : ss->order_next), d_ctrl_state->next_dequeue_server = ss))
       {
-        DMN_Event *ev = &next_event_node->v;
-        LogInfoNamedBlockF("dmn_event")
+        //- rjf: grab first event from this server
+        DMN_EventNode *next_event_node = ss->first_dmn_event_node;
+        if(next_event_node != 0)
         {
-          log_infof("kind:           %S\n",       dmn_event_kind_string_table[ev->kind]);
-          log_infof("exception_kind: %S\n",       dmn_exception_kind_string_table[ev->exception_kind]);
-          log_infof("process:        [%I64u]\n",  ev->process.u64[0]);
-          log_infof("thread:         [%I64u]\n",  ev->thread.u64[0]);
-          log_infof("module:         [%I64u]\n",  ev->module.u64[0]);
-          log_infof("arch:           %S\n",       string_from_arch(ev->arch));
-          log_infof("address:        0x%I64x\n",  ev->address);
-          log_infof("string:         \"%S\"\n",   ev->string);
-          log_infof("ip_vaddr:       0x%I64x\n",  ev->instruction_pointer);
-        }
-      }
-      
-      // rjf: determine if we should filter
-      B32 should_filter_event = 0;
-      if(next_event_node != 0)
-      {
-        DMN_Event *ev = &next_event_node->v;
-        switch(ev->kind)
-        {
-          default:{}break;
-          case DMN_EventKind_Exception:
+          DMN_Event *ev = &next_event_node->v;
+          LogInfoNamedBlockF("dmn_event")
           {
-            // NOTE(rjf): first chance exceptions -> try ignoring
-            should_filter_event = (ev->exception_repeated == 0 && (spoof == 0 || ev->instruction_pointer != spoof->new_ip_value));
-            
-            // rjf: exception code -> kind
-            D_ExceptionCodeKind code_kind = D_ExceptionCodeKind_Null;
-            if(should_filter_event)
+            log_infof("kind:           %S\n",       dmn_event_kind_string_table[ev->kind]);
+            log_infof("exception_kind: %S\n",       dmn_exception_kind_string_table[ev->exception_kind]);
+            log_infof("process:        [%I64u]\n",  ev->process.u64[0]);
+            log_infof("thread:         [%I64u]\n",  ev->thread.u64[0]);
+            log_infof("module:         [%I64u]\n",  ev->module.u64[0]);
+            log_infof("arch:           %S\n",       string_from_arch(ev->arch));
+            log_infof("address:        0x%I64x\n",  ev->address);
+            log_infof("string:         \"%S\"\n",   ev->string);
+            log_infof("ip_vaddr:       0x%I64x\n",  ev->instruction_pointer);
+          }
+        }
+        
+        //- rjf: determine if we should filter
+        B32 should_filter_event = 0;
+        if(next_event_node != 0)
+        {
+          DMN_Event *ev = &next_event_node->v;
+          switch(ev->kind)
+          {
+            default:{}break;
+            case DMN_EventKind_Exception:
             {
-              for(D_ExceptionCodeKind k = (D_ExceptionCodeKind)0; k < D_ExceptionCodeKind_COUNT; k = (D_ExceptionCodeKind)(k+1))
+              // NOTE(rjf): first chance exceptions -> try ignoring
+              should_filter_event = (ev->exception_repeated == 0 && (spoof == 0 || ev->instruction_pointer != spoof->new_ip_value));
+              
+              // rjf: exception code -> kind
+              D_ExceptionCodeKind code_kind = D_ExceptionCodeKind_Null;
+              if(should_filter_event)
               {
-                if(d_exception_code_kind_code_table[k] == ev->code)
+                for(D_ExceptionCodeKind k = (D_ExceptionCodeKind)0; k < D_ExceptionCodeKind_COUNT; k = (D_ExceptionCodeKind)(k+1))
                 {
-                  code_kind = k;
-                  break;
-                }
-              }
-            }
-            
-            // rjf: exception code kind -> shouldn't stop? if so, do not filter
-            if(should_filter_event)
-            {
-              B32 shouldnt_filter = !!(d_ctrl_state->exception_code_filters[code_kind/64] & (1ull<<(code_kind%64)));
-              if(should_filter_event && shouldnt_filter)
-              {
-                should_filter_event = 0;
-              }
-            }
-            
-            // rjf: special case: be gracious with ASan modules or symbols if
-            // they do their cute little 0xc0000005 exception trick...
-            if(!should_filter_event && ev->code == 0xc0000005 &&
-               (spoof == 0 || ev->instruction_pointer != spoof->new_ip_value))
-            {
-              Access *access = access_open();
-              D_Handle process_handle = d_handle_from_dmn(D_ServerID_LocalHost, ev->process);
-              D_Entity *process = d_entity_from_handle(process_handle);
-              D_Entity *module = d_module_from_process_vaddr(process, ev->instruction_pointer);
-              if(module != &d_entity_nil)
-              {
-                // rjf: determine base address of asan shadow space
-                U64 asan_shadow_base_vaddr = 0;
-                B32 asan_shadow_variable_exists_but_is_zero = 0;
-                DI_Key dbgi_key = d_dbgi_key_from_module(module);
-                RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 1, max_U64);
-                RDI_NameMap *unparsed_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_GlobalVariables);
-                {
-                  RDI_ParsedNameMap map = {0};
-                  rdi_parsed_from_name_map(rdi, unparsed_map, &map);
-                  String8 name = str8_lit("__asan_shadow_memory_dynamic_address");
-                  RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, name.str, name.size);
-                  if(node != 0)
+                  if(d_exception_code_kind_code_table[k] == ev->code)
                   {
-                    U32 id_count = 0;
-                    U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
-                    if(id_count > 0)
-                    {
-                      RDI_Symbol *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, ids[0]);
-                      U64 global_var_voff = rdi_voff_from_location(global_var->location);
-                      U64 global_var_vaddr = global_var_voff + module->vaddr_range.min;
-                      Arch arch = process->arch;
-                      U64 addr_size = bit_size_from_arch(arch)/8;
-                      d_process_read(process_handle, r1u64(global_var_vaddr, global_var_vaddr+addr_size), &asan_shadow_base_vaddr);
-                      asan_shadow_variable_exists_but_is_zero = (asan_shadow_base_vaddr == 0);
-                    }
+                    code_kind = k;
+                    break;
                   }
-                }
-                
-                // rjf: determine if this was a read/write to the shadow space
-                B32 violation_in_shadow_space = 0;
-                if(asan_shadow_base_vaddr != 0)
-                {
-                  U64 asan_shadow_space_size = TB(128)/8;
-                  if(asan_shadow_base_vaddr <= ev->address && ev->address < asan_shadow_base_vaddr+asan_shadow_space_size)
-                  {
-                    violation_in_shadow_space = 1;
-                  }
-                }
-                
-                // rjf: filter event if this violation occurred in asan's shadow space
-                if(violation_in_shadow_space || asan_shadow_variable_exists_but_is_zero)
-                {
-                  should_filter_event = 1;
                 }
               }
               
-              access_close(access);
-            }
-          }break;
+              // rjf: exception code kind -> shouldn't stop? if so, do not filter
+              if(should_filter_event)
+              {
+                B32 shouldnt_filter = !!(d_ctrl_state->exception_code_filters[code_kind/64] & (1ull<<(code_kind%64)));
+                if(should_filter_event && shouldnt_filter)
+                {
+                  should_filter_event = 0;
+                }
+              }
+              
+              // rjf: special case: be gracious with ASan modules or symbols if
+              // they do their cute little 0xc0000005 exception trick...
+              if(!should_filter_event && ev->code == 0xc0000005 && (spoof == 0 || ev->instruction_pointer != spoof->new_ip_value))
+              {
+                Access *access = access_open();
+                D_Handle process_handle = d_handle_from_dmn(D_ServerID_LocalHost, ev->process);
+                D_Entity *process = d_entity_from_handle(process_handle);
+                D_Entity *module = d_module_from_process_vaddr(process, ev->instruction_pointer);
+                if(module != &d_entity_nil)
+                {
+                  // rjf: determine base address of asan shadow space
+                  U64 asan_shadow_base_vaddr = 0;
+                  B32 asan_shadow_variable_exists_but_is_zero = 0;
+                  DI_Key dbgi_key = d_dbgi_key_from_module(module);
+                  RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 1, max_U64);
+                  RDI_NameMap *unparsed_map = rdi_element_from_name_idx(rdi, NameMaps, RDI_NameMapKind_GlobalVariables);
+                  {
+                    RDI_ParsedNameMap map = {0};
+                    rdi_parsed_from_name_map(rdi, unparsed_map, &map);
+                    String8 name = str8_lit("__asan_shadow_memory_dynamic_address");
+                    RDI_NameMapNode *node = rdi_name_map_lookup(rdi, &map, name.str, name.size);
+                    if(node != 0)
+                    {
+                      U32 id_count = 0;
+                      U32 *ids = rdi_matches_from_map_node(rdi, node, &id_count);
+                      if(id_count > 0)
+                      {
+                        RDI_Symbol *global_var = rdi_element_from_name_idx(rdi, GlobalVariables, ids[0]);
+                        U64 global_var_voff = rdi_voff_from_location(global_var->location);
+                        U64 global_var_vaddr = global_var_voff + module->vaddr_range.min;
+                        Arch arch = process->arch;
+                        U64 addr_size = bit_size_from_arch(arch)/8;
+                        d_process_read(process_handle, r1u64(global_var_vaddr, global_var_vaddr+addr_size), &asan_shadow_base_vaddr);
+                        asan_shadow_variable_exists_but_is_zero = (asan_shadow_base_vaddr == 0);
+                      }
+                    }
+                  }
+                  
+                  // rjf: determine if this was a read/write to the shadow space
+                  B32 violation_in_shadow_space = 0;
+                  if(asan_shadow_base_vaddr != 0)
+                  {
+                    U64 asan_shadow_space_size = TB(128)/8;
+                    if(asan_shadow_base_vaddr <= ev->address && ev->address < asan_shadow_base_vaddr+asan_shadow_space_size)
+                    {
+                      violation_in_shadow_space = 1;
+                    }
+                  }
+                  
+                  // rjf: filter event if this violation occurred in asan's shadow space
+                  if(violation_in_shadow_space || asan_shadow_variable_exists_but_is_zero)
+                  {
+                    should_filter_event = 1;
+                  }
+                }
+                
+                access_close(access);
+              }
+            }break;
+          }
         }
-      }
-      
-      // rjf: good event & unfiltered? -> pop from queue & grab as result
-      if(next_event_node != 0 && !should_filter_event)
-      {
-        got_event = 1;
-        SLLQueuePop(d_ctrl_state->first_dmn_event_node, d_ctrl_state->last_dmn_event_node);
-        MemoryCopyStruct(event, &next_event_node->v);
-        event->string = push_str8_copy(arena, event->string);
-        run_ctrls->ignore_previous_exception = 1;
-      }
-      
-      // rjf: good event but filtered? pop from queue
-      if(next_event_node != 0 && should_filter_event)
-      {
-        SLLQueuePop(d_ctrl_state->first_dmn_event_node, d_ctrl_state->last_dmn_event_node);
-        run_ctrls->ignore_previous_exception = 0;
+        
+        //- rjf: good event & unfiltered? -> pop from queue & grab as result
+        if(next_event_node != 0 && !should_filter_event)
+        {
+          got_event = 1;
+          SLLQueuePop(ss->first_dmn_event_node, ss->last_dmn_event_node);
+          dmn_event_deep_copy(arena, event, &next_event_node->v);
+          run_ctrls->ignore_previous_exception = 1;
+        }
+        
+        //- rjf: good event but filtered? pop from queue, but we don't have a result yet.
+        if(next_event_node != 0 && should_filter_event)
+        {
+          SLLQueuePop(ss->first_dmn_event_node, ss->last_dmn_event_node);
+          run_ctrls->ignore_previous_exception = 0;
+        }
+        
+        //- rjf: out of queued up demon events -> clear event arena
+        if(ss->first_dmn_event_node == 0)
+        {
+          ss->free_dmn_event_node = 0;
+          arena_clear(ss->dmn_event_arena);
+        }
       }
     }
     
-    //- rjf: no event -> dmn_ctrl_run for a new one
-    if(got_event == 0) ProfScope("no event -> dmn_ctrl_run for a new one")
+    //- rjf: no event -> run all servers until we get a new one
+    if(!got_event) ProfScope("no event -> run all servers until we get a new one")
     {
-      // rjf: prep spoof
+      //- rjf: prep spoof
       B32 do_spoof = (spoof != 0 && dmn_handle_match(run_ctrls->single_step_thread, dmn_handle_zero()));
       U64 size_of_spoof = 0;
       if(do_spoof) ProfScope("prep spoof")
@@ -3041,16 +3064,17 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
         d_process_read(spoof->process, r1u64(spoof->vaddr, spoof->vaddr+size_of_spoof), &spoof_old_ip_value);
       }
       
-      // rjf: set spoof
+      //- rjf: set spoof
       if(do_spoof) ProfScope("set spoof")
       {
         d_process_write(spoof->process, r1u64(spoof->vaddr, spoof->vaddr+size_of_spoof), &spoof->new_ip_value);
       }
       
-      // rjf: run for new events
+      //- rjf: run for new events
       ProfScope("run for new events")
       {
-        LogInfoNamedBlockF("dmn_ctrl_run")
+        //- rjf: log run controls
+        LogInfoNamedBlockF("run")
         {
           log_infof("single_step_thread:         [0x%I64x]\n", run_ctrls->single_step_thread);
           log_infof("ignore_previous_exception:  %i\n", !!run_ctrls->ignore_previous_exception);
@@ -3071,41 +3095,131 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
           }
         }
         
+        //- rjf: send run message to all *remote* servers - shouldn't matter much, but send starting at the
+        // current server position, so that we also fairly order the runs (assuming equal network latency)
+        U64 num_servers_running = 0;
+        {
+          B32 first = 1;
+          for(D_ServerState *ss = d_ctrl_state->next_dequeue_server;
+              ss != d_ctrl_state->next_dequeue_server || first;
+              (first = 0, ss = (ss->order_next == 0 ? d_ctrl_state->first_server : ss->order_next), d_ctrl_state->next_dequeue_server = ss))
+          {
+            if(ss->server_id != D_ServerID_LocalHost)
+            {
+              // rjf: unpack server
+              D_Handle server_handle = {.server_id = ss->server_id};
+              D_Entity *server = d_entity_from_handle(server_handle);
+              String8 server_addr = server->string;
+              SOCK_Endpoint server_endpoint = sock_endpoint_from_string(server_addr);
+              
+              // rjf: form run message
+              DS_Msg msg = {0};
+              {
+                msg.kind = DS_MsgKind_Run;
+                // TODO(rjf)
+              }
+              
+              // rjf: message -> packet
+              String8 packet = ds_packet_from_msg(scratch.arena, &msg);
+              
+              // rjf: send run message
+              if(!sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, server_endpoint, packet, now_time_us()+10000000))
+              {
+                // TODO(rjf)
+              }
+              else
+              {
+                num_servers_running += 1;
+              }
+            }
+          }
+        }
+        
+        //- rjf: run the local server synchronously - if we get a response from another server, it will
+        // halt the local one.
+        d_ctrl_state->ctrl_thread_dmn_run_block = 1;
         DMN_EventList events = dmn_ctrl_run(scratch.arena, ctrl_ctx, run_ctrls);
+        d_ctrl_state->ctrl_thread_dmn_run_block = 0;
+        
+        //- rjf: if we got significant events back (anything except a NotAttached), then we
+        // need to halt all connected remote servers.
+        if(events.first != 0 && (events.first->v.kind != DMN_EventKind_Error || events.first->v.error_kind != DMN_ErrorKind_NotAttached))
+        {
+          B32 first = 1;
+          for(D_ServerState *ss = d_ctrl_state->next_dequeue_server;
+              ss != d_ctrl_state->next_dequeue_server || first;
+              (first = 0, ss = (ss->order_next == 0 ? d_ctrl_state->first_server : ss->order_next), d_ctrl_state->next_dequeue_server = ss))
+          {
+            if(ss->server_id != D_ServerID_LocalHost)
+            {
+              // rjf: unpack server
+              D_Handle server_handle = {.server_id = ss->server_id};
+              D_Entity *server = d_entity_from_handle(server_handle);
+              String8 server_addr = server->string;
+              SOCK_Endpoint server_endpoint = sock_endpoint_from_string(server_addr);
+              
+              // rjf: form halt message / packet
+              DS_Msg msg = {DS_MsgKind_Halt};
+              String8 packet = ds_packet_from_msg(scratch.arena, &msg);
+              
+              // rjf: send
+              if(!sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, server_endpoint, packet, now_time_us()+10000000))
+              {
+                // TODO(rjf)
+              }
+            }
+          }
+        }
+        
+        //- rjf: copy locally returned events to local server queue
+        {
+          D_ServerID server_id = D_ServerID_LocalHost;
+          U64 slot_idx = server_id%d_ctrl_state->server_slots_count;
+          for(D_ServerState *ss = d_ctrl_state->server_slots[slot_idx].first; ss != 0; ss = ss->order_next)
+          {
+            if(ss->server_id == server_id)
+            {
+              for EachNode(src_n, DMN_EventNode, events.first)
+              {
+                DMN_EventNode *dst_n = ss->free_dmn_event_node;
+                if(dst_n != 0)
+                {
+                  SLLStackPop(ss->free_dmn_event_node);
+                }
+                else
+                {
+                  dst_n = push_array(ss->dmn_event_arena, DMN_EventNode, 1);
+                }
+                dmn_event_deep_copy(ss->dmn_event_arena, &dst_n->v, &src_n->v);
+                SLLQueuePush(ss->first_dmn_event_node, ss->last_dmn_event_node, dst_n);
+              }
+            }
+          }
+        }
+        
+        //- rjf: wait for all running servers to stop (either we're waiting on them for events, *or* we generated
+        // a halt, and we're waiting for that)
+        if(events.first != 0 && events.count == 1 && events.first->v.kind == DMN_EventKind_Error && events.first->v.error_kind == DMN_ErrorKind_NotAttached)
+        {
+          for(;num_servers_running > 0;)
+          {
+            // TODO(rjf)
+          }
+        }
+        
+        //- rjf: bump all debuggee state generations
         ins_atomic_u64_inc_eval(&d_ctrl_state->mem_gen);
         ins_atomic_u64_inc_eval(&d_ctrl_state->reg_gen);
         ins_atomic_u64_inc_eval(&d_ctrl_state->run_gen);
-        for(DMN_EventNode *src_n = events.first; src_n != 0; src_n = src_n->next)
-        {
-          DMN_EventNode *dst_n = d_ctrl_state->free_dmn_event_node;
-          if(dst_n != 0)
-          {
-            SLLStackPop(d_ctrl_state->free_dmn_event_node);
-          }
-          else
-          {
-            dst_n = push_array(d_ctrl_state->dmn_event_arena, DMN_EventNode, 1);
-          }
-          MemoryCopyStruct(&dst_n->v, &src_n->v);
-          dst_n->v.string = push_str8_copy(d_ctrl_state->dmn_event_arena, dst_n->v.string);
-          if(src_n->v.module_info != &dmn_module_info_nil)
-          {
-            dst_n->v.module_info = push_array(d_ctrl_state->dmn_event_arena, DMN_ModuleInfo, 1);
-            MemoryCopyStruct(dst_n->v.module_info, src_n->v.module_info);
-            dst_n->v.module_info->module_path = str8_copy(d_ctrl_state->dmn_event_arena, dst_n->v.module_info->module_path);
-            dst_n->v.module_info->debug_info_path = str8_copy(d_ctrl_state->dmn_event_arena, dst_n->v.module_info->debug_info_path);
-          }
-          SLLQueuePush(d_ctrl_state->first_dmn_event_node, d_ctrl_state->last_dmn_event_node, dst_n);
-        }
       }
       
-      // rjf: unset spoof
+      //- rjf: unset spoof
       if(do_spoof) ProfScope("unset spoof")
       {
         d_process_write(spoof->process, r1u64(spoof->vaddr, spoof->vaddr+size_of_spoof), &spoof_old_ip_value);
       }
       
-      // rjf: irrespective of what event came back, we should ALWAYS check the
+      //- rjf: irrespective of what event came back, we should ALWAYS check the
       // spoof's thread and see if it hit the spoof address, because we may have
       // simply been sent other debug events first
       if(spoof != 0)
@@ -3157,7 +3271,6 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt->arch      = event->arch;
       out_evt->entity_id = event->code;
       out_evt->os        = OperatingSystem_CURRENT; // TODO: operating system of the remote target machine
-      d_ctrl_state->process_counter += 1;
     }break;
     
     //- rjf: create thread
@@ -3350,7 +3463,6 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
       out_evt->msg_id     = msg->msg_id;
       out_evt->entity     = d_handle_from_dmn(D_ServerID_LocalHost, event->process);
       out_evt->u64_code   = event->code;
-      d_ctrl_state->process_counter -= 1;
     }break;
     
     //- rjf: exit thread
@@ -3469,21 +3581,6 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
     }break;
   }
   d_c2u_push_events(&evts);
-  
-  //- rjf: if this is the first process in a session, clear the debug directory
-  // cache state
-  if(d_ctrl_state->process_counter == 1 && event->kind == DMN_EventKind_CreateProcess)
-  {
-    arena_clear(d_ctrl_state->dbg_dir_arena);
-    d_ctrl_state->dbg_dir_root = push_array(d_ctrl_state->dbg_dir_arena, D_DbgDirNode, 1);
-  }
-  
-  //- rjf: out of queued up demon events -> clear event arena
-  if(d_ctrl_state->first_dmn_event_node == 0)
-  {
-    d_ctrl_state->free_dmn_event_node = 0;
-    arena_clear(d_ctrl_state->dmn_event_arena);
-  }
   
   scratch_end(scratch);
   ProfEnd();
@@ -3803,6 +3900,126 @@ d_ctrl_thread__eval_scope_end(D_EvalScope *scope)
   access_close(scope->access);
 }
 
+//- rjf: server connection lookups
+
+internal D_Handle
+d_ctrl_thread__handle_from_addr_or_connect(String8 addr)
+{
+  D_Handle handle = {0};
+  
+  //- rjf: try to find existing handle for this server address
+  B32 found = 0;
+  {
+    D_EntityArray servers = d_entity_array_from_kind(D_EntityKind_Server);
+    for EachIndex(idx, servers.count)
+    {
+      if(str8_match(servers.v[idx]->string, addr, 0))
+      {
+        handle = servers.v[idx]->handle;
+        found = 1;
+        break;
+      }
+    }
+  }
+  
+  //- rjf: if not found, connect to server & handshake
+  if(!found)
+  {
+    SOCK_Endpoint endpoint = sock_endpoint_from_string(addr);
+    
+    // rjf: handshake & get state
+    B32 good_handshake = 1;
+    {
+      Temp scratch = scratch_begin(0, 0);
+      
+      // rjf: send handshake packet
+      {
+        DS_Msg server_msg = {0};
+        {
+          server_msg.kind   = DS_MsgKind_Handshake;
+          server_msg.msg_id = 1;
+        }
+        String8 send_packet = ds_packet_from_msg(scratch.arena, &server_msg);
+        sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, endpoint, send_packet, max_U64);
+      }
+      
+      // rjf: receive state packet(s)
+      {
+        SOCK_Protocol recv_protocol = SOCK_Protocol_TCP;
+        SOCK_Endpoint recv_endpoint = {0};
+        String8 recv_packet = {0};
+        sock_recv(scratch.arena, d_ctrl_state->sock_session, &recv_protocol, &recv_endpoint, &recv_packet, now_time_us()+10000000);
+        if(recv_packet.size == 0)
+        {
+          good_handshake = 0;
+        }
+      }
+      
+      // rjf: report failure
+      if(!good_handshake)
+      {
+        log_user_errorf("Couldn't successfully connect to server at %S (%S).", sock_string_from_endpoint(scratch.arena, endpoint), addr);
+      }
+      scratch_end(scratch);
+    }
+    
+    // rjf: push connect event
+    D_ServerID server_id = 0;
+    if(good_handshake)
+    {
+      Temp scratch = scratch_begin(0, 0);
+      D_EventList evts = {0};
+      D_Event *evt = d_event_list_push(scratch.arena, &evts);
+      d_ctrl_state->server_id_gen += 1;
+      server_id = D_ServerID_LocalHost + d_ctrl_state->server_id_gen;
+      evt->kind = D_EventKind_ServerConnect;
+      evt->entity_id = server_id;
+      evt->string = addr;
+      d_c2u_push_events(&evts);
+      scratch_end(scratch);
+    }
+    
+    // rjf: set up server state
+    if(good_handshake)
+    {
+      D_ServerState *ss = d_ctrl_state->free_server;
+      if(ss != 0)
+      {
+        SLLStackPop_N(d_ctrl_state->free_server, order_next);
+      }
+      else
+      {
+        ss = push_array_no_zero(d_ctrl_state->arena, D_ServerState, 1);
+      }
+      MemoryZeroStruct(ss);
+      ss->server_id = server_id;
+      ss->dmn_event_arena = arena_alloc();
+      DLLPushBack_NP(d_ctrl_state->first_server, d_ctrl_state->last_server, ss, order_next, order_prev);
+      U64 slot_idx = server_id%d_ctrl_state->server_slots_count;
+      DLLPushBack_NP(d_ctrl_state->server_slots[slot_idx].first, d_ctrl_state->server_slots[slot_idx].last, ss, hash_next, hash_prev);
+    }
+    
+    // rjf: form handle
+    handle.server_id = server_id;
+  }
+  
+  return handle;
+}
+
+//- rjf: control system socket wakeup function
+
+internal void
+d_ctrl_sock_wakeup(void)
+{
+  // NOTE(rjf): if we receive something from a socket while in a run state
+  // (e.g. blocked locally on a dmn_ctrl_run), then we want to generate a
+  // halt, so that we can wake up and process the received packet.
+  if(d_ctrl_state->ctrl_thread_dmn_run_block)
+  {
+    dmn_halt(0, 0);
+  }
+}
+
 //- rjf: log flusher
 
 internal void
@@ -3827,56 +4044,7 @@ d_ctrl_thread__end_and_flush_log(void)
 internal void
 d_ctrl_thread__open_remote_server(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
 {
-  SOCK_Endpoint endpoint = sock_endpoint_from_string(msg->path);
-  
-  //- rjf: handshake & get state
-  B32 good_handshake = 1;
-  {
-    Temp scratch = scratch_begin(0, 0);
-    
-    // rjf: send handshake packet
-    {
-      DS_Msg server_msg = {0};
-      {
-        server_msg.kind   = DS_MsgKind_Handshake;
-        server_msg.msg_id = 1;
-      }
-      String8 send_packet = ds_packet_from_msg(scratch.arena, &server_msg);
-      sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, endpoint, send_packet, max_U64);
-    }
-    
-    // rjf: receive state packet(s)
-    {
-      SOCK_Protocol recv_protocol = SOCK_Protocol_TCP;
-      SOCK_Endpoint recv_endpoint = {0};
-      String8 recv_packet = {0};
-      sock_recv(scratch.arena, d_ctrl_state->sock_session, &recv_protocol, &recv_endpoint, &recv_packet, now_time_us()+10000000);
-      if(recv_packet.size == 0)
-      {
-        good_handshake = 0;
-      }
-    }
-    
-    // rjf: report failure
-    if(!good_handshake)
-    {
-      log_user_errorf("Couldn't successfully connect to server at %S (%S).", sock_string_from_endpoint(scratch.arena, endpoint), msg->path);
-    }
-    scratch_end(scratch);
-  }
-  
-  //- rjf: push connect event
-  {
-    Temp scratch = scratch_begin(0, 0);
-    D_EventList evts = {0};
-    D_Event *evt = d_event_list_push(scratch.arena, &evts);
-    d_ctrl_state->server_id_gen += 1;
-    evt->kind = D_EventKind_ServerConnect;
-    evt->entity_id = D_ServerID_LocalHost + d_ctrl_state->server_id_gen;
-    evt->string = msg->path;
-    d_c2u_push_events(&evts);
-    scratch_end(scratch);
-  }
+  d_ctrl_thread__handle_from_addr_or_connect(msg->address);
 }
 
 internal void
@@ -3897,52 +4065,69 @@ d_ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
 {
   Temp scratch = scratch_begin(0, 0);
   
-  //- rjf: produce full stdout/stderr/stdin paths
-  String8 stdout_path = path_absolute_dst_from_relative_dst_src(scratch.arena, msg->stdout_path, msg->path);
-  String8 stdin_path  = path_absolute_dst_from_relative_dst_src(scratch.arena, msg->stdin_path, msg->path);
-  String8 stderr_path = path_absolute_dst_from_relative_dst_src(scratch.arena, msg->stderr_path, msg->path);
+  //////////////////////////////
+  //- rjf: message -> launch parameters for debug servers
+  //
+  DS_LaunchParams launch_params =
+  {
+    .command_line       = msg->cmd_line_string_list,
+    .path               = msg->path,
+    .env                = msg->env_string_list,
+    .stdout_path        = msg->stdout_path,
+    .stdin_path         = msg->stdin_path,
+    .stderr_path        = msg->stderr_path,
+    .debug_subprocesses = msg->debug_subprocesses,
+    .inherit_env        = msg->env_inherit,
+  };
   
-  //- rjf: obtain stdout/stderr/stdin handles
-  File stdout_handle = {0};
-  File stderr_handle = {0};
-  File stdin_handle  = {0};
-  if(stdout_path.size != 0)
+  //////////////////////////////
+  //- rjf: remote? -> get server handle
+  //
+  D_Handle server = {.server_id = D_ServerID_LocalHost};
+  if(msg->address.size != 0)
   {
-    File f = file_open(AccessFlag_Write|AccessFlag_Read, stdout_path);
-    file_close(f);
-    stdout_handle = file_open(AccessFlag_Write|AccessFlag_Append|AccessFlag_ShareRead|AccessFlag_ShareWrite|AccessFlag_Inherited, msg->stdout_path);
-  }
-  if(stderr_path.size != 0)
-  {
-    File f = file_open(AccessFlag_Write|AccessFlag_Read, stderr_path);
-    file_close(f);
-    stderr_handle = file_open(AccessFlag_Write|AccessFlag_Append|AccessFlag_ShareRead|AccessFlag_ShareWrite|AccessFlag_Inherited, msg->stderr_path);
-  }
-  if(stdin_path.size != 0)
-  {
-    stdin_handle = file_open(AccessFlag_Read|AccessFlag_ShareRead|AccessFlag_ShareWrite|AccessFlag_Inherited, stdin_path);
+    server = d_ctrl_thread__handle_from_addr_or_connect(msg->address);
   }
   
-  //- rjf: launch
-  ProcessLaunchParams params = {0};
+  //////////////////////////////
+  //- rjf: remote? -> send message to launch, wait on new PID
+  //
+  U64 pid = 0;
+  if(msg->address.size != 0)
   {
-    params.cmd_line           = msg->cmd_line_string_list;
-    params.path               = msg->path;
-    params.env                = msg->env_string_list;
-    params.inherit_env        = msg->env_inherit;
-    params.debug_subprocesses = msg->debug_subprocesses;
-    params.stdout_file        = stdout_handle;
-    params.stderr_file        = stderr_handle;
-    params.stdin_file         = stdin_handle;
+    SOCK_Endpoint server_endpoint = sock_endpoint_from_string(msg->address);
+    DS_Msg server_msg = {DS_MsgKind_Launch, .launch_params = &launch_params};
+    String8 server_packet = ds_packet_from_msg(scratch.arena, &server_msg);
+    String8 server_response_packet = {0};
+    SOCK_Endpoint server_response_endpoint = {0};
+    if(!sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, server_endpoint, server_packet, now_time_us()+10000000))
+    {
+      log_user_errorf("Couldn't successfully send launch command to %S (%S).", sock_string_from_endpoint(scratch.arena, server_endpoint), msg->address);
+    }
+    else if(!sock_recv(scratch.arena, d_ctrl_state->sock_session, 0, &server_response_endpoint, &server_response_packet, now_time_us()+10000000))
+    {
+      log_user_errorf("Didn't receive launch command response from %S (%S) in time.", sock_string_from_endpoint(scratch.arena, server_endpoint), msg->address);
+    }
+    else
+    {
+      DS_Response response = ds_response_from_packet(scratch.arena, server_response_packet);
+      pid = response.pid;
+    }
   }
-  U32 id = dmn_ctrl_launch(ctrl_ctx, &params);
   
-  //- rjf: close stdout/stderr/stdin files
-  file_close(stdout_handle);
-  file_close(stderr_handle);
-  file_close(stdin_handle);
+  //////////////////////////////
+  //- rjf: local? -> launch locally
+  //
+  else
+  {
+    pid = ds_ctrl_launch(ctrl_ctx, &launch_params);
+  }
   
+  //////////////////////////////
   //- rjf: record (id -> entry points), and (id -> msg_id) so that we know custom entry points for this PID
+  //
+  // TODO(rjf): PID is not unique across machines. these should be under a server.
+  //
   D_EntityCtxRWStore *entity_ctx_rw_store = d_ctrl_state->ctrl_thread_entity_store;
   MutexScopeW(d_ctrl_state->ctrl_thread_entity_ctx_rw_mutex)
   {
@@ -3950,11 +4135,11 @@ d_ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
     {
       {
         String8 string = n->string;
-        D_Entity *entry = d_entity_alloc(entity_ctx_rw_store, entity_ctx_rw_store->ctx.root, D_EntityKind_EntryPoint, Arch_Null, d_handle_zero(), (U64)id);
+        D_Entity *entry = d_entity_alloc(entity_ctx_rw_store, entity_ctx_rw_store->ctx.root, D_EntityKind_EntryPoint, Arch_Null, d_handle_zero(), pid);
         d_entity_equip_string(entity_ctx_rw_store, entry, string);
       }
       {
-        D_Entity *entry = d_entity_alloc(entity_ctx_rw_store, entity_ctx_rw_store->ctx.root, D_EntityKind_LaunchMsgID, Arch_Null, d_handle_zero(), (U64)id);
+        D_Entity *entry = d_entity_alloc(entity_ctx_rw_store, entity_ctx_rw_store->ctx.root, D_EntityKind_LaunchMsgID, Arch_Null, d_handle_zero(), pid);
         entry->src_msg_id = msg->msg_id;
       }
     }
@@ -3969,35 +4154,50 @@ d_ctrl_thread__attach(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   ProfBeginFunction();
   Temp scratch = scratch_begin(0, 0);
   
-  //- rjf: attach
-  B32 attach_successful = dmn_ctrl_attach(ctrl_ctx, msg->entity_id);
-  
-  //- rjf: run to handshake
-  if(attach_successful)
+  //////////////////////////////
+  //- rjf: remote? -> send message to attach, wait on success
+  //
+  B32 attach_successful = 0;
+  if(msg->address.size != 0)
   {
-    DMN_Handle unfrozen_process = {0};
-    DMN_RunCtrls run_ctrls = {0};
-    run_ctrls.run_entities_are_unfrozen = 1;
-    run_ctrls.run_entities_are_processes = 1;
-    for(B32 done = 0; done == 0;)
+    // TODO(rjf)
+  }
+  
+  //////////////////////////////
+  //- rjf: local? -> attach locally
+  //
+  else
+  {
+    //- rjf: attach
+    attach_successful = dmn_ctrl_attach(ctrl_ctx, msg->entity_id);
+    
+    //- rjf: run to handshake
+    if(attach_successful)
     {
-      DMN_Event *event = d_ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
-      switch(event->kind)
+      DMN_Handle unfrozen_process = {0};
+      DMN_RunCtrls run_ctrls = {0};
+      run_ctrls.run_entities_are_unfrozen = 1;
+      run_ctrls.run_entities_are_processes = 1;
+      for(B32 done = 0; done == 0;)
       {
-        default:{}break;
-        case DMN_EventKind_CreateProcess:
+        DMN_Event *event = d_ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, &run_ctrls, 0);
+        switch(event->kind)
         {
-          unfrozen_process = event->process;
-          run_ctrls.run_entities = &unfrozen_process;
-          run_ctrls.run_entity_count = 1;
-        }break;
-        case DMN_EventKind_Halt:
-        case DMN_EventKind_Exception:
-        case DMN_EventKind_Error:
-        case DMN_EventKind_HandshakeComplete:
-        {
-          done = 1;
-        }break;
+          default:{}break;
+          case DMN_EventKind_CreateProcess:
+          {
+            unfrozen_process = event->process;
+            run_ctrls.run_entities = &unfrozen_process;
+            run_ctrls.run_entity_count = 1;
+          }break;
+          case DMN_EventKind_Halt:
+          case DMN_EventKind_Exception:
+          case DMN_EventKind_Error:
+          case DMN_EventKind_HandshakeComplete:
+          {
+            done = 1;
+          }break;
+        }
       }
     }
   }

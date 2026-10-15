@@ -60,6 +60,7 @@ typedef SOCK_WAKEUP_FUNCTION_DEF(SOCK_WakeupFunctionType);
 internal SOCK_Endpoint sock_endpoint_from_string_port(String8 address, U16 port);
 internal SOCK_Endpoint sock_endpoint_from_string(String8 address_and_port);
 internal String8 sock_string_from_endpoint(Arena *arena, SOCK_Endpoint endpoint);
+internal B32 sock_endpoint_match(SOCK_Endpoint a, SOCK_Endpoint b);
 
 ////////////////////////////////
 //~ rjf: @per_os_impl Top-Level Layer Calls

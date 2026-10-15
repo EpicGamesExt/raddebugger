@@ -72,11 +72,22 @@ DS_MsgKind;
 typedef U32 DS_MsgFlags;
 enum
 {
-  DS_MsgFlag_InheritEnv              = (1<<0),
-  DS_MsgFlag_DebugSubprocesses       = (1<<1),
-  DS_MsgFlag_IgnorePreviousException = (1<<2),
-  DS_MsgFlag_RunEntitiesAreUnfrozen  = (1<<3),
-  DS_MsgFlag_RunEntitiesAreProcesses = (1<<4),
+  DS_MsgFlag_IgnorePreviousException = (1<<0),
+  DS_MsgFlag_RunEntitiesAreUnfrozen  = (1<<1),
+  DS_MsgFlag_RunEntitiesAreProcesses = (1<<2),
+};
+
+typedef struct DS_LaunchParams DS_LaunchParams;
+struct DS_LaunchParams
+{
+  String8List command_line;
+  String8 path;
+  String8List env;
+  String8 stdout_path;
+  String8 stdin_path;
+  String8 stderr_path;
+  B32 debug_subprocesses;
+  B32 inherit_env;
 };
 
 typedef struct DS_Msg DS_Msg;
@@ -93,10 +104,8 @@ struct DS_Msg
   U64 pid;
   U64 code;
   
-  //- rjf: process launching parameters
-  String8List command_line;
-  String8 path;
-  String8List env;
+  //- rjf: process launching parameter extension
+  DS_LaunchParams *launch_params;
   
   //- rjf: running parameters
   DMN_TrapChunkList traps;
@@ -132,5 +141,14 @@ internal DS_Response ds_response_from_packet(Arena *arena, String8 data);
 internal String8 ds_packet_from_response(Arena *arena, DS_Response *response);
 internal DMN_EventList ds_dmn_events_from_packet(Arena *arena, String8 data);
 internal String8 ds_packet_from_dmn_events(Arena *arena, DMN_EventList evts);
+
+////////////////////////////////
+//~ rjf: Local Server Functions
+
+internal U64 ds_ctrl_launch(DMN_CtrlCtx *ctrl_ctx, DS_LaunchParams *params);
+internal B32 ds_ctrl_attach(DMN_CtrlCtx *ctrl_ctx, U32 pid);
+internal B32 ds_ctrl_kill(DMN_CtrlCtx *ctrl_ctx, DMN_Handle process, U32 exit_code);
+internal B32 ds_ctrl_detach(DMN_CtrlCtx *ctrl_ctx, DMN_Handle process);
+internal DMN_EventList ds_ctrl_run(Arena *arena, DMN_CtrlCtx *ctrl_ctx, DMN_RunCtrls *ctrls);
 
 #endif // DBG_SERVER_H

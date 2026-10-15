@@ -104,7 +104,7 @@ d_init(void)
     Arena *arena = arena_alloc();
     d_ctrl_state = push_array(arena, D_CtrlState, 1);
     d_ctrl_state->arena = arena;
-    d_ctrl_state->sock_session = sock_session_open(0, 0);
+    d_ctrl_state->sock_session = sock_session_open(0, d_ctrl_sock_wakeup);
     for EachEnumVal(Arch, arch)
     {
       ARCH_Info *arch_info = arch_info_from_arch(arch);
@@ -145,9 +145,21 @@ d_init(void)
     d_ctrl_state->ctrl_thread_entity_store = d_entity_ctx_rw_store_alloc();
     d_ctrl_state->ctrl_thread_eval_cache = e_cache_alloc();
     d_ctrl_state->ctrl_thread_msg_process_arena = arena_alloc();
+    d_ctrl_state->server_slots_count = 16;
+    d_ctrl_state->server_slots = push_array(arena, D_ServerSlot, d_ctrl_state->server_slots_count);
+    {
+      D_ServerState *ss = push_array(arena, D_ServerState, 1);
+      ss->server_id = D_ServerID_LocalHost;
+      ss->dmn_event_arena = arena_alloc();
+      U64 slot_idx = ss->server_id%d_ctrl_state->server_slots_count;
+      DLLPushBack_NP(d_ctrl_state->first_server, d_ctrl_state->last_server, ss, order_next, order_prev);
+      DLLPushBack_NP(d_ctrl_state->server_slots[slot_idx].first, d_ctrl_state->server_slots[slot_idx].last, ss, hash_next, hash_prev);
+      d_ctrl_state->next_dequeue_server = ss;
+    }
+#if 0
     d_ctrl_state->dmn_event_arena = arena_alloc();
+#endif
     d_ctrl_state->user_entry_point_arena = arena_alloc();
-    d_ctrl_state->dbg_dir_arena = arena_alloc();
     for(D_ExceptionCodeKind k = (D_ExceptionCodeKind)0; k < D_ExceptionCodeKind_COUNT; k = (D_ExceptionCodeKind)(k+1))
     {
       if(d_exception_code_kind_default_enable_table[k])

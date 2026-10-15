@@ -197,7 +197,9 @@ struct D_Msg
   B32 env_inherit;
   B32 debug_subprocesses;
   B32 auto_download_debug_info;
+  B32 deploy;
   U64 exception_code_filters[(D_ExceptionCodeKind_COUNT+63)/64];
+  String8 address;
   String8 path;
   String8List entry_points;
   String8List cmd_line_string_list;

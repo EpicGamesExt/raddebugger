@@ -251,8 +251,10 @@ struct D_Target
   String8 stdout_path;
   String8 stderr_path;
   String8 stdin_path;
+  String8 remote_address;
   D_MsgID msg_id;
   B32 debug_subprocesses;
+  B32 deploy;
   String8List env;
 };
 

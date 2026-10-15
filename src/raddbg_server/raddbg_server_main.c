@@ -143,34 +143,27 @@ dmn_thread__entry_point(void *p)
         
         //- rjf: launching
         case DS_MsgKind_Launch:
+        if(msg.launch_params != 0)
         {
-          ProcessLaunchParams params = {0};
-          {
-            params.cmd_line           = msg.command_line;
-            params.path               = msg.path;
-            params.env                = msg.env;
-            params.inherit_env        = !!(msg.flags & DS_MsgFlag_InheritEnv);
-            params.debug_subprocesses = !!(msg.flags & DS_MsgFlag_DebugSubprocesses);
-          }
-          response.pid = dmn_ctrl_launch(ctrl_ctx, &params);
+          response.pid = ds_ctrl_launch(ctrl_ctx, msg.launch_params);
         }break;
         
         //- rjf: attaching
         case DS_MsgKind_Attach:
         {
-          response.good = dmn_ctrl_attach(ctrl_ctx, msg.pid);
+          response.good = ds_ctrl_attach(ctrl_ctx, msg.pid);
         }break;
         
         //- rjf: killing
         case DS_MsgKind_Kill:
         {
-          response.good = dmn_ctrl_kill(ctrl_ctx, msg.entity, (U32)msg.code);
+          response.good = ds_ctrl_kill(ctrl_ctx, msg.entity, (U32)msg.code);
         }break;
         
         //- rjf: detaching
         case DS_MsgKind_Detach:
         {
-          response.good = dmn_ctrl_detach(ctrl_ctx, msg.entity);
+          response.good = ds_ctrl_detach(ctrl_ctx, msg.entity);
         }break;
         
         //- rjf: running ops
@@ -189,7 +182,7 @@ dmn_thread__entry_point(void *p)
             ctrls.run_entities_are_processes = !!(msg.flags & DS_MsgFlag_RunEntitiesAreProcesses);
           };
           response.good = 1;
-          events = dmn_ctrl_run(scratch.arena, ctrl_ctx, &ctrls);
+          events = ds_ctrl_run(scratch.arena, ctrl_ctx, &ctrls);
         }break;
       }
       
@@ -296,11 +289,16 @@ entry_point(CmdLine *cmd_line)
         fprintf(stderr, " %.*s", str8_varg(n->string));
       }
       fprintf(stderr, "\n");
-      DS_Msg msg =
+      DS_LaunchParams launch_params =
       {
-        .kind         = DS_MsgKind_Launch,
         .command_line = t->cmd_line,
         .path         = current_path,
+        .inherit_env  = 1,
+      };
+      DS_Msg msg =
+      {
+        .kind          = DS_MsgKind_Launch,
+        .launch_params = &launch_params,
       };
       String8 packet = ds_packet_from_msg(scratch.arena, &msg);
       RWMutexScope(rds_state->c2d_rw_mutex, 1)
@@ -381,7 +379,7 @@ entry_point(CmdLine *cmd_line)
     if(header_is_good)
     {
       String8 msg_raw = str8_skip(data, sizeof(header));
-      str8_deserial_read_struct(msg_raw, 2, &peek_kind);
+      str8_deserial_read_struct(msg_raw, 0, &peek_kind);
       if(peek_kind < DS_MsgKind_Launch || DS_MsgKind_SingleStep < peek_kind)
       {
         DS_Msg msg = ds_msg_from_packet(scratch.arena, data);

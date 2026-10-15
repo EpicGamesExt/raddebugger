@@ -1774,6 +1774,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               String8 stdout_path             = str8_skip_chop_whitespace(target->stdout_path);
               String8 stderr_path             = str8_skip_chop_whitespace(target->stderr_path);
               String8 stdin_path              = str8_skip_chop_whitespace(target->stdin_path);
+              String8 remote_address          = str8_skip_chop_whitespace(target->remote_address);
               String8List env                 = target->env;
               if(working_directory.size == 0)
               {
@@ -1813,12 +1814,14 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 D_Msg *msg = d_msg_list_push(scratch.arena, &ctrl_msgs);
                 msg->msg_id = target->msg_id;
                 msg->kind = D_MsgKind_Launch;
+                msg->address = str8_copy(scratch.arena, remote_address);
                 msg->path = str8_copy(scratch.arena, working_directory);
                 msg->cmd_line_string_list = str8_list_copy(scratch.arena, &cmdln_strings);
                 msg->stdout_path = str8_copy(scratch.arena, stdout_path);
                 msg->stderr_path = str8_copy(scratch.arena, stderr_path);
                 msg->stdin_path = str8_copy(scratch.arena, stdin_path);
                 msg->debug_subprocesses = target->debug_subprocesses;
+                msg->deploy = target->deploy;
                 msg->env_inherit = 1;
                 MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
                 msg->auto_download_debug_info = auto_download_debug_info;
@@ -2197,7 +2200,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         {
           D_Msg *msg = d_msg_list_push(scratch.arena, &ctrl_msgs);
           msg->kind      = D_MsgKind_OpenRemoteServer;
-          msg->path      = str8_copy(scratch.arena, params->string);
+          msg->address   = str8_copy(scratch.arena, params->string);
           MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
           msg->auto_download_debug_info = auto_download_debug_info;
         }break;

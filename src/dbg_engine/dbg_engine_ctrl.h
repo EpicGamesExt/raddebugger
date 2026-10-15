@@ -314,6 +314,45 @@ struct D_ModuleReqCacheNode
 typedef D_WAKEUP_FUNCTION_DEF(D_WakeupFunctionType);
 
 ////////////////////////////////
+//~ rjf: Server State Types
+//
+// Each call to `dmn_ctrl_run` can generate a sequence of debug events. We handle
+// these one at a time, and so after a `dmn_ctrl_run`, we need to store all returned
+// events in a queue, and process the full queue before doing another `dmn_ctrl_run`.
+//
+// Initially, there was just one of these queues, but on moving to multi-server
+// debugging, we will have a sequence of events generated per-server. Then, we
+// will just want to round-robin drain the queues before we dispatch another run
+// to all servers.
+//
+
+typedef struct D_ServerState D_ServerState;
+struct D_ServerState
+{
+  // rjf: links
+  D_ServerState *hash_next;
+  D_ServerState *hash_prev;
+  D_ServerState *order_next;
+  D_ServerState *order_prev;
+  
+  // rjf: server identifier
+  D_ServerID server_id;
+  
+  // rjf: demon event queue
+  Arena *dmn_event_arena;
+  DMN_EventNode *first_dmn_event_node;
+  DMN_EventNode *last_dmn_event_node;
+  DMN_EventNode *free_dmn_event_node;
+};
+
+typedef struct D_ServerSlot D_ServerSlot;
+struct D_ServerSlot
+{
+  D_ServerState *first;
+  D_ServerState *last;
+};
+
+////////////////////////////////
 //~ rjf: Main State Types
 
 typedef struct D_CtrlState D_CtrlState;
@@ -326,7 +365,7 @@ struct D_CtrlState
   // rjf: name -> register hash tables for eval
   E_String2NumMap arch_string2reg_tables[Arch_COUNT];
   
-  // rjf: caches
+  // rjf: shared caches
   D_ThreadRegCache thread_reg_cache;
   D_ModuleInfoCache module_info_cache;
   D_DumpCache dump_cache;
@@ -363,18 +402,24 @@ struct D_CtrlState
   D_EntityCtxRWStore *ctrl_thread_entity_store;
   E_Cache *ctrl_thread_eval_cache;
   Arena *ctrl_thread_msg_process_arena;
+  U64 server_slots_count;
+  D_ServerSlot *server_slots;
+  D_ServerState *first_server;
+  D_ServerState *last_server;
+  D_ServerState *free_server;
+  D_ServerState *next_dequeue_server;
+  B32 ctrl_thread_dmn_run_block;
+#if 0
   Arena *dmn_event_arena;
   DMN_EventNode *first_dmn_event_node;
   DMN_EventNode *last_dmn_event_node;
   DMN_EventNode *free_dmn_event_node;
+#endif
   Arena *user_entry_point_arena;
   String8List user_entry_points;
   U64 exception_code_filters[(D_ExceptionCodeKind_COUNT+63)/64];
   B32 auto_download_debug_info;
-  U64 process_counter;
   D_ServerID server_id_gen;
-  Arena *dbg_dir_arena;
-  D_DbgDirNode *dbg_dir_root;
   U64 module_req_cache_slots_count;
   D_ModuleReqCacheNode **module_req_cache_slots;
   String8List msg_user_bp_touched_files;
@@ -621,6 +666,12 @@ internal B32 d_ctrl_eval_space_read(E_Space space, void *out, E_SpaceRangeInfo *
 //- rjf: control thread eval scopes
 internal D_EvalScope *d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Entity *thread);
 internal void d_ctrl_thread__eval_scope_end(D_EvalScope *scope);
+
+//- rjf: server connection lookups
+internal D_Handle d_ctrl_thread__handle_from_addr_or_connect(String8 addr);
+
+//- rjf: control system socket wakeup function
+internal void d_ctrl_sock_wakeup(void);
 
 //- rjf: log flusher
 internal void d_ctrl_thread__end_and_flush_log(void);

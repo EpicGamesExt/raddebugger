@@ -263,21 +263,27 @@ internal D_Target
 rd_target_from_cfg(Arena *arena, CFG_Node *cfg)
 {
   D_Target target = {0};
-  target.exe                        = cfg_node_child_from_string(cfg, str8_lit("executable"))->first->string;
-  target.args                       = cfg_node_child_from_string(cfg, str8_lit("arguments"))->first->string;
-  target.working_directory          = cfg_node_child_from_string(cfg, str8_lit("working_directory"))->first->string;
-  target.custom_entry_point_name    = cfg_node_child_from_string(cfg, str8_lit("entry_point"))->first->string;
-  target.stdout_path                = cfg_node_child_from_string(cfg, str8_lit("stdout_path"))->first->string;
-  target.stderr_path                = cfg_node_child_from_string(cfg, str8_lit("stderr_path"))->first->string;
-  target.stdin_path                 = cfg_node_child_from_string(cfg, str8_lit("stdin_path"))->first->string;
+  target.exe                        = cfg_node_child_from_string(cfg, s("executable"))->first->string;
+  target.args                       = cfg_node_child_from_string(cfg, s("arguments"))->first->string;
+  target.working_directory          = cfg_node_child_from_string(cfg, s("working_directory"))->first->string;
+  target.custom_entry_point_name    = cfg_node_child_from_string(cfg, s("entry_point"))->first->string;
+  target.stdout_path                = cfg_node_child_from_string(cfg, s("stdout_path"))->first->string;
+  target.stderr_path                = cfg_node_child_from_string(cfg, s("stderr_path"))->first->string;
+  target.stdin_path                 = cfg_node_child_from_string(cfg, s("stdin_path"))->first->string;
   target.msg_id                     = cfg->id;
-  target.debug_subprocesses         = !!e_value_from_string(cfg_node_child_from_string(cfg, str8_lit("debug_subprocesses"))->first->string).u64;
+  target.debug_subprocesses         = !!e_value_from_string(cfg_node_child_from_string(cfg, s("debug_subprocesses"))->first->string).u64;
   for(CFG_Node *child = cfg->first; child != &cfg_nil_node; child = child->next)
   {
-    if(str8_match(child->string, str8_lit("environment"), 0))
+    if(str8_match(child->string, s("environment"), 0))
     {
       str8_list_push(arena, &target.env, child->first->string);
     }
+  }
+  B32 is_remote = !!e_value_from_string(cfg_node_child_from_string(cfg, s("remote"))->first->string).u64;
+  if(is_remote)
+  {
+    target.remote_address = cfg_node_child_from_string(cfg, s("address"))->first->string;
+    target.deploy         = !!e_value_from_string(cfg_node_child_from_string(cfg, s("deploy"))->first->string).u64;\
   }
   return target;
 }
@@ -14805,10 +14811,11 @@ rd_frame(void)
           cycle:;
           {
             CFG_PanelTree panel_tree = cfg_panel_tree_from_cfg(scratch.arena, cfg_node_from_id(rd_regs()->window));
+            CFG_PanelNode *panel_nav_root = (panel_tree.zoom_root != &cfg_nil_panel_node ? panel_tree.zoom_root : panel_tree.root);
             CFG_PanelNode *next_focused = &cfg_nil_panel_node;
             for(CFG_PanelNode *p = panel_tree.focused;
                 p != &cfg_nil_panel_node;
-                p = cfg_panel_node_rec__depth_first(panel_tree.root, p, panel_sib_off, panel_child_off).next)
+                p = cfg_panel_node_rec__depth_first(panel_nav_root, p, panel_sib_off, panel_child_off).next)
             {
               if(p != panel_tree.focused && p->first == &cfg_nil_panel_node)
               {
@@ -14818,9 +14825,9 @@ rd_frame(void)
             }
             if(next_focused == &cfg_nil_panel_node)
             {
-              for(CFG_PanelNode *p = panel_tree.root;
+              for(CFG_PanelNode *p = panel_nav_root;
                   p != &cfg_nil_panel_node;
-                  p = cfg_panel_node_rec__depth_first(panel_tree.root, p, panel_sib_off, panel_child_off).next)
+                  p = cfg_panel_node_rec__depth_first(panel_nav_root, p, panel_sib_off, panel_child_off).next)
               {
                 if(p != panel_tree.focused && p->first == &cfg_nil_panel_node)
                 {
@@ -14885,20 +14892,21 @@ rd_frame(void)
           {
             CFG_Node *window = cfg_node_from_id(rd_regs()->window);
             CFG_PanelTree panel_tree = cfg_panel_tree_from_cfg(scratch.arena, window);
+            CFG_PanelNode *panel_nav_root = (panel_tree.zoom_root != &cfg_nil_panel_node ? panel_tree.zoom_root : panel_tree.root);
             CFG_PanelNode *src_panel = panel_tree.focused;
-            Rng2F32 src_panel_rect = cfg_target_rect_from_panel_node(r2f32(v2f32(0, 0), v2f32(1000, 1000)), panel_tree.root, src_panel);
+            Rng2F32 src_panel_rect = cfg_target_rect_from_panel_node(r2f32(v2f32(0, 0), v2f32(1000, 1000)), panel_nav_root, src_panel);
             Vec2F32 src_panel_center = center_2f32(src_panel_rect);
             Vec2F32 src_panel_half_dim = scale_2f32(dim_2f32(src_panel_rect), 0.5f);
             Vec2F32 travel_dim = add_2f32(src_panel_half_dim, v2f32(10.f, 10.f));
             Vec2F32 travel_dst = add_2f32(src_panel_center, mul_2f32(travel_dim, v2f32((F32)panel_change_dir.x, (F32)panel_change_dir.y)));
             CFG_PanelNode *dst_root = &cfg_nil_panel_node;
-            for(CFG_PanelNode *p = panel_tree.root; p != &cfg_nil_panel_node; p = cfg_panel_node_rec__depth_first_pre(panel_tree.root, p).next)
+            for(CFG_PanelNode *p = panel_nav_root; p != &cfg_nil_panel_node; p = cfg_panel_node_rec__depth_first_pre(panel_nav_root, p).next)
             {
               if(p == src_panel || p->first != &cfg_nil_panel_node)
               {
                 continue;
               }
-              Rng2F32 p_rect = cfg_target_rect_from_panel_node(r2f32(v2f32(0, 0), v2f32(1000, 1000)), panel_tree.root, p);
+              Rng2F32 p_rect = cfg_target_rect_from_panel_node(r2f32(v2f32(0, 0), v2f32(1000, 1000)), panel_nav_root, p);
               if(contains_2f32(p_rect, travel_dst))
               {
                 dst_root = p;

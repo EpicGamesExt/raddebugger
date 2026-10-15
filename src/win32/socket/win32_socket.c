@@ -488,7 +488,10 @@ sock_recv(Arena *arena, SOCK_Session session, SOCK_Protocol *protocol_out, SOCK_
       if(guarded_ring_read_or_wait(&guard, sizeof(header), header, endt_us))
       {
         U64 size_cap = s->s2u_ring->ring->size - sizeof(header);
-        protocol_out[0] = (SOCK_Protocol)header[0];
+        if(protocol_out != 0)
+        {
+          protocol_out[0] = (SOCK_Protocol)header[0];
+        }
         endpoint_out->port = (U16)header[1];
         endpoint_out->address_u64[0] = header[2];
         endpoint_out->address_u64[1] = header[3];
