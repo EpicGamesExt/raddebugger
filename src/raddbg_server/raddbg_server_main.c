@@ -48,7 +48,7 @@ struct RDS_Msg
 {
   RDS_Msg *next;
   SOCK_Endpoint endpoint;
-  String8 msg_raw;
+  String8 packet;
 };
 
 typedef struct RDS_Client RDS_Client;
@@ -87,9 +87,6 @@ struct RDS_State
   Arena *c2d_arena;
   RDS_Msg *c2d_msg_first;
   RDS_Msg *c2d_msg_last;
-  
-  //- rjf: demon run state
-  B32 demon_is_running;
 };
 
 global RDS_State *rds_state = 0;
@@ -120,7 +117,7 @@ dmn_thread__entry_point(void *p)
           RDS_Msg *dst = push_array(scratch.arena, RDS_Msg, 1);
           SLLQueuePush(msg_first, msg_last, dst);
           dst->endpoint = src->endpoint;
-          dst->msg_raw = str8_copy(scratch.arena, src->msg_raw);
+          dst->packet = str8_copy(scratch.arena, src->packet);
         }
         arena_clear(rds_state->c2d_arena);
         rds_state->c2d_msg_first = rds_state->c2d_msg_last = 0;
@@ -135,7 +132,7 @@ dmn_thread__entry_point(void *p)
     for(RDS_Msg *msg_n = msg_first; msg_n != 0; msg_n = msg_n->next)
     {
       //- rjf: unpack message
-      DS_Msg msg = ds_msg_from_packet(scratch.arena, msg_n->msg_raw);
+      DS_Msg msg = ds_msg_from_packet(scratch.arena, msg_n->packet);
       
       //- rjf: do action, get response
       DS_Response response = {0};
@@ -197,6 +194,7 @@ dmn_thread__entry_point(void *p)
       }
       
       //- rjf: pack response & send back to the originating endpoint of the message
+      if(msg_n->endpoint.port != 0)
       {
         String8 data = ds_packet_from_response(scratch.arena, &response);
         sock_send(rds_state->sock_session, SOCK_Protocol_TCP, msg_n->endpoint, data, max_U64);
@@ -205,7 +203,7 @@ dmn_thread__entry_point(void *p)
       //- rjf: pack events & send to all connected client 
       if(events.count != 0)
       {
-        String8 data = ds_serialized_from_dmn_events(scratch.arena, events);
+        String8 data = ds_packet_from_dmn_events(scratch.arena, events);
         for(RDS_Client *c = rds_state->first_client; c != 0; c = c->order_next)
         {
           sock_send(rds_state->sock_session, SOCK_Protocol_TCP, c->endpoint, data, max_U64);
@@ -223,6 +221,8 @@ dmn_thread__entry_point(void *p)
 internal void
 entry_point(CmdLine *cmd_line)
 {
+  Temp scratch = scratch_begin(0, 0);
+  
   //- rjf: get port argument
   U64 port = 7273;
   {
@@ -234,6 +234,42 @@ entry_point(CmdLine *cmd_line)
     }
   }
   
+  //- rjf: get launch targets from command line
+  typedef struct Target Target;
+  struct Target
+  {
+    Target *next;
+    String8List cmd_line;
+  };
+  Target *first_target = 0;
+  Target *last_target = 0;
+  {
+    B32 past_first_non_flag = 0;
+    for(U64 idx = 1; idx < cmd_line->argc; idx += 1)
+    {
+      String8 arg = str8_cstring(cmd_line->argv[idx]);
+      B32 is_flag = (str8_match(str8_prefix(arg, 1), s("-"), 0) ||
+                     str8_match(str8_prefix(arg, 1), s("--"), 0) ||
+                     str8_match(str8_prefix(arg, 1), s("/"), 0));
+      past_first_non_flag = (past_first_non_flag || !is_flag);
+      if(past_first_non_flag)
+      {
+        // rjf: create new target after ;s, or if we don't have one
+        if(str8_match(arg, s(";"), 0) || first_target == 0)
+        {
+          Target *t = push_array(scratch.arena, Target, 1);
+          SLLQueuePush(first_target, last_target, t);
+        }
+        
+        // rjf: push this string to the most recently added target
+        if(last_target != 0)
+        {
+          str8_list_push(scratch.arena, &last_target->cmd_line, arg);
+        }
+      }
+    }
+  }
+  
   //- rjf: set up shared state
   Arena *arena = arena_alloc();
   rds_state = push_array(arena, RDS_State, 1);
@@ -242,9 +278,40 @@ entry_point(CmdLine *cmd_line)
   rds_state->c2d_rw_mutex = rw_mutex_alloc();
   rds_state->c2d_cv = cond_var_alloc();
   rds_state->c2d_arena = arena_alloc();
+  rds_state->client_slots_count = 64;
+  rds_state->client_slots = push_array(arena, RDS_ClientSlot, rds_state->client_slots_count);
   
   //- rjf: launch demon thread
   thread_launch(dmn_thread__entry_point, 0);
+  
+  //- rjf: do initial launch of all command-line-specified targets
+  {
+    String8 current_path = get_current_path(scratch.arena);
+    for EachNode(t, Target, first_target)
+    {
+      fprintf(stderr, "[launching command line target]\n");
+      fprintf(stderr, " ");
+      for EachNode(n, String8Node, t->cmd_line.first)
+      {
+        fprintf(stderr, " %.*s", str8_varg(n->string));
+      }
+      fprintf(stderr, "\n");
+      DS_Msg msg =
+      {
+        .kind         = DS_MsgKind_Launch,
+        .command_line = t->cmd_line,
+        .path         = current_path,
+      };
+      String8 packet = ds_packet_from_msg(scratch.arena, &msg);
+      RWMutexScope(rds_state->c2d_rw_mutex, 1)
+      {
+        RDS_Msg *msg = push_array(rds_state->c2d_arena, RDS_Msg, 1);
+        msg->packet = str8_copy(rds_state->c2d_arena, packet);
+        SLLQueuePush(rds_state->c2d_msg_first, rds_state->c2d_msg_last, msg);
+      }
+      cond_var_broadcast(rds_state->c2d_cv);
+    }
+  }
   
   //- rjf: loop: wait for messages, issue commands to demon
   for(;;)
@@ -318,14 +385,34 @@ entry_point(CmdLine *cmd_line)
       if(peek_kind < DS_MsgKind_Launch || DS_MsgKind_SingleStep < peek_kind)
       {
         DS_Msg msg = ds_msg_from_packet(scratch.arena, data);
+        
+        // rjf: form base response info
         DS_Response response = {0};
+        response.msg_id = msg.msg_id;
+        response.good = 1;
+        
+        // rjf: do message specifics
         switch(msg.kind)
         {
           default:{}break;
+          
+          //- rjf: response
+          case DS_MsgKind_Handshake:
+          {
+            // TODO(rjf): send initial state
+          }break;
+          
+          //- rjf: halting
           case DS_MsgKind_Halt:
           {
             dmn_halt(0, 0);
           }break;
+        }
+        
+        // rjf: send response
+        {
+          String8 packet = ds_packet_from_response(scratch.arena, &response);
+          sock_send(rds_state->sock_session, protocol, endpoint, packet, now_time_us()+10000000);
         }
       }
     }
@@ -335,14 +422,16 @@ entry_point(CmdLine *cmd_line)
     {
       RWMutexScope(rds_state->c2d_rw_mutex, 1)
       {
-        String8 msg_raw = str8_skip(data, sizeof(header));
         RDS_Msg *msg = push_array(rds_state->c2d_arena, RDS_Msg, 1);
         msg->endpoint = endpoint;
-        msg->msg_raw = str8_copy(rds_state->c2d_arena, msg_raw);
+        msg->packet = str8_copy(rds_state->c2d_arena, data);
+        SLLQueuePush(rds_state->c2d_msg_first, rds_state->c2d_msg_last, msg);
       }
       cond_var_broadcast(rds_state->c2d_cv);
     }
     
     scratch_end(scratch);
   }
+  
+  scratch_end(scratch);
 }

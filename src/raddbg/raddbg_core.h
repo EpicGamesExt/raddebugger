@@ -324,6 +324,9 @@ struct RD_WindowState
   CFG_ID query_last_bottom_view_id;
   RD_QueryView *query_top;
   
+  // rjf: panel 'hoisting' state - bring-to-front
+  CFG_ID panel_hoist_cfg_id;
+  
   // rjf: hover eval state
   B32 hover_eval_focused;
   Arena *hover_eval_arena;
@@ -457,6 +460,7 @@ struct RD_State
   F32 catchall_animation_rate;
   F32 menu_animation_rate;
   F32 menu_animation_rate__slow;
+  F32 menu_animation_rate__very_slow;
   F32 entity_alive_animation_rate;
   F32 rich_hover_animation_rate;
   F32 scrolling_animation_rate;

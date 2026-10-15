@@ -33,6 +33,7 @@ struct CFG_PanelTree
 {
   CFG_PanelNode *root;
   CFG_PanelNode *focused;
+  CFG_PanelNode *zoom_root;
 };
 
 typedef struct CFG_PanelNodeRec CFG_PanelNodeRec;

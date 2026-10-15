@@ -7,7 +7,7 @@ cfg_window_from_cfg(CFG_Node *cfg)
   CFG_Node *result = &cfg_nil_node;
   for(CFG_Node *c = cfg; c != &cfg_nil_node; c = c->parent)
   {
-    if(c->parent->parent == cfg_node_root() && str8_match(c->string, str8_lit("window"), 0))
+    if(c->parent->parent == cfg_node_root() && str8_match(c->string, s("window"), 0))
     {
       result = c;
       break;
@@ -21,56 +21,69 @@ cfg_panel_tree_from_cfg(Arena *arena, CFG_Node *cfg_root)
 {
   Temp scratch = scratch_begin(&arena, 1);
   CFG_Node *wcfg = cfg_window_from_cfg(cfg_root);
-  CFG_Node *src_root = cfg_node_child_from_string(wcfg, str8_lit("panels"));
+  CFG_Node *src_root = cfg_node_child_from_string(wcfg, s("panels"));
   CFG_PanelNode *dst_root = &cfg_nil_panel_node;
   CFG_PanelNode *dst_focused = &cfg_nil_panel_node;
+  CFG_PanelNode *dst_zoom_root = &cfg_nil_panel_node;
   {
-    Axis2 active_split_axis = cfg_node_child_from_string(wcfg, str8_lit("split_x")) != &cfg_nil_node ? Axis2_X : Axis2_Y;
+    Axis2 active_split_axis = cfg_node_child_from_string(wcfg, s("split_x")) != &cfg_nil_node ? Axis2_X : Axis2_Y;
     CFG_NodeRec rec = {0};
     CFG_PanelNode *dst_active_parent = &cfg_nil_panel_node;
     for(CFG_Node *src = src_root; src != &cfg_nil_node; src = rec.next)
     {
-      // rjf: build a panel node
-      CFG_PanelNode *dst = push_array(arena, CFG_PanelNode, 1);
-      MemoryCopyStruct(dst, &cfg_nil_panel_node);
-      dst->parent = dst_active_parent;
-      if(dst_active_parent != &cfg_nil_panel_node)
-      {
-        DLLPushBack_NPZ(&cfg_nil_panel_node, dst_active_parent->first, dst_active_parent->last, dst, next, prev);
-        dst_active_parent->child_count += 1;
-      }
-      if(dst_root == &cfg_nil_panel_node)
-      {
-        dst_root = dst;
-      }
+      // rjf: unpack this config string
+      MD_TokenizeResult tokenize = md_tokenize_from_text(scratch.arena, src->string);
       
-      // rjf: extract cfg info
+      // rjf: build a panel node if this is a child panel
+      CFG_PanelNode *dst = &cfg_nil_panel_node;
       B32 panel_has_children = 0;
-      dst->cfg = src;
-      dst->pct_of_parent = (src == src_root ? 1.f : (F32)f64_from_str8(src->string));
-      dst->tab_side = (cfg_node_child_from_string(src, str8_lit("tabs_on_bottom")) != &cfg_nil_node ? Side_Max : Side_Min);
-      dst->split_axis = active_split_axis;
-      for(CFG_Node *src_child = src->first; src_child != &cfg_nil_node; src_child = src_child->next)
+      if(src == src_root || (tokenize.tokens.count == 1 && tokenize.tokens.v[0].flags & MD_TokenFlag_Numeric))
       {
-        MD_TokenizeResult tokenize = md_tokenize_from_text(scratch.arena, src_child->string);
-        if(tokenize.tokens.count == 1 && tokenize.tokens.v[0].flags & MD_TokenFlag_Numeric)
+        // rjf: allocate
+        dst = push_array(arena, CFG_PanelNode, 1);
+        MemoryCopyStruct(dst, &cfg_nil_panel_node);
+        dst->parent = dst_active_parent;
+        if(dst_active_parent != &cfg_nil_panel_node)
         {
-          panel_has_children = 1;
+          DLLPushBack_NPZ(&cfg_nil_panel_node, dst_active_parent->first, dst_active_parent->last, dst, next, prev);
+          dst_active_parent->child_count += 1;
         }
-        else if(str8_match(src_child->string, str8_lit("tabs_on_bottom"), 0))
+        if(dst_root == &cfg_nil_panel_node)
         {
-          // NOTE(rjf): skip - this is a panel option.
+          dst_root = dst;
         }
-        else if(str8_match(src_child->string, str8_lit("selected"), 0))
+        
+        // rjf: extract cfg info
+        dst->cfg = src;
+        dst->pct_of_parent = (src == src_root ? 1.f : (F32)f64_from_str8(src->string));
+        dst->tab_side = (cfg_node_child_from_string(src, s("tabs_on_bottom")) != &cfg_nil_node ? Side_Max : Side_Min);
+        dst->split_axis = active_split_axis;
+        for(CFG_Node *src_child = src->first; src_child != &cfg_nil_node; src_child = src_child->next)
         {
-          dst_focused = dst;
-        }
-        else if(tokenize.tokens.count == 1 && tokenize.tokens.v[0].flags & MD_TokenFlag_Identifier)
-        {
-          cfg_node_ptr_list_push(arena, &dst->tabs, src_child);
-          if(cfg_node_child_from_string(src_child, str8_lit("selected")) != &cfg_nil_node)
+          MD_TokenizeResult tokenize = md_tokenize_from_text(scratch.arena, src_child->string);
+          if(tokenize.tokens.count == 1 && tokenize.tokens.v[0].flags & MD_TokenFlag_Numeric)
           {
-            dst->selected_tab = src_child;
+            panel_has_children = 1;
+          }
+          if(str8_match(src_child->string, s("tabs_on_bottom"), 0))
+          {
+            // NOTE(rjf): skip - this is a panel option.
+          }
+          else if(str8_match(src_child->string, s("selected"), 0))
+          {
+            dst_focused = dst;
+          }
+          else if(str8_match(src_child->string, s("zoom_root"), 0))
+          {
+            dst_zoom_root = dst;
+          }
+          else if(tokenize.tokens.count == 1 && tokenize.tokens.v[0].flags & MD_TokenFlag_Identifier)
+          {
+            cfg_node_ptr_list_push(arena, &dst->tabs, src_child);
+            if(cfg_node_child_from_string(src_child, s("selected")) != &cfg_nil_node)
+            {
+              dst->selected_tab = src_child;
+            }
           }
         }
       }
@@ -103,7 +116,7 @@ cfg_panel_tree_from_cfg(Arena *arena, CFG_Node *cfg_root)
     }
   }
   scratch_end(scratch);
-  CFG_PanelTree tree = {dst_root, dst_focused};
+  CFG_PanelTree tree = {dst_root, dst_focused, dst_zoom_root};
   return tree;
 }
 
@@ -179,7 +192,7 @@ cfg_target_rect_from_panel_node(Rng2F32 root_rect, CFG_PanelNode *root, CFG_Pane
   
   // rjf: count ancestors
   U64 ancestor_count = 0;
-  for(CFG_PanelNode *p = panel->parent; p != &cfg_nil_panel_node; p = p->parent)
+  for(CFG_PanelNode *p = panel->parent; p != root->parent; p = p->parent)
   {
     ancestor_count += 1;
   }
@@ -188,7 +201,7 @@ cfg_target_rect_from_panel_node(Rng2F32 root_rect, CFG_PanelNode *root, CFG_Pane
   CFG_PanelNode **ancestors = push_array(scratch.arena, CFG_PanelNode *, ancestor_count);
   {
     U64 ancestor_idx = 0;
-    for(CFG_PanelNode *p = panel->parent; p != &cfg_nil_panel_node; p = p->parent)
+    for(CFG_PanelNode *p = panel->parent; p != root->parent; p = p->parent)
     {
       ancestors[ancestor_idx] = p;
       ancestor_idx += 1;
@@ -203,7 +216,7 @@ cfg_target_rect_from_panel_node(Rng2F32 root_rect, CFG_PanelNode *root, CFG_Pane
   {
     CFG_PanelNode *ancestor = ancestors[ancestor_idx];
     CFG_PanelNode *parent = ancestor->parent;
-    if(parent != &cfg_nil_panel_node)
+    if(parent != root->parent)
     {
       parent_rect = cfg_target_rect_from_panel_node_child(parent_rect, parent, ancestor);
     }

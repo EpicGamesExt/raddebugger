@@ -145,11 +145,15 @@ RD_CmdKind_SplitPanel,
 RD_CmdKind_RotatePanelColumns,
 RD_CmdKind_NextPanel,
 RD_CmdKind_PrevPanel,
+RD_CmdKind_ParentPanel,
 RD_CmdKind_FocusPanel,
 RD_CmdKind_FocusPanelRight,
 RD_CmdKind_FocusPanelLeft,
 RD_CmdKind_FocusPanelUp,
 RD_CmdKind_FocusPanelDown,
+RD_CmdKind_ZoomPanel,
+RD_CmdKind_UnzoomPanel,
+RD_CmdKind_ToggleZoomPanel,
 RD_CmdKind_Undo,
 RD_CmdKind_Redo,
 RD_CmdKind_GoBack,
@@ -634,7 +638,7 @@ Z(getting_started)\
 C_LINKAGE_BEGIN
 extern String8 rd_tab_fast_path_view_name_table[25];
 extern String8 rd_tab_fast_path_query_name_table[25];
-extern RD_VocabInfo rd_vocab_info_table[375];
+extern RD_VocabInfo rd_vocab_info_table[379];
 extern RD_NameSchemaInfo rd_name_schema_info_table[39];
 extern String8 rd_reg_slot_code_name_table[56];
 extern Rng1U64 rd_reg_slot_range_table[56];

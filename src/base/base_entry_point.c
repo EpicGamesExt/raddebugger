@@ -82,7 +82,7 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(DBG_INFO_H) && !defined(DI_INIT_MANUAL)
   di_init(&cmdline);
 #endif
-#if defined(DEMON_CORE_H) && !defined(DMN_INIT_MANUAL)
+#if defined(DEMON_H) && !defined(DMN_INIT_MANUAL)
   dmn_init();
 #endif
 #if defined(DBG_ENGINE_CORE_H) && !defined(D_INIT_MANUAL)

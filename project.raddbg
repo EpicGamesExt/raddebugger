@@ -11,6 +11,13 @@ target:
 }
 target:
 {
+  executable: "build/raddbg_server.exe"
+  working_directory: build
+  debug_subprocesses: 1
+  arguments: "mule_main.exe"
+}
+target:
+{
   executable: "build/metagen.exe"
   working_directory: build
 }

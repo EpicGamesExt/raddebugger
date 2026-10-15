@@ -3830,21 +3830,38 @@ d_ctrl_thread__open_remote_server(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   SOCK_Endpoint endpoint = sock_endpoint_from_string(msg->path);
   
   //- rjf: handshake & get state
+  B32 good_handshake = 1;
   {
     Temp scratch = scratch_begin(0, 0);
-    DS_Msg msg = {0};
+    
+    // rjf: send handshake packet
     {
-      msg.kind   = DS_MsgKind_Handshake;
-      msg.msg_id = 1;
+      DS_Msg server_msg = {0};
+      {
+        server_msg.kind   = DS_MsgKind_Handshake;
+        server_msg.msg_id = 1;
+      }
+      String8 send_packet = ds_packet_from_msg(scratch.arena, &server_msg);
+      sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, endpoint, send_packet, max_U64);
     }
-    String8 msg_raw = ds_packet_from_msg(scratch.arena, &msg);
-    DS_PacketHeader header =
+    
+    // rjf: receive state packet(s)
     {
-      .magic        = DS_PACKET_MAGIC,
-      .kind         = DS_PacketKind_Msg,
-      .version      = DS_PACKET_VERSION,
-      .payload_size = msg_raw.size,
-    };
+      SOCK_Protocol recv_protocol = SOCK_Protocol_TCP;
+      SOCK_Endpoint recv_endpoint = {0};
+      String8 recv_packet = {0};
+      sock_recv(scratch.arena, d_ctrl_state->sock_session, &recv_protocol, &recv_endpoint, &recv_packet, now_time_us()+10000000);
+      if(recv_packet.size == 0)
+      {
+        good_handshake = 0;
+      }
+    }
+    
+    // rjf: report failure
+    if(!good_handshake)
+    {
+      log_user_errorf("Couldn't successfully connect to server at %S (%S).", sock_string_from_endpoint(scratch.arena, endpoint), msg->path);
+    }
     scratch_end(scratch);
   }
   

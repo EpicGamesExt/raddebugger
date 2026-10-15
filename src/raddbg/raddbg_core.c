@@ -5724,7 +5724,7 @@ rd_window_frame(void)
   //
   rd_regs()->panel = panel_tree.focused->cfg->id;
   rd_regs()->tab   = panel_tree.focused->selected_tab->id;
-  rd_regs()->view = panel_tree.focused->selected_tab->id;
+  rd_regs()->view  = panel_tree.focused->selected_tab->id;
   
   //////////////////////////////
   //- rjf: @window_frame_part compute window's theme
@@ -6054,8 +6054,8 @@ rd_window_frame(void)
       ui_push_pref_height(ui_px(floor_f32(ui_top_font_size()*3.f), 1.f));
       ui_push_blur_size(10.f);
       FNT_RasterFlags text_raster_flags = 0;
-      if(rd_setting_b32_from_name(str8_lit("smooth_ui_text"))) {text_raster_flags |= FNT_RasterFlag_Smooth;}
-      if(rd_setting_b32_from_name(str8_lit("hint_ui_text"))) {text_raster_flags |= FNT_RasterFlag_Hinted;}
+      if(rd_setting_b32_from_name(s("smooth_ui_text"))) {text_raster_flags |= FNT_RasterFlag_Smooth;}
+      if(rd_setting_b32_from_name(s("hint_ui_text"))) {text_raster_flags |= FNT_RasterFlag_Hinted;}
       ui_push_text_raster_flags(text_raster_flags);
     }
     
@@ -7538,6 +7538,10 @@ rd_window_frame(void)
                     rd_cmd_kind_info_table[RD_CmdKind_NextPanel].string,
                     rd_cmd_kind_info_table[RD_CmdKind_PrevPanel].string,
                     {0},//-
+                    rd_cmd_kind_info_table[RD_CmdKind_ZoomPanel].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_UnzoomPanel].string,
+                    rd_cmd_kind_info_table[RD_CmdKind_ToggleZoomPanel].string,
+                    {0},//-
                     rd_cmd_kind_info_table[RD_CmdKind_TabBarTop].string,
                     rd_cmd_kind_info_table[RD_CmdKind_TabBarBottom].string,
                     {0},//-
@@ -7554,6 +7558,10 @@ rd_window_frame(void)
                     'n',
                     'p',
                     0,//-
+                    'z',
+                    'm',
+                    't',
+                    0,//--
                     0,
                     0,
                     0,//-
@@ -8236,53 +8244,150 @@ rd_window_frame(void)
     //
     B32 is_changing_panel_boundaries = 0;
     ProfScope("non-leaf panel UI")
-      for(CFG_PanelNode *panel = panel_tree.root;
-          panel != &cfg_nil_panel_node;
-          panel = cfg_panel_node_rec__depth_first_pre(panel_tree.root, panel).next)
     {
-      //////////////////////////
-      //- rjf: continue on leaf panels
-      //
-      if(panel->first == &cfg_nil_panel_node)
+      CFG_PanelNode *panel_tree_root = (panel_tree.zoom_root != &cfg_nil_panel_node) ? panel_tree.zoom_root : panel_tree.root;
+      for(CFG_PanelNode *panel = panel_tree_root;
+          panel != &cfg_nil_panel_node;
+          panel = cfg_panel_node_rec__depth_first_pre(panel_tree_root, panel).next)
       {
-        continue;
-      }
-      
-      //////////////////////////
-      //- rjf: grab info
-      //
-      Axis2 split_axis = panel->split_axis;
-      Rng2F32 panel_rect = cfg_target_rect_from_panel_node(content_rect, panel_tree.root, panel);
-      
-      //////////////////////////
-      //- rjf: boundary tab-drag/drop sites
-      //
-      {
-        CFG_Node *drag_view = cfg_node_from_id(rd_state->drag_drop_regs->view);
-        if(rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_View && drag_view != &cfg_nil_node)
+        //////////////////////////
+        //- rjf: continue on leaf panels
+        //
+        if(panel->first == &cfg_nil_panel_node)
         {
-          //- rjf: params
-          F32 drop_site_major_dim_px = ceil_f32(ui_top_font_size()*7.f);
-          F32 drop_site_minor_dim_px = ceil_f32(ui_top_font_size()*5.f);
-          F32 corner_radius = ui_top_font_size()*0.5f;
-          F32 padding = ceil_f32(ui_top_font_size()*0.5f);
-          
-          //- rjf: special case - build Y boundary drop sites on root panel
-          //
-          // (this does not naturally follow from the below algorithm, since the
-          // root level panel only splits on X)
-          if(panel == panel_tree.root) UI_CornerRadius(corner_radius)
+          continue;
+        }
+        
+        //////////////////////////
+        //- rjf: grab info
+        //
+        Axis2 split_axis = panel->split_axis;
+        Rng2F32 panel_rect = cfg_target_rect_from_panel_node(content_rect, panel_tree_root, panel);
+        if(panel == panel_tree.zoom_root)
+        {
+          panel_rect = content_rect;
+        }
+        
+        //////////////////////////
+        //- rjf: boundary tab-drag/drop sites
+        //
+        {
+          CFG_Node *drag_view = cfg_node_from_id(rd_state->drag_drop_regs->view);
+          if(rd_drag_is_active() && rd_state->drag_drop_regs_slot == RD_RegSlot_View && drag_view != &cfg_nil_node)
           {
-            Vec2F32 panel_rect_center = center_2f32(panel_rect);
-            Axis2 axis = axis2_flip(panel_tree.root->split_axis);
-            for EachEnumVal(Side, side)
+            //- rjf: params
+            F32 drop_site_major_dim_px = ceil_f32(ui_top_font_size()*7.f);
+            F32 drop_site_minor_dim_px = ceil_f32(ui_top_font_size()*5.f);
+            F32 corner_radius = ui_top_font_size()*0.5f;
+            F32 padding = ceil_f32(ui_top_font_size()*0.5f);
+            
+            //- rjf: special case - build Y boundary drop sites on root panel
+            //
+            // (this does not naturally follow from the below algorithm, since the
+            // root level panel only splits on X)
+            if(panel == panel_tree_root) UI_CornerRadius(corner_radius)
             {
-              UI_Key key = ui_key_from_stringf(ui_key_zero(), "root_extra_split_%i", side);
-              Rng2F32 site_rect = panel_rect;
-              site_rect.p0.v[axis2_flip(axis)] = panel_rect_center.v[axis2_flip(axis)] - drop_site_major_dim_px/2;
-              site_rect.p1.v[axis2_flip(axis)] = panel_rect_center.v[axis2_flip(axis)] + drop_site_major_dim_px/2;
-              site_rect.p0.v[axis] = panel_rect.v[side].v[axis] - drop_site_minor_dim_px/2;
-              site_rect.p1.v[axis] = panel_rect.v[side].v[axis] + drop_site_minor_dim_px/2;
+              Vec2F32 panel_rect_center = center_2f32(panel_rect);
+              Axis2 axis = axis2_flip(panel_tree_root->split_axis);
+              for EachEnumVal(Side, side)
+              {
+                UI_Key key = ui_key_from_stringf(ui_key_zero(), "root_extra_split_%i", side);
+                Rng2F32 site_rect = panel_rect;
+                site_rect.p0.v[axis2_flip(axis)] = panel_rect_center.v[axis2_flip(axis)] - drop_site_major_dim_px/2;
+                site_rect.p1.v[axis2_flip(axis)] = panel_rect_center.v[axis2_flip(axis)] + drop_site_major_dim_px/2;
+                site_rect.p0.v[axis] = panel_rect.v[side].v[axis] - drop_site_minor_dim_px/2;
+                site_rect.p1.v[axis] = panel_rect.v[side].v[axis] + drop_site_minor_dim_px/2;
+                
+                // rjf: build
+                UI_Box *site_box = &ui_nil_box;
+                {
+                  F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f, .rate = rd_state->menu_animation_rate);
+                  UI_Rect(site_rect) UI_Squish(0.1f-0.1f*site_open_t) UI_Transparency(1-site_open_t)
+                  {
+                    site_box = ui_build_box_from_key(UI_BoxFlag_DropSite|UI_BoxFlag_DrawHotEffects, key);
+                    ui_signal_from_box(site_box);
+                  }
+                  UI_Box *site_box_viz = &ui_nil_box;
+                  UI_Parent(site_box) UI_WidthFill UI_HeightFill
+                    UI_Padding(ui_px(padding, 1.f))
+                    UI_Column
+                    UI_Padding(ui_px(padding, 1.f))
+                    UI_GroupKey(key)
+                  {
+                    ui_set_next_child_layout_axis(axis2_flip(axis));
+                    site_box_viz = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
+                                                         UI_BoxFlag_DrawBorder|
+                                                         UI_BoxFlag_DrawDropShadow|
+                                                         UI_BoxFlag_DrawBackgroundBlur|
+                                                         UI_BoxFlag_DrawHotEffects, ui_key_zero());
+                  }
+                  UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
+                  {
+                    ui_set_next_child_layout_axis(axis);
+                    UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero()); UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
+                    {
+                      ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                      ui_spacer(ui_px(padding, 1.f));
+                      ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
+                    }
+                  }
+                }
+                
+                // rjf: viz
+                if(ui_key_match(site_box->key, ui_drop_hot_key()))
+                {
+                  Rng2F32 future_split_rect_target = site_rect;
+                  future_split_rect_target.p0.v[axis] -= drop_site_major_dim_px;
+                  future_split_rect_target.p1.v[axis] += drop_site_major_dim_px;
+                  future_split_rect_target.p0.v[axis2_flip(axis)] = panel_rect.p0.v[axis2_flip(axis)];
+                  future_split_rect_target.p1.v[axis2_flip(axis)] = panel_rect.p1.v[axis2_flip(axis)];
+                  future_split_rect_target = pad_2f32(future_split_rect_target, -ui_top_font_size()*2.f);
+                  Vec2F32 future_split_rect_target_center = center_2f32(future_split_rect_target);
+                  Rng2F32 future_split_rect =
+                  {
+                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v0"), future_split_rect_target.x0, .initial = future_split_rect_target_center.x, .rate = rd_state->menu_animation_rate),
+                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v1"), future_split_rect_target.y0, .initial = future_split_rect_target_center.y, .rate = rd_state->menu_animation_rate),
+                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x, .rate = rd_state->menu_animation_rate),
+                    ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y, .rate = rd_state->menu_animation_rate),
+                  };
+                  UI_Rect(future_split_rect) UI_TagF("drop_site") UI_CornerRadius(ui_top_font_size()*2.f)
+                  {
+                    ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
+                  }
+                }
+                
+                // rjf: drop
+                if(ui_key_match(site_box->key, ui_drop_hot_key()) && rd_drag_drop())
+                {
+                  Dir2 dir = (axis == Axis2_Y ? (side == Side_Min ? Dir2_Up : Dir2_Down) :
+                              axis == Axis2_X ? (side == Side_Min ? Dir2_Left : Dir2_Right) :
+                              Dir2_Invalid);
+                  if(dir != Dir2_Invalid)
+                  {
+                    CFG_PanelNode *split_panel = panel;
+                    rd_cmd(RD_CmdKind_SplitPanel,
+                           .dst_panel  = split_panel->cfg->id,
+                           .panel      = rd_state->drag_drop_regs->panel,
+                           .view      = rd_state->drag_drop_regs->view,
+                           .dir2       = dir);
+                  }
+                }
+              }
+            }
+            
+            //- rjf: iterate all children, build boundary drop sites
+            Axis2 split_axis = panel->split_axis;
+            UI_CornerRadius(corner_radius) for(CFG_PanelNode *child = panel->first;; child = child->next)
+            {
+              // rjf: form rect
+              Rng2F32 child_rect = cfg_target_rect_from_panel_node_child(panel_rect, panel, child);
+              Vec2F32 child_rect_center = center_2f32(child_rect);
+              UI_Key key = ui_key_from_stringf(ui_key_zero(), "drop_boundary_%p_%p", panel->cfg, child->cfg);
+              Rng2F32 site_rect = r2f32(child_rect_center, child_rect_center);
+              site_rect.p0.v[split_axis] = child_rect.p0.v[split_axis] - drop_site_minor_dim_px/2;
+              site_rect.p1.v[split_axis] = child_rect.p0.v[split_axis] + drop_site_minor_dim_px/2;
+              site_rect.p0.v[axis2_flip(split_axis)] -= drop_site_major_dim_px/2;
+              site_rect.p1.v[axis2_flip(split_axis)] += drop_site_major_dim_px/2;
               
               // rjf: build
               UI_Box *site_box = &ui_nil_box;
@@ -8300,7 +8405,7 @@ rd_window_frame(void)
                   UI_Padding(ui_px(padding, 1.f))
                   UI_GroupKey(key)
                 {
-                  ui_set_next_child_layout_axis(axis2_flip(axis));
+                  ui_set_next_child_layout_axis(axis2_flip(split_axis));
                   site_box_viz = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
                                                        UI_BoxFlag_DrawBorder|
                                                        UI_BoxFlag_DrawDropShadow|
@@ -8309,7 +8414,7 @@ rd_window_frame(void)
                 }
                 UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
                 {
-                  ui_set_next_child_layout_axis(axis);
+                  ui_set_next_child_layout_axis(split_axis);
                   UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero()); UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
                   {
                     ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
@@ -8323,10 +8428,10 @@ rd_window_frame(void)
               if(ui_key_match(site_box->key, ui_drop_hot_key()))
               {
                 Rng2F32 future_split_rect_target = site_rect;
-                future_split_rect_target.p0.v[axis] -= drop_site_major_dim_px;
-                future_split_rect_target.p1.v[axis] += drop_site_major_dim_px;
-                future_split_rect_target.p0.v[axis2_flip(axis)] = panel_rect.p0.v[axis2_flip(axis)];
-                future_split_rect_target.p1.v[axis2_flip(axis)] = panel_rect.p1.v[axis2_flip(axis)];
+                future_split_rect_target.p0.v[split_axis] -= drop_site_major_dim_px;
+                future_split_rect_target.p1.v[split_axis] += drop_site_major_dim_px;
+                future_split_rect_target.p0.v[axis2_flip(split_axis)] = child_rect.p0.v[axis2_flip(split_axis)];
+                future_split_rect_target.p1.v[axis2_flip(split_axis)] = child_rect.p1.v[axis2_flip(split_axis)];
                 future_split_rect_target = pad_2f32(future_split_rect_target, -ui_top_font_size()*2.f);
                 Vec2F32 future_split_rect_target_center = center_2f32(future_split_rect_target);
                 Rng2F32 future_split_rect =
@@ -8345,187 +8450,97 @@ rd_window_frame(void)
               // rjf: drop
               if(ui_key_match(site_box->key, ui_drop_hot_key()) && rd_drag_drop())
               {
-                Dir2 dir = (axis == Axis2_Y ? (side == Side_Min ? Dir2_Up : Dir2_Down) :
-                            axis == Axis2_X ? (side == Side_Min ? Dir2_Left : Dir2_Right) :
-                            Dir2_Invalid);
-                if(dir != Dir2_Invalid)
+                Dir2 dir = (panel->split_axis == Axis2_X ? Dir2_Left : Dir2_Up);
+                CFG_PanelNode *split_panel = child;
+                if(split_panel == &cfg_nil_panel_node)
                 {
-                  CFG_PanelNode *split_panel = panel;
-                  rd_cmd(RD_CmdKind_SplitPanel,
-                         .dst_panel  = split_panel->cfg->id,
-                         .panel      = rd_state->drag_drop_regs->panel,
-                         .view      = rd_state->drag_drop_regs->view,
-                         .dir2       = dir);
+                  split_panel = panel->last;
+                  dir = (panel->split_axis == Axis2_X ? Dir2_Right : Dir2_Down);
                 }
+                rd_cmd(RD_CmdKind_SplitPanel,
+                       .dst_panel  = split_panel->cfg->id,
+                       .panel      = rd_state->drag_drop_regs->panel,
+                       .view      = rd_state->drag_drop_regs->view,
+                       .dir2       = dir);
+              }
+              
+              // rjf: exit on opl child
+              if(child == &cfg_nil_panel_node)
+              {
+                break;
               }
             }
           }
-          
-          //- rjf: iterate all children, build boundary drop sites
-          Axis2 split_axis = panel->split_axis;
-          UI_CornerRadius(corner_radius) for(CFG_PanelNode *child = panel->first;; child = child->next)
-          {
-            // rjf: form rect
-            Rng2F32 child_rect = cfg_target_rect_from_panel_node_child(panel_rect, panel, child);
-            Vec2F32 child_rect_center = center_2f32(child_rect);
-            UI_Key key = ui_key_from_stringf(ui_key_zero(), "drop_boundary_%p_%p", panel->cfg, child->cfg);
-            Rng2F32 site_rect = r2f32(child_rect_center, child_rect_center);
-            site_rect.p0.v[split_axis] = child_rect.p0.v[split_axis] - drop_site_minor_dim_px/2;
-            site_rect.p1.v[split_axis] = child_rect.p0.v[split_axis] + drop_site_minor_dim_px/2;
-            site_rect.p0.v[axis2_flip(split_axis)] -= drop_site_major_dim_px/2;
-            site_rect.p1.v[axis2_flip(split_axis)] += drop_site_major_dim_px/2;
-            
-            // rjf: build
-            UI_Box *site_box = &ui_nil_box;
-            {
-              F32 site_open_t = ui_anim(ui_key_from_stringf(key, "open_t"), 1.f, .rate = rd_state->menu_animation_rate);
-              UI_Rect(site_rect) UI_Squish(0.1f-0.1f*site_open_t) UI_Transparency(1-site_open_t)
-              {
-                site_box = ui_build_box_from_key(UI_BoxFlag_DropSite|UI_BoxFlag_DrawHotEffects, key);
-                ui_signal_from_box(site_box);
-              }
-              UI_Box *site_box_viz = &ui_nil_box;
-              UI_Parent(site_box) UI_WidthFill UI_HeightFill
-                UI_Padding(ui_px(padding, 1.f))
-                UI_Column
-                UI_Padding(ui_px(padding, 1.f))
-                UI_GroupKey(key)
-              {
-                ui_set_next_child_layout_axis(axis2_flip(split_axis));
-                site_box_viz = ui_build_box_from_key(UI_BoxFlag_DrawBackground|
-                                                     UI_BoxFlag_DrawBorder|
-                                                     UI_BoxFlag_DrawDropShadow|
-                                                     UI_BoxFlag_DrawBackgroundBlur|
-                                                     UI_BoxFlag_DrawHotEffects, ui_key_zero());
-              }
-              UI_Parent(site_box_viz) UI_WidthFill UI_HeightFill UI_Padding(ui_px(padding, 1.f))
-              {
-                ui_set_next_child_layout_axis(split_axis);
-                UI_Box *row_or_column = ui_build_box_from_key(0, ui_key_zero()); UI_Parent(row_or_column) UI_Padding(ui_px(padding, 1.f))
-                {
-                  ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
-                  ui_spacer(ui_px(padding, 1.f));
-                  ui_build_box_from_key(UI_BoxFlag_DrawBorder, ui_key_zero());
-                }
-              }
-            }
-            
-            // rjf: viz
-            if(ui_key_match(site_box->key, ui_drop_hot_key()))
-            {
-              Rng2F32 future_split_rect_target = site_rect;
-              future_split_rect_target.p0.v[split_axis] -= drop_site_major_dim_px;
-              future_split_rect_target.p1.v[split_axis] += drop_site_major_dim_px;
-              future_split_rect_target.p0.v[axis2_flip(split_axis)] = child_rect.p0.v[axis2_flip(split_axis)];
-              future_split_rect_target.p1.v[axis2_flip(split_axis)] = child_rect.p1.v[axis2_flip(split_axis)];
-              future_split_rect_target = pad_2f32(future_split_rect_target, -ui_top_font_size()*2.f);
-              Vec2F32 future_split_rect_target_center = center_2f32(future_split_rect_target);
-              Rng2F32 future_split_rect =
-              {
-                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v0"), future_split_rect_target.x0, .initial = future_split_rect_target_center.x, .rate = rd_state->menu_animation_rate),
-                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v1"), future_split_rect_target.y0, .initial = future_split_rect_target_center.y, .rate = rd_state->menu_animation_rate),
-                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v2"), future_split_rect_target.x1, .initial = future_split_rect_target_center.x, .rate = rd_state->menu_animation_rate),
-                ui_anim(ui_key_from_stringf(ui_key_zero(), "drop_site_v3"), future_split_rect_target.y1, .initial = future_split_rect_target_center.y, .rate = rd_state->menu_animation_rate),
-              };
-              UI_Rect(future_split_rect) UI_TagF("drop_site") UI_CornerRadius(ui_top_font_size()*2.f)
-              {
-                ui_build_box_from_key(UI_BoxFlag_DrawBackground|UI_BoxFlag_DrawBorder, ui_key_zero());
-              }
-            }
-            
-            // rjf: drop
-            if(ui_key_match(site_box->key, ui_drop_hot_key()) && rd_drag_drop())
-            {
-              Dir2 dir = (panel->split_axis == Axis2_X ? Dir2_Left : Dir2_Up);
-              CFG_PanelNode *split_panel = child;
-              if(split_panel == &cfg_nil_panel_node)
-              {
-                split_panel = panel->last;
-                dir = (panel->split_axis == Axis2_X ? Dir2_Right : Dir2_Down);
-              }
-              rd_cmd(RD_CmdKind_SplitPanel,
-                     .dst_panel  = split_panel->cfg->id,
-                     .panel      = rd_state->drag_drop_regs->panel,
-                     .view      = rd_state->drag_drop_regs->view,
-                     .dir2       = dir);
-            }
-            
-            // rjf: exit on opl child
-            if(child == &cfg_nil_panel_node)
-            {
-              break;
-            }
-          }
-        }
-      }
-      
-      //////////////////////////
-      //- rjf: do UI for drag boundaries between all children
-      //
-      for(CFG_PanelNode *child = panel->first;
-          child != &cfg_nil_panel_node && child->next != &cfg_nil_panel_node;
-          child = child->next)
-      {
-        CFG_PanelNode *min_child = child;
-        CFG_PanelNode *max_child = min_child->next;
-        Rng2F32 min_child_rect = cfg_target_rect_from_panel_node_child(panel_rect, panel, min_child);
-        Rng2F32 max_child_rect = cfg_target_rect_from_panel_node_child(panel_rect, panel, max_child);
-        Rng2F32 boundary_rect = {0};
-        {
-          boundary_rect.p0.v[split_axis] = min_child_rect.p1.v[split_axis] - ui_top_font_size()/3;
-          boundary_rect.p1.v[split_axis] = max_child_rect.p0.v[split_axis] + ui_top_font_size()/3;
-          boundary_rect.p0.v[axis2_flip(split_axis)] = panel_rect.p0.v[axis2_flip(split_axis)];
-          boundary_rect.p1.v[axis2_flip(split_axis)] = panel_rect.p1.v[axis2_flip(split_axis)];
         }
         
-        UI_Rect(boundary_rect)
+        //////////////////////////
+        //- rjf: do UI for drag boundaries between all children
+        //
+        for(CFG_PanelNode *child = panel->first;
+            child != &cfg_nil_panel_node && child->next != &cfg_nil_panel_node;
+            child = child->next)
         {
-          ui_set_next_hover_cursor(split_axis == Axis2_X ? WM_Cursor_LeftRight : WM_Cursor_UpDown);
-          UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "###%p_%p", min_child->cfg, max_child->cfg);
-          UI_Signal sig = ui_signal_from_box(box);
-          if(ui_double_clicked(sig))
+          CFG_PanelNode *min_child = child;
+          CFG_PanelNode *max_child = min_child->next;
+          Rng2F32 min_child_rect = cfg_target_rect_from_panel_node_child(panel_rect, panel, min_child);
+          Rng2F32 max_child_rect = cfg_target_rect_from_panel_node_child(panel_rect, panel, max_child);
+          Rng2F32 boundary_rect = {0};
           {
-            ui_kill_action();
-            F32 sum_pct = min_child->pct_of_parent + max_child->pct_of_parent;
-            min_child->pct_of_parent = 0.5f * sum_pct;
-            max_child->pct_of_parent = 0.5f * sum_pct;
-            cfg_node_equip_stringf(rd_state->cfg, min_child->cfg, "%f", min_child->pct_of_parent);
-            cfg_node_equip_stringf(rd_state->cfg, max_child->cfg, "%f", max_child->pct_of_parent);
+            boundary_rect.p0.v[split_axis] = min_child_rect.p1.v[split_axis] - ui_top_font_size()/3;
+            boundary_rect.p1.v[split_axis] = max_child_rect.p0.v[split_axis] + ui_top_font_size()/3;
+            boundary_rect.p0.v[axis2_flip(split_axis)] = panel_rect.p0.v[axis2_flip(split_axis)];
+            boundary_rect.p1.v[axis2_flip(split_axis)] = panel_rect.p1.v[axis2_flip(split_axis)];
           }
-          else if(ui_pressed(sig))
+          
+          UI_Rect(boundary_rect)
           {
-            Vec2F32 v = {min_child->pct_of_parent, max_child->pct_of_parent};
-            ui_store_drag_struct(&v);
-          }
-          else if(ui_dragging(sig))
-          {
-            Vec2F32 v = *ui_get_drag_struct(Vec2F32);
-            Vec2F32 mouse_delta      = ui_drag_delta();
-            F32 total_size           = dim_2f32(panel_rect).v[split_axis];
-            F32 min_pct__before      = v.v[0];
-            F32 min_pixels__before   = min_pct__before * total_size;
-            F32 min_pixels__after    = min_pixels__before + mouse_delta.v[split_axis];
-            if(min_pixels__after < 50.f)
+            ui_set_next_hover_cursor(split_axis == Axis2_X ? WM_Cursor_LeftRight : WM_Cursor_UpDown);
+            UI_Box *box = ui_build_box_from_stringf(UI_BoxFlag_Clickable, "###%p_%p", min_child->cfg, max_child->cfg);
+            UI_Signal sig = ui_signal_from_box(box);
+            if(ui_double_clicked(sig))
             {
-              min_pixels__after = 50.f;
+              ui_kill_action();
+              F32 sum_pct = min_child->pct_of_parent + max_child->pct_of_parent;
+              min_child->pct_of_parent = 0.5f * sum_pct;
+              max_child->pct_of_parent = 0.5f * sum_pct;
+              cfg_node_equip_stringf(rd_state->cfg, min_child->cfg, "%f", min_child->pct_of_parent);
+              cfg_node_equip_stringf(rd_state->cfg, max_child->cfg, "%f", max_child->pct_of_parent);
             }
-            F32 min_pct__after       = min_pixels__after / total_size;
-            F32 pct_delta            = min_pct__after - min_pct__before;
-            F32 max_pct__before      = v.v[1];
-            F32 max_pct__after       = max_pct__before - pct_delta;
-            F32 max_pixels__after    = max_pct__after * total_size;
-            if(max_pixels__after < 50.f)
+            else if(ui_pressed(sig))
             {
-              max_pixels__after = 50.f;
-              max_pct__after = max_pixels__after / total_size;
-              pct_delta = -(max_pct__after - max_pct__before);
-              min_pct__after = min_pct__before + pct_delta;
+              Vec2F32 v = {min_child->pct_of_parent, max_child->pct_of_parent};
+              ui_store_drag_struct(&v);
             }
-            min_child->pct_of_parent = min_pct__after;
-            max_child->pct_of_parent = max_pct__after;
-            cfg_node_equip_stringf(rd_state->cfg, min_child->cfg, "%f", min_pct__after);
-            cfg_node_equip_stringf(rd_state->cfg, max_child->cfg, "%f", max_pct__after);
-            is_changing_panel_boundaries = 1;
+            else if(ui_dragging(sig))
+            {
+              Vec2F32 v = *ui_get_drag_struct(Vec2F32);
+              Vec2F32 mouse_delta      = ui_drag_delta();
+              F32 total_size           = dim_2f32(panel_rect).v[split_axis];
+              F32 min_pct__before      = v.v[0];
+              F32 min_pixels__before   = min_pct__before * total_size;
+              F32 min_pixels__after    = min_pixels__before + mouse_delta.v[split_axis];
+              if(min_pixels__after < 50.f)
+              {
+                min_pixels__after = 50.f;
+              }
+              F32 min_pct__after       = min_pixels__after / total_size;
+              F32 pct_delta            = min_pct__after - min_pct__before;
+              F32 max_pct__before      = v.v[1];
+              F32 max_pct__after       = max_pct__before - pct_delta;
+              F32 max_pixels__after    = max_pct__after * total_size;
+              if(max_pixels__after < 50.f)
+              {
+                max_pixels__after = 50.f;
+                max_pct__after = max_pixels__after / total_size;
+                pct_delta = -(max_pct__after - max_pct__before);
+                min_pct__after = min_pct__before + pct_delta;
+              }
+              min_child->pct_of_parent = min_pct__after;
+              max_child->pct_of_parent = max_pct__after;
+              cfg_node_equip_stringf(rd_state->cfg, min_child->cfg, "%f", min_pct__after);
+              cfg_node_equip_stringf(rd_state->cfg, max_child->cfg, "%f", max_pct__after);
+              is_changing_panel_boundaries = 1;
+            }
           }
         }
       }
@@ -8544,7 +8559,20 @@ rd_window_frame(void)
             panel != &cfg_nil_panel_node;
             panel = cfg_panel_node_rec__depth_first_pre(panel_tree.root, panel).next)
         {
-          Rng2F32 target_rect_px = cfg_target_rect_from_panel_node(content_rect, panel_tree.root, panel);
+          B32 is_in_zoom = 0;
+          for(CFG_PanelNode *p = panel; p != &cfg_nil_panel_node; p = p->parent)
+          {
+            if(p == panel_tree.zoom_root)
+            {
+              is_in_zoom = 1;
+              break;
+            }
+          }
+          Rng2F32 target_rect_px = cfg_target_rect_from_panel_node(content_rect, is_in_zoom ? panel_tree.zoom_root : panel_tree.root, panel);
+          if(panel == panel_tree.zoom_root)
+          {
+            target_rect_px = content_rect;
+          }
           Rng2F32 target_rect_pct = r2f32p(target_rect_px.x0/content_rect_dim.x,
                                            target_rect_px.y0/content_rect_dim.y,
                                            target_rect_px.x1/content_rect_dim.x,
@@ -8565,12 +8593,23 @@ rd_window_frame(void)
     if(content_rect.x1 > content_rect.x0 && content_rect.y1 > content_rect.y0)
     {
       B32 any_disasm_open = 0;
-      ProfScope("leaf panel UI")
-        for(CFG_PanelNode *panel = panel_tree.root;
-            panel != &cfg_nil_panel_node;
-            panel = cfg_panel_node_rec__depth_first_pre(panel_tree.root, panel).next)
+      if(ws->panel_hoist_cfg_id != panel_tree.zoom_root->cfg->id && panel_tree.zoom_root->cfg->id != 0)
       {
-        if(panel->first != &cfg_nil_panel_node) {continue;}
+        ws->panel_hoist_cfg_id = panel_tree.zoom_root->cfg->id;
+      }
+      CFG_PanelNode *front_panel = cfg_panel_node_from_tree_cfg(panel_tree.root, cfg_node_from_id(ws->panel_hoist_cfg_id));
+      CFG_PanelNode *panel_trees[] = {front_panel, panel_tree.root};
+      F32 panel_zoom_t = ui_anim(ui_key_from_stringf(ui_key_zero(), "panel_zoom_t"), (F32)(panel_tree.zoom_root != &cfg_nil_panel_node), .initial = (F32)(panel_tree.zoom_root != &cfg_nil_panel_node));
+      ProfScope("leaf panel UI")
+        for EachElement(panel_tree_idx, panel_trees)
+        for(CFG_PanelNode *panel = panel_trees[panel_tree_idx];
+            panel != &cfg_nil_panel_node;
+            panel = cfg_panel_node_rec__depth_first_pre(panel_trees[panel_tree_idx], panel).next)
+      {
+        if(panel_trees[panel_tree_idx] != front_panel && panel == front_panel)
+        {
+          continue;
+        }
         B32 panel_is_focused = (window_is_focused &&
                                 !rd_state->popup_active &&
                                 !ws->menu_bar_focused &&
@@ -8586,12 +8625,26 @@ rd_window_frame(void)
         }
         ProfScope("leaf panel UI work - %.*s: %.*s", str8_varg(selected_tab->string), str8_varg(rd_expr_from_cfg(selected_tab)))
           UI_Focus(panel_is_focused ? UI_FocusKind_Null : UI_FocusKind_Off)
+          UI_Transparency(panel_trees[panel_tree_idx] != front_panel ? panel_zoom_t : 0)
         {
           //////////////////////////
           //- rjf: calculate UI rectangles
           //
           Vec2F32 content_rect_dim = dim_2f32(content_rect);
-          Rng2F32 target_rect_px = cfg_target_rect_from_panel_node(content_rect, panel_tree.root, panel);
+          B32 is_in_zoom = 0;
+          for(CFG_PanelNode *p = panel; p != &cfg_nil_panel_node; p = p->parent)
+          {
+            if(p == panel_tree.zoom_root)
+            {
+              is_in_zoom = 1;
+              break;
+            }
+          }
+          Rng2F32 target_rect_px = cfg_target_rect_from_panel_node(content_rect, is_in_zoom ? panel_tree.zoom_root : panel_tree.root, panel);
+          if(panel == panel_tree.zoom_root)
+          {
+            target_rect_px = content_rect;
+          }
           Rng2F32 target_rect_pct = r2f32p(target_rect_px.x0 / content_rect_dim.x,
                                            target_rect_px.y0 / content_rect_dim.y,
                                            target_rect_px.x1 / content_rect_dim.x,
@@ -8623,9 +8676,17 @@ rd_window_frame(void)
           content_rect = intersect_2f32(content_rect, panel_rect);
           
           //////////////////////////
-          //- rjf: decide to skip this panel (e.g. if it is too small
+          //- rjf: for non-leaf panels with focus (subtree selection) -> draw border for all children
           //
-          B32 build_panel = (content_rect.x1 > content_rect.x0 && content_rect.y1 > content_rect.y0);
+          if(panel->first != &cfg_nil_panel_node && panel == panel_tree.focused) UI_Rect(pad_2f32(panel_rect, ui_top_font_size()*0.2f)) UI_Focus(UI_FocusKind_On)
+          {
+            ui_build_box_from_stringf(UI_BoxFlag_Clickable|UI_BoxFlag_DisableFocusOverlay, "###");
+          }
+          
+          //////////////////////////
+          //- rjf: decide to skip this panel (e.g. if it non-leaf, or is too small)
+          //
+          B32 build_panel = ((panel->first == &cfg_nil_panel_node) && content_rect.x1 > content_rect.x0 && content_rect.y1 > content_rect.y0 && ui_top_transparency() < 0.99f);
           
           //////////////////////////
           //- rjf: build combined split+movetab drag/drop sites
@@ -8823,6 +8884,16 @@ rd_window_frame(void)
           }
           
           //////////////////////////
+          //- rjf: determine how much this panel is occluding others
+          //
+          B32 is_occluding = 0;
+          if(panel_trees[panel_tree_idx] == front_panel)
+          {
+            is_occluding = (abs_f32(panel_rect.x0 - target_rect_px.x0) > 2 ||
+                            abs_f32(panel_rect.y0 - target_rect_px.y0) > 2);
+          }
+          
+          //////////////////////////
           //- rjf: build panel container box
           //
           UI_Box *panel_box = &ui_nil_box;
@@ -8833,6 +8904,7 @@ rd_window_frame(void)
                                               UI_BoxFlag_Clip|
                                               UI_BoxFlag_DrawBorder|
                                               UI_BoxFlag_DisableFocusOverlay|
+                                              (is_occluding*UI_BoxFlag_DrawBackground)|
                                               ((panel_tree.focused != panel)*UI_BoxFlag_DisableFocusBorder),
                                               panel_key);
           }
@@ -8972,6 +9044,70 @@ rd_window_frame(void)
           }
           
           //////////////////////////
+          //- rjf: build zoom button
+          //
+          if(panel_is_focused)
+          {
+            UI_TextAlignment(UI_TextAlign_Center)
+              UI_TagF(".")
+            {
+              ui_set_next_child_layout_axis(Axis2_Y);
+              UI_Box *container = &ui_nil_box;
+              UI_Rect(r2f32p(tab_bar_rect.x1 - tab_bar_vheight, tab_bar_rect.y0, tab_bar_rect.x1, tab_bar_rect.y1))
+              {
+                container = ui_build_box_from_stringf(0, "###zoom_panel");
+              }
+              UI_Parent(container)
+              {
+                if(panel->tab_side == Side_Max)
+                {
+                  ui_spacer(ui_px(tab_bar_rv_diff-1.f, 1.f));
+                }
+                else
+                {
+                  ui_spacer(ui_px(1.f, 1.f));
+                }
+                {
+                  UI_Box *zoom_box = &ui_nil_box;
+                  RD_Font(RD_FontSlot_Icons)
+                    UI_CornerRadius((tab_bar_vheight - tab_bar_vheight/4.f) / 3.f)
+                    UI_VisualMargin(tab_bar_vheight/5.f)
+                    UI_TagF("implicit")
+                    UI_TagF("weak")
+                    UI_FontSize(ui_top_font_size()*0.65f)
+                  {
+                    zoom_box = ui_build_box_from_stringf(UI_BoxFlag_DrawText|
+                                                         UI_BoxFlag_DrawBorder|
+                                                         UI_BoxFlag_DrawBackground|
+                                                         UI_BoxFlag_DrawHotEffects|
+                                                         UI_BoxFlag_DrawActiveEffects|
+                                                         UI_BoxFlag_Clickable|
+                                                         UI_BoxFlag_DisableTextTrunc,
+                                                         "%S##zoom_panel_button_%p",
+                                                         rd_icon_kind_text_table[panel_tree.zoom_root == panel ? RD_IconKind_WindowRestore : RD_IconKind_Window],
+                                                         panel->cfg);
+                  }
+                  UI_Signal sig = ui_signal_from_box(zoom_box);
+                  if(ui_pressed(sig))
+                  {
+                    rd_cmd(RD_CmdKind_ToggleZoomPanel, .panel = panel->cfg->id);
+                  }
+                  if(ui_hovering(sig)) UI_Tooltip
+                  {
+                    ui_state->tooltip_anchor_key = zoom_box->key;
+                    ui_set_next_pref_width(ui_children_sum(1));
+                    UI_Row
+                    {
+                      ui_labelf("Toggle Zoom Panel");
+                      rd_cmd_binding_buttons(rd_cmd_kind_info_table[RD_CmdKind_ToggleZoomPanel].string, s(""), 1, RD_CmdBindingButtonFlag_NoEdit);
+                    }
+                  }
+                }
+              }
+            }
+          }
+          
+          //////////////////////////
           //- rjf: compute tab build tasks
           //
           typedef struct TabTask TabTask;
@@ -8987,7 +9123,7 @@ rd_window_frame(void)
           U64 tab_task_count = 0;
           F32 tab_close_width_px = ui_top_font_size()*2.5f;
           F32 max_tab_width_px = ui_top_font_size()*20.f;
-          if(build_panel) UI_TagF("tab")
+          UI_TagF("tab")
           {
             B32 reset = (ws->window_layout_reset || ws->frames_alive < 5 || is_changing_panel_boundaries);
             for(CFG_NodePtrNode *n = panel->tabs.first; n != 0; n = n->next)
@@ -8999,19 +9135,24 @@ rd_window_frame(void)
               }
               UI_TagF(tab != panel->selected_tab ? "inactive" : "")
               {
-                TabTask *t = push_array(scratch.arena, TabTask, 1);
-                t->tab = tab;
-                t->fstrs = rd_title_fstrs_from_cfg(scratch.arena, tab, 0);
-                F32 tab_width_target = dr_dim_from_fstrs(ui_top_tab_size(), &t->fstrs).x + tab_close_width_px + ui_top_font_size()*1.f;
+                DR_FStrList tab_title_fstrs = rd_title_fstrs_from_cfg(scratch.arena, tab, 0);
+                F32 tab_width_target = dr_dim_from_fstrs(ui_top_tab_size(), &tab_title_fstrs).x + tab_close_width_px + ui_top_font_size()*1.f;
                 B32 tab_is_selected = (tab == panel->selected_tab);
                 if(tab_is_selected && panel_tree.focused == panel)
                 {
                   tab_width_target += tab_close_width_px;
                 }
                 tab_width_target = Min(max_tab_width_px, tab_width_target);
-                t->tab_width = floor_f32(ui_anim(ui_key_from_stringf(ui_key_zero(), "tab_width_%p", tab), tab_width_target, .initial = reset ? tab_width_target : 0, .rate = rd_state->menu_animation_rate));
-                SLLQueuePush(first_tab_task, last_tab_task, t);
-                tab_task_count += 1;
+                F32 tab_width = floor_f32(ui_anim(ui_key_from_stringf(ui_key_zero(), "tab_width_%p", tab), tab_width_target, .initial = reset ? tab_width_target : 0, .rate = rd_state->menu_animation_rate));
+                if(build_panel)
+                {
+                  TabTask *t = push_array(scratch.arena, TabTask, 1);
+                  t->tab = tab;
+                  t->fstrs = tab_title_fstrs;
+                  t->tab_width = tab_width;
+                  SLLQueuePush(first_tab_task, last_tab_task, t);
+                  tab_task_count += 1;
+                }
               }
             }
           }
@@ -9361,6 +9502,7 @@ rd_window_frame(void)
           //////////////////////////
           //- rjf: accept file drops
           //
+          if(build_panel)
           {
             for(UI_Event *evt = 0; ui_next_event(&evt);)
             {
@@ -11459,9 +11601,9 @@ rd_init(CmdLine *cmdln)
       for(U64 idx = 1; idx < cmdln->argc; idx += 1)
       {
         String8 arg = str8_cstring(cmdln->argv[idx]);
-        B32 is_flag = (str8_match(str8_prefix(arg, 1), str8_lit("-"), 0) ||
-                       str8_match(str8_prefix(arg, 1), str8_lit("--"), 0) ||
-                       str8_match(str8_prefix(arg, 1), str8_lit("/"), 0));
+        B32 is_flag = (str8_match(str8_prefix(arg, 1), s("-"), 0) ||
+                       str8_match(str8_prefix(arg, 1), s("--"), 0) ||
+                       str8_match(str8_prefix(arg, 1), s("/"), 0));
         B32 is_cfg = 0;
         B32 is_dmp = 0;
         if(!is_flag && !after_first_non_flag)
@@ -11479,12 +11621,12 @@ rd_init(CmdLine *cmdln)
             String8 header_suffix = {0};
             header_suffix.str = header_suffix_buffer;
             header_suffix.size = file_read(file, r1u64(10, 10+256), header_suffix_buffer);
-            String8 header_type_suffix = str8_skip(header_suffix, str8_find_needle(header_suffix, 0, str8_lit(" "), 0)+1);
-            if(str8_match(header_type_suffix, str8_lit("user"), StringMatchFlag_RightSideSloppy))
+            String8 header_type_suffix = str8_skip(header_suffix, str8_find_needle(header_suffix, 0, s(" "), 0)+1);
+            if(str8_match(header_type_suffix, s("user"), StringMatchFlag_RightSideSloppy))
             {
               implicit_user_arg = path_absolute_dst_from_relative_dst_src(scratch.arena, arg, get_process_info()->initial_path);
             }
-            else if(str8_match(header_type_suffix, str8_lit("project"), StringMatchFlag_RightSideSloppy))
+            else if(str8_match(header_type_suffix, s("project"), StringMatchFlag_RightSideSloppy))
             {
               implicit_project_arg = path_absolute_dst_from_relative_dst_src(scratch.arena, arg, get_process_info()->initial_path);
             }
@@ -14545,6 +14687,11 @@ rd_frame(void)
               CFG_Node *split_panel_prev = panel->prev->cfg;
               CFG_Node *new_parent = cfg_node_alloc(rd_state->cfg);
               CFG_Node *new_sibling = cfg_node_alloc(rd_state->cfg);
+              if(panel == panel_tree.zoom_root)
+              {
+                CFG_Node *zoom_panel = cfg_node_child_from_string_or_alloc(rd_state->cfg, split_panel, s("zoom_root"));
+                cfg_node_insert_child(rd_state->cfg, new_parent, &cfg_nil_node, zoom_panel);
+              }
               cfg_node_equip_string(rd_state->cfg, new_parent, split_panel->string);
               cfg_node_equip_string(rd_state->cfg, split_panel, str8_lit("0.5"));
               cfg_node_equip_string(rd_state->cfg, new_sibling, str8_lit("0.5"));
@@ -14726,6 +14873,17 @@ rd_frame(void)
             }
             rd_cmd(RD_CmdKind_FocusPanel, .panel = next_focused->cfg->id);
           }break;
+          case RD_CmdKind_ParentPanel:
+          {
+            CFG_Node *panel = cfg_node_from_id(rd_regs()->panel);
+            CFG_PanelTree panel_tree = cfg_panel_tree_from_cfg(scratch.arena, cfg_node_from_id(rd_regs()->window));
+            CFG_PanelNode *panel_node = cfg_panel_node_from_tree_cfg(panel_tree.root, panel);
+            CFG_PanelNode *parent_node = panel_node->parent;
+            if(parent_node != &cfg_nil_panel_node)
+            {
+              rd_cmd(RD_CmdKind_FocusPanel, .panel = parent_node->cfg->id);
+            }
+          }break;
           case RD_CmdKind_FocusPanel:
           {
             CFG_Node *panel = cfg_node_from_id(rd_regs()->panel);
@@ -14801,6 +14959,35 @@ rd_frame(void)
                 }
               }
               rd_cmd(RD_CmdKind_FocusPanel, .panel = dst_panel->cfg->id);
+            }
+          }break;
+          
+          //- rjf: panel zooming
+          case RD_CmdKind_ToggleZoomPanel:
+          case RD_CmdKind_ZoomPanel:
+          case RD_CmdKind_UnzoomPanel:
+          {
+            CFG_Node *window = cfg_node_from_id(rd_regs()->window);
+            CFG_Node *panel = cfg_node_from_id(rd_regs()->panel);
+            CFG_PanelTree panel_tree = cfg_panel_tree_from_cfg(scratch.arena, window);
+            RD_WindowState *ws = rd_window_state_from_cfg(window);
+            ws->panel_hoist_cfg_id = rd_regs()->panel;
+            
+            // rjf: remove existing zoom
+            B32 already_zoomed = 0;
+            {
+              CFG_PanelNode *zoom_root = panel_tree.zoom_root;
+              if(zoom_root->cfg != &cfg_nil_node)
+              {
+                already_zoomed = 1;
+                cfg_node_release(rd_state->cfg, cfg_node_child_from_string(zoom_root->cfg, s("zoom_root")));
+              }
+            }
+            
+            // rjf: not already zoomed? -> zoom
+            if(!already_zoomed || kind == RD_CmdKind_ZoomPanel)
+            {
+              cfg_node_child_from_string_or_alloc(rd_state->cfg, panel, s("zoom_root"));
             }
           }break;
           
@@ -18595,13 +18782,14 @@ rd_frame(void)
     F32 scrolling_animations_f = (F32)!!rd_setting_b32_from_name(str8_lit("scrolling_animations"));
     F32 tooltip_animations_f   = (F32)!!rd_setting_b32_from_name(str8_lit("tooltip_animations"));
     F32 menu_animations_f      = (F32)!!rd_setting_b32_from_name(str8_lit("menu_animations"));
-    rd_state->catchall_animation_rate     = 1 - master_animations_f*pow_f32(2, (-60.f * rd_state->frame_dt));
-    rd_state->menu_animation_rate         = 1 - master_animations_f*menu_animations_f*pow_f32(2, (-70.f * rd_state->frame_dt));
-    rd_state->menu_animation_rate__slow   = 1 - master_animations_f*menu_animations_f*pow_f32(2, (-50.f * rd_state->frame_dt));
-    rd_state->entity_alive_animation_rate = 1 - master_animations_f*menu_animations_f*pow_f32(2, (-30.f * rd_state->frame_dt));
-    rd_state->rich_hover_animation_rate   = 1 - master_animations_f*menu_animations_f*pow_f32(2, (-50.f * rd_state->frame_dt));
-    rd_state->scrolling_animation_rate    = 1 - master_animations_f*scrolling_animations_f*pow_f32(2, (-60.f * rd_state->frame_dt));
-    rd_state->tooltip_animation_rate      = 1 - master_animations_f*tooltip_animations_f*pow_f32(2, (-60.f * rd_state->frame_dt));
+    rd_state->catchall_animation_rate        = 1 - master_animations_f*pow_f32(2, (-60.f * rd_state->frame_dt));
+    rd_state->menu_animation_rate            = 1 - master_animations_f*menu_animations_f*pow_f32(2, (-70.f * rd_state->frame_dt));
+    rd_state->menu_animation_rate__slow      = 1 - master_animations_f*menu_animations_f*pow_f32(2, (-50.f * rd_state->frame_dt));
+    rd_state->menu_animation_rate__very_slow = 1 - master_animations_f*menu_animations_f*pow_f32(2, (-20.f * rd_state->frame_dt));
+    rd_state->entity_alive_animation_rate    = 1 - master_animations_f*menu_animations_f*pow_f32(2, (-30.f * rd_state->frame_dt));
+    rd_state->rich_hover_animation_rate      = 1 - master_animations_f*menu_animations_f*pow_f32(2, (-50.f * rd_state->frame_dt));
+    rd_state->scrolling_animation_rate       = 1 - master_animations_f*scrolling_animations_f*pow_f32(2, (-60.f * rd_state->frame_dt));
+    rd_state->tooltip_animation_rate         = 1 - master_animations_f*tooltip_animations_f*pow_f32(2, (-60.f * rd_state->frame_dt));
   }
   
   //////////////////////////////

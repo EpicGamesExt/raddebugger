@@ -40,6 +40,7 @@ ds_msg_from_packet(Arena *arena, String8 data)
         String8 string = {0};
         off += str8_deserial_read_struct(payload, off, &string.size);
         string = str8_substr(payload, r1u64(off, off+string.size));
+        off += string.size;
         str8_list_push(arena, &msg.command_line, string);
       }
     }
@@ -49,6 +50,7 @@ ds_msg_from_packet(Arena *arena, String8 data)
       String8 string = {0};
       off += str8_deserial_read_struct(payload, off, &string.size);
       string = str8_substr(payload, r1u64(off, off+string.size));
+      off += string.size;
       msg.path = string;
     }
     
@@ -61,6 +63,7 @@ ds_msg_from_packet(Arena *arena, String8 data)
         String8 string = {0};
         off += str8_deserial_read_struct(payload, off, &string.size);
         string = str8_substr(payload, r1u64(off, off+string.size));
+        off += string.size;
         str8_list_push(arena, &msg.env, string);
       }
     }
