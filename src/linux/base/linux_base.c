@@ -807,8 +807,11 @@ internal File
 file_open(AccessFlags flags, String8 path)
 {
   Temp scratch = scratch_begin(0, 0);
-  String8 path_copy = push_str8_copy(scratch.arena, path);
+ 
   int lnx_flags = 0;
+  
+  lnx_flags |= O_CLOEXEC;
+  
   if(flags & AccessFlag_Read && flags & AccessFlag_Write)
   {
     lnx_flags = O_RDWR;
@@ -821,22 +824,32 @@ file_open(AccessFlags flags, String8 path)
   {
     lnx_flags = O_RDONLY;
   }
+ 
   if(flags & AccessFlag_Append)
   {
     lnx_flags |= O_APPEND;
   }
+  else if(flags & AccessFlag_Write)
+  {
+    lnx_flags |= O_TRUNC;
+  }
+ 
   if(flags & (AccessFlag_Write|AccessFlag_Append))
   {
     lnx_flags |= O_CREAT;
   }
-  lnx_flags |= O_CLOEXEC;
+
+ 
   if(flags & AccessFlag_CreateNew) { lnx_flags |= O_CREAT|O_EXCL; }
+
+  String8 path_copy = push_str8_copy(scratch.arena, path);
   int fd = open((char *)path_copy.str, lnx_flags, 0755);
   File handle = {0};
   if(fd != -1)
   {
     handle.u64[0] = fd;
   }
+
   scratch_end(scratch);
   return handle;
 }
