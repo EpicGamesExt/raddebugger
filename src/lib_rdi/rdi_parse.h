@@ -11,6 +11,26 @@
 //~ Usage Samples
 //
 #if 0
+// File Data Blob -> RDI
+{
+  RDI_Parsed rdi = {0};
+  RDI_ParseStatus status = rdi_parse(data, size, &rdi);
+}
+
+// Compressed File Data Blob -> RDI
+{
+  RDI_Parsed rdi = {0};
+  RDI_ParseStatus status = RDI_ParseStatus_Good;
+  {
+    RDI_Parsed rdi_compressed = {0};
+    RDI_ParseStatus rdi_compressed_status = rdi_parse(compressed_data, compressed_size, &rdi_compressed);
+    RDI_U64 decompressed_size = rdi_decompressed_size_from_parsed(&rdi_compressed);
+    RDI_U8 *decompressed_data = allocate(decompressed_size);
+    rdi_decompress_parsed(decompressed_data, decompressed_size, &rdi_compressed);
+    status = rdi_parse(decompressed_data, decompressed_size, &rdi);
+  }
+}
+
 // Procedure Name -> Line
 {
   RDI_Parsed *rdi = ...;
