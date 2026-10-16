@@ -1940,12 +1940,16 @@ main(int argc, char **argv)
     {
       U64 env_count = 0;
       for(; __environ[env_count] != 0; env_count += 1) {}
+
       char **default_env = push_array(lnx_state.arena, char *, env_count+1);
       for EachIndex(idx, env_count)
       {
-        default_env[idx] = (char *)str8_copy(lnx_state.arena, str8_cstring(__environ[idx])).str;
+        String8 entry = str8_copy(lnx_state.arena, str8_cstring(__environ[idx]));
+        default_env[idx] = (char *)entry.str;
+        str8_list_push(lnx_state.arena, &lnx_state.process_info.environment, entry);
       }
       default_env[env_count] = 0;
+      
       lnx_state.default_env_count = env_count;
       lnx_state.default_env       = default_env;
     }
