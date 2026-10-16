@@ -129,4 +129,5 @@ internal B32
 sock_endpoint_match(SOCK_Endpoint a, SOCK_Endpoint b)
 {
   B32 result = (a.port == b.port && a.kind == b.kind && MemoryMatchArray(a.address_u8, b.address_u8));
+  return result;
 }

@@ -1703,20 +1703,21 @@ di_match_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out,
         RDI_SectionKind_Procedures,
         RDI_SectionKind_TypeNodes,
       };
-      Rng1U64 range = lane_range(dbgi_keys.count);
-      for EachInRange(dbgi_idx, range)
+      for EachElement(name_map_kind_idx, name_map_kinds)
       {
-        DI_Key dbgi_key = dbgi_keys.v[dbgi_idx];
-        if(!allow_other_dbgis && !di_key_match(preferred_key, dbgi_key))
+        Rng1U64 range = lane_range(dbgi_keys.count);
+        for EachInRange(dbgi_idx, range)
         {
-          continue;
-        }
-        Access *access = access_open();
-        {
-          RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
-          RDI_Unit *unit = rdi_element_from_name_idx(rdi, Units, unit_idx);
-          for EachElement(name_map_kind_idx, name_map_kinds)
+          DI_Key dbgi_key = dbgi_keys.v[dbgi_idx];
+          if(!allow_other_dbgis && !di_key_match(preferred_key, dbgi_key))
           {
+            continue;
+          }
+          Access *access = access_open();
+          {
+            RDI_Parsed *rdi = di_rdi_from_key(access, dbgi_key, 0, 0);
+            RDI_Unit *unit = rdi_element_from_name_idx(rdi, Units, unit_idx);
+            
             // rjf: unpack name map
             RDI_NameMap *name_map = rdi_element_from_name_idx(rdi, NameMaps, name_map_kinds[name_map_kind_idx]);
             RDI_ParsedNameMap parsed_name_map = {0};
@@ -1821,8 +1822,8 @@ di_match_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out,
               lane_matches[lane_idx()].count        = filtered_matches_count;
             }
           }
+          access_close(access);
         }
-        access_close(access);
       }
     }
   }

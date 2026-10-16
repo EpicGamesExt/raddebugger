@@ -3201,10 +3201,12 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
         // a halt, and we're waiting for that)
         if(events.first != 0 && events.count == 1 && events.first->v.kind == DMN_EventKind_Error && events.first->v.error_kind == DMN_ErrorKind_NotAttached)
         {
+#if 0
           for(;num_servers_running > 0;)
           {
             // TODO(rjf)
           }
+#endif
         }
         
         //- rjf: bump all debuggee state generations
