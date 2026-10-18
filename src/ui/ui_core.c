@@ -1859,6 +1859,11 @@ ui_layout_position__in_place(UI_Box *root, Axis2 axis)
   {
     F32 layout_position = 0;
     
+    // children are placed from this box's unrounded position: placing them from its floored rect loses up to a
+    // pixel per level (two fill columns splitting an odd width get x.5 each, and everything right-aligned after
+    // them drew 1 px left at every odd window width). The root's rect is set from outside, unrounded.
+    F32 box_p0 = (box == root) ? box->rect.p0.v[axis] : box->rect_p0_unrounded.v[axis];
+    
     //- rjf: lay out children
     F32 bounds = 0;
     for(UI_Box *child = box->first; !ui_box_is_nil(child); child = child->next)
@@ -1888,12 +1893,13 @@ ui_layout_position__in_place(UI_Box *root, Axis2 axis)
         {
           child->fixed_position_animated = child->fixed_position;
         }
-        child->rect.p0.v[axis] = box->rect.p0.v[axis] + child->fixed_position_animated.v[axis] - !(child->flags&(UI_BoxFlag_SkipViewOffX<<axis))*floor_f32(box->view_off.v[axis]);
+        child->rect.p0.v[axis] = box_p0 + child->fixed_position_animated.v[axis] - !(child->flags&(UI_BoxFlag_SkipViewOffX<<axis))*floor_f32(box->view_off.v[axis]);
       }
       else
       {
-        child->rect.p0.v[axis] = box->rect.p0.v[axis] + child->fixed_position.v[axis] - !(child->flags&(UI_BoxFlag_SkipViewOffX<<axis))*floor_f32(box->view_off.v[axis]);
+        child->rect.p0.v[axis] = box_p0 + child->fixed_position.v[axis] - !(child->flags&(UI_BoxFlag_SkipViewOffX<<axis))*floor_f32(box->view_off.v[axis]);
       }
+      child->rect_p0_unrounded.v[axis] = child->rect.p0.v[axis];
       child->rect.p1.v[axis] = child->rect.p0.v[axis] + child->fixed_size.v[axis];
       child->rect.p0.x = floor_f32(child->rect.p0.x);
       child->rect.p0.y = floor_f32(child->rect.p0.y);

@@ -412,6 +412,7 @@ struct UI_Box
   DR_FStrList display_fstrs;
   DR_FRunList display_fruns;
   Rng2F32 rect;
+  Vec2F32 rect_p0_unrounded; // rect.p0 before flooring: children are placed from it, so rounding doesn't add up down the tree
   Vec2F32 fixed_position_animated;
   Vec2F32 position_delta;
   FuzzyMatchRangeList fuzzy_match_ranges;
