@@ -178,7 +178,7 @@ typedef struct COFF_ParsedArchiveMemberHeader
   Rng1U64        data_range;
 } COFF_ParsedArchiveMemberHeader;
 
-typedef struct COFF_ParsedArchiveImportHeader
+typedef struct COFF_ShortImport
 {
   B32               is_sig_correct;
   U16               version;
@@ -190,7 +190,8 @@ typedef struct COFF_ParsedArchiveImportHeader
   COFF_ImportByType import_by;
   String8           func_name;
   String8           dll_name;
-} COFF_ParsedArchiveImportHeader;
+  String8           actual_export; // optional export name override (EXPORTAS)
+} COFF_ShortImport;
 
 typedef struct COFF_ArchiveMember
 {
@@ -233,6 +234,7 @@ typedef struct COFF_ArchiveMemberList
 
 typedef struct COFF_ArchiveParse
 {
+  B32                      has_first_header;
   B32                      has_second_header;
   B32                      has_long_names;
   COFF_ArchiveFirstMember  first_member;
@@ -315,11 +317,11 @@ internal COFF_ArchiveFirstMember  coff_parse_first_archive_member (COFF_ArchiveM
 internal COFF_ArchiveSecondMember coff_parse_second_archive_member(COFF_ArchiveMember *member);
 internal String8                  coff_decode_raw_member_name     (String8 long_names, String8 name);
 internal String8                  coff_decode_member_name         (String8 long_names, String8 name);
-internal U64                      coff_parse_import               (String8 raw_archive_member, U64 offset, COFF_ParsedArchiveImportHeader *header_out);
+internal U64                      coff_parse_short_import               (String8 raw_archive_member, U64 offset, COFF_ShortImport *header_out);
 
 internal COFF_ArchiveMember             coff_archive_member_from_offset(String8 raw_archive, U64 offset);
 internal COFF_ArchiveMember             coff_archive_member_from_data  (String8 raw_archive_member);
-internal COFF_ParsedArchiveImportHeader coff_archive_import_from_data  (String8 raw_archive_member);
+internal COFF_ShortImport coff_archive_import_from_data  (String8 raw_archive_member);
 
 internal U64 coff_regular_archive_member_iter_init(String8 raw_archive);
 internal B32 coff_regular_archive_member_iter_next(String8 raw_archive, U64 *offset, COFF_ArchiveMember *member_out);

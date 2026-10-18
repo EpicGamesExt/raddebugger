@@ -493,7 +493,7 @@ coff_print_file_header(Arena *arena, String8List *out, String8 indent, COFF_File
 }
 
 internal void
-coff_print_import(Arena *arena, String8List *out, String8 indent, COFF_ParsedArchiveImportHeader *header)
+coff_print_import(Arena *arena, String8List *out, String8 indent, COFF_ShortImport *header)
 {
   Temp scratch = scratch_begin(&arena, 1);
   
@@ -794,8 +794,8 @@ coff_print_archive(Arena *arena, String8List *out, String8 indent, String8 raw_a
       } break;
       case COFF_DataType_Import: {
         if (opts & RD_Option_Headers) {
-          COFF_ParsedArchiveImportHeader header = {0};
-          U64 parse_size = coff_parse_import(member.data, 0, &header);
+          COFF_ShortImport header = {0};
+          U64 parse_size = coff_parse_short_import(member.data, 0, &header);
           if (parse_size) {
             coff_print_import(arena, out, indent, &header);
           } else {

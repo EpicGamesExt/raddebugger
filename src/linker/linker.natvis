@@ -124,6 +124,7 @@
 	</Type>
 
 	<Type Name="LNK_SymbolHashTrieChunkList">
+    <AlternativeType Name="LNK_NameTrieChunkList"/>
 		<Expand>
       <Item Name="[chunk count]">count</Item>
       <CustomListItems MaxItemsPerView="5000">
@@ -144,6 +145,7 @@
 	</Type>
 
   <Type Name="LNK_SymbolHashTrieChunk">
+    <AlternativeType Name="LNK_NameTrieChunk"/>
     <DisplayString>{count,cap,v}</DisplayString>
     <Expand>
       <Item Name="[count]">count</Item>

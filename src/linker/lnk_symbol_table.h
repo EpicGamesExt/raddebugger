@@ -59,27 +59,9 @@ typedef struct LNK_SymbolArray
 
 // --- Symbol Hash Trie --------------------------------------------------------
 
-typedef struct LNK_SymbolHashTrie
-{
-  String8                   *name;
-  LNK_Symbol                *symbol;
-  struct LNK_SymbolHashTrie *child[4];
-} LNK_SymbolHashTrie;
-
-typedef struct LNK_SymbolHashTrieChunk
-{
-  struct LNK_SymbolHashTrieChunk *next;
-  U64                             count;
-  U64                             cap;
-  LNK_SymbolHashTrie             *v;
-} LNK_SymbolHashTrieChunk;
-
-typedef struct LNK_SymbolHashTrieChunkList
-{
-  U64                      count;
-  LNK_SymbolHashTrieChunk *first;
-  LNK_SymbolHashTrieChunk *last;
-} LNK_SymbolHashTrieChunkList;
+typedef LNK_NameTrieNode      LNK_SymbolHashTrie;
+typedef LNK_NameTrieChunk     LNK_SymbolHashTrieChunk;
+typedef LNK_NameTrieChunkList LNK_SymbolHashTrieChunkList;
 
 // --- Symbol Table ------------------------------------------------------------
 
@@ -120,12 +102,11 @@ internal LNK_SymbolNode * lnk_symbol_list_push(Arena *arena, LNK_SymbolList *lis
 
 // --- Symbol Hash Trie --------------------------------------------------------
 
-internal LNK_SymbolHashTrie *       lnk_symbol_hash_tire_chunk_list_push(Arena *arena, LNK_SymbolHashTrieChunkList *list, U64 cap);
-internal void                       lnk_symbol_hash_trie_chunk_list_concat_in_place(LNK_SymbolHashTrieChunkList *list, LNK_SymbolHashTrieChunkList *to_concat);
 internal void                       lnk_symbol_hash_trie_insert_or_replace(Arena *arena, LNK_SymbolHashTrieChunkList *chunks, LNK_SymbolHashTrie **trie, U64 hash, LNK_Symbol *symbol);
-internal LNK_SymbolHashTrie *       lnk_symbol_hash_trie_search(LNK_SymbolHashTrie *trie, U64 hash, String8 name);
-internal void                       lnk_symbol_hash_trie_remove(LNK_SymbolHashTrie *trie);
-internal LNK_SymbolHashTrieChunk ** lnk_array_from_symbol_hash_trie_chunk_list(Arena *arena, LNK_SymbolHashTrieChunkList *lists, U64 lists_count, U64 *count_out);
+#define lnk_symbol_hash_trie_chunk_list_concat_in_place lnk_name_trie_chunk_list_concat
+#define lnk_symbol_hash_trie_search lnk_name_trie_search
+#define lnk_symbol_hash_trie_remove lnk_name_trie_remove
+#define lnk_array_from_symbol_hash_trie_chunk_list lnk_name_trie_chunk_array
 
 // --- Symbol Helpers ----------------------------------------------------------
 

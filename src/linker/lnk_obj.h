@@ -8,7 +8,7 @@
 typedef struct LNK_ObjSymbolArray
 {
   U64                   count;
-  U32Array               primary_bits;
+  U32Array              primary_bits;
   U32                  *block_bases;
   U64                  *values;
   U32                  *section_numbers;
@@ -28,42 +28,43 @@ typedef struct LNK_ObjSectionArray
   U32Node           **associated_section_numbers;
 } LNK_ObjSectionArray;
 
+typedef struct LNK_ObjImportMetadata
+{
+  String8     definition;
+  String8List references;
+} LNK_ObjImportMetadata;
+
 typedef struct LNK_ObjCoff
 {
-  String8             data;
-  COFF_FileHeaderInfo header;
-  LNK_ObjSectionArray sections;
-  LNK_ObjSymbolArray  symbols;
-  U32                 debug_t_section_number;
-  U32                 debug_p_section_number;
-  U32                 debug_h_section_number;
-  U32                 llvm_addrsig_section_number;
-  B8                  hotpatch;
+  String8                data;
+  COFF_FileHeaderInfo    header;
+  LNK_ObjSectionArray    sections;
+  LNK_ObjSymbolArray     symbols;
+  LNK_ObjImportMetadata *import_metadata;
+  U32                    debug_t_section_number;
+  U32                    debug_p_section_number;
+  U32                    debug_h_section_number;
+  U32                    llvm_addrsig_section_number;
+  B8                     hotpatch;
 } LNK_ObjCoff;
 
+typedef struct LNK_Lib     LNK_Lib;
+typedef struct LNK_ObjNode LNK_ObjNode;
 typedef struct LNK_Obj
 {
-  String8 path;
-
-  LNK_ObjCoff coff;
-
-  // flags
-  B8 exclude_from_debug_info;
-
-  U32 input_idx;
-
-  // link state
-  LNK_ObjSymbolRef  *symlinks; // indexed by COFF section number; slot zero is null
-
-  // link
-  struct LNK_LibMemberRef *link_member;
-  struct LNK_ObjNode      *self;
+  String8           path;
+  LNK_ObjCoff       coff;
+  B8                exclude_from_debug_info;
+  U32               input_idx;
+  LNK_ObjSymbolRef *symlinks; // indexed by COFF section number; slot zero is null
+  LNK_Lib          *lib;
+  LNK_ObjNode      *self;
 
   // @type_server
-  Rng1U64         ti_range;
-  CV_TypeIndex   *ti_map;
-  Rng1U64         pch_ti_range;
-  U64             pch_obj_idx;
+  Rng1U64       ti_range;
+  CV_TypeIndex *ti_map;
+  Rng1U64       pch_ti_range;
+  U64           pch_obj_idx;
 } LNK_Obj;
 
 typedef struct LNK_ObjSection
@@ -210,13 +211,14 @@ typedef struct
   struct LNK_Input **inputs;
   LNK_ObjNode       *objs;
   U64                obj_id_base;
-  U32                machine;
   String8List        remove_sections;
 } LNK_ObjIniter;
 
 typedef struct
 {
   LNK_SymbolTable  *symtab;
+  LNK_ExportTable  *exports;
+  HashMap         *import_symbols;
   LNK_Obj         **objs;
 } LNK_InputCoffSymbolTable;
 
@@ -241,6 +243,8 @@ internal void       lnk_obj_list_push_node_many(LNK_ObjList *list, U64 count, LN
 internal void       lnk_obj_list_push_node(LNK_ObjList *list, LNK_ObjNode *node);
 
 // --- Metadata ----------------------------------------------------------------
+
+internal B32 lnk_is_import_metadata_name(String8 name);
 
 internal U32              lnk_obj_get_features(LNK_Obj *obj);
 internal struct LNK_Lib * lnk_obj_get_lib(LNK_Obj *obj);

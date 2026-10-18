@@ -4,10 +4,17 @@
 #pragma once
 
 // entry points
+#define LNK_BootMode_XList \
+  X(Linker)     \
+  X(TypeServer) \
+  X(Lib)        \
+  /* end */
+
 typedef enum
 {
-  LNK_BootMode_Linker,
-  LNK_BootMode_TypeServer,
+#define X(n,...) LNK_BootMode_##n,
+  LNK_BootMode_XList
+#undef X
 } LNK_BootMode;
 
 #if OS_WINDOWS
@@ -80,6 +87,7 @@ typedef enum
   LNK_CmdSwitch_ManifestInput,
   LNK_CmdSwitch_ManifestUac,
   LNK_CmdSwitch_Merge,
+  LNK_CmdSwitch_Name,
   LNK_CmdSwitch_Natvis,
   LNK_CmdSwitch_NoDefaultLib,
   LNK_CmdSwitch_NoEntry,
@@ -425,6 +433,9 @@ typedef struct LNK_Config
   LNK_SwitchState             sort_imports;
   LNK_SwitchState             llvm_addrsig;
   B32                         no_entry;
+
+  // LIB
+  String8List def_paths;
 } LNK_Config;
 
 // --- MSVC Error Codes --------------------------------------------------------
@@ -606,7 +617,6 @@ internal Version lnk_get_min_subsystem_version    (PE_WindowsSubsystem subsystem
 
 internal B32 lnk_do_debug_info        (LNK_Config *config);
 internal B32 lnk_is_thread_pool_shared(LNK_Config *config);
-internal B32 lnk_is_section_removed   (LNK_Config *config, String8 section_name);
 internal B32 lnk_is_dll_delay_load    (LNK_Config *config, String8 dll_name);
 
 internal COFF_SectionFlags lnk_apply_section_directives_to_flags(LNK_Config *config, String8 full_section_name, COFF_SectionFlags flags);
@@ -622,6 +632,6 @@ internal void lnk_whole_archive(LNK_Config *config, String8 lib_name);
 // --- Config ------------------------------------------------------------------
 
 internal void lnk_apply_cmd_option_to_config(LNK_Config *config, String8 name, String8 value, struct LNK_Obj *obj);
-
 internal LNK_Config * lnk_config_init(U64 argc, char **argv);
+internal void lnk_config_apply_cmd_line(LNK_Config *config, LNK_CmdLine input_cmd_line);
 

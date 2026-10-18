@@ -104,6 +104,7 @@
 #include "linker/lnk_cmd_line.h"
 #include "linker/lnk_cmd_line.c"
 #include "linker/lnk_log.h"
+#include "linker/lnk_name_trie.h"
 #include "linker/lnk_debug_helper.h"
 #include "torture.h"
 
@@ -112,6 +113,7 @@
 #include "win32/win32_inc.c"
 #include "linux/linux_inc.c"
 #include "linker/hash_table.c"
+#include "linker/lnk_name_trie.c"
 #include "linker/lf_hash_table.c"
 #include "linker/base_ext/base_bit_array.c"
 #include "artifact_cache/artifact_cache.c"

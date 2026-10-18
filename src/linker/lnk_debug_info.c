@@ -2672,7 +2672,7 @@ THREAD_POOL_TASK_FUNC(lnk_move_global_symbols_to_gsi)
     CV_SymbolList *public_symbol_list = &public_symbols[task_id];
     for EachNode(chunk, LNK_SymbolHashTrieChunk, symbol_chunks.first) {
       for EachIndex(i, chunk->count) {
-        LNK_Symbol        *symbol        = chunk->v[i].symbol;
+        LNK_Symbol        *symbol        = chunk->v[i].value;
         LNK_ObjSymbolRef   symbol_ref    = lnk_ref_from_symbol(symbol);
         COFF_ParsedSymbol  symbol_parsed = lnk_parsed_from_symbol(symbol);
 
