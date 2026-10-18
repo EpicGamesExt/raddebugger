@@ -1816,9 +1816,11 @@ ui_layout_enforce_constraints__in_place(UI_Box *root, Axis2 axis)
           {
             if(!(child->flags & (UI_BoxFlag_FloatingX<<axis)))
             {
-              F32 fixup_pct = (violation / total_weighted_size);
-              fixup_pct = Clamp(0, fixup_pct, 1);
-              child->fixed_size.v[axis] -= child_fixups[child_idx] * fixup_pct;
+              // multiply before dividing: (size*violation)/total is exact whenever the result is representable
+              // (a lone fill child shrinks by exactly the violation), where size*(violation/total) leaves sizes
+              // like 1502.9999 that the floor in layout positioning turns into a 1 px jump at some widths
+              F32 fixup_total = Clamp(0, violation, total_weighted_size);
+              child->fixed_size.v[axis] -= (child_fixups[child_idx] * fixup_total) / total_weighted_size;
             }
           }
         }
