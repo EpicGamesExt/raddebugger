@@ -193,7 +193,7 @@ if "%oodle%"=="1" (
 
 :: --- Build Everything (@build_targets) --------------------------------------
 pushd build
-if "%raddbg%"=="1"                     set didbuild=1 && %compile% ..\src\raddbg\raddbg_main.c                               %compile_link% %link_icon% %out%raddbg.exe || exit /b 1
+if "%raddbg%"=="1"                     set didbuild=1 && %compile% ..\src\raddbg\raddbg_main.c                               %compile_link% %link_icon% %linker% /MANIFESTINPUT:..\data\raddbg.manifest %out%raddbg.exe || exit /b 1
 if "%raddbg_non_graphical%"=="1"       set didbuild=1 && %compile% -DWM_STUB=1 -DR_BACKEND=R_BACKEND_STUB ..\src\raddbg\raddbg_main.c %compile_link% %link_icon% %out%raddbg_non_graphical.exe || exit /b 1
 if "%com_shim%"=="1"                   set didbuild=1 && %compile% ..\src\com_shim\com_shim_main.c                           %compile_link% %out%com_shim.exe || exit /b 1
 if "%raddbg_server%"=="1"              set didbuild=1 && %compile% ..\src\raddbg_server\raddbg_server_main.c                 %compile_link% %out%raddbg_server.exe || exit /b 1

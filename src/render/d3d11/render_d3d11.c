@@ -513,39 +513,44 @@ r_window_equip(WM_Window handle)
       hwnd = w32_wm_hwnd_from_window(w32_layer_window);
     }
     
-    //- rjf: create swapchain
-    DXGI_SWAP_CHAIN_DESC1 swapchain_desc = {0};
+    //- draw through a composition surface when possible (frame-perfect resizes, see win32_composition.h); its
+    // framebuffer is made at the first frame's size. Otherwise, a swap chain.
+    if(!w32_comp_window_equip(handle, r_d3d11_state->device))
     {
-      swapchain_desc.Width              = 0; // NOTE(rjf): use window width
-      swapchain_desc.Height             = 0; // NOTE(rjf): use window height
-      swapchain_desc.Format             = DXGI_FORMAT_B8G8R8A8_UNORM;
-      swapchain_desc.Stereo             = FALSE;
-      swapchain_desc.SampleDesc.Count   = 1;
-      swapchain_desc.SampleDesc.Quality = 0;
-      swapchain_desc.BufferUsage        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-      swapchain_desc.BufferCount        = 2;
-      swapchain_desc.Scaling            = DXGI_SCALING_NONE;
-      swapchain_desc.SwapEffect         = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-      swapchain_desc.AlphaMode          = DXGI_ALPHA_MODE_UNSPECIFIED;
-      swapchain_desc.Flags              = 0;
+      //- rjf: create swapchain
+      DXGI_SWAP_CHAIN_DESC1 swapchain_desc = {0};
+      {
+        swapchain_desc.Width              = 0; // NOTE(rjf): use window width
+        swapchain_desc.Height             = 0; // NOTE(rjf): use window height
+        swapchain_desc.Format             = DXGI_FORMAT_B8G8R8A8_UNORM;
+        swapchain_desc.Stereo             = FALSE;
+        swapchain_desc.SampleDesc.Count   = 1;
+        swapchain_desc.SampleDesc.Quality = 0;
+        swapchain_desc.BufferUsage        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        swapchain_desc.BufferCount        = 2;
+        swapchain_desc.Scaling            = DXGI_SCALING_NONE;
+        swapchain_desc.SwapEffect         = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+        swapchain_desc.AlphaMode          = DXGI_ALPHA_MODE_UNSPECIFIED;
+        swapchain_desc.Flags              = 0;
+      }
+      HRESULT error = r_d3d11_state->dxgi_factory->lpVtbl->CreateSwapChainForHwnd(r_d3d11_state->dxgi_factory, (IUnknown *)r_d3d11_state->device, hwnd, &swapchain_desc, 0, 0, &window->swapchain);
+      if(FAILED(error))
+      {
+        char buffer[256] = {0};
+        raddbg_snprintf(buffer, sizeof(buffer), "DXGI swap chain creation failure (%lx). The process is terminating.", error);
+        sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+        abort_self(1);
+      }
+      
+      r_d3d11_state->dxgi_factory->lpVtbl->MakeWindowAssociation(r_d3d11_state->dxgi_factory, hwnd, DXGI_MWA_NO_ALT_ENTER);
+      
+      //- rjf: create framebuffer & view
+      D3D11_RENDER_TARGET_VIEW_DESC framebuffer_rtv_desc = {0};
+      framebuffer_rtv_desc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+      framebuffer_rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+      window->swapchain->lpVtbl->GetBuffer(window->swapchain, 0, &IID_ID3D11Texture2D, (void **)(&window->framebuffer));
+      r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)window->framebuffer, &framebuffer_rtv_desc, &window->framebuffer_rtv);
     }
-    HRESULT error = r_d3d11_state->dxgi_factory->lpVtbl->CreateSwapChainForHwnd(r_d3d11_state->dxgi_factory, (IUnknown *)r_d3d11_state->device, hwnd, &swapchain_desc, 0, 0, &window->swapchain);
-    if(FAILED(error))
-    {
-      char buffer[256] = {0};
-      raddbg_snprintf(buffer, sizeof(buffer), "DXGI swap chain creation failure (%lx). The process is terminating.", error);
-      sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
-      abort_self(1);
-    }
-    
-    r_d3d11_state->dxgi_factory->lpVtbl->MakeWindowAssociation(r_d3d11_state->dxgi_factory, hwnd, DXGI_MWA_NO_ALT_ENTER);
-    
-    //- rjf: create framebuffer & view
-    D3D11_RENDER_TARGET_VIEW_DESC framebuffer_rtv_desc = {0};
-    framebuffer_rtv_desc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-    framebuffer_rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-    window->swapchain->lpVtbl->GetBuffer(window->swapchain, 0, &IID_ID3D11Texture2D, (void **)(&window->framebuffer));
-    r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)window->framebuffer, &framebuffer_rtv_desc, &window->framebuffer_rtv);
     
     result = r_d3d11_handle_from_window(window);
     r_d3d11_state->window_count += 1;
@@ -572,7 +577,14 @@ r_window_unequip(WM_Window handle, R_Handle equip_handle)
       window->stage_scratch_color->lpVtbl->Release(window->stage_scratch_color);
       window->framebuffer_rtv->lpVtbl->Release(window->framebuffer_rtv);
       window->framebuffer->lpVtbl->Release(window->framebuffer);
-      window->swapchain->lpVtbl->Release(window->swapchain);
+      if(window->swapchain)
+      {
+        window->swapchain->lpVtbl->Release(window->swapchain);
+      }
+      else
+      {
+        w32_comp_window_unequip(handle);
+      }
       window->generation += 1;
       SLLStackPush(r_d3d11_state->first_free_window, window);
       r_d3d11_state->window_count -= 1;
@@ -899,10 +911,28 @@ r_window_begin_frame(WM_Window window, R_Handle window_equip)
       if(wnd->geo3d_depth)            {wnd->geo3d_depth->lpVtbl->Release(wnd->geo3d_depth);}
       
       // rjf: resize swapchain & main framebuffer
-      wnd->framebuffer_rtv->lpVtbl->Release(wnd->framebuffer_rtv);
-      wnd->framebuffer->lpVtbl->Release(wnd->framebuffer);
-      wnd->swapchain->lpVtbl->ResizeBuffers(wnd->swapchain, 0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
-      wnd->swapchain->lpVtbl->GetBuffer(wnd->swapchain, 0, &IID_ID3D11Texture2D, (void **)(&wnd->framebuffer));
+      if(wnd->framebuffer_rtv){wnd->framebuffer_rtv->lpVtbl->Release(wnd->framebuffer_rtv);}
+      if(wnd->framebuffer)    {wnd->framebuffer->lpVtbl->Release(wnd->framebuffer);}
+      if(wnd->swapchain)
+      {
+        wnd->swapchain->lpVtbl->ResizeBuffers(wnd->swapchain, 0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
+        wnd->swapchain->lpVtbl->GetBuffer(wnd->swapchain, 0, &IID_ID3D11Texture2D, (void **)(&wnd->framebuffer));
+      }
+      else
+      {
+        // composed: typeless, for the same sRGB view as a swap chain's buffer; end_frame copies it into the
+        // composition surface's (UNORM) texture
+        D3D11_TEXTURE2D_DESC desc = {0};
+        desc.Width            = (UINT)Max(1, resolution.x);
+        desc.Height           = (UINT)Max(1, resolution.y);
+        desc.MipLevels        = 1;
+        desc.ArraySize        = 1;
+        desc.Format           = DXGI_FORMAT_B8G8R8A8_TYPELESS;
+        desc.SampleDesc.Count = 1;
+        desc.Usage            = D3D11_USAGE_DEFAULT;
+        desc.BindFlags        = D3D11_BIND_RENDER_TARGET;
+        r_d3d11_state->device->lpVtbl->CreateTexture2D(r_d3d11_state->device, &desc, 0, &wnd->framebuffer);
+      }
       D3D11_RENDER_TARGET_VIEW_DESC framebuffer_rtv_desc = {0};
       framebuffer_rtv_desc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
       framebuffer_rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
@@ -1050,13 +1080,33 @@ r_window_end_frame(WM_Window window, R_Handle window_equip)
     ////////////////////////////
     //- rjf: present
     //
-    HRESULT error = wnd->swapchain->lpVtbl->Present(wnd->swapchain, 1, 0);
-    if(FAILED(error))
+    if(wnd->swapchain)
     {
-      char buffer[256] = {0};
-      raddbg_snprintf(buffer, sizeof(buffer), "D3D11 present failure (%lx). The process is terminating.", error);
-      sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
-      abort_self(1);
+      HRESULT error = wnd->swapchain->lpVtbl->Present(wnd->swapchain, 1, 0);
+      if(FAILED(error))
+      {
+        char buffer[256] = {0};
+        raddbg_snprintf(buffer, sizeof(buffer), "D3D11 present failure (%lx). The process is terminating.", error);
+        sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+        abort_self(1);
+      }
+    }
+    
+    ////////////////////////////
+    //- composed: copy the frame into the composition surface; it shows with the next commit (implicit, or
+    // the resize's synchronized one). Frames are paced in wm_get_events.
+    //
+    else
+    {
+      ID3D11Texture2D *target = 0;
+      POINT offset = {0};
+      if(w32_comp_window_begin_draw(window, wnd->last_resolution, &IID_ID3D11Texture2D, (void **)&target, &offset))
+      {
+        D3D11_BOX box = {0, 0, 0, (UINT)wnd->last_resolution.x, (UINT)wnd->last_resolution.y, 1};
+        d_ctx->lpVtbl->CopySubresourceRegion(d_ctx, (ID3D11Resource *)target, 0, (UINT)offset.x, (UINT)offset.y, 0, (ID3D11Resource *)wnd->framebuffer, 0, &box);
+        target->lpVtbl->Release(target);
+        w32_comp_window_end_draw(window);
+      }
     }
     d_ctx->lpVtbl->ClearState(d_ctx);
   }

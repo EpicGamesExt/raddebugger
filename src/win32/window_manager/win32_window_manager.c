@@ -367,9 +367,20 @@ w32_wm_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       {
         PAINTSTRUCT ps = {0};
         BeginPaint(hwnd, &ps);
+        B32 between_frames = w32_wm_between_frames;
+        w32_wm_between_frames = 0;
         update();
+        w32_wm_between_frames = between_frames;
         EndPaint(hwnd, &ps);
         DwmFlush();
+      }break;
+      
+      case W32_COMP_ATTACH_ISLAND_MSG:
+      {
+        if(window != 0)
+        {
+          w32_comp_window_attach_island(window);
+        }
       }break;
       
       case WM_CLOSE:
@@ -618,6 +629,22 @@ w32_wm_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       }break;
       case WM_WINDOWPOSCHANGED:
       {
+        // NOTE: returning without DefWindowProc means no WM_SIZE; a composed window's size changes are handled here.
+        // The frame for the new size is built now and committed with DWM's resize synchronization object, so the
+        // window frame and its content show at the new size together. Inside a frame (a programmatic resize
+        // from a command), no frame can be built: the object is committed at once and the next frame catches up.
+        WINDOWPOS *pos = (WINDOWPOS *)lParam;
+        if(window != 0 && window->comp_surface != 0 && !(pos->flags & SWP_NOSIZE))
+        {
+          if(w32_wm_between_frames && !IsIconic(hwnd))
+          {
+            w32_wm_between_frames = 0;
+            update();
+            w32_wm_between_frames = 1;
+            ValidateRect(hwnd, 0);
+          }
+          w32_comp_commit_resize(window);
+        }
         result = 0;
       }break;
       case WM_NCUAHDRAWCAPTION:
@@ -1163,6 +1190,10 @@ wm_window_first_paint(WM_Window window_handle)
     {
       ShowWindow(window->hwnd, SW_MAXIMIZE);
     }
+    if(window->comp_target != 0)
+    {
+      PostMessageW(window->hwnd, W32_COMP_ATTACH_ISLAND_MSG, 0, 0);
+    }
   }
 }
 
@@ -1548,20 +1579,39 @@ wm_get_events(Arena *arena, B32 wait)
 {
   w32_wm_event_arena = arena;
   MemoryZeroStruct(&w32_wm_event_list);
-  MSG msg = {0};
-  if(!wait || GetMessageW(&msg, 0, 0, 0))
+  
+  //- pacing for windows drawn through composition, where no swap chain's Present blocks for vsync: while frames
+  // follow each other, wait (dispatching messages) for XAML's tick at each compositor frame; until XAML runs, for
+  // the compositor's clock
+  w32_comp_pace(!wait);
+  if(!wait && !w32_comp_state.ticking && w32_comp_state.graphics_device != 0 && w32_comp_state.wait_for_compositor_clock != 0)
   {
-    B32 first_wait = wait;
-    for(;first_wait || PeekMessageW(&msg, 0, 0, 0, PM_REMOVE); first_wait = 0)
-    {
-      TranslateMessage(&msg);
-      DispatchMessageW(&msg);
-      if(msg.message == WM_QUIT)
-      {
-        w32_wm_push_event(WM_EventKind_WindowClose, 0);
-      }
-    }
+    w32_comp_state.wait_for_compositor_clock(0, 0, 100);
   }
+  
+  w32_wm_between_frames = 1;
+  MSG msg = {0};
+  B32 block = wait || (w32_comp_state.ticking && !w32_comp_state.ticked);
+  for(;;)
+  {
+    if(!PeekMessageW(&msg, 0, 0, 0, PM_REMOVE))
+    {
+      if(!block || MsgWaitForMultipleObjectsEx(0, 0, wait ? INFINITE : 100, QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_TIMEOUT)
+      {
+        break;
+      }
+      continue;
+    }
+    TranslateMessage(&msg);
+    DispatchMessageW(&msg);
+    if(msg.message == WM_QUIT)
+    {
+      w32_wm_push_event(WM_EventKind_WindowClose, 0);
+    }
+    block = w32_comp_state.ticking && !w32_comp_state.ticked;
+  }
+  w32_comp_state.ticked = 0;
+  w32_wm_between_frames = 0;
   return w32_wm_event_list;
 }
 
@@ -1654,3 +1704,8 @@ hcursor = curs; }break;
     w32_wm_state->hCursor = hcursor;
   }
 }
+
+////////////////////////////////
+//~ Composition
+
+#include "win32_composition.c"
