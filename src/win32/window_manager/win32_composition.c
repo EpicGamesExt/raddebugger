@@ -18,9 +18,6 @@ global const GUID w32_comp_iid_composition_brush     = {0xab0d7608, 0x30c0, 0x40
 global const GUID w32_comp_iid_drawing_interop       = {0xfd04e6e3, 0xfe0c, 0x4c3c, {0xab, 0x19, 0xa0, 0x76, 0x01, 0xa5, 0x76, 0xee}};
 global const GUID w32_comp_iid_xaml_manager_statics  = {0x28258a12, 0x7d82, 0x505b, {0xb2, 0x10, 0x71, 0x2b, 0x04, 0xa5, 0x88, 0x82}};
 global const GUID w32_comp_iid_xaml_source_native    = {0x3cbcf1bf, 0x2f76, 0x4e9c, {0x96, 0xab, 0xe8, 0x4b, 0x37, 0x97, 0x25, 0x54}};
-global const GUID w32_comp_iid_core_window_static    = {0x4d239005, 0x3c2a, 0x41b1, {0x90, 0x22, 0x53, 0x6b, 0xb9, 0xcf, 0x93, 0xb1}};
-global const GUID w32_comp_iid_core_window_interop   = {0x45d64a29, 0xa63e, 0x4cb6, {0xb4, 0x98, 0x57, 0x81, 0xd2, 0x98, 0xcb, 0x4f}};
-global const GUID w32_comp_iid_resize_manager_static = {0xae4a9045, 0x6d70, 0x49db, {0x8e, 0x68, 0x46, 0xff, 0xbd, 0x17, 0xd3, 0x8d}};
 global const GUID w32_comp_iid_target_statics        = {0x2b1af03d, 0x1ed2, 0x4b59, {0xbd, 0x00, 0x75, 0x94, 0xee, 0x92, 0x83, 0x2b}};
 global const GUID w32_comp_iid_event_handler         = {0xc50898f6, 0xc536, 0x5f47, {0x85, 0x83, 0x8b, 0x2c, 0x24, 0x38, 0xa1, 0x3b}}; // EventHandler<IInspectable*>
 global const GUID w32_comp_iid_agile_object          = {0x94ea2b94, 0xe9cc, 0x49e0, {0xc0, 0xff, 0xee, 0x64, 0xca, 0x8f, 0x5b, 0x90}};
@@ -40,11 +37,9 @@ global const GUID w32_comp_iid_agile_object          = {0x94ea2b94, 0xe9cc, 0x49
 #define W32_COMP_SLOT_DRAWING_INTEROP_BEGIN_DRAW                 3
 #define W32_COMP_SLOT_DRAWING_INTEROP_END_DRAW                   4
 #define W32_COMP_SLOT_DRAWING_INTEROP_RESIZE                     5
-#define W32_COMP_SLOT_STATICS_GET                                6 // InitializeForCurrentThread, GetForCurrentThread, GetForCurrentView
+#define W32_COMP_SLOT_STATICS_GET                                6 // InitializeForCurrentThread
 #define W32_COMP_SLOT_XAML_SOURCE_ATTACH_TO_WINDOW               3
 #define W32_COMP_SLOT_XAML_SOURCE_GET_WINDOW_HANDLE              4
-#define W32_COMP_SLOT_CORE_WINDOW_INTEROP_GET_WINDOW_HANDLE      3
-#define W32_COMP_SLOT_RESIZE_MANAGER_NOTIFY_LAYOUT_COMPLETED     6
 #define W32_COMP_SLOT_TARGET_STATICS_ADD_RENDERING               6
 #define W32_COMP_SLOT_TARGET_STATICS_REMOVE_RENDERING            7
 
@@ -236,6 +231,12 @@ w32_comp_window_equip(WM_Window handle, void *d3d11_device)
     }
     s->get_resize_sync_object = (BOOL (WINAPI *)(HWND, HANDLE *))GetProcAddress(user32, MAKEINTRESOURCEA(2614));
     s->enable_resize_sync = (BOOL (WINAPI *)(HWND, BOOL))GetProcAddress(user32, MAKEINTRESOURCEA(2615));
+    s->layout_completed = (BOOL (WINAPI *)(HWND))GetProcAddress(user32, MAKEINTRESOURCEA(2538));
+    if(s->device_partner != 0 && s->layout_completed == 0)
+    {
+      sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not get the native window layout completion API."));
+      abort_self(1);
+    }
     if(s->device_partner == 0 || s->get_resize_sync_object == 0 || s->enable_resize_sync == 0 ||
        GetEnvironmentVariableW(L"RADDBG_NO_RESIZE_SYNC", 0, 0) != 0) // the control for measuring what it does
     {
@@ -360,7 +361,7 @@ w32_comp_window_end_draw(WM_Window handle)
 //~ Composition: XAML island, resize synchronization, pacing
 
 // After a window's first show (posted, so XAML's start doesn't hold back the first frame). The first island also
-// starts XAML on the thread, which brings the CoreWindow DWM waits on and the per-frame Rendering event.
+// starts XAML on the thread, which brings the per-frame Rendering event.
 internal void
 w32_comp_window_attach_island(W32_WM_Window *window)
 {
@@ -374,27 +375,7 @@ w32_comp_window_attach_island(W32_WM_Window *window)
     if(xaml_statics != 0 &&
        SUCCEEDED(w32_comp_slot(xaml_statics, W32_COMP_SLOT_STATICS_GET, W32_Comp_GetFn)(xaml_statics, &s->xaml_manager)))
     {
-      void *core_statics = w32_comp_statics(L"Windows.UI.Core.CoreWindow", &w32_comp_iid_core_window_static);
-      void *core_window = 0;
-      if(core_statics != 0)
-      {
-        w32_comp_slot(core_statics, W32_COMP_SLOT_STATICS_GET, W32_Comp_GetFn)(core_statics, &core_window);
-      }
-      void *core_interop = w32_comp_query(core_window, &w32_comp_iid_core_window_interop);
-      if(core_interop != 0)
-      {
-        w32_comp_slot(core_interop, W32_COMP_SLOT_CORE_WINDOW_INTEROP_GET_WINDOW_HANDLE, W32_Comp_GetFn)(core_interop, (void **)&s->core_hwnd);
-      }
-      void *resize_statics = w32_comp_statics(L"Windows.UI.Core.CoreWindowResizeManager", &w32_comp_iid_resize_manager_static);
-      if(resize_statics != 0)
-      {
-        w32_comp_slot(resize_statics, W32_COMP_SLOT_STATICS_GET, W32_Comp_GetFn)(resize_statics, &s->resize_manager);
-      }
       s->composition_target = w32_comp_statics(L"Windows.UI.Xaml.Media.CompositionTarget", &w32_comp_iid_target_statics);
-      w32_comp_release(core_statics);
-      w32_comp_release(core_window);
-      w32_comp_release(core_interop);
-      w32_comp_release(resize_statics);
     }
     w32_comp_release(xaml_statics);
   }
@@ -429,8 +410,8 @@ w32_comp_window_attach_island(W32_WM_Window *window)
   }
 }
 
-// After a size change's frame: commits it with the resize's synchronization object, then tells the island's
-// CoreWindow its layout is done, then waits for DComp to process the batch before the next resize step.
+// After a size change's frame: commits it with the resize's synchronization object, tells the same window
+// its layout is done, then waits for DComp to process the batch before the next resize step.
 internal void
 w32_comp_commit_resize(W32_WM_Window *window)
 {
@@ -446,14 +427,9 @@ w32_comp_commit_resize(W32_WM_Window *window)
     error = w32_comp_slot(s->device_partner, W32_COMP_SLOT_DEVICE_PARTNER6_SYNCHRONIZED_COMMIT, W32_Comp_PutFn)(s->device_partner, sync);
     CloseHandle(sync);
   }
-  if(s->core_hwnd != 0 && s->resize_manager != 0)
+  if(sync != 0 && SUCCEEDED(error) && !s->layout_completed(window->hwnd))
   {
-    RECT client = {0};
-    GetClientRect(window->hwnd, &client);
-    WPARAM kind = IsIconic(window->hwnd) ? SIZE_MINIMIZED : IsZoomed(window->hwnd) ? SIZE_MAXIMIZED : SIZE_RESTORED;
-    SendMessageW(s->core_hwnd, WM_SIZE, kind, MAKELPARAM(client.right, client.bottom));
-    HRESULT notify_error = w32_comp_slot(s->resize_manager, W32_COMP_SLOT_RESIZE_MANAGER_NOTIFY_LAYOUT_COMPLETED, W32_Comp_CallFn)(s->resize_manager);
-    if(SUCCEEDED(error)){error = notify_error;}
+    error = E_FAIL;
   }
   if(sync != 0 && SUCCEEDED(error))
   {

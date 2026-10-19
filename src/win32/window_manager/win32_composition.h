@@ -12,8 +12,9 @@
 // New surface pixels are part of a composition commit. DWM can hold a resized window frame until the commit
 // that carries the resize's synchronization object.
 //
-// Private and Windows 11 only: user32 ordinals 2614 (GetResizeDCompositionSynchronizationObject) and 2615
-// (EnableResizeLayoutSynchronization), dcomp's interop compositor (IInteropCompositorFactoryPartner slot 6) and its
+// Private and Windows 11 only: user32 ordinals 2538 (LayoutCompleted), 2614
+// (GetResizeDCompositionSynchronizationObject) and 2615 (EnableResizeLayoutSynchronization),
+// dcomp's interop compositor (IInteropCompositorFactoryPartner slot 6) and its
 // IDCompositionDesktopDevicePartner6 slot 69 (SynchronizedCommit). DWM only issues the objects to windows hosting
 // UWP content, hence an empty, zero-size XAML island per window. XAML on the thread also brings
 // CompositionTarget.Rendering, which paces frames that follow each other (it ticks once per compositor frame).
@@ -25,9 +26,10 @@
 // smaller rectangle before the matching frame appeared. The completion event does not replace the resize's
 // synchronization object, and ordinary frames do not wait.
 //
-// After the synchronized commit and layout notification, WaitForCommitCompletion waits for the composition
-// engine to process the batch before the next resize step advances. This paces live resize on composition,
-// rather than just GPU rendering completion; it does not confirm that the frame has been displayed.
+// After the synchronized commit, LayoutCompleted notifies the same top-level HWND that supplied the token.
+// WaitForCommitCompletion then waits for the composition engine to process the batch before the next resize
+// step advances. This paces live resize on composition, rather than just GPU rendering completion;
+// it does not confirm that the frame has been displayed.
 //
 // Only the vtable slots used are called, by number, to keep the WinRT headers out of the build.
 
@@ -49,12 +51,11 @@ struct W32_Comp_State
   void *commit_device;           // IDCompositionDevice2: waits for resize commits to be processed
   BOOL (WINAPI *get_resize_sync_object)(HWND hwnd, HANDLE *sync);
   BOOL (WINAPI *enable_resize_sync)(HWND hwnd, BOOL enable);
+  BOOL (WINAPI *layout_completed)(HWND hwnd);
   B32 resize_step;               // building a resize step's frame: the renderer waits for its GPU work
   
   // xaml (the islands' thread state)
   void *xaml_manager;            // IWindowsXamlManager
-  HWND core_hwnd;                // the thread's CoreWindow, which DWM also waits on during a resize
-  void *resize_manager;          // ICoreWindowResizeManager
   void *composition_target;      // Windows.UI.Xaml.Media.ICompositionTargetStatics
   
   // pacing
