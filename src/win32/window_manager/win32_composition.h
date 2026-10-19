@@ -20,10 +20,10 @@
 // Each piece falls back: no composition -> the swap chain; no island -> unsynchronized commits, paced on the
 // compositor clock.
 //
-// A resize step's frame is finished on the GPU before its synchronized commit (resize_step; r_end_frame waits on a
-// fence). Committed with that work still queued (about 7 ms on an NVIDIA T1000 at 2400x1600), DWM sometimes showed
-// the new content and size a frame before the window's new position: while shrinking from the left or top, a strip
-// at the right or bottom edge was see-through for a frame. An Intel Iris Xe finished in time and never showed it.
+// Before a resize's synchronized commit, r_end_frame waits for GPU rendering with IDXGIDevice2::EnqueueSetEvent.
+// This mitigates a mismatch seen on an NVIDIA T1000: while shrinking, older surface pixels were clipped to a
+// smaller rectangle before the matching frame appeared. The completion event does not replace the resize's
+// synchronization object, and ordinary frames do not wait.
 //
 // Only the vtable slots used are called, by number, to keep the WinRT headers out of the build.
 

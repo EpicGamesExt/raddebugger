@@ -9,7 +9,6 @@
 #include <initguid.h>
 #include <windows.h>
 #include <d3d11_1.h>
-#include <d3d11_4.h>
 #include <d3dcompiler.h>
 
 #pragma comment(lib, "user32")
@@ -143,7 +142,7 @@ struct R_D3D11_State
   ID3D11DeviceContext     *base_device_ctx;
   ID3D11Device1           *device;
   ID3D11DeviceContext1    *device_ctx;
-  IDXGIDevice1            *dxgi_device;
+  IDXGIDevice2            *dxgi_device;
   IDXGIAdapter            *dxgi_adapter;
   IDXGIFactory2           *dxgi_factory;
   ID3D11RasterizerState1  *main_rasterizer;
@@ -154,13 +153,8 @@ struct R_D3D11_State
   ID3D11DepthStencilState *plain_depth_stencil;
   ID3D11Buffer            *instance_scratch_buffer_64kb;
   
-  // waiting for a frame's GPU work: a resize step's frame, before its synchronized commit (win32_composition.h).
-  // A fence and an event where the driver has them, else an event query.
-  ID3D11DeviceContext4    *device_ctx4;
-  ID3D11Fence             *frame_fence;
-  HANDLE                   frame_fence_event;
-  U64                      frame_fence_value;
-  ID3D11Query             *frame_done_query;
+  // GPU completion before a resize's synchronized commit; ordinary frames do not wait.
+  HANDLE frame_done_event;
   
   // rjf: backups
   R_Handle backup_texture;
