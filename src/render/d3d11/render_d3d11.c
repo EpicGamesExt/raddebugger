@@ -528,8 +528,7 @@ r_window_equip(WM_Window handle)
       hwnd = w32_wm_hwnd_from_window(w32_layer_window);
     }
     
-    //- draw through a composition surface when possible (frame-perfect resizes, see win32_composition.h); its
-    // framebuffer is made at the first frame's size. Otherwise, a swap chain.
+    //- draw the final pass into a composition surface when possible; otherwise, a swap chain
     if(!w32_comp_window_equip(handle, r_d3d11_state->device))
     {
       //- rjf: create swapchain
@@ -590,8 +589,8 @@ r_window_unequip(WM_Window handle, R_Handle equip_handle)
       window->stage_scratch_color_srv->lpVtbl->Release(window->stage_scratch_color_srv);
       window->stage_scratch_color_rtv->lpVtbl->Release(window->stage_scratch_color_rtv);
       window->stage_scratch_color->lpVtbl->Release(window->stage_scratch_color);
-      window->framebuffer_rtv->lpVtbl->Release(window->framebuffer_rtv);
-      window->framebuffer->lpVtbl->Release(window->framebuffer);
+      if(window->framebuffer_rtv){window->framebuffer_rtv->lpVtbl->Release(window->framebuffer_rtv);}
+      if(window->framebuffer)    {window->framebuffer->lpVtbl->Release(window->framebuffer);}
       if(window->swapchain)
       {
         window->swapchain->lpVtbl->Release(window->swapchain);
@@ -958,38 +957,30 @@ r_window_begin_frame(WM_Window window, R_Handle window_equip)
       if(wnd->geo3d_depth)            {wnd->geo3d_depth->lpVtbl->Release(wnd->geo3d_depth);}
       
       // rjf: resize swapchain & main framebuffer
-      if(wnd->framebuffer_rtv){wnd->framebuffer_rtv->lpVtbl->Release(wnd->framebuffer_rtv);}
-      if(wnd->framebuffer)    {wnd->framebuffer->lpVtbl->Release(wnd->framebuffer);}
+      D3D11_TEXTURE2D_DESC target_desc = {0};
+      target_desc.Width            = (UINT)Max(1, resolution.x);
+      target_desc.Height           = (UINT)Max(1, resolution.y);
+      target_desc.MipLevels        = 1;
+      target_desc.ArraySize        = 1;
+      target_desc.SampleDesc.Count = 1;
+      target_desc.Usage            = D3D11_USAGE_DEFAULT;
       if(wnd->swapchain)
       {
+        if(wnd->framebuffer_rtv){wnd->framebuffer_rtv->lpVtbl->Release(wnd->framebuffer_rtv);}
+        if(wnd->framebuffer)    {wnd->framebuffer->lpVtbl->Release(wnd->framebuffer);}
         wnd->swapchain->lpVtbl->ResizeBuffers(wnd->swapchain, 0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
         wnd->swapchain->lpVtbl->GetBuffer(wnd->swapchain, 0, &IID_ID3D11Texture2D, (void **)(&wnd->framebuffer));
+        wnd->framebuffer->lpVtbl->GetDesc(wnd->framebuffer, &target_desc);
+        D3D11_RENDER_TARGET_VIEW_DESC framebuffer_rtv_desc = {0};
+        framebuffer_rtv_desc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+        framebuffer_rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+        r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->framebuffer, &framebuffer_rtv_desc, &wnd->framebuffer_rtv);
       }
-      else
-      {
-        // composed: typeless, for the same sRGB view as a swap chain's buffer; end_frame copies it into the
-        // composition surface's (UNORM) texture
-        D3D11_TEXTURE2D_DESC desc = {0};
-        desc.Width            = (UINT)Max(1, resolution.x);
-        desc.Height           = (UINT)Max(1, resolution.y);
-        desc.MipLevels        = 1;
-        desc.ArraySize        = 1;
-        desc.Format           = DXGI_FORMAT_B8G8R8A8_TYPELESS;
-        desc.SampleDesc.Count = 1;
-        desc.Usage            = D3D11_USAGE_DEFAULT;
-        desc.BindFlags        = D3D11_BIND_RENDER_TARGET;
-        r_d3d11_state->device->lpVtbl->CreateTexture2D(r_d3d11_state->device, &desc, 0, &wnd->framebuffer);
-      }
-      D3D11_RENDER_TARGET_VIEW_DESC framebuffer_rtv_desc = {0};
-      framebuffer_rtv_desc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-      framebuffer_rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-      r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->framebuffer, &framebuffer_rtv_desc, &wnd->framebuffer_rtv);
       
       // rjf: create stage color targets
       {
-        D3D11_TEXTURE2D_DESC color_desc = zero_struct;
+        D3D11_TEXTURE2D_DESC color_desc = target_desc;
         {
-          wnd->framebuffer->lpVtbl->GetDesc(wnd->framebuffer, &color_desc);
           color_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
           color_desc.BindFlags = D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
         }
@@ -1014,9 +1005,8 @@ r_window_begin_frame(WM_Window window, R_Handle window_equip)
       
       // rjf: create geo3d targets
       {
-        D3D11_TEXTURE2D_DESC color_desc = zero_struct;
+        D3D11_TEXTURE2D_DESC color_desc = target_desc;
         {
-          wnd->framebuffer->lpVtbl->GetDesc(wnd->framebuffer, &color_desc);
           color_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
           color_desc.BindFlags = D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
         }
@@ -1031,9 +1021,8 @@ r_window_begin_frame(WM_Window window, R_Handle window_equip)
           color_srv_desc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE2D;
           color_srv_desc.Texture2D.MipLevels       = -1;
         }
-        D3D11_TEXTURE2D_DESC depth_desc = zero_struct;
+        D3D11_TEXTURE2D_DESC depth_desc = target_desc;
         {
-          wnd->framebuffer->lpVtbl->GetDesc(wnd->framebuffer, &depth_desc);
           depth_desc.Format = DXGI_FORMAT_R24G8_TYPELESS;
           depth_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL|D3D11_BIND_SHADER_RESOURCE;
         }
@@ -1062,7 +1051,10 @@ r_window_begin_frame(WM_Window window, R_Handle window_equip)
     
     //- rjf: clear framebuffers
     Vec4F32 clear_color = {0, 0, 0, 0};
-    d_ctx->lpVtbl->ClearRenderTargetView(d_ctx, wnd->framebuffer_rtv, clear_color.v);
+    if(wnd->framebuffer_rtv)
+    {
+      d_ctx->lpVtbl->ClearRenderTargetView(d_ctx, wnd->framebuffer_rtv, clear_color.v);
+    }
     d_ctx->lpVtbl->ClearRenderTargetView(d_ctx, wnd->stage_color_rtv, clear_color.v);
     if(resize_done)
     {
@@ -1080,23 +1072,44 @@ r_window_end_frame(WM_Window window, R_Handle window_equip)
   {
     R_D3D11_Window *wnd = r_d3d11_window_from_handle(window_equip);
     ID3D11DeviceContext1 *d_ctx = r_d3d11_state->device_ctx;
+    HRESULT error = S_OK;
+    ID3D11Texture2D *surface_texture = 0;
+    ID3D11RenderTargetView *surface_rtv = 0;
+    ID3D11RenderTargetView *output_rtv = wnd->framebuffer_rtv;
+    POINT offset = {0};
+    B32 drawing_surface = 0;
+    if(wnd->swapchain == 0 && wnd->last_resolution.x > 0 && wnd->last_resolution.y > 0)
+    {
+      error = w32_comp_window_begin_draw(window, wnd->last_resolution, &IID_ID3D11Texture2D, (void **)&surface_texture, &offset);
+      if(SUCCEEDED(error))
+      {
+        drawing_surface = 1;
+        D3D11_RENDER_TARGET_VIEW_DESC desc = {0};
+        desc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+        desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+        error = r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)surface_texture, &desc, &surface_rtv);
+        output_rtv = surface_rtv;
+      }
+    }
     
     ////////////////////////////
-    //- rjf: finalize, by writing staging buffer out to window framebuffer
+    //- rjf: finalize, directly into the window's output
     //
+    if(SUCCEEDED(error) && output_rtv != 0)
     {
       ID3D11SamplerState *sampler   = r_d3d11_state->samplers[R_Tex2DSampleKind_Nearest];
       ID3D11VertexShader *vshad     = r_d3d11_state->vshads[R_D3D11_VShadKind_Finalize];
       ID3D11PixelShader *pshad      = r_d3d11_state->pshads[R_D3D11_PShadKind_Finalize];
       
       // rjf: setup output merger
-      d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->framebuffer_rtv, 0);
+      d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &output_rtv, 0);
       d_ctx->lpVtbl->OMSetDepthStencilState(d_ctx, r_d3d11_state->noop_depth_stencil, 0);
-      d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->main_blend_state, 0, 0xffffffff);
+      // Finalize writes opaque pixels; do not blend with undefined surface contents.
+      d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->no_blend_state, 0, 0xffffffff);
       
       // rjf: set up rasterizer
       Vec2S32 resolution = wnd->last_resolution;
-      D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (F32)resolution.x, (F32)resolution.y, 0.0f, 1.0f };
+      D3D11_VIEWPORT viewport = { (F32)offset.x, (F32)offset.y, (F32)resolution.x, (F32)resolution.y, 0.0f, 1.0f };
       d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &viewport);
       d_ctx->lpVtbl->RSSetState(d_ctx, (ID3D11RasterizerState *)r_d3d11_state->main_rasterizer);
       
@@ -1113,49 +1126,47 @@ r_window_end_frame(WM_Window window, R_Handle window_equip)
       // rjf: setup scissor rect
       {
         D3D11_RECT rect = {0};
-        rect.left = 0;
-        rect.right = (LONG)wnd->last_resolution.x;
-        rect.top = 0;
-        rect.bottom = (LONG)wnd->last_resolution.y;
+        rect.left = offset.x;
+        rect.right = offset.x + resolution.x;
+        rect.top = offset.y;
+        rect.bottom = offset.y + resolution.y;
         d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &rect);
       }
       
       // rjf: draw
       d_ctx->lpVtbl->Draw(d_ctx, 4, 0);
     }
+    d_ctx->lpVtbl->ClearState(d_ctx);
     
     ////////////////////////////
     //- rjf: present
     //
     if(wnd->swapchain)
     {
-      HRESULT error = wnd->swapchain->lpVtbl->Present(wnd->swapchain, 1, 0);
-      if(FAILED(error))
-      {
-        char buffer[256] = {0};
-        raddbg_snprintf(buffer, sizeof(buffer), "D3D11 present failure (%lx). The process is terminating.", error);
-        sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
-        abort_self(1);
-      }
+      error = wnd->swapchain->lpVtbl->Present(wnd->swapchain, 1, 0);
     }
     
     ////////////////////////////
-    //- composed: copy the frame into the composition surface; it shows with the next commit (implicit, or
-    // the resize's synchronized one). Frames are paced in wm_get_events.
+    //- composed: end the surface update after dropping all references to this draw's target.
+    // Frames are paced in wm_get_events; r_end_frame waits for the GPU on resize steps.
     //
     else
     {
-      ID3D11Texture2D *target = 0;
-      POINT offset = {0};
-      if(w32_comp_window_begin_draw(window, wnd->last_resolution, &IID_ID3D11Texture2D, (void **)&target, &offset))
+      if(surface_rtv){surface_rtv->lpVtbl->Release(surface_rtv);}
+      if(surface_texture){surface_texture->lpVtbl->Release(surface_texture);}
+      if(drawing_surface)
       {
-        D3D11_BOX box = {0, 0, 0, (UINT)wnd->last_resolution.x, (UINT)wnd->last_resolution.y, 1};
-        d_ctx->lpVtbl->CopySubresourceRegion(d_ctx, (ID3D11Resource *)target, 0, (UINT)offset.x, (UINT)offset.y, 0, (ID3D11Resource *)wnd->framebuffer, 0, &box);
-        target->lpVtbl->Release(target);
-        w32_comp_window_end_draw(window);
+        HRESULT end_error = w32_comp_window_end_draw(window);
+        if(SUCCEEDED(error)){error = end_error;}
       }
     }
-    d_ctx->lpVtbl->ClearState(d_ctx);
+    if(FAILED(error))
+    {
+      char buffer[256] = {0};
+      raddbg_snprintf(buffer, sizeof(buffer), "D3D11 window output failure (%lx). The process is terminating.", error);
+      sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+      abort_self(1);
+    }
   }
   ProfEnd();
 }

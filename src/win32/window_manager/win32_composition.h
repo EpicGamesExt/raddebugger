@@ -5,12 +5,12 @@
 #define WIN32_COMPOSITION_H
 
 ////////////////////////////////
-//~ Composition: frame-perfect window resizes
+//~ Composition: synchronized window resizes
 //
-// The renderer draws each window into a Windows.UI.Composition drawing surface instead of a swap chain. A
-// surface's new pixels are part of a composition commit, and DWM can hold a resized window frame until the commit
-// that carries the resize's synchronization object; so the content of each resize step shows in the same DWM frame
-// as the window's new size (no lag or gap at the right or bottom edge, nor at the left/top while dragging those).
+// The renderer writes its final pass directly into a Windows.UI.Composition drawing surface instead of a swap
+// chain. BeginDraw supplies the render target and its offset; the renderer keeps neither past EndDraw.
+// New surface pixels are part of a composition commit. DWM can hold a resized window frame until the commit
+// that carries the resize's synchronization object. This reduces resize jitter, but intermittent flicker remains.
 //
 // Private and Windows 11 only: user32 ordinals 2614 (GetResizeDCompositionSynchronizationObject) and 2615
 // (EnableResizeLayoutSynchronization), dcomp's interop compositor (IInteropCompositorFactoryPartner slot 6) and its
@@ -65,8 +65,8 @@ global W32_Comp_State w32_comp_state = {0};
 
 internal B32  w32_comp_window_equip(WM_Window window, void *d3d11_device);
 internal void w32_comp_window_unequip(WM_Window window);
-internal B32  w32_comp_window_begin_draw(WM_Window window, Vec2S32 size, REFIID iid, void **out, POINT *offset);
-internal void w32_comp_window_end_draw(WM_Window window);
+internal HRESULT w32_comp_window_begin_draw(WM_Window window, Vec2S32 size, REFIID iid, void **out, POINT *offset);
+internal HRESULT w32_comp_window_end_draw(WM_Window window);
 internal void w32_comp_window_attach_island(W32_WM_Window *window);
 internal void w32_comp_commit_resize(W32_WM_Window *window);
 internal void w32_comp_pace(B32 frames_follow);

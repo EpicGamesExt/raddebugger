@@ -314,10 +314,10 @@ w32_comp_window_unequip(WM_Window handle)
   }
 }
 
-internal B32
+internal HRESULT
 w32_comp_window_begin_draw(WM_Window handle, Vec2S32 size, REFIID iid, void **out, POINT *offset)
 {
-  B32 result = 0;
+  HRESULT result = E_INVALIDARG;
   W32_WM_Window *window = w32_wm_window_from_handle(handle);
   if(window != 0 && window->comp_surface != 0 && size.x > 0 && size.y > 0)
   {
@@ -326,23 +326,26 @@ w32_comp_window_begin_draw(WM_Window handle, Vec2S32 size, REFIID iid, void **ou
     {
       SIZE surface_size = {size.x, size.y};
       W32_Comp_Vec2 visual_size = {(F32)size.x, (F32)size.y};
-      w32_comp_slot(window->comp_surface, W32_COMP_SLOT_DRAWING_INTEROP_RESIZE, W32_Comp_ResizeFn)(window->comp_surface, surface_size);
-      w32_comp_slot(window->comp_visual, W32_COMP_SLOT_VISUAL_PUT_SIZE, W32_Comp_PutVec2Fn)(window->comp_visual, visual_size);
+      result = w32_comp_slot(window->comp_surface, W32_COMP_SLOT_DRAWING_INTEROP_RESIZE, W32_Comp_ResizeFn)(window->comp_surface, surface_size);
+      if(FAILED(result)){return result;}
+      result = w32_comp_slot(window->comp_visual, W32_COMP_SLOT_VISUAL_PUT_SIZE, W32_Comp_PutVec2Fn)(window->comp_visual, visual_size);
+      if(FAILED(result)){return result;}
       window->comp_size = size;
     }
-    result = SUCCEEDED(w32_comp_slot(window->comp_surface, W32_COMP_SLOT_DRAWING_INTEROP_BEGIN_DRAW, W32_Comp_BeginDrawFn)(window->comp_surface, 0, iid, out, offset));
+    result = w32_comp_slot(window->comp_surface, W32_COMP_SLOT_DRAWING_INTEROP_BEGIN_DRAW, W32_Comp_BeginDrawFn)(window->comp_surface, 0, iid, out, offset);
   }
   return result;
 }
 
-internal void
+internal HRESULT
 w32_comp_window_end_draw(WM_Window handle)
 {
   W32_WM_Window *window = w32_wm_window_from_handle(handle);
   if(window != 0 && window->comp_surface != 0)
   {
-    w32_comp_slot(window->comp_surface, W32_COMP_SLOT_DRAWING_INTEROP_END_DRAW, W32_Comp_CallFn)(window->comp_surface);
+    return w32_comp_slot(window->comp_surface, W32_COMP_SLOT_DRAWING_INTEROP_END_DRAW, W32_Comp_CallFn)(window->comp_surface);
   }
+  return E_INVALIDARG;
 }
 
 ////////////////////////////////
