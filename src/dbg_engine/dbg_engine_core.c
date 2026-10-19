@@ -156,9 +156,6 @@ d_init(void)
       DLLPushBack_NP(d_ctrl_state->server_slots[slot_idx].first, d_ctrl_state->server_slots[slot_idx].last, ss, hash_next, hash_prev);
       d_ctrl_state->next_dequeue_server = ss;
     }
-#if 0
-    d_ctrl_state->dmn_event_arena = arena_alloc();
-#endif
     d_ctrl_state->user_entry_point_arena = arena_alloc();
     for(D_ExceptionCodeKind k = (D_ExceptionCodeKind)0; k < D_ExceptionCodeKind_COUNT; k = (D_ExceptionCodeKind)(k+1))
     {

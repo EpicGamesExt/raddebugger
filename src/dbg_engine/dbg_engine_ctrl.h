@@ -314,6 +314,31 @@ struct D_ModuleReqCacheNode
 typedef D_WAKEUP_FUNCTION_DEF(D_WakeupFunctionType);
 
 ////////////////////////////////
+//~ rjf: Cross-Server Run Controls
+
+typedef struct D_ServerRunCtrlsNode D_ServerRunCtrlsNode;
+struct D_ServerRunCtrlsNode
+{
+  D_ServerRunCtrlsNode *next;
+  D_ServerID server_id;
+  DMN_RunCtrls run_ctrls;
+};
+
+typedef struct D_ServerRunCtrlsSlot D_ServerRunCtrlsSlot;
+struct D_ServerRunCtrlsSlot
+{
+  D_ServerRunCtrlsNode *first;
+  D_ServerRunCtrlsNode *last;
+};
+
+typedef struct D_RunCtrls D_RunCtrls;
+struct D_RunCtrls
+{
+  D_ServerRunCtrlsSlot *slots;
+  U64 slots_count;
+};
+
+////////////////////////////////
 //~ rjf: Server State Types
 //
 // Each call to `dmn_ctrl_run` can generate a sequence of debug events. We handle
@@ -337,6 +362,10 @@ struct D_ServerState
   
   // rjf: server identifier
   D_ServerID server_id;
+  
+  // rjf: run state
+  B32 run_state;
+  B32 group_halt;
   
   // rjf: demon event queue
   Arena *dmn_event_arena;
@@ -409,12 +438,6 @@ struct D_CtrlState
   D_ServerState *free_server;
   D_ServerState *next_dequeue_server;
   B32 ctrl_thread_dmn_run_block;
-#if 0
-  Arena *dmn_event_arena;
-  DMN_EventNode *first_dmn_event_node;
-  DMN_EventNode *last_dmn_event_node;
-  DMN_EventNode *free_dmn_event_node;
-#endif
   Arena *user_entry_point_arena;
   String8List user_entry_points;
   U64 exception_code_filters[(D_ExceptionCodeKind_COUNT+63)/64];
@@ -655,6 +678,11 @@ internal void d_ctrl_thread__append_program_defined_bp_traps(Arena *arena, D_Ent
 
 //- rjf: dump process closing work
 internal void d_ctrl_thread__close_dump_process(D_MsgID msg_id, D_Handle process);
+
+//- rjf: run controls building
+internal D_RunCtrls *d_ctrl_thread__run_ctrls(Arena *arena);
+internal void d_ctrl_thread__run_ctrls_set_server(Arena *arena, D_RunCtrls *ctrls, D_ServerID server_id, DMN_RunCtrls *server_ctrls);
+internal DMN_RunCtrls *d_ctrl_thread__server_run_ctrls_from_id(D_RunCtrls *ctrls, D_ServerID server_id);
 
 //- rjf: attached process running/event gathering
 internal DMN_Event *d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, DMN_RunCtrls *run_ctrls, D_Spoof *spoof);

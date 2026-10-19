@@ -2882,6 +2882,43 @@ d_ctrl_thread__close_dump_process(D_MsgID msg_id, D_Handle process)
   }
 }
 
+//- rjf: run controls building
+
+internal D_RunCtrls *
+d_ctrl_thread__run_ctrls(Arena *arena)
+{
+  D_RunCtrls *ctrls = push_array(arena, D_RunCtrls, 1);
+  ctrls->slots_count = 8;
+  ctrls->slots = push_array(arena, D_ServerRunCtrlsSlot, ctrls->slots_count);
+  return ctrls;
+}
+
+internal void
+d_ctrl_thread__run_ctrls_set_server(Arena *arena, D_RunCtrls *ctrls, D_ServerID server_id, DMN_RunCtrls *server_ctrls)
+{
+  D_ServerRunCtrlsNode *node = push_array(arena, D_ServerRunCtrlsNode, 1);
+  U64 slot_idx = server_id%ctrls->slots_count;
+  SLLQueuePush(ctrls->slots[slot_idx].first, ctrls->slots[slot_idx].last, node);
+  MemoryCopyStruct(&node->run_ctrls, server_ctrls);
+  node->server_id = server_id;
+}
+
+internal DMN_RunCtrls *
+d_ctrl_thread__server_run_ctrls_from_id(D_RunCtrls *ctrls, D_ServerID server_id)
+{
+  DMN_RunCtrls *result = 0;
+  U64 slot_idx = server_id%ctrls->slots_count;
+  for(D_ServerRunCtrlsNode *n = ctrls->slots[slot_idx].first; n != 0; n = n->next)
+  {
+    if(n->server_id == server_id)
+    {
+      result = &n->run_ctrls;
+      break;
+    }
+  }
+  return result;
+}
+
 //- rjf: attached process running/event gathering
 
 internal DMN_Event *
@@ -3116,21 +3153,18 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
               DS_Msg msg = {0};
               {
                 msg.kind = DS_MsgKind_Run;
-                // TODO(rjf)
+                // TODO(rjf): run_ctrls
               }
               
               // rjf: message -> packet
               String8 packet = ds_packet_from_msg(scratch.arena, &msg);
               
-              // rjf: send run message
-              if(!sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, server_endpoint, packet, now_time_us()+10000000))
-              {
-                // TODO(rjf)
-              }
-              else
-              {
-                num_servers_running += 1;
-              }
+              // rjf: send packet
+              sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, server_endpoint, packet, max_U64);
+              
+              // rjf: set run state
+              num_servers_running += 1;
+              ss->run_state = 1;
             }
           }
         }
@@ -3150,7 +3184,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
               ss != d_ctrl_state->next_dequeue_server || first;
               (first = 0, ss = (ss->order_next == 0 ? d_ctrl_state->first_server : ss->order_next), d_ctrl_state->next_dequeue_server = ss))
           {
-            if(ss->server_id != D_ServerID_LocalHost)
+            if(ss->server_id != D_ServerID_LocalHost && ss->run_state)
             {
               // rjf: unpack server
               D_Handle server_handle = {.server_id = ss->server_id};
@@ -3163,10 +3197,10 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
               String8 packet = ds_packet_from_msg(scratch.arena, &msg);
               
               // rjf: send
-              if(!sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, server_endpoint, packet, now_time_us()+10000000))
-              {
-                // TODO(rjf)
-              }
+              sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, server_endpoint, packet, max_U64);
+              
+              // rjf: set group halt state (to skip halt event)
+              ss->group_halt = 1;
             }
           }
         }
@@ -3199,12 +3233,11 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
         
         //- rjf: wait for all running servers to stop (either we're waiting on them for events, *or* we generated
         // a halt, and we're waiting for that)
-        if(events.first != 0 && events.count == 1 && events.first->v.kind == DMN_EventKind_Error && events.first->v.error_kind == DMN_ErrorKind_NotAttached)
         {
 #if 0
           for(;num_servers_running > 0;)
           {
-            // TODO(rjf)
+            // TODO(rjf): ss->run_state = 0, num_servers_running -= 1
           }
 #endif
         }
@@ -4128,7 +4161,7 @@ d_ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   //////////////////////////////
   //- rjf: record (id -> entry points), and (id -> msg_id) so that we know custom entry points for this PID
   //
-  // TODO(rjf): PID is not unique across machines. these should be under a server.
+  // TODO(rjf): PID is not unique across machines. these should be under a server. @multimachine
   //
   D_EntityCtxRWStore *entity_ctx_rw_store = d_ctrl_state->ctrl_thread_entity_store;
   MutexScopeW(d_ctrl_state->ctrl_thread_entity_ctx_rw_mutex)
@@ -4509,6 +4542,7 @@ d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
           {
             module_name = smsv_local_module_path_from_key(scratch.arena, str8_skip_last_slash(module_name), module->time_date_stamp, module->image_size);
             smsv_fill_local_path(module_name);
+            smsv_wait_local_path(module_name, max_U64);
           }
 #endif
           
@@ -6295,7 +6329,7 @@ d_memory_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_out,
     if(range_size != 0)
     {
       // rjf: set up arena
-      U64 page_size = get_system_info()->page_size; // TODO(rjf): @page_size_from_process
+      U64 page_size = get_system_info()->page_size; // TODO(rjf): @multimachine @page_size_from_process
       U64 arena_size = AlignPow2(range_size + ARENA_HEADER_SIZE, page_size);
       range_arena = arena_alloc(.reserve_size = range_size+ARENA_HEADER_SIZE, .commit_size = range_size+ARENA_HEADER_SIZE);
       
