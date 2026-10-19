@@ -639,7 +639,9 @@ w32_wm_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
           if(w32_wm_between_frames && !IsIconic(hwnd))
           {
             w32_wm_between_frames = 0;
+            w32_comp_state.resize_step = 1;
             update();
+            w32_comp_state.resize_step = 0;
             w32_wm_between_frames = 1;
             ValidateRect(hwnd, 0);
           }

@@ -20,6 +20,11 @@
 // Each piece falls back: no composition -> the swap chain; no island -> unsynchronized commits, paced on the
 // compositor clock.
 //
+// A resize step's frame is finished on the GPU before its synchronized commit (resize_step; r_end_frame waits on a
+// fence). Committed with that work still queued (about 7 ms on an NVIDIA T1000 at 2400x1600), DWM sometimes showed
+// the new content and size a frame before the window's new position: while shrinking from the left or top, a strip
+// at the right or bottom edge was see-through for a frame. An Intel Iris Xe finished in time and never showed it.
+//
 // Only the vtable slots used are called, by number, to keep the WinRT headers out of the build.
 
 #include <roapi.h>
@@ -39,6 +44,7 @@ struct W32_Comp_State
   void *device_partner;          // IDCompositionDesktopDevicePartner6
   BOOL (WINAPI *get_resize_sync_object)(HWND hwnd, HANDLE *sync);
   BOOL (WINAPI *enable_resize_sync)(HWND hwnd, BOOL enable);
+  B32 resize_step;               // building a resize step's frame: the renderer waits for its GPU work
   
   // xaml (the islands' thread state)
   void *xaml_manager;            // IWindowsXamlManager

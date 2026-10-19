@@ -232,6 +232,33 @@ r_init(CmdLine *cmdln)
   error = r_d3d11_state->dxgi_device->lpVtbl->SetMaximumFrameLatency(r_d3d11_state->dxgi_device, 1);
   ProfEnd();
   
+  //- the fence a resize step's frame waits on (r_end_frame); an event query where the driver has no fences
+  {
+    ID3D11Device5 *device5 = 0;
+    r_d3d11_state->base_device->lpVtbl->QueryInterface(r_d3d11_state->base_device, &IID_ID3D11Device5, (void **)&device5);
+    r_d3d11_state->base_device_ctx->lpVtbl->QueryInterface(r_d3d11_state->base_device_ctx, &IID_ID3D11DeviceContext4, (void **)&r_d3d11_state->device_ctx4);
+    if(device5 != 0 && r_d3d11_state->device_ctx4 != 0)
+    {
+      device5->lpVtbl->CreateFence(device5, 0, D3D11_FENCE_FLAG_NONE, &IID_ID3D11Fence, (void **)&r_d3d11_state->frame_fence);
+      r_d3d11_state->frame_fence_event = CreateEventW(0, 0, 0, 0);
+    }
+    if(r_d3d11_state->frame_fence == 0 || r_d3d11_state->frame_fence_event == 0)
+    {
+      // both or neither: SetEventOnCompletion with no event would block until the GPU finishes, uncapped
+      if(r_d3d11_state->frame_fence != 0)
+      {
+        r_d3d11_state->frame_fence->lpVtbl->Release(r_d3d11_state->frame_fence);
+        r_d3d11_state->frame_fence = 0;
+      }
+      D3D11_QUERY_DESC desc = {D3D11_QUERY_EVENT, 0};
+      r_d3d11_state->device->lpVtbl->CreateQuery(r_d3d11_state->device, &desc, &r_d3d11_state->frame_done_query);
+    }
+    if(device5 != 0)
+    {
+      device5->lpVtbl->Release(device5);
+    }
+  }
+  
   //- rjf: create main rasterizer
   ProfScope("create main rasterizer")
   {
@@ -831,8 +858,26 @@ r_begin_frame(void)
 r_hook void
 r_end_frame(void)
 {
+  //- a resize step's frame: its GPU work is submitted here and waited on below, outside the device lock
+  B32 wait_for_gpu = w32_comp_state.resize_step;
+  U64 fence_value = 0;
   MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
+    if(wait_for_gpu)
+    {
+      ID3D11DeviceContext1 *d_ctx = r_d3d11_state->device_ctx;
+      if(r_d3d11_state->frame_fence != 0)
+      {
+        r_d3d11_state->frame_fence_value += 1;
+        fence_value = r_d3d11_state->frame_fence_value;
+        r_d3d11_state->device_ctx4->lpVtbl->Signal(r_d3d11_state->device_ctx4, r_d3d11_state->frame_fence, fence_value);
+      }
+      else if(r_d3d11_state->frame_done_query != 0)
+      {
+        d_ctx->lpVtbl->End(d_ctx, (ID3D11Asynchronous *)r_d3d11_state->frame_done_query);
+      }
+      d_ctx->lpVtbl->Flush(d_ctx);
+    }
     for(R_D3D11_FlushBuffer *buffer = r_d3d11_state->first_buffer_to_flush; buffer != 0; buffer = buffer->next)
     {
       buffer->buffer->lpVtbl->Release(buffer->buffer);
@@ -872,6 +917,45 @@ r_end_frame(void)
     r_d3d11_state->first_buffer_to_flush = r_d3d11_state->last_buffer_to_flush = 0;
     r_d3d11_state->first_to_free_tex2d  = 0;
     r_d3d11_state->first_to_free_buffer = 0;
+  }
+  
+  //- wait (at most 100 ms, against a hung GPU) for the frame's GPU work: the commit that follows then carries
+  // finished content. The loop also absorbs a signal left on the event by an earlier wait that timed out.
+  if(wait_for_gpu)
+  {
+    if(fence_value != 0)
+    {
+      ID3D11Fence *fence = r_d3d11_state->frame_fence;
+      if(fence->lpVtbl->GetCompletedValue(fence) < fence_value &&
+         SUCCEEDED(fence->lpVtbl->SetEventOnCompletion(fence, fence_value, r_d3d11_state->frame_fence_event)))
+      {
+        U64 deadline = now_time_us() + 100000;
+        for(U64 now = now_time_us();
+            fence->lpVtbl->GetCompletedValue(fence) < fence_value && now < deadline;
+            now = now_time_us())
+        {
+          WaitForSingleObject(r_d3d11_state->frame_fence_event, (DWORD)((deadline - now + 999)/1000));
+        }
+      }
+    }
+    else if(r_d3d11_state->frame_done_query != 0)
+    {
+      U64 deadline = now_time_us() + 100000;
+      for(;;)
+      {
+        HRESULT done = S_FALSE;
+        MutexScopeW(r_d3d11_state->device_rw_mutex)
+        {
+          ID3D11DeviceContext1 *d_ctx = r_d3d11_state->device_ctx;
+          done = d_ctx->lpVtbl->GetData(d_ctx, (ID3D11Asynchronous *)r_d3d11_state->frame_done_query, 0, 0, D3D11_ASYNC_GETDATA_DONOTFLUSH);
+        }
+        if(done != S_FALSE || now_time_us() >= deadline)
+        {
+          break;
+        }
+        SwitchToThread();
+      }
+    }
   }
 }
 

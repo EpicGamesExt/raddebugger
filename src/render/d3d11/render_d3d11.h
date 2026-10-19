@@ -9,6 +9,7 @@
 #include <initguid.h>
 #include <windows.h>
 #include <d3d11_1.h>
+#include <d3d11_4.h>
 #include <d3dcompiler.h>
 
 #pragma comment(lib, "user32")
@@ -152,6 +153,14 @@ struct R_D3D11_State
   ID3D11DepthStencilState *noop_depth_stencil;
   ID3D11DepthStencilState *plain_depth_stencil;
   ID3D11Buffer            *instance_scratch_buffer_64kb;
+  
+  // waiting for a frame's GPU work: a resize step's frame, before its synchronized commit (win32_composition.h).
+  // A fence and an event where the driver has them, else an event query.
+  ID3D11DeviceContext4    *device_ctx4;
+  ID3D11Fence             *frame_fence;
+  HANDLE                   frame_fence_event;
+  U64                      frame_fence_value;
+  ID3D11Query             *frame_done_query;
   
   // rjf: backups
   R_Handle backup_texture;
