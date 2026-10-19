@@ -10,7 +10,7 @@
 // The renderer writes its final pass directly into a Windows.UI.Composition drawing surface instead of a swap
 // chain. BeginDraw supplies the render target and its offset; the renderer keeps neither past EndDraw.
 // New surface pixels are part of a composition commit. DWM can hold a resized window frame until the commit
-// that carries the resize's synchronization object. This reduces resize jitter, but intermittent flicker remains.
+// that carries the resize's synchronization object.
 //
 // Private and Windows 11 only: user32 ordinals 2614 (GetResizeDCompositionSynchronizationObject) and 2615
 // (EnableResizeLayoutSynchronization), dcomp's interop compositor (IInteropCompositorFactoryPartner slot 6) and its
@@ -24,6 +24,10 @@
 // This mitigates a mismatch seen on an NVIDIA T1000: while shrinking, older surface pixels were clipped to a
 // smaller rectangle before the matching frame appeared. The completion event does not replace the resize's
 // synchronization object, and ordinary frames do not wait.
+//
+// After the synchronized commit and layout notification, WaitForCommitCompletion waits for the composition
+// engine to process the batch before the next resize step advances. This paces live resize on composition,
+// rather than just GPU rendering completion; it does not confirm that the frame has been displayed.
 //
 // Only the vtable slots used are called, by number, to keep the WinRT headers out of the build.
 
@@ -42,6 +46,7 @@ struct W32_Comp_State
   
   // resize synchronization
   void *device_partner;          // IDCompositionDesktopDevicePartner6
+  void *commit_device;           // IDCompositionDevice2: waits for resize commits to be processed
   BOOL (WINAPI *get_resize_sync_object)(HWND hwnd, HANDLE *sync);
   BOOL (WINAPI *enable_resize_sync)(HWND hwnd, BOOL enable);
   B32 resize_step;               // building a resize step's frame: the renderer waits for its GPU work

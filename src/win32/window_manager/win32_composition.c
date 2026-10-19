@@ -10,6 +10,7 @@ global const GUID w32_comp_iid_compositor_interop    = {0x25297d5c, 0x3ad4, 0x4c
 global const GUID w32_comp_iid_compositor_desktop    = {0x29e691fa, 0x4567, 0x4dca, {0xb3, 0x19, 0xd0, 0xf2, 0x07, 0xeb, 0x68, 0x07}};
 global const GUID w32_comp_iid_factory_partner       = {0x22118adf, 0x23f1, 0x4801, {0xbc, 0xfa, 0x66, 0xcb, 0xf4, 0x8c, 0xc5, 0x1b}};
 global const GUID w32_comp_iid_device_partner6       = {0xe01eb649, 0x787e, 0x4560, {0xb3, 0x98, 0x0d, 0xe7, 0xa2, 0x06, 0x5d, 0x8b}};
+global const GUID w32_comp_iid_device2               = {0x75f6468d, 0x1b8e, 0x447c, {0x9b, 0xc6, 0x75, 0xfe, 0xa8, 0x0b, 0x5b, 0x25}};
 global const GUID w32_comp_iid_visual                = {0x117e202d, 0xa859, 0x4c89, {0x87, 0x3b, 0xc2, 0xaa, 0x56, 0x67, 0x88, 0xe3}};
 global const GUID w32_comp_iid_composition_target    = {0xa1bea8ba, 0xd726, 0x4663, {0x81, 0x29, 0x6b, 0x5e, 0x79, 0x27, 0xff, 0xa6}};
 global const GUID w32_comp_iid_composition_surface   = {0x1527540d, 0x42c7, 0x47a6, {0xa4, 0x08, 0x66, 0x8f, 0x79, 0xa9, 0x0d, 0xfb}};
@@ -27,6 +28,7 @@ global const GUID w32_comp_iid_agile_object          = {0x94ea2b94, 0xe9cc, 0x49
 // Slot 0-2 are IUnknown's, 3-5 IInspectable's on WinRT interfaces.
 #define W32_COMP_SLOT_FACTORY_PARTNER_CREATE_INTEROP_COMPOSITOR 6
 #define W32_COMP_SLOT_DEVICE_PARTNER6_SYNCHRONIZED_COMMIT        69
+#define W32_COMP_SLOT_DEVICE_WAIT_FOR_COMMIT_COMPLETION          4
 #define W32_COMP_SLOT_COMPOSITOR_CREATE_SPRITE_VISUAL            22
 #define W32_COMP_SLOT_COMPOSITOR_CREATE_SURFACE_BRUSH            24
 #define W32_COMP_SLOT_COMPOSITOR_INTEROP_CREATE_GRAPHICS_DEVICE  5
@@ -226,6 +228,12 @@ w32_comp_window_equip(WM_Window handle, void *d3d11_device)
     // resize synchronization
     HMODULE user32 = GetModuleHandleW(L"user32.dll");
     s->device_partner = w32_comp_query(s->compositor, &w32_comp_iid_device_partner6);
+    s->commit_device = w32_comp_query(s->device_partner, &w32_comp_iid_device2);
+    if(s->device_partner != 0 && s->commit_device == 0)
+    {
+      sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not get the DirectComposition commit completion interface."));
+      abort_self(1);
+    }
     s->get_resize_sync_object = (BOOL (WINAPI *)(HWND, HANDLE *))GetProcAddress(user32, MAKEINTRESOURCEA(2614));
     s->enable_resize_sync = (BOOL (WINAPI *)(HWND, BOOL))GetProcAddress(user32, MAKEINTRESOURCEA(2615));
     if(s->device_partner == 0 || s->get_resize_sync_object == 0 || s->enable_resize_sync == 0 ||
@@ -422,19 +430,20 @@ w32_comp_window_attach_island(W32_WM_Window *window)
 }
 
 // After a size change's frame: commits it with the resize's synchronization object, then tells the island's
-// CoreWindow its layout is done (DWM waits on that too; without it a drag throttles to a few steps a second).
+// CoreWindow its layout is done, then waits for DComp to process the batch before the next resize step.
 internal void
 w32_comp_commit_resize(W32_WM_Window *window)
 {
   W32_Comp_State *s = &w32_comp_state;
   HANDLE sync = 0;
+  HRESULT error = S_OK;
   if(s->get_resize_sync_object != 0 && window->comp_island != 0)
   {
     s->get_resize_sync_object(window->hwnd, &sync);
   }
   if(sync != 0)
   {
-    w32_comp_slot(s->device_partner, W32_COMP_SLOT_DEVICE_PARTNER6_SYNCHRONIZED_COMMIT, W32_Comp_PutFn)(s->device_partner, sync);
+    error = w32_comp_slot(s->device_partner, W32_COMP_SLOT_DEVICE_PARTNER6_SYNCHRONIZED_COMMIT, W32_Comp_PutFn)(s->device_partner, sync);
     CloseHandle(sync);
   }
   if(s->core_hwnd != 0 && s->resize_manager != 0)
@@ -443,7 +452,21 @@ w32_comp_commit_resize(W32_WM_Window *window)
     GetClientRect(window->hwnd, &client);
     WPARAM kind = IsIconic(window->hwnd) ? SIZE_MINIMIZED : IsZoomed(window->hwnd) ? SIZE_MAXIMIZED : SIZE_RESTORED;
     SendMessageW(s->core_hwnd, WM_SIZE, kind, MAKELPARAM(client.right, client.bottom));
-    w32_comp_slot(s->resize_manager, W32_COMP_SLOT_RESIZE_MANAGER_NOTIFY_LAYOUT_COMPLETED, W32_Comp_CallFn)(s->resize_manager);
+    HRESULT notify_error = w32_comp_slot(s->resize_manager, W32_COMP_SLOT_RESIZE_MANAGER_NOTIFY_LAYOUT_COMPLETED, W32_Comp_CallFn)(s->resize_manager);
+    if(SUCCEEDED(error)){error = notify_error;}
+  }
+  if(sync != 0 && SUCCEEDED(error))
+  {
+    // A successful synchronized commit only submits the batch. Do not let the next resize advance before
+    // the composition engine has processed it. This is not an acknowledgment that the frame was displayed.
+    error = w32_comp_slot(s->commit_device, W32_COMP_SLOT_DEVICE_WAIT_FOR_COMMIT_COMPLETION, W32_Comp_CallFn)(s->commit_device);
+  }
+  if(FAILED(error))
+  {
+    char buffer[256] = {0};
+    raddbg_snprintf(buffer, sizeof(buffer), "DirectComposition resize commit failure (%lx). The process is terminating.", error);
+    sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+    abort_self(1);
   }
 }
 
