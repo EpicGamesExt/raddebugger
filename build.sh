@@ -44,6 +44,14 @@ fi
 cc_icon="-DLNX_WM_ICON=1"
 
 # --- Choose Compile/Link Lines -----------------------------------------------
+# If neither compiler was picked explicitly, honour $CC when it names one
+# (some systems, e.g. NixOS, set $CC by default). Otherwise keep the
+# historical default of clang.
+if [[ ! -v gcc && ! -v clang && -v CC ]]; then
+  if [[ "$CC" == *gcc* ]]; then gcc=1;
+  elif [[ "$CC" == *clang* ]]; then clang=1;
+  fi
+fi
 if   [[ "${gcc:-0}"   == "1" ]]; then compiler="${CC:-gcc}   $cc_cflags_gcc";   ar="${AR:-ar}";      echo "[gcc compile]";
 elif [[ "${clang:-1}" == "1" ]]; then compiler="${CC:-clang} $cc_cflags_clang"; ar="${AR:-llvm-ar}"; echo "[clang compile]";
 fi
