@@ -167,6 +167,9 @@ supplement_thread_base_entry_point(void (*entry_point)(void *params), void *para
   tctx_select(tctx);
   entry_point(params);
   tctx_release(tctx);
+#if PROFILE_SPALL
+  spall_thread_end();
+#endif
 }
 
 internal U64

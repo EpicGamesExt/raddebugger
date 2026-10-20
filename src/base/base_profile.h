@@ -77,13 +77,15 @@ thread_static SpallBuffer spall_buffer = {0};
 thread_static U32 spall_tid = 0;
 thread_static U32 spall_pid = 0;
 internal inline void spall_begin(char *fmt, ...);
+internal void spall_thread_end(void);
+internal void spall_flush_all(void);
 # define ProfBegin(...)           (spall_capturing ? (spall_begin(__VA_ARGS__), 0) : 0)
 # define ProfBeginDynamic(...)    (spall_capturing ? (spall_begin(__VA_ARGS__), 0) : 0)
 # define ProfEnd(...)             (spall_capturing ? (spall_buffer_end_ex(&spall_profile, &spall_buffer, now_time_us(), spall_tid, spall_pid)), 0 : 0)
 # define ProfTick(...)
 # define ProfIsCapturing(...)     (!!spall_capturing)
 # define ProfBeginCapture(...)    (spall_capturing = 1)
-# define ProfEndCapture(...)      (spall_capturing = 0, spall_flush(&spall_profile))
+# define ProfEndCapture(...)      (spall_capturing = 0, spall_flush_all())
 # define ProfThreadName(...)
 # define ProfMsg(...)
 # define ProfBeginLockWait(...)
@@ -91,7 +93,7 @@ internal inline void spall_begin(char *fmt, ...);
 # define ProfLockTake(...)
 # define ProfLockDrop(...)
 # define ProfColor(color)
-# define ProfBeginV(...)
+# define ProfBeginV(...)          (spall_capturing ? (spall_begin(__VA_ARGS__), 0) : 0)
 # define ProfNoteV(...)
 #endif
 
