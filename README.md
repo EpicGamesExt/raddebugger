@@ -199,6 +199,16 @@ sudo pacman -S base-devel
 sudo pacman -S clang llvm
 ```
 
+#### GCC on Fedora
+```
+sudo dnf install gcc
+```
+
+#### Clang on Fedora
+```
+sudo dnf install clang llvm
+```
+
 If you've installed the Clang and LLVM tooling required, you can run:
 
 ```
@@ -263,6 +273,11 @@ sudo apt install -y libfreetype6-dev libx11-dev libxext-dev libxfixes-dev libxra
 
 ```
 sudo pacman -S --needed freetype2 libx11 libxext libxfixes libxrandr libglvnd
+```
+
+#### Fedora
+```
+sudo dnf install freetype-devel libX11-devel libXext-devel libXfixes-devel libXrandr-devel mesa-libGL mesa-libEGL-devel
 ```
 
 ### 3. Building
