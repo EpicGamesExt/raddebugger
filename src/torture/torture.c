@@ -961,7 +961,7 @@ t_test_info_is_before(void *a_, void *b_)
   {
     cmp = u64_compar(&a[0]->decl_line, &b[0]->decl_line);
   }
-  return cmp;
+  return cmp < 0;
 }
 
 internal String8List
