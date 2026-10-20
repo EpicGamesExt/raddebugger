@@ -13546,12 +13546,16 @@ rd_frame(void)
     ////////////////////////////
     //- rjf: do installation/uninstallation of app
     //
+    // rjf: user_path is empty until OpenUser accepts a file. a missing
+    // install_to_system node reads as off, so syncing before that load
+    // uninstalls a desktop entry the user file still requests.
     B32 installed = rd_setting_b32_from_name(s("install_to_system"));
     B32 last_installed = rd_state->installed;
-    if(installed != last_installed)
+    if(rd_state->user_path.size != 0 && installed != last_installed)
     {
       sh_install_or_uninstall_self(1, installed);
       rd_state->installed = installed;
+      rd_cmd(RD_CmdKind_WriteUserData);
     }
     
     ////////////////////////////
@@ -14316,6 +14320,19 @@ rd_frame(void)
               log_user_errorf("\"%S\" appears to refer to an existing file which is not a RADDBG config file. This would overwrite the file.", file_path);
             }
             
+            //- rjf: empty user load drops install_to_system; keep its value string
+            String8 kept_install_to_system = {0};
+            B32 keep_install_to_system = 0;
+            if(kind == RD_CmdKind_OpenUser && file_data.size == 0)
+            {
+              CFG_Node *install_cfg = cfg_node_child_from_string(file_root, str8_lit("install_to_system"));
+              if(install_cfg != &cfg_nil_node)
+              {
+                kept_install_to_system = push_str8_copy(scratch.arena, install_cfg->first->string);
+                keep_install_to_system = 1;
+              }
+            }
+            
             //- rjf: eliminate all old state under this file tree
             if(file_is_okay)
             {
@@ -14346,8 +14363,14 @@ rd_frame(void)
                 default:{}break;
                 case RD_CmdKind_OpenUser:
                 {
+                  // rjf: an empty open (new user) must not keep the previous
+                  // path, or autosave would overwrite that file
                   arena_clear(rd_state->user_path_arena);
-                  rd_state->user_path = str8_copy(rd_state->user_path_arena, file_path);
+                  rd_state->user_path = str8_zero();
+                  if(file_path.size != 0)
+                  {
+                    rd_state->user_path = str8_copy(rd_state->user_path_arena, file_path);
+                  }
                 }break;
                 case RD_CmdKind_OpenProject:
                 {
@@ -14364,6 +14387,13 @@ rd_frame(void)
               {
                 cfg_node_insert_child(rd_state->cfg, file_root, file_root->last, n->v);
               }
+            }
+            
+            //- rjf: empty load inserted nothing; put the kept install flag back
+            if(keep_install_to_system)
+            {
+              CFG_Node *install_cfg = cfg_node_child_from_string_or_alloc(rd_state->cfg, file_root, str8_lit("install_to_system"));
+              cfg_node_new_replace(rd_state->cfg, install_cfg, kept_install_to_system);
             }
             
             //- rjf: if config did not open any windows for the user, then we need to open a sensible default
@@ -14400,7 +14430,7 @@ rd_frame(void)
             }
             
             //- rjf: record last-opened user in config directory
-            if(file_is_okay && kind == RD_CmdKind_OpenUser && !rd_regs()->non_graphical)
+            if(file_is_okay && kind == RD_CmdKind_OpenUser && !rd_regs()->non_graphical && rd_regs()->file_path.size != 0)
             {
               rd_cmd(RD_CmdKind_RecordUserAsLastOpened);
             }
