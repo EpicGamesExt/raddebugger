@@ -4275,7 +4275,11 @@ cv2r_convert(Arena *arena, CV2R_ConvertParams *params)
         U64 slot_idx = hash%all_namespace_slots_count;
         for(CV2R_NamespaceNode *n = all_namespace_slots[slot_idx]; n != 0; n = n->next)
         {
-          n->scope = scope_n->scope;
+          if(str8_match(n->string, scope_n->string, 0))
+          {
+            n->scope = scope_n->scope;
+            break;
+          }
         }
       }
     }
