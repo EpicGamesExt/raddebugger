@@ -425,6 +425,7 @@ struct RD_State
   S32 frame_depth;
   U64 frame_eval_memread_endt_us;
   SOCK_Endpoint ipc_sock_endpoint;
+  UI_State *ui_stub;
   
   // rjf: installation setting state
   B32 installed;

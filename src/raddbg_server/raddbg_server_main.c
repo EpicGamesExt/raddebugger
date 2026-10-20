@@ -135,7 +135,7 @@ dmn_thread__entry_point(void *p)
       DS_Msg msg = ds_msg_from_packet(scratch.arena, msg_n->packet);
       
       //- rjf: do action, get response
-      DS_Response response = {0};
+      DS_Response response = {.good = 1};
       DMN_EventList events = {0};
       switch(msg.kind)
       {
@@ -186,13 +186,6 @@ dmn_thread__entry_point(void *p)
         }break;
       }
       
-      //- rjf: pack response & send back to the originating endpoint of the message
-      if(msg_n->endpoint.port != 0)
-      {
-        String8 data = ds_packet_from_response(scratch.arena, &response);
-        sock_send(rds_state->sock_session, SOCK_Protocol_TCP, msg_n->endpoint, data, max_U64);
-      }
-      
       //- rjf: pack events & send to all connected client 
       if(events.count != 0)
       {
@@ -201,6 +194,13 @@ dmn_thread__entry_point(void *p)
         {
           sock_send(rds_state->sock_session, SOCK_Protocol_TCP, c->endpoint, data, max_U64);
         }
+      }
+      
+      //- rjf: pack response & send back to the originating endpoint of the message
+      if(msg_n->endpoint.port != 0)
+      {
+        String8 data = ds_packet_from_response(scratch.arena, &response);
+        sock_send(rds_state->sock_session, SOCK_Protocol_TCP, msg_n->endpoint, data, max_U64);
       }
     }
     

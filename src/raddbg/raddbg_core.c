@@ -11473,6 +11473,20 @@ rd_init(CmdLine *cmdln)
   rd_state->drag_drop_regs = push_array(rd_state->drag_drop_arena, RD_Regs, 1);
   rd_state->top_regs = &rd_state->base_regs;
   
+  // rjf: set up stub UI layer & drawing context - needed for stubbed out UI related functionality which is coupled
+  // with other stuff - sometimes e.g. a path generates fancy strings using UI state, but we only want the string
+  // when doing IPC stuff. this is just to stub that out if we never show a window (e.g. with hidden mode).
+  rd_state->ui_stub = ui_state_alloc();
+  {
+    UI_EventList *evts = push_array(rd_state->ui_stub->arena, UI_EventList, 1);
+    UI_IconInfo *info = push_array(rd_state->ui_stub->arena, UI_IconInfo, 1);
+    UI_Theme *theme = push_array(rd_state->ui_stub->arena, UI_Theme, 1);
+    UI_AnimationInfo *animation_info = push_array(rd_state->ui_stub->arena, UI_AnimationInfo, 1);
+    ui_select_state(rd_state->ui_stub);
+    ui_begin_build(wm_window_zero(), evts, info, theme, animation_info, 1.f, 1.f);
+    dr_begin_frame(fnt_tag_from_static_data_string(&rd_icon_font_bytes));
+  }
+  
   // rjf: set up update check http ring & send request
   {
     rd_state->update_check_arena = arena_alloc();
