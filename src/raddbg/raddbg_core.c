@@ -13937,6 +13937,7 @@ rd_frame(void)
           {
             String8List state_parts = {0};
             str8_list_pushf(scratch.arena, &state_parts, "state:\n{\n");
+            str8_list_pushf(scratch.arena, &state_parts, " version: \"%s\"\n", BUILD_TITLE_STRING_LITERAL);
             str8_list_pushf(scratch.arena, &state_parts, " running: %i\n", d_ctrl_targets_running());
             str8_list_pushf(scratch.arena, &state_parts, " run_gen: %I64u\n", d_run_gen());
             str8_list_pushf(scratch.arena, &state_parts, " stop_count: %I64u\n", d_stop_count());
