@@ -29,7 +29,13 @@ ds_msg_from_packet(Arena *arena, String8 data)
     off += str8_deserial_read_struct(payload, off, &msg.vaddr_range);
     off += str8_deserial_read_struct(payload, off, &msg.access_flags);
     off += str8_deserial_read_struct(payload, off, &msg.entity);
+    off += str8_deserial_read_struct(payload, off, &msg.module);
     off += str8_deserial_read_struct(payload, off, &msg.pid);
+    
+    // rjf: read data blob
+    off += str8_deserial_read_struct(payload, off, &msg.data.size);
+    msg.data = str8_substr(payload, r1u64(off, off+msg.data.size));
+    off += msg.data.size;
     
     // rjf: read launch parameters extension
     {
@@ -128,7 +134,12 @@ ds_packet_from_msg(Arena *arena, DS_Msg *msg)
     str8_serial_push_struct(scratch.arena, &srl, &msg->vaddr_range);
     str8_serial_push_struct(scratch.arena, &srl, &msg->access_flags);
     str8_serial_push_struct(scratch.arena, &srl, &msg->entity);
+    str8_serial_push_struct(scratch.arena, &srl, &msg->module);
     str8_serial_push_struct(scratch.arena, &srl, &msg->pid);
+    
+    // rjf: write data blob extension
+    str8_serial_push_struct(scratch.arena, &srl, &msg->data.size);
+    str8_serial_push_string(scratch.arena, &srl, msg->data);
     
     // rjf: write launch parameters extension
     B8 has_launch_params = (msg->launch_params != 0);
@@ -208,7 +219,7 @@ ds_packet_from_msg(Arena *arena, DS_Msg *msg)
 }
 
 internal DS_Response
-ds_response_from_packet(Arena *arena, String8 data)
+ds_response_from_packet(String8 data)
 {
   //- rjf: read packet header
   DS_PacketHeader header = {0};
@@ -229,12 +240,13 @@ ds_response_from_packet(Arena *arena, String8 data)
     off += str8_deserial_read_struct(payload, off, &result.msg_id);
     off += str8_deserial_read_struct(payload, off, &result.entity);
     off += str8_deserial_read_struct(payload, off, &result.pid);
+    off += str8_deserial_read_struct(payload, off, &result.vaddr);
     off += str8_deserial_read_struct(payload, off, &result.good);
     
     // rjf: read data payload
     off += str8_deserial_read_struct(payload, off, &result.data.size);
-    result.data.str = push_array(arena, U8, result.data.size);
-    off += str8_deserial_read(payload, off, result.data.str, result.data.size, 1);
+    result.data = str8_substr(payload, r1u64(off, off+result.data.size));
+    off += result.data.size;
   }
   return result;
 }
@@ -252,6 +264,7 @@ ds_packet_from_response(Arena *arena, DS_Response *response)
     str8_serial_push_struct(scratch.arena, &srl, &response->msg_id);
     str8_serial_push_struct(scratch.arena, &srl, &response->entity);
     str8_serial_push_struct(scratch.arena, &srl, &response->pid);
+    str8_serial_push_struct(scratch.arena, &srl, &response->vaddr);
     str8_serial_push_struct(scratch.arena, &srl, &response->good);
     
     // rjf: write data payload

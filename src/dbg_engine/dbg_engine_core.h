@@ -33,6 +33,9 @@ D_ControllerKindEnum;
 
 #define D_ServerID_LocalHost (1)
 
+#define d_packet_msg_id(ring_id, lower32) (((U64)(ring_id)<<32)|(lower32&0xffffffff))
+#define d_packet_ring_id_from_msg_id(msg_id) (((msg_id)&0xffffffff00000000ull)>>32)
+
 ////////////////////////////////
 //~ rjf: Entity Handle Types
 

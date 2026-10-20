@@ -56,6 +56,9 @@ struct W32_SOCK_State
   RWMutex session_rw_mutex;
   W32_SOCK_Session *first_session;
   W32_SOCK_Session *last_session;
+  Mutex send_mutex;
+  CondVar send_cv;
+  Thread send_thread;
 };
 
 ////////////////////////////////
@@ -64,8 +67,9 @@ struct W32_SOCK_State
 global W32_SOCK_State *w32_sock_state = 0;
 
 ////////////////////////////////
-//~ rjf: Listener Threads
+//~ rjf: Threads
 
+internal void w32_sock_sender_thread_entry_point(void *p);
 internal void w32_sock_listener_thread_entry_point(void *p);
 
 #endif // WIN32_SOCKET_H

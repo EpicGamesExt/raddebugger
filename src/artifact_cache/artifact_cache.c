@@ -179,8 +179,8 @@ ac_artifact_from_key_(Access *access, String8 key, AC_ArtifactParams *params, U6
           n->v.cancel_signal = &node->cancelled;
           n->v.create = params->create;
         }
-        cond_var_broadcast(async_tick_start_cond_var);
         ins_atomic_u32_eval_assign(&async_loop_again, 1);
+        cond_var_broadcast(async_tick_start_cond_var);
         if(params->flags & AC_Flag_HighPriority)
         {
           ins_atomic_u32_eval_assign(&async_loop_again_high_priority, 1);

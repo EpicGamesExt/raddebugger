@@ -105,6 +105,16 @@ d_init(void)
     d_ctrl_state = push_array(arena, D_CtrlState, 1);
     d_ctrl_state->arena = arena;
     d_ctrl_state->sock_session = sock_session_open(0, d_ctrl_sock_wakeup);
+    d_ctrl_state->sock_event_ring = guarded_ring_alloc(arena, KB(256));
+    d_ctrl_state->sock_rings_count = get_system_info()->logical_processor_count;
+    d_ctrl_state->sock_rings = push_array(arena, D_SockRing, d_ctrl_state->sock_rings_count);
+    for EachIndex(idx, d_ctrl_state->sock_rings_count)
+    {
+      d_ctrl_state->sock_rings[idx].ring = guarded_ring_alloc(arena, KB(8));
+      SLLStackPush(d_ctrl_state->free_sock_ring, &d_ctrl_state->sock_rings[idx]);
+    }
+    d_ctrl_state->sock_ring_alloc_rw_mutex = rw_mutex_alloc();
+    d_ctrl_state->sock_ring_alloc_cv = cond_var_alloc();
     for EachEnumVal(Arch, arch)
     {
       ARCH_Info *arch_info = arch_info_from_arch(arch);
@@ -169,6 +179,11 @@ d_init(void)
     d_ctrl_state->dump_cache.slots_count = 64;
     d_ctrl_state->dump_cache.slots = push_array(arena, D_DumpSlot, d_ctrl_state->dump_cache.slots_count);
     d_ctrl_state->dump_cache.stripes = stripe_array_alloc(arena);
+    d_ctrl_state->open_server_cache.arena = arena_alloc();
+    d_ctrl_state->open_server_cache.slots_count = 8;
+    d_ctrl_state->open_server_cache.slots = push_array(arena, D_OpenServerSlot, d_ctrl_state->open_server_cache.slots_count);
+    d_ctrl_state->open_server_cache.rw_mutex = rw_mutex_alloc();
+    d_ctrl_state->sock_recv_thread = thread_launch(d_sock_recv_thread_entry_point, 0);
   }
   
   //- rjf: set up user state
