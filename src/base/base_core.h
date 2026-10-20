@@ -36,12 +36,7 @@
 #elif (COMPILER_CLANG && OS_LINUX)
 # define read_only __attribute__((section(".rodata")))
 #else
-// NOTE(rjf): I don't know of a useful way to do this in GCC land.
-// __attribute__((section(".rodata"))) looked promising, but it introduces a
-// strange warning about malformed section attributes, and it doesn't look
-// like writing to that section reliably produces access violations, strangely
-// enough. (It does on Clang)
-# define read_only
+# define read_only __attribute__((section(".data.rel.ro")))
 #endif
 
 #if COMPILER_MSVC
