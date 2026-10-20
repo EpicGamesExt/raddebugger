@@ -1010,18 +1010,20 @@ wm_window_push_custom_title_bar_client_area(WM_Window handle, Rng2F32 rect)
 internal Rng2F32
 wm_rect_from_window(WM_Window handle)
 {
-  if(wm_window_match(handle, wm_window_zero())) {return r2f32p(0, 0, 0, 0);}
   LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
   Rng2F32 result = {0};
-  if(w->resize_draw)
+  if(w != 0)
   {
-    result = w->last_synced_rect;
-  }
-  else
-  {
-    XWindowAttributes atts = {0};
-    Status s = XGetWindowAttributes(lnx_wm_state->display, w->window, &atts);
-    result = r2f32p((F32)atts.x, (F32)atts.y, (F32)atts.x + (F32)atts.width, (F32)atts.y + (F32)atts.height);
+    if(w->resize_draw)
+    {
+      result = w->last_synced_rect;
+    }
+    else
+    {
+      XWindowAttributes atts = {0};
+      Status s = XGetWindowAttributes(lnx_wm_state->display, w->window, &atts);
+      result = r2f32p((F32)atts.x, (F32)atts.y, (F32)atts.x + (F32)atts.width, (F32)atts.y + (F32)atts.height);
+    }
   }
   return result;
 }
@@ -1031,16 +1033,19 @@ wm_client_rect_from_window(WM_Window handle)
 {
   LNX_WM_Window *w = (LNX_WM_Window *)handle.u64[0];
   Rng2F32 result = {0};
-  if(w->resize_draw)
+  if(w != 0)
   {
-    Vec2F32 dim = dim_2f32(w->last_synced_rect);
-    result = r2f32p(0, 0, dim.x, dim.y);
-  }
-  else
-  {
-    XWindowAttributes atts = {0};
-    Status s = XGetWindowAttributes(lnx_wm_state->display, w->window, &atts);
-    result = r2f32p(0, 0, (F32)atts.width, (F32)atts.height);
+    if(w->resize_draw)
+    {
+      Vec2F32 dim = dim_2f32(w->last_synced_rect);
+      result = r2f32p(0, 0, dim.x, dim.y);
+    }
+    else
+    {
+      XWindowAttributes atts = {0};
+      Status s = XGetWindowAttributes(lnx_wm_state->display, w->window, &atts);
+      result = r2f32p(0, 0, (F32)atts.width, (F32)atts.height);
+    }
   }
   return result;
 }
