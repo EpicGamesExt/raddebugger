@@ -825,6 +825,7 @@ r_end_frame(void)
     r_d3d11_state->first_to_free_tex2d  = 0;
     r_d3d11_state->first_to_free_buffer = 0;
   }
+  w32_comp_commit_frame();
 }
 
 r_hook void

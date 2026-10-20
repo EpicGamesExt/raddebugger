@@ -399,6 +399,8 @@ w32_wm_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
           {
             CloseHandle(sync);
           }
+          Assert(w32_comp_state.pending_resizes > 0);
+          --w32_comp_state.pending_resizes;
         }
       }break;
 
@@ -666,6 +668,7 @@ w32_wm_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
           if(!window->comp_resize_queued)
           {
             window->comp_resize_queued = 1;
+            ++s->pending_resizes;
             if(!PostMessageW(hwnd, W32_COMP_RENDER_RESIZE_MSG, 0, 0))
             {
               sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not post the resize frame."));

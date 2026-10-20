@@ -11,6 +11,8 @@
 // BeginDraw supplies the render target and its offset; the renderer keeps neither past EndDraw.
 // New surface pixels are part of a composition commit. DWM can hold a resized window frame until the commit
 // that carries the resize's synchronization object.
+// Ordinary frames commit at r_end_frame, without waiting for the compositor's automatic commit tick.
+// While a resize is queued or running, that commit is deferred: the posted handler submits its captured object.
 //
 // Private and Windows 11 only: user32 ordinals 2538 (LayoutCompleted), 2614
 // (GetResizeDCompositionSynchronizationObject) and 2615 (EnableResizeLayoutSynchronization),
@@ -38,12 +40,14 @@ typedef struct W32_Comp_State W32_Comp_State;
 struct W32_Comp_State
 {
   B32 init_tried;
+  U32 pending_resizes;           // queued or running handlers: their frames must keep the resize's commit
   void *queue_controller;        // IDispatcherQueueController: the compositor needs a DispatcherQueue on its thread
   void *compositor;              // ICompositor
   void *graphics_device;         // ICompositionGraphicsDevice over the renderer's D3D11 device
   
   // resize synchronization
   void *device_partner;          // IDCompositionDesktopDevicePartner6
+  void *commit_device;           // IDCompositionDevice2: ordinary frame commits
   BOOL (WINAPI *get_resize_sync_object)(HWND hwnd, HANDLE *sync);
   BOOL (WINAPI *enable_resize_sync)(HWND hwnd, BOOL enable);
   BOOL (WINAPI *layout_completed)(HWND hwnd);
@@ -62,5 +66,6 @@ internal void w32_comp_window_unequip(WM_Window window);
 internal HRESULT w32_comp_window_begin_draw(WM_Window window, Vec2S32 size, REFIID iid, void **out, POINT *offset);
 internal HRESULT w32_comp_window_end_draw(WM_Window window);
 internal void w32_comp_commit_resize(W32_WM_Window *window, HANDLE sync);
+internal void w32_comp_commit_frame(void);
 
 #endif // WIN32_COMPOSITION_H

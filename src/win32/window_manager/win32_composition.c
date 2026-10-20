@@ -9,6 +9,7 @@ global const GUID w32_comp_iid_compositor_interop    = {0x25297d5c, 0x3ad4, 0x4c
 global const GUID w32_comp_iid_compositor_desktop    = {0x29e691fa, 0x4567, 0x4dca, {0xb3, 0x19, 0xd0, 0xf2, 0x07, 0xeb, 0x68, 0x07}};
 global const GUID w32_comp_iid_factory_partner       = {0x22118adf, 0x23f1, 0x4801, {0xbc, 0xfa, 0x66, 0xcb, 0xf4, 0x8c, 0xc5, 0x1b}};
 global const GUID w32_comp_iid_device_partner6       = {0xe01eb649, 0x787e, 0x4560, {0xb3, 0x98, 0x0d, 0xe7, 0xa2, 0x06, 0x5d, 0x8b}};
+global const GUID w32_comp_iid_device2               = {0x75f6468d, 0x1b8e, 0x447c, {0x9b, 0xc6, 0x75, 0xfe, 0xa8, 0x0b, 0x5b, 0x25}};
 global const GUID w32_comp_iid_visual                = {0x117e202d, 0xa859, 0x4c89, {0x87, 0x3b, 0xc2, 0xaa, 0x56, 0x67, 0x88, 0xe3}};
 global const GUID w32_comp_iid_composition_target    = {0xa1bea8ba, 0xd726, 0x4663, {0x81, 0x29, 0x6b, 0x5e, 0x79, 0x27, 0xff, 0xa6}};
 global const GUID w32_comp_iid_composition_surface   = {0x1527540d, 0x42c7, 0x47a6, {0xa4, 0x08, 0x66, 0x8f, 0x79, 0xa9, 0x0d, 0xfb}};
@@ -18,6 +19,7 @@ global const GUID w32_comp_iid_drawing_interop       = {0xfd04e6e3, 0xfe0c, 0x4c
 // Slot 0-2 are IUnknown's, 3-5 IInspectable's on WinRT interfaces.
 #define W32_COMP_SLOT_FACTORY_PARTNER_CREATE_INTEROP_COMPOSITOR 6
 #define W32_COMP_SLOT_DEVICE_PARTNER6_SYNCHRONIZED_COMMIT        69
+#define W32_COMP_SLOT_DEVICE_COMMIT                              3
 #define W32_COMP_SLOT_COMPOSITOR_CREATE_SPRITE_VISUAL            22
 #define W32_COMP_SLOT_COMPOSITOR_CREATE_SURFACE_BRUSH            24
 #define W32_COMP_SLOT_COMPOSITOR_INTEROP_CREATE_GRAPHICS_DEVICE  5
@@ -134,6 +136,7 @@ w32_comp_window_equip(WM_Window handle, void *d3d11_device)
     // resize synchronization
     HMODULE user32 = GetModuleHandleW(L"user32.dll");
     s->device_partner = w32_comp_query(s->compositor, &w32_comp_iid_device_partner6);
+    s->commit_device = w32_comp_query(s->compositor, &w32_comp_iid_device2);
     s->get_resize_sync_object = (BOOL (WINAPI *)(HWND, HANDLE *))GetProcAddress(user32, MAKEINTRESOURCEA(2614));
     s->enable_resize_sync = (BOOL (WINAPI *)(HWND, BOOL))GetProcAddress(user32, MAKEINTRESOURCEA(2615));
     s->layout_completed = (BOOL (WINAPI *)(HWND))GetProcAddress(user32, MAKEINTRESOURCEA(2538));
@@ -215,7 +218,12 @@ w32_comp_window_unequip(WM_Window handle)
       CloseHandle(window->comp_resize_sync);
       window->comp_resize_sync = 0;
     }
-    window->comp_resize_queued = 0;
+    if(window->comp_resize_queued)
+    {
+      Assert(w32_comp_state.pending_resizes > 0);
+      --w32_comp_state.pending_resizes;
+      window->comp_resize_queued = 0;
+    }
     if(window->comp_resize_child != 0)
     {
       if(!w32_comp_state.enable_resize_sync(window->hwnd, 0) ||
@@ -282,6 +290,10 @@ w32_comp_commit_resize(W32_WM_Window *window, HANDLE sync)
     error = w32_comp_slot(s->device_partner, W32_COMP_SLOT_DEVICE_PARTNER6_SYNCHRONIZED_COMMIT, W32_Comp_PutFn)(s->device_partner, sync);
     CloseHandle(sync);
   }
+  else
+  {
+    error = w32_comp_slot(s->commit_device, W32_COMP_SLOT_DEVICE_COMMIT, W32_Comp_CallFn)(s->commit_device);
+  }
   if(SUCCEEDED(error) && !s->layout_completed(window->hwnd))
   {
     error = E_FAIL;
@@ -292,5 +304,15 @@ w32_comp_commit_resize(W32_WM_Window *window, HANDLE sync)
     raddbg_snprintf(buffer, sizeof(buffer), "DirectComposition resize commit failure (%lx). The process is terminating.", error);
     sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
     abort_self(1);
+  }
+}
+
+internal void
+w32_comp_commit_frame(void)
+{
+  W32_Comp_State *s = &w32_comp_state;
+  if(s->commit_device != 0 && s->pending_resizes == 0)
+  {
+    w32_comp_check(w32_comp_slot(s->commit_device, W32_COMP_SLOT_DEVICE_COMMIT, W32_Comp_CallFn)(s->commit_device), "commit frame");
   }
 }
