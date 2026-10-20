@@ -199,6 +199,16 @@ sudo pacman -S base-devel
 sudo pacman -S clang llvm
 ```
 
+#### GCC on Fedora / RHEL (Red Hat) / CentOS
+```bash
+sudo dnf group install development-tools
+```
+
+#### Clang & LLVM on Fedora / RHEL (Red Hat) / CentOS
+```bash
+sudo dnf install -y clang llvm
+```
+
 If you've installed the Clang and LLVM tooling required, you can run:
 
 ```
@@ -265,6 +275,11 @@ sudo apt install -y libfreetype6-dev libx11-dev libxext-dev libxfixes-dev libxra
 sudo pacman -S --needed freetype2 libx11 libxext libxfixes libxrandr libglvnd
 ```
 
+#### Fedora / RHEL (Red Hat) / CentOS
+```bash
+sudo dnf install -y freetype-devel libX11-devel libXext-devel libXfixes-devel libXrandr-devel mesa-libGL-devel mesa-libEGL-devel
+```
+
 ### 3. Building
 
 To build, `cd` to the root directory of the codebase, and run the `build.sh`
@@ -306,6 +321,11 @@ Linker, or the `radbin` CLI binary file utility:
 ```
 ./build.sh radlink release
 ./build.sh radbin release
+```
+
+### 4. Running
+```
+./build/raddbg
 ```
 
 ---
