@@ -825,12 +825,12 @@ internal UI_State *ui_get_selected_state(void);
 //~ rjf: Implicit State Accessors/Mutators
 
 //- rjf: per-frame info
-internal Arena *           ui_build_arena(void);
-internal WM_Window         ui_window(void);
-internal Vec2F32           ui_mouse(void);
-internal FNT_Tag           ui_icon_font(void);
-internal String8           ui_icon_string_from_kind(UI_IconKind icon_kind);
-internal F32               ui_dt(void);
+internal Arena *   ui_build_arena(void);
+internal WM_Window ui_window(void);
+internal Vec2F32   ui_mouse(void);
+internal FNT_Tag   ui_icon_font(void);
+internal String8   ui_icon_string_from_kind(UI_IconKind icon_kind);
+internal F32       ui_dt(void);
 
 //- rjf: event pumping
 internal B32 ui_next_event(UI_Event **ev);
@@ -848,27 +848,27 @@ internal String8 ui_autocomplete_string(void);
 internal String8 ui_autocomplete(void);
 
 //- rjf: drag data
-internal Vec2F32           ui_drag_start_mouse(void);
-internal Vec2F32           ui_drag_delta(void);
-internal void              ui_store_drag_data(String8 string);
-internal String8           ui_get_drag_data(U64 min_required_size);
+internal Vec2F32 ui_drag_start_mouse(void);
+internal Vec2F32 ui_drag_delta(void);
+internal void ui_store_drag_data(String8 string);
+internal String8 ui_get_drag_data(U64 min_required_size);
 #define ui_store_drag_struct(ptr) ui_store_drag_data(str8_struct(ptr))
 #define ui_get_drag_struct(type) ((type *)ui_get_drag_data(sizeof(type)).str)
 
 //- rjf: hovered string info
-internal B32                ui_string_hover_active(void);
+internal B32         ui_string_hover_active(void);
 internal DR_FStrList ui_string_hover_fstrs(Arena *arena);
 
 //- rjf: interaction keys
-internal UI_Key            ui_hot_key(void);
-internal UI_Key            ui_active_key(UI_MouseButtonKind button_kind);
-internal UI_Key            ui_drop_hot_key(void);
+internal UI_Key ui_hot_key(void);
+internal UI_Key ui_active_key(UI_MouseButtonKind button_kind);
+internal UI_Key ui_drop_hot_key(void);
 
 //- rjf: controls over interaction
-internal void              ui_kill_action(void);
+internal void ui_kill_action(void);
 
 //- rjf: box cache lookup
-internal UI_Box *          ui_box_from_key(UI_Key key);
+internal UI_Box *ui_box_from_key(UI_Key key);
 
 ////////////////////////////////
 //~ rjf: Top-Level Building API

@@ -135,7 +135,7 @@ dmn_thread__entry_point(void *p)
       DS_Msg msg = ds_msg_from_packet(scratch.arena, msg_n->packet);
       
       //- rjf: do action, get response
-      DS_Response response = {.good = 1};
+      DS_Response response = {.good = 1, .msg_id = msg.msg_id};
       DMN_EventList events = {0};
       switch(msg.kind)
       {
@@ -405,6 +405,70 @@ entry_point(CmdLine *cmd_line)
           {
             dmn_halt(0, 0);
           }break;
+          
+          //- rjf: memory ops
+          case DS_MsgKind_MemoryReserve:
+          {
+            DMN_Handle process = msg.entity;
+            response.vaddr = dmn_process_memory_reserve(process, msg.vaddr_range.min, dim_1u64(msg.vaddr_range));
+          }break;
+          case DS_MsgKind_MemoryCommit:
+          {
+            DMN_Handle process = msg.entity;
+            dmn_process_memory_commit(process, msg.vaddr_range.min, dim_1u64(msg.vaddr_range));
+          }break;
+          case DS_MsgKind_MemoryDecommit:
+          {
+            DMN_Handle process = msg.entity;
+            dmn_process_memory_decommit(process, msg.vaddr_range.min, dim_1u64(msg.vaddr_range));
+          }break;
+          case DS_MsgKind_MemoryRelease:
+          {
+            DMN_Handle process = msg.entity;
+            dmn_process_memory_release(process, msg.vaddr_range.min, dim_1u64(msg.vaddr_range));
+          }break;
+          case DS_MsgKind_MemoryProtect:
+          {
+            DMN_Handle process = msg.entity;
+            dmn_process_memory_protect(process, msg.vaddr_range.min, dim_1u64(msg.vaddr_range), msg.access_flags);
+          }break;
+          case DS_MsgKind_MemoryRead:
+          {
+            DMN_Handle process = msg.entity;
+            U64 read_size_desired = dim_1u64(msg.vaddr_range);
+            U8 *data = push_array_no_zero(scratch.arena, U8, read_size_desired);
+            U64 read_size_actual = dmn_process_read(process, msg.vaddr_range, data);
+            response.data.size = read_size_actual;
+            response.data.str  = data;
+          }break;
+          case DS_MsgKind_MemoryWrite:
+          {
+            DMN_Handle process = msg.entity;
+            response.good = dmn_process_write(process, r1u64(msg.vaddr_range.min, msg.vaddr_range.min + msg.data.size), msg.data.str);
+          }break;
+          
+          //- rjf: thread ops
+          case DS_MsgKind_ThreadRegBlockRead:
+          {
+            ARCH_Info *arch_info = arch_info_from_arch(Arch_CURRENT);
+            U8 *reg_block = push_array(scratch.arena, U8, arch_info->reg_block_size);
+            response.good = dmn_thread_read_reg_block(msg.entity, reg_block);
+            response.data = str8(reg_block, arch_info->reg_block_size);
+          }break;
+          case DS_MsgKind_ThreadRegBlockWrite:
+          {
+            ARCH_Info *arch_info = arch_info_from_arch(Arch_CURRENT);
+            U8 *reg_block = push_array(scratch.arena, U8, arch_info->reg_block_size);
+            MemoryCopy(reg_block, msg.data.str, Min(msg.data.size, arch_info->reg_block_size));
+            response.good = dmn_thread_write_reg_block(msg.entity, reg_block);
+          }break;
+          case DS_MsgKind_ThreadGetModuleTLSVAddr:
+          {
+            response.good = dmn_thread_get_module_tls_vaddr(msg.entity, msg.module, &response.vaddr);
+          }break;
+          
+          //- rjf: system ops
+          case DS_MsgKind_ListSystemProcesses:{}break;
         }
         
         // rjf: send response

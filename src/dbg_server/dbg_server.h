@@ -9,6 +9,7 @@
 
 #define DS_PACKET_MAGIC 0x7273
 #define DS_PACKET_VERSION 0x0
+#define DS_PACKET_CAP KB(1)
 
 typedef U8 DS_PacketKind;
 enum
@@ -101,8 +102,12 @@ struct DS_Msg
   Rng1U64 vaddr_range;
   AccessFlags access_flags;
   DMN_Handle entity;
+  DMN_Handle module;
   U64 pid;
   U64 code;
+  
+  //- rjf: data blob extensions
+  String8 data;
   
   //- rjf: process launching parameter extension
   DS_LaunchParams *launch_params;
@@ -121,6 +126,7 @@ struct DS_Response
   U64 msg_id;
   DMN_Handle entity;
   U64 pid;
+  U64 vaddr;
   B32 good;
   String8 data;
 };
@@ -137,7 +143,7 @@ struct DS_ResponseNode
 
 internal DS_Msg ds_msg_from_packet(Arena *arena, String8 data);
 internal String8 ds_packet_from_msg(Arena *arena, DS_Msg *msg);
-internal DS_Response ds_response_from_packet(Arena *arena, String8 data);
+internal DS_Response ds_response_from_packet(String8 data);
 internal String8 ds_packet_from_response(Arena *arena, DS_Response *response);
 internal DMN_EventList ds_dmn_events_from_packet(Arena *arena, String8 data);
 internal String8 ds_packet_from_dmn_events(Arena *arena, DMN_EventList evts);
