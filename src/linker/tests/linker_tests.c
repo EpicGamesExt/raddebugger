@@ -6075,7 +6075,7 @@ TEST(first_member_header)
   String8 lib_before = t_read_file(arena, str8_lit("test.lib"));
   String8 obj_before = t_read_file(arena, str8_lit("entry.obj"));
 
-  t_invoke_linkerf("/RAD_MEMORY_MAP_FILES:READ_WRITE /subsystem:console /entry:entry /out:a.exe test.lib entry.obj /include:1 /include:2 /include:3 /include:4 /include:5 /include:6 /include:7 /include:8 /include:9");
+  t_invoke_linkerf("/subsystem:console /entry:entry /out:a.exe test.lib entry.obj /include:1 /include:2 /include:3 /include:4 /include:5 /include:6 /include:7 /include:8 /include:9");
   T_Ok(g_last_exit_code == 0);
   T_Ok(str8_match(lib_before, t_read_file(arena, str8_lit("test.lib")), 0));
   T_Ok(str8_match(obj_before, t_read_file(arena, str8_lit("entry.obj")), 0));
@@ -7750,8 +7750,11 @@ TEST(cyclic_type)
   str8_serial_push_string(arena, debug_t, cv_make_leaf(arena, CV_LeafKind_POINTER, str8_struct((&(CV_LeafPointer){ .itype = 0x1001 })), CV_LeafAlign));
   str8_serial_push_string(arena, debug_t, cv_make_leaf(arena, CV_LeafKind_POINTER, str8_struct((&(CV_LeafPointer){ .itype = 0x1000 })), CV_LeafAlign));
 
+  // make .debug$S with S_GPROC32 'foo'
   CV_DebugS debug_s = {0};
-  str8_list_push(arena, &debug_s.data_list[CV_C13SubSectionIdxKind_Symbols], cv_make_symbol(arena, CV_SymKind_GPROC32, cv_make_proc32(arena, (CV_SymProc32){ .itype = 0x1001 }, str8_lit("foo"))));
+  String8 foo_proc = cv_make_symbol(arena, CV_SymKind_GPROC32, cv_make_proc32(arena, (CV_SymProc32){ .itype = 0x1001 }, str8_lit("foo")));
+  String8 symbols = cv_debug_s_alloc_subsection(arena, &debug_s, CV_C13SubSectionKind_Symbols, foo_proc.size);
+  MemoryCopyStr8(symbols.str, foo_proc);
   String8List debug_s_string = cv_data_from_debug_s_c13(arena, &debug_s, 1);
 
   String8 raw_coff = t_coff_from_def_obj(arena, (T_COFF_DefObj){
@@ -8106,7 +8109,11 @@ TEST(validate_gsi)
   for EachElement(i, raw_symbols) { symbols[i] = cv_symbol_from_ptr(raw_symbols[i].str); }
 
   CV_DebugS debug_s = {0};
-  for EachElement(i, symbols) { str8_list_push(arena, &debug_s.data_list[CV_C13SubSectionIdxKind_Symbols], cv_data_from_symbol(arena, &symbols[i], CV_SymbolAlign)); }
+  for EachElement(i, symbols) {
+    U64 size = cv_size_from_symbol(&symbols[i], CV_SymbolAlign);
+    String8 payload = cv_debug_s_alloc_subsection(arena, &debug_s, CV_C13SubSectionKind_Symbols, size);
+    cv_write_symbol(payload.str, 0, payload.size, &symbols[i], CV_SymbolAlign);
+  }
   String8List raw_debug_s_list = cv_data_from_debug_s_c13(arena, &debug_s, 1);
   String8     raw_debug_s      = str8_list_join(arena, &raw_debug_s_list, 0);
 
@@ -8165,7 +8172,11 @@ TEST(validate_gsi_procs_and_typedefs)
   for EachElement(i, raw_symbols) { symbols[i] = cv_symbol_from_ptr(raw_symbols[i].str); }
 
   CV_DebugS debug_s = {0};
-  for EachElement(i, symbols) { str8_list_push(arena, &debug_s.data_list[CV_C13SubSectionIdxKind_Symbols], cv_data_from_symbol(arena, &symbols[i], CV_SymbolAlign)); }
+  for EachElement(i, symbols) {
+    U64 size = cv_size_from_symbol(&symbols[i], CV_SymbolAlign);
+    String8 payload = cv_debug_s_alloc_subsection(arena, &debug_s, CV_C13SubSectionKind_Symbols, size);
+    cv_write_symbol(payload.str, 0, payload.size, &symbols[i], CV_SymbolAlign);
+  }
   String8List raw_debug_s_list = cv_data_from_debug_s_c13(arena, &debug_s, 1);
   String8     raw_debug_s      = str8_list_join(arena, &raw_debug_s_list, 0);
 
@@ -8403,7 +8414,11 @@ TEST(pdbstripped)
     for EachElement(i, raw_symbols) { symbols[i] = cv_symbol_from_ptr(raw_symbols[i].str); }
 
     CV_DebugS debug_s = {0};
-    for EachElement(i, symbols) { str8_list_push(arena, &debug_s.data_list[CV_C13SubSectionIdxKind_Symbols], cv_data_from_symbol(arena, &symbols[i], CV_SymbolAlign)); }
+    for EachElement(i, symbols) {
+      U64 size = cv_size_from_symbol(&symbols[i], CV_SymbolAlign);
+      String8 payload = cv_debug_s_alloc_subsection(arena, &debug_s, CV_C13SubSectionKind_Symbols, size);
+      cv_write_symbol(payload.str, 0, payload.size, &symbols[i], CV_SymbolAlign);
+    }
     String8List raw_debug_s_list = cv_data_from_debug_s_c13(arena, &debug_s, 1);
     String8     raw_debug_s      = str8_list_join(arena, &raw_debug_s_list, 0);
 
@@ -8802,11 +8817,12 @@ TEST(patch_cv_symbol_tree)
   str8_list_push(arena, &raw_symbols, cv_make_symbol(arena, CV_SymKind_INLINESITE_END, cv_make_inline_site_end(arena)));
   str8_list_push(arena, &raw_symbols, cv_make_symbol(arena, CV_SymKind_END,            cv_make_end(arena)));
 
-  U64 tree_size = cv_patch_symbol_tree_offsets(raw_symbols, sizeof(CV_Signature), 4);
+  String8 symbol_data = str8_list_join(arena, &raw_symbols, 0);
+  U64 tree_size = cv_patch_symbol_tree_offsets(symbol_data, sizeof(CV_Signature), 4);
   T_Ok(tree_size == 84);
 
   {
-    String8Node buf     = *raw_symbols.first;
+    String8Node buf     = { .string = symbol_data };
     U64         buf_pos = 0;
 
     CV_SymbolHeader obj_header;
@@ -10853,6 +10869,33 @@ TEST(coff_section_name_offsets)
   MemoryZeroStruct(&inline_header);
   T_Ok(coff_name_from_section_header(str8_zero(), &inline_header).size == 0);
 }
+
+// TODO: linker currenlty skips over the IFC records and should instead load the .ifc; type merger also has to expand type index space with the help of IFC records
+#if 0 && OS_WINDOWS
+TEST(msvc_cpp_module)
+{
+  char *types_h = "#pragma once\n\
+  struct Point {\n\
+    int x;\n\
+    int y;\n\
+    __declspec(noinline) int sum() const {\n\
+        return x + y;\n\
+    }\n\
+  };\n";
+
+  char *main_cpp = "import \"types.h\";\n\
+  int main() {\n\
+    Point p{20, 22};\n\
+    return p.sum();\n\
+  }\n";
+
+  T_Ok(t_write_file(str8_lit("types.h"), str8_cstring(types_h)));
+  T_Ok(t_write_file(str8_lit("main.cpp"), str8_cstring(main_cpp)));
+
+  T_Ok(t_invoke_cl("/experimental:ifcDebugRecords /nologo /std:c++20 /EHsc /MD /Od /Z7 /c /exportHeader /headerName:quote types.h /ifcOutput types.ifc /Fotypes.obj"));
+  T_Ok(t_invoke_cl("/experimental:ifcDebugRecords /nologo /std:c++20 /EHsc /MD /Od /Z7 /c main.cpp /headerUnit:quote types.h=types.ifc /Fomain.obj"));
+}
+#endif
 
 #if 0
 TEST(defer_imp_link)

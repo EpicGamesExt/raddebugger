@@ -128,16 +128,14 @@ coff_lib_writer_push_obj(COFF_LibWriter *writer, String8 obj_path, String8 obj_d
 }
 
 internal void
-coff_lib_writer_push_import(COFF_LibWriter *lib_writer, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, COFF_ImportByType import_by, String8 name, U16 hint_or_ordinal, COFF_ImportType import_type)
+coff_lib_writer_push_import_data(COFF_LibWriter *lib_writer, String8 member_name, String8 member_data)
 {
-  U64 member_idx = lib_writer->member_list.count;
-
-  String8 member_data = coff_make_import_header(lib_writer->arena, machine, time_stamp, dll_name, import_by, name, hint_or_ordinal, import_type);
-  COFF_LibWriterMember member = { .name = dll_name, .data = member_data };
-  COFF_LibWriterMemberNode *member_node = coff_lib_writer_member_list_push(lib_writer->arena, &lib_writer->member_list, member);
-  
+  COFF_ShortImport import_header = coff_archive_import_from_data(member_data);
+  COFF_LibWriterMemberNode      *member_node   = coff_lib_writer_member_list_push(lib_writer->arena, &lib_writer->member_list, (COFF_LibWriterMember){ .name = member_name, .data = member_data });
+  String8                        name          = import_header.func_name;
+  U64                            member_idx    = lib_writer->member_list.count - 1;
   if (name.size) {
-    switch (import_type) {
+    switch (import_header.type) {
     case COFF_ImportHeader_Code: {
       COFF_LibWriterSymbol thunk_symbol = {0};
       thunk_symbol.name                 = push_str8_copy(lib_writer->arena, name);
@@ -149,6 +147,7 @@ coff_lib_writer_push_import(COFF_LibWriter *lib_writer, COFF_MachineType machine
       imp_symbol.member_idx           = member_idx;
       coff_lib_writer_symbol_list_push(lib_writer->arena, &lib_writer->symbol_list, imp_symbol);
     } break;
+
     case COFF_ImportHeader_Data:
     case COFF_ImportHeader_Const: {
       COFF_LibWriterSymbol imp_symbol = {0};
@@ -156,9 +155,17 @@ coff_lib_writer_push_import(COFF_LibWriter *lib_writer, COFF_MachineType machine
       imp_symbol.member_idx           = member_idx;
       coff_lib_writer_symbol_list_push(lib_writer->arena, &lib_writer->symbol_list, imp_symbol);
     } break;
+    
     default: { InvalidPath; } break;
     }
   }
+}
+
+internal void
+coff_lib_writer_push_import(COFF_LibWriter *lib_writer, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, COFF_ImportByType import_by, String8 name, U16 hint_or_ordinal, COFF_ImportType import_type)
+{
+  String8 member_data = coff_make_import_header(lib_writer->arena, machine, time_stamp, dll_name, import_by, name, hint_or_ordinal, import_type);
+  coff_lib_writer_push_import_data(lib_writer, dll_name, member_data);
 }
 
 internal String8

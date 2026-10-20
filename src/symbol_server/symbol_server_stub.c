@@ -34,6 +34,11 @@ smsv_fill_local_path(String8 path)
 {
 }
 
+internal void
+smsv_wait_local_path(String8 path, U64 endt_us)
+{
+}
+
 internal SMSV_Status
 smsv_status_from_local_path(String8 path)
 {

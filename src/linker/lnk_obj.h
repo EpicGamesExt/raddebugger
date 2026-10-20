@@ -8,7 +8,7 @@
 typedef struct LNK_ObjSymbolArray
 {
   U64                   count;
-  U32Array               primary_bits;
+  U32Array              primary_bits;
   U32                  *block_bases;
   U64                  *values;
   U32                  *section_numbers;
@@ -28,42 +28,43 @@ typedef struct LNK_ObjSectionArray
   U32Node           **associated_section_numbers;
 } LNK_ObjSectionArray;
 
+typedef struct LNK_ObjImportMetadata
+{
+  String8     definition;
+  String8List references;
+} LNK_ObjImportMetadata;
+
 typedef struct LNK_ObjCoff
 {
-  String8             data;
-  COFF_FileHeaderInfo header;
-  LNK_ObjSectionArray sections;
-  LNK_ObjSymbolArray  symbols;
-  U32                 debug_t_section_number;
-  U32                 debug_p_section_number;
-  U32                 debug_h_section_number;
-  U32                 llvm_addrsig_section_number;
-  B8                  hotpatch;
+  String8                data;
+  COFF_FileHeaderInfo    header;
+  LNK_ObjSectionArray    sections;
+  LNK_ObjSymbolArray     symbols;
+  LNK_ObjImportMetadata *import_metadata;
+  U32                    debug_t_section_number;
+  U32                    debug_p_section_number;
+  U32                    debug_h_section_number;
+  U32                    llvm_addrsig_section_number;
+  B8                     hotpatch;
 } LNK_ObjCoff;
 
+typedef struct LNK_Lib     LNK_Lib;
+typedef struct LNK_ObjNode LNK_ObjNode;
 typedef struct LNK_Obj
 {
-  String8 path;
-
-  LNK_ObjCoff coff;
-
-  // flags
-  B8 exclude_from_debug_info;
-
-  U32 input_idx;
-
-  // link state
-  LNK_ObjSymbolRef  *symlinks; // indexed by COFF section number; slot zero is null
-
-  // link
-  struct LNK_LibMemberRef *link_member;
-  struct LNK_ObjNode      *self;
+  String8           path;
+  LNK_ObjCoff       coff;
+  B8                exclude_from_debug_info;
+  U32               input_idx;
+  LNK_ObjSymbolRef *symlinks; // indexed by COFF section number; slot zero is null
+  LNK_Lib          *lib;
+  LNK_ObjNode      *self;
 
   // @type_server
-  Rng1U64         ti_range;
-  CV_TypeIndex   *ti_map;
-  Rng1U64         pch_ti_range;
-  U64             pch_obj_idx;
+  Rng1U64       ti_range;
+  CV_TypeIndex *ti_map;
+  Rng1U64       pch_ti_range;
+  U64           pch_obj_idx;
 } LNK_Obj;
 
 typedef struct LNK_ObjSection
@@ -210,12 +211,14 @@ typedef struct
   struct LNK_Input **inputs;
   LNK_ObjNode       *objs;
   U64                obj_id_base;
-  U32                machine;
+  String8List        remove_sections;
 } LNK_ObjIniter;
 
 typedef struct
 {
   LNK_SymbolTable  *symtab;
+  LNK_ExportTable  *exports;
+  HashMap         *import_symbols;
   LNK_Obj         **objs;
 } LNK_InputCoffSymbolTable;
 
@@ -224,7 +227,7 @@ typedef struct
   LNK_Obj    **objs;
   String8      name;
   B32          collect_discarded;
-  String8List *out_lists;
+  U32List     *out_lists;
 } LNK_SectionCollector;
 
 // --- Error -------------------------------------------------------------------
@@ -240,6 +243,8 @@ internal void       lnk_obj_list_push_node_many(LNK_ObjList *list, U64 count, LN
 internal void       lnk_obj_list_push_node(LNK_ObjList *list, LNK_ObjNode *node);
 
 // --- Metadata ----------------------------------------------------------------
+
+internal B32 lnk_is_import_metadata_name(String8 name);
 
 internal U32              lnk_obj_get_features(LNK_Obj *obj);
 internal struct LNK_Lib * lnk_obj_get_lib(LNK_Obj *obj);
@@ -261,6 +266,8 @@ internal U64                  lnk_obj_foff_from_section_data_ptr(LNK_Obj *obj, v
 internal String8              lnk_obj_section_name_from_section_number(LNK_Obj *obj, U64 section_number);
 internal LNK_ObjSection       lnk_obj_section_from_section_number(LNK_Obj *obj, U64 section_number);
 internal COFF_RelocArray      lnk_coff_relocs_from_section_header(LNK_Obj *obj, COFF_SectionHeader *section_header);
+internal B32                  lnk_resolve_reloc_value(LNK_Obj *obj, U64 section_number, COFF_Reloc *reloc, U64 reloc_idx, U64 image_base, COFF_SectionHeader **image_section_table, U64 image_section_table_count, COFF_RelocValue *value_out);
+internal void                 lnk_apply_reloc_value(void *dst, COFF_RelocValue value);
 internal String8              lnk_coff_string_table_from_obj(LNK_Obj *obj);
 internal String8              lnk_coff_symbol_table_from_obj(LNK_Obj *obj);
 internal B32                  lnk_try_comdat_props_from_section_number(LNK_Obj *obj, U32 section_number, COFF_ComdatSelectType *select_out, U32 *section_number_out, U32 *section_length_out, U32 *check_sum_out);
@@ -270,8 +277,8 @@ internal force_inline B32 lnk_obj_symbol_iter_next(LNK_Obj *obj, LNK_ObjSymbolIt
 
 // --- Helpers ----------------------------------------------------------------- 
 
-internal String8List * lnk_collect_obj_sections(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded);
-internal B32           lnk_obj_is_before(void *raw_a, void *raw_b);
+internal U32List * lnk_collect_obj_section_numbers(TP_Context *tp, TP_Arena *arena, U64 objs_count, LNK_Obj **objs, String8 name, B32 collect_discarded);
+internal B32       lnk_obj_is_before(void *raw_a, void *raw_b);
 
 // --- Directive Parser --------------------------------------------------------
 

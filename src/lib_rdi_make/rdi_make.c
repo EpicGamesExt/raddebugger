@@ -20,6 +20,7 @@ RDIM_SLLQueuePush(list->first, list->last, n);                                  
 list->chunk_count += 1;                                                                  \
 }                                                                                          \
 result = &n->v[n->count];                                                                  \
+MemoryZeroStruct(result);                                                                  \
 result->chunk = n;                                                                         \
 n->count += 1;                                                                             \
 list->total_count += 1;                                                                    \

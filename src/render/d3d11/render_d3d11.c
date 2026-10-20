@@ -562,19 +562,22 @@ r_window_unequip(WM_Window handle, R_Handle equip_handle)
   MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
     R_D3D11_Window *window = r_d3d11_window_from_handle(equip_handle);
-    window->stage_color_srv->lpVtbl->Release(window->stage_color_srv);
-    window->stage_color_rtv->lpVtbl->Release(window->stage_color_rtv);
-    window->stage_color->lpVtbl->Release(window->stage_color);
-    window->stage_scratch_color_srv->lpVtbl->Release(window->stage_scratch_color_srv);
-    window->stage_scratch_color_rtv->lpVtbl->Release(window->stage_scratch_color_rtv);
-    window->stage_scratch_color->lpVtbl->Release(window->stage_scratch_color);
-    window->framebuffer_rtv->lpVtbl->Release(window->framebuffer_rtv);
-    window->framebuffer->lpVtbl->Release(window->framebuffer);
-    window->swapchain->lpVtbl->Release(window->swapchain);
-    window->generation += 1;
-    SLLStackPush(r_d3d11_state->first_free_window, window);
-    r_d3d11_state->window_count -= 1;
-    r_d3d11_state->dxgi_device->lpVtbl->SetMaximumFrameLatency(r_d3d11_state->dxgi_device, Clamp(1, r_d3d11_state->window_count, 16));
+    if(window != 0)
+    {
+      window->stage_color_srv->lpVtbl->Release(window->stage_color_srv);
+      window->stage_color_rtv->lpVtbl->Release(window->stage_color_rtv);
+      window->stage_color->lpVtbl->Release(window->stage_color);
+      window->stage_scratch_color_srv->lpVtbl->Release(window->stage_scratch_color_srv);
+      window->stage_scratch_color_rtv->lpVtbl->Release(window->stage_scratch_color_rtv);
+      window->stage_scratch_color->lpVtbl->Release(window->stage_scratch_color);
+      window->framebuffer_rtv->lpVtbl->Release(window->framebuffer_rtv);
+      window->framebuffer->lpVtbl->Release(window->framebuffer);
+      window->swapchain->lpVtbl->Release(window->swapchain);
+      window->generation += 1;
+      SLLStackPush(r_d3d11_state->first_free_window, window);
+      r_d3d11_state->window_count -= 1;
+      r_d3d11_state->dxgi_device->lpVtbl->SetMaximumFrameLatency(r_d3d11_state->dxgi_device, Clamp(1, r_d3d11_state->window_count, 16));
+    }
   }
   ProfEnd();
 }

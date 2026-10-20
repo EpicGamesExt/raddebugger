@@ -232,6 +232,7 @@ internal DMN_HandleArray dmn_handle_array_copy(Arena *arena, DMN_HandleArray *sr
 
 //- rjf: event list building
 internal DMN_Event *dmn_event_list_push(Arena *arena, DMN_EventList *list);
+internal void dmn_event_deep_copy(Arena *arena, DMN_Event *dst, DMN_Event *src);
 
 ////////////////////////////////
 //~ rjf: @dmn_os_hooks Main Layer Initialization (Implemented Per-OS)

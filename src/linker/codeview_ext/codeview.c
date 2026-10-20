@@ -208,9 +208,30 @@ cv_write_symbol_buf(String8Node *buf, U64 *buf_pos, CV_Symbol *symbol, U64 align
 internal U64
 cv_write_symbol(U8 *buffer, U64 buffer_cursor, U64 buffer_size, CV_Symbol *symbol, U64 align)
 {
-  String8Node dummy_curr = { .string = str8(buffer + buffer_cursor, buffer_size - buffer_cursor) };
-  U64         dummy_pos  = 0;
-  return cv_write_symbol_buf(&dummy_curr, &dummy_pos, symbol, align);
+  U64 raw_size   = sizeof(CV_SymbolHeader) + symbol->data.size;
+  U64 pad_size   = AlignPadPow2(raw_size, align);
+  U64 write_size = raw_size + pad_size;
+
+  if (buffer) {
+    Assert(buffer_cursor <= buffer_size && write_size <= buffer_size - buffer_cursor);
+    U8 *dst = buffer + buffer_cursor;
+
+    // copy header
+    CV_SymbolHeader header = { .size = sizeof(CV_SymKind) + symbol->data.size + pad_size, .kind = symbol->kind };
+    MemoryCopy(dst, &header, sizeof(header));
+
+    // copy body (optionally zero out)
+    if (symbol->data.str) {
+      MemoryCopyStr8(dst + sizeof(header), symbol->data);
+    } else {
+      MemoryZero(dst + sizeof(header), symbol->data.size);
+    }
+
+    // zero out padding
+    MemoryZero(dst + raw_size, pad_size);
+  }
+
+  return write_size;
 }
 
 internal U64
@@ -558,29 +579,119 @@ cv_obj_info_from_symbol(CV_Symbol symbol)
 ////////////////////////////////
 //~ .debug$S helpers
 
+internal String8
+cv_debug_s_alloc_subsection(Arena *arena, CV_DebugS *debug_s, CV_C13SubSectionKind kind, U64 size)
+{
+  CV_C13SubSectionHeader header = { .kind = kind, .size = safe_cast_u32(size) };
+  U64  block_size = AlignPow2(sizeof(header) + size, CV_C13SubSectionAlign);
+  U8  *block      = push_array(arena, U8, block_size);
+  MemoryCopy(block, &header, sizeof(header));
+  str8_list_push(arena, &debug_s->data, str8(block, block_size));
+  return str8(block + sizeof(header), size);
+}
+
 internal void
 cv_debug_s_from_data_c13_(Arena *arena, CV_DebugS *debug_s, String8 raw_debug_s)
 {
-  for (U64 cursor = 0; cursor + sizeof(CV_C13SubSectionHeader) <= raw_debug_s.size; ) {
-    // read header
-    CV_C13SubSectionHeader header = {0};
-    cursor += str8_deserial_read_struct(raw_debug_s, cursor, &header);
+  CV_DebugS_Iter it = { .debug_s = debug_s, .block = raw_debug_s };
+  while (cv_debug_s_iter_next(&it)) {}
+  if (it.malformed) { raw_debug_s.size = it.cursor; }
+  str8_list_push(arena, &debug_s->data, raw_debug_s);
+}
 
-    if (~header.kind & CV_C13SubSectionKind_IgnoreFlag) {
-      // pick sub-section list
-      U64          sub_sect_idx  = cv_c13_sub_section_idx_from_kind(header.kind);
-      String8List *sub_sect_list = debug_s->data_list + sub_sect_idx;
+internal void
+cv_debug_s_exclude_kind(CV_DebugS *debug_s, CV_C13SubSectionKind kind)
+{
+  U32 idx = cv_c13_sub_section_idx_from_kind(kind);
+  Assert(idx != CV_C13SubSectionIdxKind_NULL && idx < 32);
+  debug_s->excluded_kinds |= 1u << idx;
+}
 
-      // push data to sub-section
-      Rng1U64 sub_sect_range = r1u64(cursor, cursor + header.size);
-      String8 sub_sect_data  = str8_substr(raw_debug_s, sub_sect_range);
-      str8_list_push(arena, sub_sect_list, sub_sect_data);
+internal CV_DebugS_Iter
+cv_debug_s_iter_init(CV_DebugS *debug_s)
+{
+  return (CV_DebugS_Iter){ .debug_s = debug_s, .next_block = debug_s->data.first };
+}
+
+internal B32
+cv_debug_s_iter_next_block(CV_DebugS_Iter *it)
+{
+  it->block  = str8_zero();
+  it->cursor = 0;
+  if (it->next_block == 0) { return 0; }
+  it->block      = it->next_block->string;
+  it->next_block = it->next_block->next;
+  return 1;
+}
+
+internal B32
+cv_debug_s_iter_next(CV_DebugS_Iter *it)
+{
+  String8 data = it->block;
+  while (it->cursor <= data.size && sizeof(CV_C13SubSectionHeader) <= data.size - it->cursor) {
+    CV_C13SubSectionHeader header;
+    str8_deserial_read_struct(data, it->cursor, &header);
+    U64 off = it->cursor + sizeof(header);
+    if (header.size > data.size - off) {
+      it->malformed = 1;
+      it->block.size = it->cursor;
+      return 0;
     }
 
-    // advance
-    cursor += header.size;
-    cursor = AlignPow2(cursor, CV_C13SubSectionAlign);
+    U64 end = off + header.size;
+    U64 pad = AlignPadPow2(end, CV_C13SubSectionAlign);
+
+    it->cursor = pad <= data.size - end ? end + pad : data.size;
+    if (header.kind & CV_C13SubSectionKind_IgnoreFlag) { continue; }
+
+    U32 idx = cv_c13_sub_section_idx_from_kind(header.kind);
+    if (it->debug_s->excluded_kinds & (1u << idx)) { continue; }
+
+    it->kind        = header.kind;
+    it->data        = str8(data.str + off, header.size);
+    it->data_offset = off;
+    return 1;
   }
+
+  return 0;
+}
+
+internal B32
+cv_debug_s_iter_next_kind(CV_DebugS_Iter *it, CV_C13SubSectionKind kind)
+{
+  for (;;) {
+    while (cv_debug_s_iter_next(it)) { if (it->kind == kind) { return 1; } }
+    if (!cv_debug_s_iter_next_block(it)) { return 0; }
+  }
+}
+
+internal B32
+cv_debug_s_find_first(CV_DebugS *debug_s, CV_C13SubSectionKind kind, String8 *out)
+{
+  CV_DebugS_Iter it = cv_debug_s_iter_init(debug_s);
+  if (!cv_debug_s_iter_next_kind(&it, kind)) { return 0; }
+  *out = it.data;
+  return 1;
+}
+
+internal CV_DebugS_Stats
+cv_debug_s_stats(CV_DebugS *debug_s)
+{
+  CV_DebugS_Stats result = {0};
+  CV_DebugS_Iter  it     = cv_debug_s_iter_init(debug_s);
+  while (cv_debug_s_iter_next_block(&it)) {
+    while (cv_debug_s_iter_next(&it)) {
+      U64 idx = cv_c13_sub_section_idx_from_kind(it.kind);
+
+      result.size[idx]  += it.data.size;
+      result.count[idx] += 1;
+
+      if (it.kind == CV_C13SubSectionKind_Lines && it.data.size) {
+        result.lines_size += AlignPow2(sizeof(CV_C13SubSectionHeader) + it.data.size, CV_C13SubSectionAlign);
+      }
+    }
+  }
+  return result;
 }
 
 internal force_inline UBSAN_NO_ALIGN CV_Signature
@@ -628,28 +739,32 @@ cv_debug_s_from_data(Arena *arena, String8 raw_debug_s)
 internal void
 cv_debug_s_concat_in_place(CV_DebugS *dst, CV_DebugS *src)
 {
-  for (U64 sub_sect_idx = 0; sub_sect_idx < ArrayCount(dst->data_list); sub_sect_idx += 1) {
-    str8_list_concat_in_place(&dst->data_list[sub_sect_idx], &src->data_list[sub_sect_idx]);
-  }
+  Assert(dst != src);
+  if (dst->data.node_count == 0) { dst->excluded_kinds = src->excluded_kinds; }
+  Assert(src->data.node_count == 0 || dst->excluded_kinds == src->excluded_kinds);
+  str8_list_concat_in_place(&dst->data, &src->data);
+  MemoryZeroStruct(src);
 }
 
 internal U64
 cv_size_from_debug_s(CV_DebugS *debug_s, U64 align)
 {
-  U64 size = 0;
-  for EachElement(i, debug_s->data_list) {
+  U64             size  = 0;
+  CV_DebugS_Stats stats = cv_debug_s_stats(debug_s);
+
+  for EachElement(i, stats.size) {
     if (i == CV_C13SubSectionIdxKind_Lines)    { continue; }
-    if (debug_s->data_list[i].total_size == 0) { continue; }
+    if (stats.size[i] == 0) { continue; }
     size += sizeof(CV_C13SubSectionKind) + sizeof(U32); // header
-    size += debug_s->data_list[i].total_size;
+    size += stats.size[i];
     size  = AlignPow2(size, align);
   }
 
-  String8List *line_data = cv_sub_section_ptr_from_debug_s(debug_s, CV_C13SubSectionKind_Lines);
-  for EachNode(line_n, String8Node, line_data->first) {
-    if (line_n->string.size == 0) { continue; }
+  CV_DebugS_Iter it = cv_debug_s_iter_init(debug_s);
+  while (cv_debug_s_iter_next_kind(&it, CV_C13SubSectionKind_Lines)) {
+    if (it.data.size == 0) { continue; }
     size += sizeof(CV_C13SubSectionKind) + sizeof(U32); // header
-    size += line_n->string.size;
+    size += it.data.size;
     size  = AlignPow2(size, align);
   }
 
@@ -661,6 +776,21 @@ cv_data_from_debug_s_c13(Arena *arena, CV_DebugS *debug_s, B32 write_sig)
 {
   String8List srl = {0};
   str8_serial_begin(arena, &srl);
+
+  String8List by_kind[CV_C13SubSectionIdxKind_COUNT] = {0};
+  CV_DebugS_Iter it = cv_debug_s_iter_init(debug_s);
+  while (cv_debug_s_iter_next_block(&it)) {
+    while (cv_debug_s_iter_next(&it)) {
+      U64 idx = cv_c13_sub_section_idx_from_kind(it.kind);
+      if (by_kind[idx].last == 0) { str8_serial_begin(arena, &by_kind[idx]); }
+      if (it.kind == CV_C13SubSectionKind_Lines) {
+        str8_serial_push_u32(arena, &by_kind[idx], it.kind);
+        str8_serial_push_u32(arena, &by_kind[idx], safe_cast_u32(it.data.size));
+      }
+      str8_serial_push_string(arena, &by_kind[idx], it.data);
+      if (it.kind == CV_C13SubSectionKind_Lines) { str8_serial_push_align(arena, &by_kind[idx], 4); }
+    }
+  }
   
   if (write_sig) {
     CV_Signature sig = CV_Signature_C13;
@@ -670,23 +800,17 @@ cv_data_from_debug_s_c13(Arena *arena, CV_DebugS *debug_s, B32 write_sig)
   for EachIndex(i, CV_C13SubSectionIdxKind_COUNT) {
     if (i == CV_C13SubSectionIdxKind_Lines) { continue; }
     CV_C13SubSectionKind  kind = cv_c13_sub_section_kind_from_idx(i);
-    String8List          *data = cv_sub_section_ptr_from_debug_s(debug_s, kind);
+    String8List          *data = &by_kind[i];
     if (data->total_size > 0) {
       U32 size32 = safe_cast_u32(data->total_size);
       str8_serial_push_u32(arena, &srl, kind);
       str8_serial_push_u32(arena, &srl, size32);
-      str8_serial_push_data_list(arena, &srl, data->first);
+      str8_list_concat_in_place(&srl, data);
       str8_serial_push_align(arena, &srl, 4);
     }
   }
   
-  String8List *line_data = cv_sub_section_ptr_from_debug_s(debug_s, CV_C13SubSectionKind_Lines);
-  for EachNode(line_n, String8Node, line_data->first) {
-    str8_serial_push_u32(arena, &srl, CV_C13SubSectionKind_Lines);
-    str8_serial_push_u32(arena, &srl, safe_cast_u32(line_n->string.size));
-    str8_serial_push_string(arena, &srl, line_n->string);
-    str8_serial_push_align(arena, &srl, 4);
-  }
+  str8_list_concat_in_place(&srl, &by_kind[CV_C13SubSectionIdxKind_Lines]);
   
   return srl;
 }
@@ -713,39 +837,19 @@ cv_c13_sub_section_idx_from_kind(CV_C13SubSectionKind kind)
   return CV_C13SubSectionIdxKind_NULL;
 } 
 
-internal String8List *
-cv_sub_section_ptr_from_debug_s(CV_DebugS *debug_s, CV_C13SubSectionKind kind)
-{
-  CV_C13SubSectionIdxKind idx = cv_c13_sub_section_idx_from_kind(kind);
-  return &debug_s->data_list[idx];
-}
-
-internal String8List
-cv_sub_section_from_debug_s(CV_DebugS debug_s, CV_C13SubSectionKind kind)
-{
-  String8List *list_ptr = cv_sub_section_ptr_from_debug_s(&debug_s, kind);
-  return *list_ptr;
-}
-
 internal String8
-cv_string_table_from_debug_s(CV_DebugS debug_s)
+cv_string_table_from_debug_s(CV_DebugS *debug_s)
 {
-  String8List data_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_StringTable);
   String8 string_data = str8_zero();
-  if (data_list.node_count > 0) {
-    string_data = data_list.first->string;
-  }
+  cv_debug_s_find_first(debug_s, CV_C13SubSectionKind_StringTable, &string_data);
   return string_data;
 }
 
 internal String8
-cv_file_chksms_from_debug_s(CV_DebugS debug_s)
+cv_file_chksms_from_debug_s(CV_DebugS *debug_s)
 {
-  String8List data_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_FileChksms);
   String8 file_chksms = str8_zero();
-  if (data_list.node_count > 0) {
-    file_chksms = data_list.first->string;
-  }
+  cv_debug_s_find_first(debug_s, CV_C13SubSectionKind_FileChksms, &file_chksms);
   return file_chksms;
 }
 
@@ -845,7 +949,7 @@ THREAD_POOL_TASK_FUNC(cv_count_strings_in_debug_s_arr_task)
 
   for (CV_StringTableRange *range_n = range_list; range_n != 0; range_n = range_n->next) {
     CV_DebugS debug_s       = task->arr[range_n->debug_s_idx];
-    String8   string_buffer = cv_string_table_from_debug_s(debug_s);
+    String8   string_buffer = cv_string_table_from_debug_s(&debug_s);
 
     Assert(range_n->range.min <= range_n->range.max);
     Assert(range_n->range.min <= string_buffer.size);
@@ -875,7 +979,7 @@ THREAD_POOL_TASK_FUNC(cv_dedup_strings_in_debug_s_arr_task)
   CV_DedupStringTablesTask *task        = raw_task;
   CV_DebugS                 debug_s     = task->arr[debug_s_idx];
 
-  String8     string_table = cv_string_table_from_debug_s(debug_s);
+  String8     string_table = cv_string_table_from_debug_s(&debug_s);
   String8List strings_list = str8_split_by_string_chars(scratch.arena, string_table, str8_lit("\0"), 0);
 
   CV_StringBucket *bucket = 0;
@@ -924,7 +1028,7 @@ cv_dedup_string_tables(TP_Arena *arena, TP_Context *tp, U64 count, CV_DebugS *ar
   ProfBegin("Compute Total Weight");
   U64 total_weight = 0;
   for (U64 i = 0; i < count; ++i) {
-    String8 string_table = cv_string_table_from_debug_s(arr[i]);
+    String8 string_table = cv_string_table_from_debug_s(&arr[i]);
     total_weight += string_table.size;
   }
   ProfEnd();
@@ -936,7 +1040,7 @@ cv_dedup_string_tables(TP_Arena *arena, TP_Context *tp, U64 count, CV_DebugS *ar
 
   ProfBegin("Divide Work");
   for (U64 debug_s_idx = 0; debug_s_idx < count; ++debug_s_idx) {
-    String8 string_table = cv_string_table_from_debug_s(arr[debug_s_idx]);
+    String8 string_table = cv_string_table_from_debug_s(&arr[debug_s_idx]);
 
     for (U64 cursor = 0; cursor < string_table.size; cursor += per_task_weight) {
       if (task_weight >= per_task_weight) {
@@ -1308,21 +1412,23 @@ cv_symbol_list_push(Arena *arena, CV_SymbolList *list, CV_Symbol v)
 }
 
 internal U64
-cv_patch_symbol_tree_offsets(String8List raw_symbols, U64 base_offset, U64 align)
+cv_patch_symbol_tree_offsets(String8 raw_symbols, U64 base_offset, U64 align)
 {
   Temp scratch = scratch_begin(0, 0);
 
-  struct Stack { struct Stack *next; String8Node symbol_buf; U64 symbol_pos; U64 offset; };
+  struct Stack { struct Stack *next; U64 symbol_pos; };
   struct Stack *stack = 0, *free_list = 0;
 
-  String8Node buf           = *raw_symbols.first;
-  U64         buf_pos       = 0;
-  U64         symbol_offset = base_offset;
-  U64         depth         = 0;
+  U64 cursor = 0;
 
   for (;;) {
     CV_SymbolHeader symbol_header;
-    if (str8_buffer_peek(&buf, &buf_pos, sizeof(symbol_header), &symbol_header) != sizeof(symbol_header)) { break; }
+    if (str8_deserial_read_struct(raw_symbols, cursor, &symbol_header) != sizeof(symbol_header)) { break; }
+    U64 symbol_size = sizeof(CV_SymSize) + symbol_header.size;
+    if (symbol_size < sizeof(symbol_header) || symbol_size > raw_symbols.size - cursor) {
+      Assert(0 && "malformed symbol stream");
+      break;
+    }
 
     if (cv_is_scope_symbol(symbol_header.kind)) {
       // NOTE: We don't patch 'next' offset in PROC symbols because
@@ -1332,9 +1438,8 @@ cv_patch_symbol_tree_offsets(String8List raw_symbols, U64 base_offset, U64 align
 
       // patch parent symbol offset
       if (stack) {
-        String8Node temp_buf = buf;
-        U64         temp_pos = buf_pos + sizeof(CV_SymbolHeader);
-        str8_buffer_write_u32(&temp_buf, &temp_pos, stack->offset);
+        U32 parent_offset = safe_cast_u32(base_offset + stack->symbol_pos);
+        MemoryCopy(raw_symbols.str + cursor + sizeof(CV_SymbolHeader), &parent_offset, sizeof(parent_offset));
       }
 
       // reuse/alloc frame
@@ -1343,35 +1448,29 @@ cv_patch_symbol_tree_offsets(String8List raw_symbols, U64 base_offset, U64 align
       else       { frame = push_array_no_zero(scratch.arena, struct Stack, 1); }
 
       // push frame to the stack
-      frame->symbol_buf = buf;
-      frame->symbol_pos = buf_pos + sizeof(CV_SymbolHeader);
-      frame->offset = safe_cast_u32(symbol_offset);
+      frame->symbol_pos = cursor;
       SLLStackPush(stack, frame);
 
-      depth += 1;
     } else if (cv_is_end_symbol(symbol_header.kind)) {
+      if (stack == 0) { Assert(0 && "malformed symbol stream"); break; }
+
       // patch symbol end
-      String8Node temp_buf = stack->symbol_buf;
-      U64         temp_pos = stack->symbol_pos;
-      str8_buffer_skip(&temp_buf, &temp_pos, sizeof(U32)); // skip parent offset
-      str8_buffer_write_u32(&temp_buf, &temp_pos, symbol_offset);
+      U32 end_offset = safe_cast_u32(base_offset + cursor);
+      MemoryCopy(raw_symbols.str + stack->symbol_pos + sizeof(CV_SymbolHeader) + sizeof(U32), &end_offset, sizeof(end_offset));
 
       // recycle frame
       struct Stack *free_frame = stack;
       SLLStackPop(stack);
       SLLStackPush(free_list, free_frame);
 
-      if (depth == 0) { Assert(0 && "malformed symbol stream"); continue; }
-      depth -= 1;
     }
 
     // advance symbol offset
-    symbol_offset += AlignPow2(sizeof(CV_SymSize) + symbol_header.size, align);
-    str8_buffer_skip(&buf, &buf_pos, AlignPow2(symbol_header.size + sizeof(CV_SymSize), align));
+    cursor += AlignPow2(symbol_size, align);
   }
 
   scratch_end(scratch);
-  return symbol_offset - base_offset;
+  return cursor;
 }
 
 // $$FileChksms
@@ -1562,20 +1661,22 @@ cv_c13_patch_checksum_offsets_in_line_data_list(String8List line_data, U64 check
 // $$InlineeLines
 
 internal CV_C13InlineeLinesParsedList
-cv_c13_inlinee_lines_from_sub_sections(Arena *arena, String8List raw_inlinee_lines)
+cv_c13_inlinee_lines_from_sub_sections(Arena *arena, CV_DebugS *debug_s)
 {
   ProfBeginFunction();
 
   CV_C13InlineeLinesParsedList inlinee_lines_list = {0};
 
-  for (String8Node *raw_data_node = raw_inlinee_lines.first; raw_data_node != 0; raw_data_node = raw_data_node->next) {
-    U64 cursor = 0;
+  for (CV_DebugS_Iter it = cv_debug_s_iter_init(debug_s);
+       cv_debug_s_iter_next_kind(&it, CV_C13SubSectionKind_InlineeLines);) {
+    String8 data   = it.data;
+    U64     cursor = 0;
 
     CV_C13InlineeLinesSig sig = 0;
-    cursor += str8_deserial_read_struct(raw_data_node->string, cursor, &sig);
+    cursor += str8_deserial_read_struct(data, cursor, &sig);
 
-    for (; cursor + sizeof(CV_C13InlineeSourceLineHeader) <= raw_data_node->string.size; ) {
-      CV_C13InlineeSourceLineHeader *hdr = (CV_C13InlineeSourceLineHeader *)(raw_data_node->string.str + cursor);
+    for (; cursor + sizeof(CV_C13InlineeSourceLineHeader) <= data.size; ) {
+      CV_C13InlineeSourceLineHeader *hdr = (CV_C13InlineeSourceLineHeader *)(data.str + cursor);
       cursor += sizeof(*hdr);
 
       CV_C13InlineeLinesParsedNode *inlinee_parsed_node = push_array_no_zero(arena, CV_C13InlineeLinesParsedNode, 1);
@@ -1591,13 +1692,13 @@ cv_c13_inlinee_lines_from_sub_sections(Arena *arena, String8List raw_inlinee_lin
       inlinee_parsed->extra_files      = 0;
 
       if (sig == CV_C13InlineeLinesSig_EXTRA_FILES) {
-        if (cursor + sizeof(U32) <= raw_data_node->string.size) {
-          U32 *extra_file_count_ptr = (U32 *)(raw_data_node->string.str + cursor);
+        if (cursor + sizeof(U32) <= data.size) {
+          U32 *extra_file_count_ptr = (U32 *)(data.str + cursor);
           cursor += sizeof(*extra_file_count_ptr);
 
-          U32 max_extra_file_count = (raw_data_node->string.size - cursor) / sizeof(U32);
-          U32 extra_file_count     = Min(*extra_file_count_ptr, max_extra_file_count);
-          U32 *extra_files         = (U32 *)(raw_data_node->string.str + cursor);
+          U32  max_extra_file_count = (data.size - cursor) / sizeof(U32);
+          U32  extra_file_count     = Min(*extra_file_count_ptr, max_extra_file_count);
+          U32 *extra_files          = (U32 *)(data.str + cursor);
           cursor += sizeof(*extra_files) * extra_file_count;
 
           inlinee_parsed->extra_file_count = extra_file_count;

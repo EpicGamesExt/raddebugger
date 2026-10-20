@@ -24,14 +24,40 @@ lnk_make_debug_s(Arena *arena, String8List symbols)
 {
   Temp scratch = scratch_begin(&arena, 1);
 
-  cv_patch_symbol_tree_offsets(symbols, sizeof(CV_Signature), CV_SymbolAlign);
-
-  CV_DebugS   debug_s           = { .data_list[CV_C13SubSectionIdxKind_Symbols] = symbols };
+  CV_DebugS debug_s = {0};
+  if (symbols.total_size) {
+    String8 data = cv_debug_s_alloc_subsection(scratch.arena, &debug_s, CV_C13SubSectionKind_Symbols, symbols.total_size);
+    U64 cursor = 0;
+    for EachNode(n, String8Node, symbols.first) {
+      cursor += str8_write(data, cursor, n->string);
+    }
+  }
   String8List debug_s_data_list = cv_data_from_debug_s_c13(scratch.arena, &debug_s, 1);
   String8     debug_s_data      = str8_list_join(arena, &debug_s_data_list, 0);
 
+  if (symbols.total_size > 0) {
+    U64     symbols_offset = sizeof(CV_Signature) + sizeof(CV_C13SubSectionHeader);
+    String8 raw_symbols    = str8_substr(debug_s_data, r1u64s(symbols_offset, symbols.total_size));
+    cv_patch_symbol_tree_offsets(raw_symbols, sizeof(CV_Signature), CV_SymbolAlign);
+  }
+
   scratch_end(scratch);
   return debug_s_data;
+}
+
+internal U64
+lnk_size_stripped_symbols(String8 symbols, U64 align)
+{
+  U64 size = 0;
+  for (U64 cursor = 0; cursor < symbols.size; ) {
+    CV_Symbol symbol = {0};
+    TryReadBreak(cv_read_symbol(symbols, cursor, align, &symbol), cursor);
+    if (cv_is_lproc(symbol)) {
+      size += cv_size_from_symbol(&symbol, PDB_SYMBOL_ALIGN);
+      size += AlignPow2(sizeof(CV_SymbolHeader), PDB_SYMBOL_ALIGN); // S_END
+    }
+  }
+  return size;
 }
 
 internal String8
@@ -64,4 +90,3 @@ lnk_make_dll_import_debug_symbols(Arena *arena, COFF_MachineType machine, String
   scratch_end(scratch);
   return debug_symbols;
 }
-

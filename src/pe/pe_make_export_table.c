@@ -211,13 +211,13 @@ pe_make_edata_obj(Arena               *arena,
           exp_symbol = coff_obj_writer_push_symbol_undef(obj_writer, exp->name);
         }
 
-        // create slot for the ordinal virtual offset
-        U64  voff_offset = voff_table_sect->data.total_size;
-        U32 *voff        = push_array(obj_writer->arena, U32, 1);
-        str8_list_push(obj_writer->arena, &voff_table_sect->data, str8_struct(voff));
-
-        // ordinal is an index into the export address table
+        // cover the ordinal range, leaving unused address-table slots zero
         U16 ordinal_nb = exp->ordinal - finalized_exports.ordinal_low;
+        U64 voff_opl = (ordinal_nb + 1)*sizeof(U32);
+        if (voff_opl > voff_table_sect->data.total_size) {
+          U64 size = voff_opl - voff_table_sect->data.total_size;
+          str8_list_push(obj_writer->arena, &voff_table_sect->data, str8(push_array(obj_writer->arena, U8, size), size));
+        }
         coff_obj_writer_section_push_reloc_voff(obj_writer, voff_table_sect, ordinal_nb*sizeof(U32), exp_symbol);
       }
     }
@@ -275,7 +275,7 @@ pe_make_edata_obj(Arena               *arena,
   PE_ExportTableHeader *header       = push_array(obj_writer->arena, PE_ExportTableHeader, 1);
   header->time_stamp                 = time_stamp;
   header->ordinal_base               = safe_cast_u16(finalized_exports.ordinal_low);
-  header->export_address_table_count = safe_cast_u32(voff_table_sect->data.node_count);
+  header->export_address_table_count = safe_cast_u32(voff_table_sect->data.total_size / sizeof(U32));
   header->name_pointer_table_count   = safe_cast_u32(name_voff_table_sect->data.node_count);
 
   // push header field's symbols
@@ -302,17 +302,16 @@ pe_make_edata_obj(Arena               *arena,
 }
 
 internal String8
-pe_make_import_lib(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, String8 debug_symbols, PE_ExportParseList export_list)
+pe_make_import_lib(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_stamp, String8 dll_name, String8 debug_symbols, PE_FinalizedExports exports)
 {
   ProfBeginFunction();
 
   COFF_LibWriter *lib_writer = coff_lib_writer_alloc();
 
-  // These objects appear in first three members of any lib that linker produces with /dll.
-  // Objects are used by MSVC linker to build import table.
-  String8 import_entry_obj = pe_make_import_entry_obj(lib_writer->arena, dll_name, time_stamp, machine, debug_symbols);
+  String8 import_entry_obj           = pe_make_import_entry_obj(lib_writer->arena, dll_name, time_stamp, machine, debug_symbols);
   String8 null_import_descriptor_obj = pe_make_null_import_descriptor_obj(lib_writer->arena, time_stamp, machine, debug_symbols);
-  String8 null_thunk_data_obj = pe_make_null_thunk_data_obj(lib_writer->arena, dll_name, time_stamp, machine, debug_symbols);
+  String8 dll_stem                   = str8_chop_last_dot(str8_skip_last_slash(dll_name));
+  String8 null_thunk_data_obj        = pe_make_null_thunk_data_obj(lib_writer->arena, dll_stem, time_stamp, machine, debug_symbols);
 
   // push import table nulls
   coff_lib_writer_push_obj(lib_writer, dll_name, import_entry_obj);
@@ -320,14 +319,14 @@ pe_make_import_lib(Arena *arena, COFF_MachineType machine, COFF_TimeStamp time_s
   coff_lib_writer_push_obj(lib_writer, dll_name, null_thunk_data_obj);
 
   // push exports
-  for (PE_ExportParseNode *exp_n = export_list.first; exp_n != 0; exp_n = exp_n->next) {
-    PE_ExportParse *exp = &exp_n->data;
-    if (exp->is_private) {
-      continue;
+  for EachElement(i, exports.all) {
+    for EachIndex(j, exports.all[i].count) {
+      PE_ExportParse *exp = exports.all[i].v[j];
+      if (exp->is_private) { continue; }
+      String8 name = pe_name_from_export_parse(exp);
+      U16 hint_or_ordinal = pe_hint_or_ordinal_from_export_parse(exp);
+      coff_lib_writer_push_import(lib_writer, machine, time_stamp, dll_name, exp->import_by, name, hint_or_ordinal, exp->type);
     }
-    String8 name = pe_name_from_export_parse(exp);
-    U16 hint_or_ordinal = pe_hint_or_ordinal_from_export_parse(exp);
-    coff_lib_writer_push_import(lib_writer, machine, time_stamp, dll_name, exp->import_by, name, hint_or_ordinal, exp->type);
   }
 
   // serialize lib

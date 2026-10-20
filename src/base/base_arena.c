@@ -152,6 +152,13 @@ arena_release(Arena *arena)
   }
 #endif
   
+#if ARENA_FREE_LIST
+  Arena *last = arena->current;
+  for (; last->prev != 0; last = last->prev);
+  last->prev = arena->free_last;
+  arena->free_last = 0;
+#endif
+
 #if ARENA_TABLE_DEBUG
   for(Arena *n = arena->current; n != 0; n = n->prev)
   {
@@ -180,6 +187,21 @@ arena_release(Arena *arena)
   ProfEnd();
 }
 
+internal void
+arena_release_free_blocks(Arena *arena)
+{
+  ProfBeginFunction();
+#if ARENA_FREE_LIST
+  Arena *free_last = arena->free_last;
+  arena->free_last = 0;
+  if(free_last != 0)
+  {
+    arena_release(free_last);
+  }
+#endif
+  ProfEnd();
+}
+
 //- rjf: arena push/pop core functions
 
 internal void *
@@ -196,7 +218,7 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
   U64 size_to_zero = 0;
   if(zero)
   {
-    size_to_zero = Min(current->cmt, pos_pst) - pos_pre;
+    size_to_zero = pos_pre < current->cmt ? Min(current->cmt, pos_pst) - pos_pre : 0;
   }
   
   // rjf: chain, if needed
@@ -244,7 +266,7 @@ arena_push(Arena *arena, U64 size, U64 align, B32 zero)
     }
     else
     {
-      size_to_zero = size;
+      size_to_zero = zero ? size : 0;
     }
     
     new_block->base_pos = current->base_pos + current->res;
@@ -388,3 +410,4 @@ temp_end(Temp temp)
 {
   arena_pop_to(temp.arena, temp.pos);
 }
+

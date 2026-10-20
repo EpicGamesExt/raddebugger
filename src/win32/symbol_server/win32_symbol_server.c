@@ -347,6 +347,7 @@ smsv_async_tick(void)
         DLLRemove(slot->first, slot->last, task);
         arena_release(task->arena);
       }
+      cond_var_broadcast(stripe->cv);
     }
   }
   
@@ -449,6 +450,38 @@ smsv_fill_local_path(String8 path)
     ins_atomic_u32_eval_assign(&async_loop_again, 1);
     cond_var_broadcast(async_tick_start_cond_var);
   }
+}
+
+internal void
+smsv_wait_local_path(String8 path, U64 endt_us)
+{
+  Temp scratch = scratch_begin(0, 0);
+  String8 path_normalized = path_normalized_from_string(scratch.arena, path);
+  U64 hash = u64_hash_from_str8(path_normalized);
+  U64 slot_idx = hash%w32_smsv_state->task_slots_count;
+  W32_SMSV_TaskSlot *slot = &w32_smsv_state->task_slots[slot_idx];
+  Stripe *stripe = stripe_from_slot_idx(&w32_smsv_state->task_stripes, slot_idx);
+  RWMutexScope(stripe->rw_mutex, 0) for(;;)
+  {
+    B32 found = 0;
+    for(W32_SMSV_Task *n = slot->first; n != 0; n = n->next)
+    {
+      if(str8_match(n->local_path, path, 0))
+      {
+        found = 1;
+        break;
+      }
+    }
+    if(found && now_time_us() < endt_us)
+    {
+      cond_var_wait_rw_r(stripe->cv, stripe->rw_mutex, endt_us);
+    }
+    else
+    {
+      break;
+    }
+  }
+  scratch_end(scratch);
 }
 
 internal SMSV_Status

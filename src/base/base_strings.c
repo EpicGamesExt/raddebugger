@@ -657,6 +657,18 @@ push_cstr(Arena *arena, String8 str)
   return result;
 }
 
+internal U64
+str8_write(String8 string, U64 offset, String8 data)
+{
+  U64 bytes_written = 0;
+  if(offset <= string.size && data.size <= string.size - offset)
+  {
+    MemoryCopyStr8(string.str + offset, data);
+    bytes_written = data.size;
+  }
+  return bytes_written;
+}
+
 ////////////////////////////////
 //~ rjf: String <=> Integer Conversions
 

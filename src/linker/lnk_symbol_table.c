@@ -40,7 +40,7 @@ lnk_make_symbol(Arena *arena, String8 name, LNK_Obj *obj, U32 symbol_idx, LNK_Sy
 internal B32
 lnk_obj_symbol_ref_match(LNK_ObjSymbolRef a, LNK_ObjSymbolRef b)
 {
-  return MemoryMatchStruct(&a, &b);
+  return a.obj == b.obj && a.symbol_idx == b.symbol_idx;
 }
 
 internal LNK_ObjSymbolRefNode *
@@ -123,27 +123,6 @@ lnk_symbol_list_push(Arena *arena, LNK_SymbolList *list, LNK_Symbol *symbol)
   node->data           = symbol;
   lnk_symbol_list_push_node(list, node);
   return node;
-}
-
-internal LNK_SymbolHashTrie *
-lnk_symbol_hash_trie_chunk_list_push(Arena *arena, LNK_SymbolHashTrieChunkList *list, U64 cap)
-{
-  if (list->last == 0 || list->last->count >= list->last->cap) {
-    LNK_SymbolHashTrieChunk *chunk = push_array(arena, LNK_SymbolHashTrieChunk, 1);
-    chunk->cap                     = cap;
-    chunk->v                       = push_array_no_zero(arena, LNK_SymbolHashTrie, cap);
-    SLLQueuePush(list->first, list->last, chunk);
-    ++list->count;
-  }
-
-  LNK_SymbolHashTrie *result = &list->last->v[list->last->count++];
-  return result;
-}
-
-internal void
-lnk_symbol_hash_trie_chunk_list_concat_in_place(LNK_SymbolHashTrieChunkList *list, LNK_SymbolHashTrieChunkList *to_concat)
-{
-  SLLConcatInPlace(list, to_concat);
 }
 
 internal void
@@ -470,117 +449,27 @@ lnk_symbol_hash_trie_insert_or_replace(Arena                        *arena,
                                        U64                           hash,
                                        LNK_Symbol                   *symbol)
 {
-  LNK_SymbolHashTrie **curr_trie_ptr = trie;
-  for (U64 h = hash; ; h <<= 2) {
-    // load current pointer
-    LNK_SymbolHashTrie *curr_trie = ins_atomic_ptr_eval(curr_trie_ptr);
+  B32 inserted = 0;
+  LNK_NameTrieNode *node = lnk_name_trie_find_or_insert(arena, chunks, trie, hash, &symbol->name, symbol, &inserted);
+  if (inserted) { return; }
 
-    if (curr_trie == 0) {
-      // init node
-      LNK_SymbolHashTrie *new_trie = lnk_symbol_hash_trie_chunk_list_push(arena, chunks, 0x1000);
-      new_trie->name               = &symbol->name;
-      new_trie->symbol             = symbol;
-      MemoryZeroArray(new_trie->child);
-
-      // try to insert new node
-      LNK_SymbolHashTrie *cmp = ins_atomic_ptr_eval_cond_assign(curr_trie_ptr, new_trie, curr_trie);
-
-      // was symbol inserted?
-      if (cmp == curr_trie) {
-        break;
+  for (LNK_Symbol *src = symbol;;) {
+    LNK_Symbol *leader = ins_atomic_ptr_eval_assign(&node->value, 0);
+    if (leader) {
+      if (lnk_can_replace_symbol(leader, src)) {
+        lnk_on_symbol_replace(leader, src);
+        leader = src;
+      } else {
+        lnk_on_symbol_replace(src, leader);
+        src = leader;
       }
-
-      // rollback chunk list push
-      --chunks->last->count;
-
-      // retry insert with trie node from another thread
-      curr_trie = cmp;
+    } else {
+      leader = src;
     }
-
-    // load current symbol
-    String8 *curr_name = ins_atomic_ptr_eval(&curr_trie->name);
-
-    if (curr_name && str8_match(*curr_name, symbol->name, 0)) {
-      for (LNK_Symbol *src = symbol;;) {
-        // try replacing current symbol with zero, otherwise loop back and retry
-        LNK_Symbol *leader = ins_atomic_ptr_eval_assign(&curr_trie->symbol, 0);
-
-        // apply replacement
-        if (leader) {
-          if (lnk_can_replace_symbol(leader, src)) {
-            // discard leader
-            lnk_on_symbol_replace(leader, src);
-            leader = src;
-          } else {
-            // discard source
-            lnk_on_symbol_replace(src, leader);
-            src = leader;
-          }
-        } else {
-          leader = src;
-        }
-
-        // try replacing symbol, if another thread has already taken the slot, rerun replacement loop again
-        LNK_Symbol *was_replaced = ins_atomic_ptr_eval_cond_assign(&curr_trie->symbol, leader, 0);
-
-        // symbol replaced, exit
-        if (was_replaced == 0) {
-          goto exit;
-        }
-      }
-    }
-
-    // pick child and descend
-    curr_trie_ptr = curr_trie->child + (h >> 62);
-  }
-  exit:;
-}
-
-internal LNK_SymbolHashTrie *
-lnk_symbol_hash_trie_search(LNK_SymbolHashTrie *trie, U64 hash, String8 name)
-{
-  LNK_SymbolHashTrie  *result   = 0;
-  LNK_SymbolHashTrie **curr_ptr = &trie;
-  for (U64 h = hash; ; h <<= 2) {
-    LNK_SymbolHashTrie *curr = ins_atomic_ptr_eval(curr_ptr);
-    if (curr == 0) {
-      break;
-    }
-    if (curr->name && str8_match(*curr->name, name, 0)) {
-      result = curr;
-      break;
-    }
-    curr_ptr = curr->child + (h >> 62);
-  }
-  return result;
-}
-
-internal void
-lnk_symbol_hash_trie_remove(LNK_SymbolHashTrie *trie)
-{
-  ins_atomic_ptr_eval_assign(&trie->name,   0);
-  ins_atomic_ptr_eval_assign(&trie->symbol, 0);
-}
-
-internal LNK_SymbolHashTrieChunk **
-lnk_array_from_symbol_hash_trie_chunk_list(Arena *arena, LNK_SymbolHashTrieChunkList *lists, U64 lists_count, U64 *count_out)
-{
-  U64 chunks_count = 0;
-  for EachIndex(i, lists_count) { chunks_count += lists[i].count; }
-
-  LNK_SymbolHashTrieChunk **chunks        = push_array(arena, LNK_SymbolHashTrieChunk *, chunks_count);
-  U64                       chunks_cursor = 0;
-  for EachIndex(i, lists_count) {
-    for (LNK_SymbolHashTrieChunk *chunk = lists[i].first; chunk != 0; chunk = chunk->next) {
-      chunks[chunks_cursor++] = chunk;
+    if (ins_atomic_ptr_eval_cond_assign(&node->value, leader, 0) == 0) {
+      return;
     }
   }
-
-  if (count_out) {
-    *count_out = chunks_count;
-  }
-
-  return chunks;
 }
 
 internal LNK_ObjSymbolRef
@@ -676,7 +565,7 @@ internal LNK_Symbol *
 lnk_symbol_table_search(LNK_SymbolTable *symtab, String8 name)
 {
   LNK_SymbolHashTrie *trie = lnk_symbol_table_search_(symtab, name);
-  return trie ? trie->symbol : 0;
+  return trie ? trie->value : 0;
 }
 
 internal LNK_Symbol *
@@ -891,7 +780,7 @@ THREAD_POOL_TASK_FUNC(lnk_replace_weak_with_default_symbol_task)
   LNK_SymbolTable *symtab = raw_task;
   for EachNode(c, LNK_SymbolHashTrieChunk, symtab->search_chunks[task_id].first) {
     for EachIndex(i, c->count) {
-      LNK_Symbol                 *symbol        = c->v[i].symbol;
+      LNK_Symbol                 *symbol        = c->v[i].value;
       LNK_ObjSymbolRef            symbol_ref    = lnk_ref_from_symbol(symbol);
       COFF_ParsedSymbol           symbol_parsed = lnk_parsed_symbol_from_coff_symbol_idx_no_name(symbol_ref.obj, symbol_ref.symbol_idx);
       COFF_SymbolValueInterpType  symbol_interp = coff_interp_from_parsed_symbol(symbol_parsed);

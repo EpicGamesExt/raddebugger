@@ -807,8 +807,11 @@ internal File
 file_open(AccessFlags flags, String8 path)
 {
   Temp scratch = scratch_begin(0, 0);
-  String8 path_copy = push_str8_copy(scratch.arena, path);
+ 
   int lnx_flags = 0;
+  
+  lnx_flags |= O_CLOEXEC;
+  
   if(flags & AccessFlag_Read && flags & AccessFlag_Write)
   {
     lnx_flags = O_RDWR;
@@ -821,22 +824,32 @@ file_open(AccessFlags flags, String8 path)
   {
     lnx_flags = O_RDONLY;
   }
+ 
   if(flags & AccessFlag_Append)
   {
     lnx_flags |= O_APPEND;
   }
+  else if(flags & AccessFlag_Write)
+  {
+    lnx_flags |= O_TRUNC;
+  }
+ 
   if(flags & (AccessFlag_Write|AccessFlag_Append))
   {
     lnx_flags |= O_CREAT;
   }
-  lnx_flags |= O_CLOEXEC;
+
+ 
   if(flags & AccessFlag_CreateNew) { lnx_flags |= O_CREAT|O_EXCL; }
+
+  String8 path_copy = push_str8_copy(scratch.arena, path);
   int fd = open((char *)path_copy.str, lnx_flags, 0755);
   File handle = {0};
   if(fd != -1)
   {
     handle.u64[0] = fd;
   }
+
   scratch_end(scratch);
   return handle;
 }
@@ -1030,10 +1043,10 @@ reserve_memory_placeholders(U64 size, U64 block_size)
   return reserve_memory(size);
 }
 
-internal void
+internal B32
 release_memory_placeholders(void *ptr, U64 size, U64 block_size)
 {
-  if(size && block_size) { release_memory(ptr, size); }
+  return size && block_size && munmap(ptr, size) == 0;
 }
 
 internal B32
@@ -1927,12 +1940,16 @@ main(int argc, char **argv)
     {
       U64 env_count = 0;
       for(; __environ[env_count] != 0; env_count += 1) {}
+
       char **default_env = push_array(lnx_state.arena, char *, env_count+1);
       for EachIndex(idx, env_count)
       {
-        default_env[idx] = (char *)str8_copy(lnx_state.arena, str8_cstring(__environ[idx])).str;
+        String8 entry = str8_copy(lnx_state.arena, str8_cstring(__environ[idx]));
+        default_env[idx] = (char *)entry.str;
+        str8_list_push(lnx_state.arena, &lnx_state.process_info.environment, entry);
       }
       default_env[env_count] = 0;
+      
       lnx_state.default_env_count = env_count;
       lnx_state.default_env       = default_env;
     }

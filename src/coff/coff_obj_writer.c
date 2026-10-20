@@ -514,6 +514,7 @@ coff_obj_writer_section_push_reloc_voff(COFF_ObjWriter *obj_writer, COFF_ObjSect
   COFF_RelocType reloc_type = 0;
   switch (obj_writer->machine) {
     case COFF_MachineType_Unknown: break;
+    case COFF_MachineType_X86: reloc_type = COFF_Reloc_X86_Dir32Nb; break;
     case COFF_MachineType_X64: reloc_type = COFF_Reloc_X64_Addr32Nb; break;
     default: { NotImplemented; } break;
   }

@@ -13,7 +13,7 @@ internal void coff_print_relocs               (Arena *arena, String8List *out, S
 internal void coff_print_symbol_table         (Arena *arena, String8List *out, String8 indent, String8 raw_data, B32 is_big_obj, String8 string_table, COFF_Symbol32Array symbols);
 internal void coff_print_big_obj_header       (Arena *arena, String8List *out, String8 indent, COFF_BigObjHeader *header);
 internal void coff_print_file_header          (Arena *arena, String8List *out, String8 indent, COFF_FileHeader *header);
-internal void coff_print_import               (Arena *arena, String8List *out, String8 indent, COFF_ParsedArchiveImportHeader *header);
+internal void coff_print_import               (Arena *arena, String8List *out, String8 indent, COFF_ShortImport *header);
 internal void coff_print_big_obj              (Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Option opts);
 internal void coff_print_obj                  (Arena *arena, String8List *out, String8 indent, String8 raw_data, RD_Option opts);
 internal void coff_print_archive              (Arena *arena, String8List *out, String8 indent, String8 raw_archive, RD_Option opts);

@@ -368,6 +368,7 @@ sock_session_open(U16 listener_port, SOCK_WakeupFunctionType *wakeup_hook)
   session->iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0);
   
   //- rjf: set up listener(s)
+  if(listener_port != 0)
   {
     session->tcp_listen_socket = WSASocketA(AF_INET, SOCK_STREAM, IPPROTO_TCP, 0, 0, WSA_FLAG_OVERLAPPED);
     DWORD ipv6only = 0;
@@ -391,16 +392,19 @@ sock_session_open(U16 listener_port, SOCK_WakeupFunctionType *wakeup_hook)
   WSAIoctl(session->tcp_listen_socket, SIO_GET_EXTENSION_FUNCTION_POINTER, &AcceptEx_guid, sizeof(AcceptEx_guid), &session->lpfnAcceptEx, sizeof(session->lpfnAcceptEx), &dwBytes, 0, 0);
   
   //- rjf: create accepting socket
+  if(listener_port != 0)
   {
     session->tcp_accept_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   }
   
   //- rjf: associate accepting socket with IOCP
+  if(listener_port != 0)
   {
     CreateIoCompletionPort((HANDLE)session->tcp_accept_socket, session->iocp, 0, 0);
   }
   
   //- rjf: kick off accept
+  if(listener_port != 0)
   {
     session->lpfnAcceptEx(session->tcp_listen_socket, session->tcp_accept_socket, session->tcp_accept_buffer, 0, sizeof(struct sockaddr_storage) + 16, sizeof(struct sockaddr_storage) + 16, &session->tcp_accept_size_out, &session->tcp_accept_overlapped);
   }
@@ -484,7 +488,10 @@ sock_recv(Arena *arena, SOCK_Session session, SOCK_Protocol *protocol_out, SOCK_
       if(guarded_ring_read_or_wait(&guard, sizeof(header), header, endt_us))
       {
         U64 size_cap = s->s2u_ring->ring->size - sizeof(header);
-        protocol_out[0] = (SOCK_Protocol)header[0];
+        if(protocol_out != 0)
+        {
+          protocol_out[0] = (SOCK_Protocol)header[0];
+        }
         endpoint_out->port = (U16)header[1];
         endpoint_out->address_u64[0] = header[2];
         endpoint_out->address_u64[1] = header[3];

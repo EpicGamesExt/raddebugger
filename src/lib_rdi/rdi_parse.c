@@ -226,11 +226,14 @@ RDI_PROC void *
 rdi_section_raw_data_from_kind(RDI_Parsed *rdi, RDI_SectionKind kind, RDI_SectionEncoding *encoding_out, RDI_U64 *size_out)
 {
   void *result = 0;
+  *size_out = 0;
+  *encoding_out = RDI_SectionEncoding_Unpacked;
 #if !defined(RDI_DISABLE_NILS)
   result = &rdi_nil_element_union;
   *size_out = rdi_section_element_size_table[kind];
 #endif
   if(0 <= kind && kind < rdi->sections_count &&
+     rdi->sections[kind].encoded_size != 0 &&
      rdi->sections[kind].off < rdi->raw_data_size)
   {
     result = rdi->raw_data+rdi->sections[kind].off;

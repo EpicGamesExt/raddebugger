@@ -122,3 +122,17 @@ dmn_event_list_push(Arena *arena, DMN_EventList *list)
   result->module_info = &dmn_module_info_nil;
   return result;
 }
+
+internal void
+dmn_event_deep_copy(Arena *arena, DMN_Event *dst, DMN_Event *src)
+{
+  MemoryCopyStruct(dst, src);
+  dst->string = str8_copy(arena, dst->string);
+  if(dst->module_info != 0)
+  {
+    dst->module_info = push_array(arena, DMN_ModuleInfo, 1);
+    MemoryCopyStruct(dst->module_info, src->module_info);
+    dst->module_info->module_path = str8_copy(arena, dst->module_info->module_path);
+    dst->module_info->debug_info_path = str8_copy(arena, dst->module_info->debug_info_path);
+  }
+}

@@ -476,7 +476,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, D_Entity *entity, B32 include_extr
   switch(entity->kind)
   {
     default:{}break;
-    case D_EntityKind_Machine: {icon_kind = RD_IconKind_Machine;}break;
+    case D_EntityKind_Server: {icon_kind = RD_IconKind_Machine;}break;
     case D_EntityKind_Process: {icon_kind = RD_IconKind_Threads;}break;
     case D_EntityKind_Thread:  {icon_kind = RD_IconKind_Thread; name_is_code = 1;}break;
     case D_EntityKind_Module:  {icon_kind = RD_IconKind_Module;}break;
@@ -493,7 +493,7 @@ rd_title_fstrs_from_ctrl_entity(Arena *arena, D_Entity *entity, B32 include_extr
   }
   
   //- rjf: push frozen icon, if frozen
-  if((entity->kind == D_EntityKind_Machine ||
+  if((entity->kind == D_EntityKind_Server ||
       entity->kind == D_EntityKind_Process ||
       entity->kind == D_EntityKind_Thread) &&
      d_entity_tree_is_frozen(entity))

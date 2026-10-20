@@ -324,6 +324,9 @@ struct RD_WindowState
   CFG_ID query_last_bottom_view_id;
   RD_QueryView *query_top;
   
+  // rjf: panel 'hoisting' state - bring-to-front
+  CFG_ID panel_hoist_cfg_id;
+  
   // rjf: hover eval state
   B32 hover_eval_focused;
   Arena *hover_eval_arena;
@@ -422,6 +425,7 @@ struct RD_State
   S32 frame_depth;
   U64 frame_eval_memread_endt_us;
   SOCK_Endpoint ipc_sock_endpoint;
+  UI_State *ui_stub;
   
   // rjf: installation setting state
   B32 installed;
@@ -433,6 +437,9 @@ struct RD_State
   Arena *update_check_arena;
   String8List update_check_response_body_pieces;
   GuardedRing *update_check_http_ring;
+  
+  // rjf: hidden mode
+  B32 hidden_mode;
   
   // rjf: config bucket paths
   Arena *user_path_arena;
@@ -454,6 +461,7 @@ struct RD_State
   F32 catchall_animation_rate;
   F32 menu_animation_rate;
   F32 menu_animation_rate__slow;
+  F32 menu_animation_rate__very_slow;
   F32 entity_alive_animation_rate;
   F32 rich_hover_animation_rate;
   F32 scrolling_animation_rate;

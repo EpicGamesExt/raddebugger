@@ -11,17 +11,37 @@
 //~ Usage Samples
 //
 #if 0
+// File Data Blob -> RDI
+{
+  RDI_Parsed rdi = {0};
+  RDI_ParseStatus status = rdi_parse(data, size, &rdi);
+}
+
+// Compressed File Data Blob -> RDI
+{
+  RDI_Parsed rdi = {0};
+  RDI_ParseStatus status = RDI_ParseStatus_Good;
+  {
+    RDI_Parsed rdi_compressed = {0};
+    RDI_ParseStatus rdi_compressed_status = rdi_parse(compressed_data, compressed_size, &rdi_compressed);
+    RDI_U64 decompressed_size = rdi_decompressed_size_from_parsed(&rdi_compressed);
+    RDI_U8 *decompressed_data = allocate(decompressed_size);
+    rdi_decompress_parsed(decompressed_data, decompressed_size, &rdi_compressed);
+    status = rdi_parse(decompressed_data, decompressed_size, &rdi);
+  }
+}
+
 // Procedure Name -> Line
 {
   RDI_Parsed *rdi = ...;
   char *name = "mule_main";
-  RDI_Procedure *procedure = rdi_procedure_from_name_cstr(rdi, name);                  // 1. name -> procedure
+  RDI_Symbol *procedure = rdi_procedure_from_name_cstr(rdi, name);                     // 1. name -> procedure
   RDI_U64 procedure_first_voff = rdi_first_voff_from_procedure(rdi, procedure);        // 2. procedure -> virtual offset
   RDI_Line line = rdi_line_from_voff(rdi, procedure_first_voff);                       // 3. virtual offset -> line
   RDI_SourceFile *file = rdi_source_file_from_line(rdi, &line);                        // 4. line -> source file
   RDI_U64 file_path_size = 0;                                                          // 5. source file -> path
   RDI_U8 *file_path = rdi_normal_path_from_source_file(rdi, file, &file_path_size);
-  printf("%s is at %.*s:%u\n", name, (int)file_path_size, file_path, line.line_num);
+  printf("%s is at %.*s:%u\n", name, (int)file_path_size, file_path, line.line_num);   // "<name> is at <file>:<line>"
 }
 
 // Line -> Procedure Name
@@ -31,10 +51,20 @@
   RDI_U32 line_num = 2557;
   RDI_SourceFile *file = rdi_source_file_from_normal_path_cstr(rdi, path);      // 1. path -> source file
   RDI_U64 voff = rdi_first_voff_from_source_file_line_num(rdi, file, line_num); // 2. (source file, line) -> virtual offset
-  RDI_Procedure *procedure = rdi_procedure_from_voff(rdi, voff);                // 3. virtual offset -> procedure
+  RDI_Symbol *procedure = rdi_procedure_from_voff(rdi, voff);                   // 3. virtual offset -> procedure
   RDI_U64 name_size = 0;                                                        // 4. procedure -> name
   RDI_U8 *name = rdi_name_from_procedure(rdi, procedure, &name_size);
-  printf("%s:%u is inside %.*s\n", path, line_num, (int)name_size, name);
+  printf("%s:%u is inside %.*s\n", path, line_num, (int)name_size, name);       // "<file>:<line> is inside <name>"
+}
+
+// Virtual Offset -> Procedure Name
+{
+  RDI_Parsed *rdi = ...;
+  RDI_U64 voff = ...;
+  RDI_Symbol *procedure = rdi_procedure_from_voff(rdi, voff);                   // 1. voff -> procedure
+  RDI_U64 name_size = 0;                                                        // 2. procedure -> name
+  RDI_U8 *name = rdi_name_from_procedure(rdi, procedure, &name_size);
+  printf("0x%llx is inside %.*s\n", voff, (int)name_size, name);                // "<voff> is inside <name>"
 }
 #endif
 

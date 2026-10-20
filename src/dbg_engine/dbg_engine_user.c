@@ -1774,6 +1774,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
               String8 stdout_path             = str8_skip_chop_whitespace(target->stdout_path);
               String8 stderr_path             = str8_skip_chop_whitespace(target->stderr_path);
               String8 stdin_path              = str8_skip_chop_whitespace(target->stdin_path);
+              String8 remote_address          = str8_skip_chop_whitespace(target->remote_address);
               String8List env                 = target->env;
               if(working_directory.size == 0)
               {
@@ -1813,12 +1814,14 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
                 D_Msg *msg = d_msg_list_push(scratch.arena, &ctrl_msgs);
                 msg->msg_id = target->msg_id;
                 msg->kind = D_MsgKind_Launch;
+                msg->address = str8_copy(scratch.arena, remote_address);
                 msg->path = str8_copy(scratch.arena, working_directory);
                 msg->cmd_line_string_list = str8_list_copy(scratch.arena, &cmdln_strings);
                 msg->stdout_path = str8_copy(scratch.arena, stdout_path);
                 msg->stderr_path = str8_copy(scratch.arena, stderr_path);
                 msg->stdin_path = str8_copy(scratch.arena, stdin_path);
                 msg->debug_subprocesses = target->debug_subprocesses;
+                msg->deploy = target->deploy;
                 msg->env_inherit = 1;
                 MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
                 msg->auto_download_debug_info = auto_download_debug_info;
@@ -2047,7 +2050,7 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
           D_EntityArray processes = d_entity_array_from_kind(D_EntityKind_Process);
           if(processes.count != 0)
           {
-            d_cmd(D_CmdKind_Continue, .machine = params->machine, .process = params->process, .thread = params->thread);
+            d_cmd(D_CmdKind_Continue, .server = params->server, .process = params->process, .thread = params->thread);
           }
           else if(!d_ctrl_targets_running())
           {
@@ -2092,25 +2095,25 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         case D_CmdKind_ThawThread:
         case D_CmdKind_FreezeProcess:
         case D_CmdKind_ThawProcess:
-        case D_CmdKind_FreezeMachine:
-        case D_CmdKind_ThawMachine:
+        case D_CmdKind_FreezeServer:
+        case D_CmdKind_ThawServer:
         {
           D_CmdKind disptch_kind = ((cmd->kind == D_CmdKind_FreezeThread ||
                                      cmd->kind == D_CmdKind_FreezeProcess ||
-                                     cmd->kind == D_CmdKind_FreezeMachine)
+                                     cmd->kind == D_CmdKind_FreezeServer)
                                     ? D_CmdKind_FreezeEntity
                                     : D_CmdKind_ThawEntity);
           d_push_cmd(disptch_kind, params);
         }break;
-        case D_CmdKind_FreezeLocalMachine:
+        case D_CmdKind_FreezeLocalServer:
         {
-          D_DemonID demon_id = D_DemonID_LocalHost;
-          d_cmd(D_CmdKind_FreezeMachine, .entity = d_handle_from_dmn(demon_id, dmn_handle_zero()));
+          D_ServerID server_id = D_ServerID_LocalHost;
+          d_cmd(D_CmdKind_FreezeServer, .entity = d_handle_from_dmn(server_id, dmn_handle_zero()));
         }break;
-        case D_CmdKind_ThawLocalMachine:
+        case D_CmdKind_ThawLocalServer:
         {
-          D_DemonID demon_id = D_DemonID_LocalHost;
-          d_cmd(D_CmdKind_ThawMachine, .entity = d_handle_from_dmn(demon_id, dmn_handle_zero()));
+          D_ServerID server_id = D_ServerID_LocalHost;
+          d_cmd(D_CmdKind_ThawServer, .entity = d_handle_from_dmn(server_id, dmn_handle_zero()));
         }break;
         case D_CmdKind_FreezeEntity:
         case D_CmdKind_ThawEntity:
@@ -2193,18 +2196,18 @@ d_tick(Arena *arena, D_TargetArray *targets, D_BreakpointArray *breakpoints, D_P
         }break;
         
         //- rjf: opening/closing remote debuggers
-        case D_CmdKind_OpenRemoteDebugger:
+        case D_CmdKind_OpenRemoteServer:
         {
           D_Msg *msg = d_msg_list_push(scratch.arena, &ctrl_msgs);
-          msg->kind      = D_MsgKind_OpenRemoteDebugger;
-          msg->path      = str8_copy(scratch.arena, params->string);
+          msg->kind      = D_MsgKind_OpenRemoteServer;
+          msg->address   = str8_copy(scratch.arena, params->string);
           MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
           msg->auto_download_debug_info = auto_download_debug_info;
         }break;
-        case D_CmdKind_CloseRemoteDebugger:
+        case D_CmdKind_CloseRemoteServer:
         {
           D_Msg *msg = d_msg_list_push(scratch.arena, &ctrl_msgs);
-          msg->kind      = D_MsgKind_CloseRemoteDebugger;
+          msg->kind      = D_MsgKind_CloseRemoteServer;
           msg->entity    = params->entity;
           MemoryCopyArray(msg->exception_code_filters, exception_code_filters);
           msg->auto_download_debug_info = auto_download_debug_info;

@@ -8,9 +8,9 @@ local copy has been built. You can find pre-built release binaries
 [here](https://github.com/EpicGames/raddebugger/releases)._
 
 The RAD Debugger is a native, user-mode, multi-process, graphical debugger. It
-currently only supports local-machine Windows x64 debugging with PDBs, with
-plans to expand and port in the future. In the future we'll expand to also
-support native Linux debugging and DWARF debug info.
+currently only supports local-machine x64 debugging on both Windows and Linux
+(although Linux support is still very early). We plan to expand support to
+other architectures, and to implement remote and multi-machine debugging.
 
 The debugger is currently in *ALPHA*. In order to get the debugger
 bullet-proof, it'd greatly help out if you submitted the issues you find
@@ -27,8 +27,7 @@ additional related technologies: **(1)** the RAD Debug Info (RDI) format, and
 The RAD Debug Info (RDI) format is our custom debug information format, which
 the debugger parses and uses, rather than the debug information natively
 produced by toolchains, like PDB or DWARF. To work with these existing
-toolchains, we convert PDB (and eventually PE/ELF files with embedded DWARF)
-into the RDI format on-demand.
+toolchains, we convert PDB and DWARF to the RDI format on-demand.
 
 The RDI format is currently specified in code, in the files within the
 `src/lib_rdi` folder. In [`rdi.h`](src/lib_rdi/rdi.h) and
@@ -308,74 +307,6 @@ Linker, or the `radbin` CLI binary file utility:
 ./build.sh radlink release
 ./build.sh radbin release
 ```
-
----
-
-# Project Roadmap
-
-### The Initial Alpha Battle-Testing Phase
-
-The first priority for the project is to ensure that the most crucial components
-are functioning extremely reliably for local, x64, Windows development.
-For the debugger, this would include parts like debug info conversion, debug
-info loading, process control, stepping, evaluation (correct usage of both
-location info and type info), and a robust frontend which ensures the lower
-level parts are usable. For the linker, this is a matter of reliability and
-convergence with existing linker behavior.
-
-We feel that we've already come a long way in all of these respects, but given
-the massive set of possible combinations of languages, build settings,
-toolchains, used language features, and patterns of generated code, we still
-expect some issues, and are prioritizing these issues being resolved first.
-
-We also hope to continue to improve performance in this phase. For the debugger,
-this primarily includes frontend performance, introducing caches when economical
-to do so, and tightening existing systems up. For the linker, it has been mostly
-tuned thus far for giant projects, and so we'd like to improve linking speed for
-small-to-mid sized projects as well.
-
-For the linker, there are also a number of features to come, like
-dead-code-elimination (`/opt:ref`), and link-time-optimizations with the help
-of `clang` (we won't support LTCG from MSVC, since it is undocumented).
-
-### Local x64 Linux Debugging Phase
-
-The next priority for the project is to take the rock solid x64 Windows
-debugging experience, and port all of the relevant pieces to support local x64
-Linux debugging also.
-
-The debugger has been written to abstract over the parts that need to differ on
-either Linux or Windows, and this is mainly going to be a task in building out
-different backends for those abstraction layers.
-
-The major parts of this phase are:
-
-- Porting the `src/demon` layer to implement the Demon local process control
-abstraction API.
-- Implementing an x64 ELF Linux unwinder in the `src/ctrl` layer.
-- Creating a DWARF-to-RDI converter (in the same way that we've built a
-PDB-to-RDI converter). A partial implementation of this is in
-`src/rdi_from_dwarf`.
-- Porting the `src/render` layer to implement all of the rendering features the
-frontend needs on a Linux-compatible API (the backend used on Windows is D3D11).
-- Porting the `src/font_provider` layer to a Linux-compatible font
-rasterization backend, like FreeType (the backend used on Windows is
-DirectWrite).
-- Porting the `src/os` layers to Linux. This includes core operating system
-abstraction (virtual memory allocation, threading and synchronization
-primitives, and so on), and graphical operating system abstraction (windows,
-input events, and so on).
-
-Once the above list is complete, and once every part is rock solid, the Windows
-debugging experience we'll have worked diligently to create will also be
-available natively on Linux machines.
-
-### And Beyond!
-
-There are several directions we might take after these two major phases,
-like remote debugging, porting to different architectures, further improving
-the debugger's features (like improving the visualization engine), and so on.
-But for now, we're mostly focused on those first two phases.
 
 ---
 

@@ -22,7 +22,7 @@ struct D_Eval
 //~ rjf: ID Types
 
 typedef U64 D_MsgID;
-typedef U32 D_DemonID;
+typedef U32 D_ServerID;
 typedef U32 D_ControllerKind;
 typedef enum D_ControllerKindEnum
 {
@@ -31,7 +31,7 @@ typedef enum D_ControllerKindEnum
 }
 D_ControllerKindEnum;
 
-#define D_DemonID_LocalHost (1)
+#define D_ServerID_LocalHost (1)
 
 ////////////////////////////////
 //~ rjf: Entity Handle Types
@@ -39,7 +39,7 @@ D_ControllerKindEnum;
 typedef struct D_Handle D_Handle;
 struct D_Handle
 {
-  D_DemonID demon_id;
+  D_ServerID server_id;
   D_ControllerKind controller_kind;
   U64 entity_id;
 };
@@ -251,8 +251,10 @@ struct D_Target
   String8 stdout_path;
   String8 stderr_path;
   String8 stdin_path;
+  String8 remote_address;
   D_MsgID msg_id;
   B32 debug_subprocesses;
+  B32 deploy;
   String8List env;
 };
 

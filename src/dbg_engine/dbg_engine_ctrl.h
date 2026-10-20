@@ -314,65 +314,71 @@ struct D_ModuleReqCacheNode
 typedef D_WAKEUP_FUNCTION_DEF(D_WakeupFunctionType);
 
 ////////////////////////////////
-//~ rjf: Demon Interface V-Table
+//~ rjf: Cross-Server Run Controls
 
-typedef struct D_DemonInterface D_DemonInterface;
-struct D_DemonInterface
+typedef struct D_ServerRunCtrlsNode D_ServerRunCtrlsNode;
+struct D_ServerRunCtrlsNode
 {
-  //- rjf: control
-  void (*ctrl_exclusive_access_begin)(void);
-  void (*ctrl_exclusive_access_end)(void);
-  U32 (*launch)(DMN_CtrlCtx *ctx, ProcessLaunchParams *params);
-  B32 (*attach)(DMN_CtrlCtx *ctx, U32 pid);
-  B32 (*kill)(DMN_CtrlCtx *ctx, DMN_Handle process, U32 exit_code);
-  B32 (*detach)(DMN_CtrlCtx *ctx, DMN_Handle process);
-  DMN_EventList (*run)(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls);
-  
-  //- rjf: halting
-  void (*halt)(U64 code, U64 user_data);
-  
-  //- rjf: non-blocking-control-thread access barriers
-  B32 (*access_open)(void);
-  void (*access_close)(void);
-  
-  //- rjf: process memory
-  U64 (*reserve_memory)(DMN_Handle process, U64 vaddr, U64 size);
-  void (*commit_memory)(DMN_Handle process, U64 vaddr, U64 size);
-  void (*decommit_memory)(DMN_Handle process, U64 vaddr, U64 size);
-  void (*release_memory)(DMN_Handle process, U64 vaddr, U64 size);
-  void (*protect_memory)(DMN_Handle process, U64 vaddr, U64 size, AccessFlags flags);
-  U64 (*read_memory)(DMN_Handle process, Rng1U64 range, void *dst);
-  B32 (*write_memory)(DMN_Handle process, Rng1U64 range, void *src);
-  
-  //- rjf: threads
-  B32 (*thread_read_reg_block)(DMN_Handle thread, void *dst);
-  B32 (*thread_write_reg_block)(DMN_Handle thread, void *src);
-  B32 (*thread_get_module_tls_vaddr)(DMN_Handle thread, DMN_Handle module, U64 *vaddr_out);
+  D_ServerRunCtrlsNode *next;
+  D_ServerID server_id;
+  DMN_RunCtrls run_ctrls;
 };
 
-typedef struct D_DemonState D_DemonState;
-struct D_DemonState
+typedef struct D_ServerRunCtrlsSlot D_ServerRunCtrlsSlot;
+struct D_ServerRunCtrlsSlot
 {
-  D_DemonState *next;
-  D_DemonState *prev;
-  D_DemonID id;
-  D_DemonInterface *fn;
-  Arena *event_arena;
-  DMN_EventList events;
+  D_ServerRunCtrlsNode *first;
+  D_ServerRunCtrlsNode *last;
 };
 
-typedef struct D_DemonStateSlot D_DemonStateSlot;
-struct D_DemonStateSlot
+typedef struct D_RunCtrls D_RunCtrls;
+struct D_RunCtrls
 {
-  D_DemonState *first;
-  D_DemonState *last;
-};
-
-typedef struct D_DemonCache D_DemonCache;
-struct D_DemonCache
-{
+  D_ServerRunCtrlsSlot *slots;
   U64 slots_count;
-  D_DemonStateSlot *slots;
+};
+
+////////////////////////////////
+//~ rjf: Server State Types
+//
+// Each call to `dmn_ctrl_run` can generate a sequence of debug events. We handle
+// these one at a time, and so after a `dmn_ctrl_run`, we need to store all returned
+// events in a queue, and process the full queue before doing another `dmn_ctrl_run`.
+//
+// Initially, there was just one of these queues, but on moving to multi-server
+// debugging, we will have a sequence of events generated per-server. Then, we
+// will just want to round-robin drain the queues before we dispatch another run
+// to all servers.
+//
+
+typedef struct D_ServerState D_ServerState;
+struct D_ServerState
+{
+  // rjf: links
+  D_ServerState *hash_next;
+  D_ServerState *hash_prev;
+  D_ServerState *order_next;
+  D_ServerState *order_prev;
+  
+  // rjf: server identifier
+  D_ServerID server_id;
+  
+  // rjf: run state
+  B32 run_state;
+  B32 group_halt;
+  
+  // rjf: demon event queue
+  Arena *dmn_event_arena;
+  DMN_EventNode *first_dmn_event_node;
+  DMN_EventNode *last_dmn_event_node;
+  DMN_EventNode *free_dmn_event_node;
+};
+
+typedef struct D_ServerSlot D_ServerSlot;
+struct D_ServerSlot
+{
+  D_ServerState *first;
+  D_ServerState *last;
 };
 
 ////////////////////////////////
@@ -383,11 +389,12 @@ struct D_CtrlState
 {
   Arena *arena;
   D_WakeupFunctionType *wakeup_hook;
+  SOCK_Session sock_session;
   
   // rjf: name -> register hash tables for eval
   E_String2NumMap arch_string2reg_tables[Arch_COUNT];
   
-  // rjf: caches
+  // rjf: shared caches
   D_ThreadRegCache thread_reg_cache;
   D_ModuleInfoCache module_info_cache;
   D_DumpCache dump_cache;
@@ -424,17 +431,18 @@ struct D_CtrlState
   D_EntityCtxRWStore *ctrl_thread_entity_store;
   E_Cache *ctrl_thread_eval_cache;
   Arena *ctrl_thread_msg_process_arena;
-  Arena *dmn_event_arena;
-  DMN_EventNode *first_dmn_event_node;
-  DMN_EventNode *last_dmn_event_node;
-  DMN_EventNode *free_dmn_event_node;
+  U64 server_slots_count;
+  D_ServerSlot *server_slots;
+  D_ServerState *first_server;
+  D_ServerState *last_server;
+  D_ServerState *free_server;
+  D_ServerState *next_dequeue_server;
+  B32 ctrl_thread_dmn_run_block;
   Arena *user_entry_point_arena;
   String8List user_entry_points;
   U64 exception_code_filters[(D_ExceptionCodeKind_COUNT+63)/64];
   B32 auto_download_debug_info;
-  U64 process_counter;
-  Arena *dbg_dir_arena;
-  D_DbgDirNode *dbg_dir_root;
+  D_ServerID server_id_gen;
   U64 module_req_cache_slots_count;
   D_ModuleReqCacheNode **module_req_cache_slots;
   String8List msg_user_bp_touched_files;
@@ -488,8 +496,8 @@ internal D_HandleArray d_handle_array_from_list(Arena  *arena, D_HandleList *src
 internal String8 d_string_from_handle(Arena *arena, D_Handle handle);
 internal D_Handle d_handle_from_string(String8 string);
 internal DMN_Handle d_dmn_from_handle(D_Handle handle);
-internal D_Handle d_handle_from_dmn(D_DemonID demon_id, DMN_Handle handle);
-internal D_Handle d_dump_handle_make(D_DemonID demon_id, U64 id);
+internal D_Handle d_handle_from_dmn(D_ServerID server_id, DMN_Handle handle);
+internal D_Handle d_dump_handle_make(D_ServerID server_id, U64 id);
 
 ////////////////////////////////
 //~ rjf: Trap Type Functions
@@ -671,6 +679,11 @@ internal void d_ctrl_thread__append_program_defined_bp_traps(Arena *arena, D_Ent
 //- rjf: dump process closing work
 internal void d_ctrl_thread__close_dump_process(D_MsgID msg_id, D_Handle process);
 
+//- rjf: run controls building
+internal D_RunCtrls *d_ctrl_thread__run_ctrls(Arena *arena);
+internal void d_ctrl_thread__run_ctrls_set_server(Arena *arena, D_RunCtrls *ctrls, D_ServerID server_id, DMN_RunCtrls *server_ctrls);
+internal DMN_RunCtrls *d_ctrl_thread__server_run_ctrls_from_id(D_RunCtrls *ctrls, D_ServerID server_id);
+
 //- rjf: attached process running/event gathering
 internal DMN_Event *d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, DMN_RunCtrls *run_ctrls, D_Spoof *spoof);
 
@@ -682,10 +695,18 @@ internal B32 d_ctrl_eval_space_read(E_Space space, void *out, E_SpaceRangeInfo *
 internal D_EvalScope *d_ctrl_thread__eval_scope_begin(Arena *arena, D_BreakpointList *user_bps, D_Entity *thread);
 internal void d_ctrl_thread__eval_scope_end(D_EvalScope *scope);
 
+//- rjf: server connection lookups
+internal D_Handle d_ctrl_thread__handle_from_addr_or_connect(String8 addr);
+
+//- rjf: control system socket wakeup function
+internal void d_ctrl_sock_wakeup(void);
+
 //- rjf: log flusher
 internal void d_ctrl_thread__end_and_flush_log(void);
 
 //- rjf: msg kind implementations
+internal void d_ctrl_thread__open_remote_server(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);
+internal void d_ctrl_thread__close_remote_server(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);
 internal void d_ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);
 internal void d_ctrl_thread__attach(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);
 internal void d_ctrl_thread__open_crash_dump(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg);

@@ -296,18 +296,17 @@ entry_point(CmdLine *cmdl)
     String8 file_chksms = cv_file_chksms_from_debug_s(debug_s);
     
     // parse $$INLINEE_LINES 
-    String8List                  ss_inlinee_lines     = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_InlineeLines);
-    CV_C13InlineeLinesParsedList inlinee_lines_parsed = cv_c13_inlinee_lines_from_sub_sections(arena, ss_inlinee_lines);
+    CV_C13InlineeLinesParsedList inlinee_lines_parsed = cv_c13_inlinee_lines_from_sub_sections(arena, &debug_s);
     
     // parse $$LINES
     U64           c13_lines_count = 0;
     CV_LineArray *c13_lines       = 0;
     {
-      String8List raw_lines_list = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_Lines);
+      CV_DebugS_Iter lines = cv_debug_s_iter_init(&debug_s);
       
-      for (String8Node *raw_lines_node = raw_lines_list.first; raw_lines_node != 0; raw_lines_node = raw_lines_node->next) {
+      while (cv_debug_s_iter_next_kind(&lines, CV_C13SubSectionKind_Lines)) {
         Temp temp = temp_begin(arena);
-        CV_C13LinesHeaderList parsed_list = cv_c13_lines_from_sub_sections(temp.arena, raw_lines_node->string, rng_1u64(0, raw_lines_node->string.size));
+        CV_C13LinesHeaderList parsed_list = cv_c13_lines_from_sub_sections(temp.arena, lines.data, rng_1u64(0, lines.data.size));
         c13_lines_count += parsed_list.count;
         temp_end(temp);
       }
@@ -315,8 +314,9 @@ entry_point(CmdLine *cmdl)
       c13_lines = push_array_no_zero(arena, CV_LineArray, c13_lines_count);
       
       U64 c13_lines_idx = 0;
-      for (String8Node *raw_lines_node = raw_lines_list.first; raw_lines_node != 0; raw_lines_node = raw_lines_node->next) {
-        String8               raw_lines   = raw_lines_node->string;
+      lines = cv_debug_s_iter_init(&debug_s);
+      while (cv_debug_s_iter_next_kind(&lines, CV_C13SubSectionKind_Lines)) {
+        String8               raw_lines   = lines.data;
         CV_C13LinesHeaderList parsed_list = cv_c13_lines_from_sub_sections(arena, raw_lines, rng_1u64(0, raw_lines.size));
         
         for(CV_C13LinesHeaderNode *header_node = parsed_list.first; header_node != 0; header_node = header_node->next) {
@@ -331,8 +331,7 @@ entry_point(CmdLine *cmdl)
       }
     }
     
-    String8List                  raw_inlinee_lines = cv_sub_section_from_debug_s(debug_s, CV_C13SubSectionKind_InlineeLines);
-    CV_C13InlineeLinesParsedList inlinee_lines     = cv_c13_inlinee_lines_from_sub_sections(arena, raw_inlinee_lines);
+    CV_C13InlineeLinesParsedList inlinee_lines     = cv_c13_inlinee_lines_from_sub_sections(arena, &debug_s);
     
     CV_InlineeLinesAccel *inlinee_lines_accel = cv_c13_make_inlinee_lines_accel(arena, inlinee_lines);
     CV_LinesAccel        *lines_accel         = cv_c13_make_lines_accel(arena, c13_lines_count, c13_lines);
@@ -440,5 +439,4 @@ entry_point(CmdLine *cmdl)
     }
   }
 }
-
 

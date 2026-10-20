@@ -64,18 +64,6 @@ typedef struct LNK_TypeServerNode  { LNK_TypeServer v; struct LNK_TypeServerNode
 typedef struct LNK_TypeServerList  { U64 count; LNK_TypeServerNode *first, *last;       } LNK_TypeServerList;
 typedef struct LNK_TypeServerArray { U64 count; LNK_TypeServer *v;                      } LNK_TypeServerArray;
 
-typedef struct LNK_SymbolInput
-{
-  U64     obj_idx;
-  String8 raw_symbols;
-} LNK_SymbolInput;
-
-typedef struct LNK_SymbolInputTask
-{
-  Rng1U64 input_range;
-  U64     weight;
-} LNK_SymbolInputTask;
-
 typedef struct
 {
   LNK_Config  *config;
@@ -92,7 +80,7 @@ typedef struct
   U64          *obj_to_ts;
   U32Array     *is_leaf_discarded;
 
-  String8List *debug_s_list_arr;
+  U32List *debug_s_section_numbers;
 
   U32Array int_obj_indices;
   U32Array ext_obj_indices;
@@ -104,12 +92,17 @@ typedef struct
   B32                 *is_type_server_discarded; // [ts_arr.count]
   CV_TypeIndex         min_type_indices[CV_TypeIndexSource_COUNT];
 
-  U64                  symbol_input_count;
-  LNK_SymbolInput     *symbol_inputs;       // [symbol_input_count]
-  Rng1U64             *symbol_input_ranges; // [worker_count]
-  U64                  symbol_patch_task_count; //
-  LNK_SymbolInputTask *symbol_patch_task; // [symbol_patch_task_count]
 } LNK_CodeViewInput;
+
+typedef struct
+{
+  LNK_Obj    *obj;
+  U64         section_number;
+  String8     section_data;
+  COFF_Reloc *first;
+  COFF_Reloc *cursor;
+  COFF_Reloc *opl;
+} LNK_DebugRelocs;
 
 typedef struct
 {
@@ -121,6 +114,9 @@ typedef struct
 ////////////////////////////////
 // Type Merging
 
+// must be power of two
+#define LNK_LEAF_HT_MIN_CAP 16
+
 typedef U64 LNK_LeafRef;
 typedef struct { U64 count; LNK_LeafRef *v; } LNK_LeafRefArray;
 
@@ -128,37 +124,43 @@ typedef struct { U64 count; LNK_LeafRef *v; } LNK_LeafRefArray;
 
 typedef struct
 {
+  Arena       *arena;
   U64          cap;
+  U64          count;
+  U64          initial_cap;
+  U64          grow_count;
   LNK_LeafRef *bucket_arr;
 } LNK_LeafHashTable;
 
 typedef struct
 {
+  U32 obj_idx;
+  U64 cursor;
+  U64 opl;
+} LNK_LeafDedupWork;
+
+typedef struct
+{
   U64           cap;
   CV_TypeIndex *ti_arr;
-  U64          *hash_arr;
+  CV_TypeIndex  min_ti;
+  LNK_LeafRef  *leaf_refs; // borrowed representatives, indexed by final TI
 } LNK_AssignedTiHash;
-
-typedef struct LNK_LeafRange
-{
-  struct LNK_LeafRange *next;
-  Rng1U64               range;
-  CV_DebugT            *debug_t;
-} LNK_LeafRange;
-typedef struct { U64 count; LNK_LeafRange *first, *last; } LNK_LeafRangeList;
 
 typedef enum
 {
-  LNK_MergeTypeFlag_BuildObjTiMap       = (1 << 0),
-  LNK_MergeTypeFlag_SkipSymbolTypeFixup = (1 << 1),
-  LNK_MergeTypeFlag_ExportHashes        = (1 << 2),
+  LNK_MergeTypeFlag_BuildObjTiMap = (1 << 0),
+  LNK_MergeTypeFlag_ExportHashes  = (1 << 2),
 } LNK_MergeTypeFlags;
 
 typedef struct
 {
   CV_TypeIndex  min_type_indices[CV_TypeIndexSource_COUNT];
   U64           count           [CV_TypeIndexSource_COUNT];
-  U8          **v               [CV_TypeIndexSource_COUNT];
+
+  LNK_CodeViewInput  *input;
+  LNK_AssignedTiHash  assigned_ti_arr[CV_TypeIndexSource_COUNT];
+  LNK_LeafRefArray    leaf_refs[CV_TypeIndexSource_COUNT];
 
   // @type_server
   CV_TypeIndex **obj_ti_maps;
@@ -168,17 +170,11 @@ typedef struct
 typedef struct
 {
   LNK_CodeViewInput  *input;
-  CV_DebugS          *debug_s_arr;
   LNK_LeafHashTable   leaf_ht_arr[CV_TypeIndexSource_COUNT];
   LNK_AssignedTiHash  assigned_ti_arr[CV_TypeIndexSource_COUNT];
-  Arena             **fixed_arenas;
   CV_TypeIndexSource  ti_source;
   U32Array            indices;
   Rng1U64            *ranges;
-
-  // count types per source
-  LNK_LeafRangeList *leaf_ranges_per_task;
-  U64                per_source_count[CV_TypeIndexSource_COUNT];
 
   // extract present buckets
   U64 *counts [CV_TypeIndexSource_COUNT];
@@ -191,8 +187,9 @@ typedef struct
   U64          *obj_ti_map_offsets;
   CV_TypeIndex *obj_ti_batch;
 
-  U64        pop_obj_idx;
-  Rng1U64   *pop_range;
+  LNK_LeafDedupWork *dedup_work;
+  B32                skip_dedup; // seed deduped RRT; also skip discarded-leaf filtering
+  U32                grow_mask;
 
   LNK_MergedTypes result;
 } LNK_MergeTypes;
@@ -215,10 +212,15 @@ typedef struct
   String8              image_data;
   LNK_SymbolTable     *symtab;
   LNK_CodeViewInput   *cv;
+  LNK_MergedTypes     *types;
   PDB_Context         *pdb;
+  Arena               *build_arena; // coordinator scratch; allocations occur between lane barriers
+  B32                  build_modules;
+  String8List          file_info;
   CV_StringHashTable   string_ht;
   U64                  string_table_base_offset;
   PDB_DbiModule      **mod_arr;     // [obj_count]
+  PDB_ModuleView      *mod_views; // [obj_count], published after module finalization
   U32Array            *obj_indices; // [obj_count]
 
   U64 symbol_count;
@@ -242,14 +244,25 @@ typedef struct
 
 typedef struct
 {
-  U64          leaf_count;
-  U8         **leaf_arr;
-  Rng1U64     *ranges;
-  U64          hash_length;
-  B32          make_map;
-  TP_Arena    *map_arena;
-  String8List *maps;
-} LNK_TypeNameReplacer;
+  B32             available;
+  U64             count;
+  PDB_ModuleView *modules;
+} LNK_PdbModules;
+
+typedef struct
+{
+  LNK_MergedTypes   *types;
+  CV_TypeIndexSource source;
+  B32              write_name_map;
+  U64             *map_offsets; // [worker_count + 1]
+  String8          map_data;
+  Rng1U64         *ranges;
+  U64             *offsets; // [worker_count + 1]
+  U64              hash_bucket_count;
+  U32             *hashes; // final hash-stream slots
+  String8          output;
+  PDB_TpiOffHint  *hints;
+} LNK_WritePdbTypes;
 
 ////////////////////////////////
 // RRT
@@ -262,15 +275,15 @@ internal B32         lnk_rrt_from_string     (Arena *arena, String8 rrt_data, St
 
 internal LNK_CodeViewInput lnk_make_code_view_input(TP_Context *tp, TP_Arena *tp_arena, LNK_Config *config, U64 objs_count, LNK_Obj **objs, LNK_RRT_Array rrt_input);
 
-internal int             lnk_leaf_ref_compare                (LNK_LeafRef a, LNK_LeafRef b);
-internal B32             lnk_match_leaf_ref                  (LNK_CodeViewInput *input, LNK_LeafRef a, LNK_LeafRef b);
-internal U64             lnk_hash_cv_leaf                    (LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInfoList ti_info_list, B32 discard_cycles);
-internal void            lnk_hash_cv_leaf_deep               (Arena *arena, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInfoList ti_info_list);
-internal CV_TypeIndex    lnk_assigned_ti_hash_search          (LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
-internal LNK_MergedTypes lnk_merge_types                     (TP_Context *tp, TP_Arena *tp_temp, LNK_CodeViewInput *input, LNK_MergeTypeFlags merge_flags);
-internal void            lnk_replace_type_names_with_hashes  (TP_Context *tp, TP_Arena *arena, U64 leaf_count, U8 **leaf_arr, LNK_TypeNameHashMode mode, U64 hash_length, String8 map_name);
+internal int             lnk_leaf_ref_compare       (LNK_LeafRef a, LNK_LeafRef b);
+internal B32             lnk_match_leaf_ref         (LNK_CodeViewInput *input, LNK_LeafRef a, LNK_LeafRef b);
+internal U64             lnk_hash_cv_leaf           (LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInfoList ti_info_list, B32 discard_cycles);
+internal void            lnk_hash_cv_leaf_deep      (Arena *arena, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref, CV_TypeIndexInfoList ti_info_list);
+internal CV_TypeIndex    lnk_assigned_ti_hash_search(LNK_AssignedTiHash *ht, LNK_CodeViewInput *input, LNK_LeafRef leaf_ref);
+internal LNK_MergedTypes lnk_merge_types            (TP_Context *tp, Arena *arena, LNK_CodeViewInput *input, LNK_MergeTypeFlags merge_flags);
 
 ////////////////////////////////
 // PDB
 
-internal LNK_FileArtifact lnk_build_pdb(TP_Context *tp, TP_Arena *tp_arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags);
+internal LNK_FileArtifact lnk_build_pdb(TP_Context *tp, Arena *arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, LNK_CodeViewInput *cv, LNK_MergedTypes cv_types, LNK_PdbWriter writer, LNK_PDB_BuilderFlags builder_flags, LNK_PdbModules *prepared_out);
+internal LNK_FileArtifact lnk_build_stripped_pdb(TP_Context *tp, Arena *arena, String8 image_data, LNK_Config *config, LNK_SymbolTable *symtab, U64 obj_count, LNK_Obj **obj_arr, LNK_PdbModules pdb_modules);
