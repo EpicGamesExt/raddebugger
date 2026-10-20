@@ -4,28 +4,20 @@
 ////////////////////////////////
 //~ Composition: interface IDs and the vtable slots used (from the Windows SDK's MIDL C bindings)
 
-global const GUID w32_comp_iid_unknown               = {0x00000000, 0x0000, 0x0000, {0xc0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x46}};
 global const GUID w32_comp_iid_compositor            = {0xb403ca50, 0x7f8c, 0x4e83, {0x98, 0x5f, 0xcc, 0x45, 0x06, 0x00, 0x36, 0xd8}};
 global const GUID w32_comp_iid_compositor_interop    = {0x25297d5c, 0x3ad4, 0x4c9c, {0xb5, 0xcf, 0xe3, 0x6a, 0x38, 0x51, 0x23, 0x30}};
 global const GUID w32_comp_iid_compositor_desktop    = {0x29e691fa, 0x4567, 0x4dca, {0xb3, 0x19, 0xd0, 0xf2, 0x07, 0xeb, 0x68, 0x07}};
 global const GUID w32_comp_iid_factory_partner       = {0x22118adf, 0x23f1, 0x4801, {0xbc, 0xfa, 0x66, 0xcb, 0xf4, 0x8c, 0xc5, 0x1b}};
 global const GUID w32_comp_iid_device_partner6       = {0xe01eb649, 0x787e, 0x4560, {0xb3, 0x98, 0x0d, 0xe7, 0xa2, 0x06, 0x5d, 0x8b}};
-global const GUID w32_comp_iid_device2               = {0x75f6468d, 0x1b8e, 0x447c, {0x9b, 0xc6, 0x75, 0xfe, 0xa8, 0x0b, 0x5b, 0x25}};
 global const GUID w32_comp_iid_visual                = {0x117e202d, 0xa859, 0x4c89, {0x87, 0x3b, 0xc2, 0xaa, 0x56, 0x67, 0x88, 0xe3}};
 global const GUID w32_comp_iid_composition_target    = {0xa1bea8ba, 0xd726, 0x4663, {0x81, 0x29, 0x6b, 0x5e, 0x79, 0x27, 0xff, 0xa6}};
 global const GUID w32_comp_iid_composition_surface   = {0x1527540d, 0x42c7, 0x47a6, {0xa4, 0x08, 0x66, 0x8f, 0x79, 0xa9, 0x0d, 0xfb}};
 global const GUID w32_comp_iid_composition_brush     = {0xab0d7608, 0x30c0, 0x40e9, {0xb5, 0x68, 0xb6, 0x0a, 0x6b, 0xd1, 0xfb, 0x46}};
 global const GUID w32_comp_iid_drawing_interop       = {0xfd04e6e3, 0xfe0c, 0x4c3c, {0xab, 0x19, 0xa0, 0x76, 0x01, 0xa5, 0x76, 0xee}};
-global const GUID w32_comp_iid_xaml_manager_statics  = {0x28258a12, 0x7d82, 0x505b, {0xb2, 0x10, 0x71, 0x2b, 0x04, 0xa5, 0x88, 0x82}};
-global const GUID w32_comp_iid_xaml_source_native    = {0x3cbcf1bf, 0x2f76, 0x4e9c, {0x96, 0xab, 0xe8, 0x4b, 0x37, 0x97, 0x25, 0x54}};
-global const GUID w32_comp_iid_target_statics        = {0x2b1af03d, 0x1ed2, 0x4b59, {0xbd, 0x00, 0x75, 0x94, 0xee, 0x92, 0x83, 0x2b}};
-global const GUID w32_comp_iid_event_handler         = {0xc50898f6, 0xc536, 0x5f47, {0x85, 0x83, 0x8b, 0x2c, 0x24, 0x38, 0xa1, 0x3b}}; // EventHandler<IInspectable*>
-global const GUID w32_comp_iid_agile_object          = {0x94ea2b94, 0xe9cc, 0x49e0, {0xc0, 0xff, 0xee, 0x64, 0xca, 0x8f, 0x5b, 0x90}};
 
 // Slot 0-2 are IUnknown's, 3-5 IInspectable's on WinRT interfaces.
 #define W32_COMP_SLOT_FACTORY_PARTNER_CREATE_INTEROP_COMPOSITOR 6
 #define W32_COMP_SLOT_DEVICE_PARTNER6_SYNCHRONIZED_COMMIT        69
-#define W32_COMP_SLOT_DEVICE_WAIT_FOR_COMMIT_COMPLETION          4
 #define W32_COMP_SLOT_COMPOSITOR_CREATE_SPRITE_VISUAL            22
 #define W32_COMP_SLOT_COMPOSITOR_CREATE_SURFACE_BRUSH            24
 #define W32_COMP_SLOT_COMPOSITOR_INTEROP_CREATE_GRAPHICS_DEVICE  5
@@ -37,11 +29,6 @@ global const GUID w32_comp_iid_agile_object          = {0x94ea2b94, 0xe9cc, 0x49
 #define W32_COMP_SLOT_DRAWING_INTEROP_BEGIN_DRAW                 3
 #define W32_COMP_SLOT_DRAWING_INTEROP_END_DRAW                   4
 #define W32_COMP_SLOT_DRAWING_INTEROP_RESIZE                     5
-#define W32_COMP_SLOT_STATICS_GET                                6 // InitializeForCurrentThread
-#define W32_COMP_SLOT_XAML_SOURCE_ATTACH_TO_WINDOW               3
-#define W32_COMP_SLOT_XAML_SOURCE_GET_WINDOW_HANDLE              4
-#define W32_COMP_SLOT_TARGET_STATICS_ADD_RENDERING               6
-#define W32_COMP_SLOT_TARGET_STATICS_REMOVE_RENDERING            7
 
 #define W32_COMP_PIXEL_FORMAT_B8G8R8A8_UNORM 87
 #define W32_COMP_ALPHA_MODE_PREMULTIPLIED    1
@@ -64,7 +51,6 @@ typedef HRESULT (STDMETHODCALLTYPE *W32_Comp_CreateDrawingSurfaceFn)(void *self,
 typedef HRESULT (STDMETHODCALLTYPE *W32_Comp_PutVec2Fn)(void *self, W32_Comp_Vec2 value);
 typedef HRESULT (STDMETHODCALLTYPE *W32_Comp_BeginDrawFn)(void *self, const RECT *update_rect, REFIID iid, void **out, POINT *offset);
 typedef HRESULT (STDMETHODCALLTYPE *W32_Comp_ResizeFn)(void *self, SIZE size);
-typedef HRESULT (STDMETHODCALLTYPE *W32_Comp_RemoveTokenFn)(void *self, S64 token);
 typedef struct W32_Comp_DispatcherQueueOptions W32_Comp_DispatcherQueueOptions;
 struct W32_Comp_DispatcherQueueOptions
 {
@@ -125,57 +111,6 @@ w32_comp_activate(const WCHAR *class_name)
   return result;
 }
 
-//- CompositionTarget.Rendering's handler: a static COM object, as nothing else needs its lifetime.
-
-typedef struct W32_Comp_Handler W32_Comp_Handler;
-struct W32_Comp_Handler
-{
-  const struct W32_Comp_HandlerVtbl *vtbl;
-};
-
-struct W32_Comp_HandlerVtbl
-{
-  HRESULT (STDMETHODCALLTYPE *QueryInterface)(W32_Comp_Handler *self, REFIID iid, void **out);
-  ULONG (STDMETHODCALLTYPE *AddRef)(W32_Comp_Handler *self);
-  ULONG (STDMETHODCALLTYPE *Release)(W32_Comp_Handler *self);
-  HRESULT (STDMETHODCALLTYPE *Invoke)(W32_Comp_Handler *self, void *sender, void *args);
-};
-
-internal HRESULT STDMETHODCALLTYPE
-w32_comp_handler_query_interface(W32_Comp_Handler *self, REFIID iid, void **out)
-{
-  HRESULT result = E_NOINTERFACE;
-  *out = 0;
-  if(IsEqualGUID(iid, &w32_comp_iid_unknown) || IsEqualGUID(iid, &w32_comp_iid_event_handler) || IsEqualGUID(iid, &w32_comp_iid_agile_object))
-  {
-    *out = self;
-    result = S_OK;
-  }
-  return result;
-}
-
-internal ULONG STDMETHODCALLTYPE
-w32_comp_handler_ref(W32_Comp_Handler *self)
-{
-  return 1;
-}
-
-internal HRESULT STDMETHODCALLTYPE
-w32_comp_rendering_invoke(W32_Comp_Handler *self, void *sender, void *args)
-{
-  w32_comp_state.ticked = 1;
-  return S_OK;
-}
-
-global const struct W32_Comp_HandlerVtbl w32_comp_rendering_vtbl =
-{
-  w32_comp_handler_query_interface,
-  w32_comp_handler_ref,
-  w32_comp_handler_ref,
-  w32_comp_rendering_invoke,
-};
-global W32_Comp_Handler w32_comp_rendering_handler = {&w32_comp_rendering_vtbl};
-
 ////////////////////////////////
 //~ Composition: windows
 
@@ -223,12 +158,6 @@ w32_comp_window_equip(WM_Window handle, void *d3d11_device)
     // resize synchronization
     HMODULE user32 = GetModuleHandleW(L"user32.dll");
     s->device_partner = w32_comp_query(s->compositor, &w32_comp_iid_device_partner6);
-    s->commit_device = w32_comp_query(s->device_partner, &w32_comp_iid_device2);
-    if(s->device_partner != 0 && s->commit_device == 0)
-    {
-      sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not get the DirectComposition commit completion interface."));
-      abort_self(1);
-    }
     s->get_resize_sync_object = (BOOL (WINAPI *)(HWND, HANDLE *))GetProcAddress(user32, MAKEINTRESOURCEA(2614));
     s->enable_resize_sync = (BOOL (WINAPI *)(HWND, BOOL))GetProcAddress(user32, MAKEINTRESOURCEA(2615));
     s->layout_completed = (BOOL (WINAPI *)(HWND))GetProcAddress(user32, MAKEINTRESOURCEA(2538));
@@ -242,8 +171,21 @@ w32_comp_window_equip(WM_Window handle, void *d3d11_device)
     {
       s->get_resize_sync_object = 0;
     }
+    if(s->get_resize_sync_object != 0)
+    {
+      WNDCLASSW child_class = {0};
+      child_class.lpfnWndProc = DefWindowProcW;
+      child_class.hInstance = w32_wm_state->hInstance;
+      child_class.lpszClassName = L"composition-resize-child";
+      s->resize_child_class = RegisterClassW(&child_class);
+      if(s->resize_child_class == 0)
+      {
+        sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not register the resize synchronization child class."));
+        abort_self(1);
+      }
+    }
     
-    // pacing until XAML's ticks come
+    // pacing without a swap chain or XAML
     s->wait_for_compositor_clock = (HRESULT (WINAPI *)(UINT, const HANDLE *, DWORD))GetProcAddress(LoadLibraryW(L"dcomp.dll"), "DCompositionWaitForCompositorClock");
   }
   
@@ -289,6 +231,17 @@ w32_comp_window_equip(WM_Window handle, void *d3d11_device)
       window->comp_surface = drawing_interop;
       window->comp_size = v2s32(0, 0);
       target = visual = drawing_interop = 0;
+      if(s->get_resize_sync_object != 0)
+      {
+        window->comp_resize_child = CreateWindowExW(0, MAKEINTRESOURCEW(s->resize_child_class), L"", WS_CHILD,
+                                                   0, 0, 0, 0, window->hwnd, 0, w32_wm_state->hInstance, 0);
+        if(window->comp_resize_child == 0 ||
+           !s->enable_resize_sync(window->hwnd, 1) || !s->enable_resize_sync(window->comp_resize_child, 1))
+        {
+          sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not create or enable the resize synchronization child."));
+          abort_self(1);
+        }
+      }
       result = 1;
     }
     w32_comp_release(desktop_interop);
@@ -311,15 +264,27 @@ w32_comp_window_unequip(WM_Window handle)
   W32_WM_Window *window = w32_wm_window_from_handle(handle);
   if(window != 0 && window->comp_target != 0)
   {
-    if(window->comp_island != 0 && w32_comp_state.get_resize_sync_object != 0)
+    if(window->comp_resize_sync != 0)
     {
-      w32_comp_state.enable_resize_sync(window->hwnd, 0);
+      CloseHandle(window->comp_resize_sync);
+      window->comp_resize_sync = 0;
     }
-    w32_comp_release(window->comp_island);
+    window->comp_resize_queued = 0;
+    if(window->comp_resize_child != 0)
+    {
+      if(!w32_comp_state.enable_resize_sync(window->hwnd, 0) ||
+         !w32_comp_state.enable_resize_sync(window->comp_resize_child, 0) ||
+         !DestroyWindow(window->comp_resize_child))
+      {
+        sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not remove the resize synchronization child."));
+        abort_self(1);
+      }
+      window->comp_resize_child = 0;
+    }
     w32_comp_release(window->comp_surface);
     w32_comp_release(window->comp_visual);
     w32_comp_release(window->comp_target);
-    window->comp_island = window->comp_surface = window->comp_visual = window->comp_target = 0;
+    window->comp_surface = window->comp_visual = window->comp_target = 0;
   }
 }
 
@@ -358,84 +323,23 @@ w32_comp_window_end_draw(WM_Window handle)
 }
 
 ////////////////////////////////
-//~ Composition: XAML island, resize synchronization, pacing
+//~ Composition: resize synchronization
 
-// After a window's first show (posted, so XAML's start doesn't hold back the first frame). The first island also
-// starts XAML on the thread, which brings the per-frame Rendering event.
+// After the posted frame, commit its captured token and notify the window. Neither completion wait is needed.
 internal void
-w32_comp_window_attach_island(W32_WM_Window *window)
+w32_comp_commit_resize(W32_WM_Window *window, HANDLE sync)
 {
   W32_Comp_State *s = &w32_comp_state;
-  
-  //- xaml's thread state
-  if(!s->xaml_tried)
-  {
-    s->xaml_tried = 1;
-    void *xaml_statics = w32_comp_statics(L"Windows.UI.Xaml.Hosting.WindowsXamlManager", &w32_comp_iid_xaml_manager_statics);
-    if(xaml_statics != 0 &&
-       SUCCEEDED(w32_comp_slot(xaml_statics, W32_COMP_SLOT_STATICS_GET, W32_Comp_GetFn)(xaml_statics, &s->xaml_manager)))
-    {
-      s->composition_target = w32_comp_statics(L"Windows.UI.Xaml.Media.CompositionTarget", &w32_comp_iid_target_statics);
-    }
-    w32_comp_release(xaml_statics);
-  }
-  
-  //- the window's island: empty and zero-size, it only makes DWM issue resize synchronization objects
-  if(s->xaml_manager != 0 && window->comp_target != 0 && window->comp_island == 0)
-  {
-    void *island = w32_comp_activate(L"Windows.UI.Xaml.Hosting.DesktopWindowXamlSource");
-    void *native = w32_comp_query(island, &w32_comp_iid_xaml_source_native);
-    HWND island_hwnd = 0;
-    if(native != 0 &&
-       SUCCEEDED(w32_comp_slot(native, W32_COMP_SLOT_XAML_SOURCE_ATTACH_TO_WINDOW, W32_Comp_PutFn)(native, window->hwnd)) &&
-       SUCCEEDED(w32_comp_slot(native, W32_COMP_SLOT_XAML_SOURCE_GET_WINDOW_HANDLE, W32_Comp_GetFn)(native, (void **)&island_hwnd)))
-    {
-      SetWindowPos(island_hwnd, 0, 0, 0, 0, 0, SWP_NOZORDER|SWP_NOACTIVATE);
-      if(s->get_resize_sync_object != 0)
-      {
-        s->enable_resize_sync(window->hwnd, 1);
-      }
-      window->comp_island = island;
-      island = 0;
-      
-      // keys go to the window, not the island's child window, if it took them
-      HWND focus = GetFocus();
-      if(focus != 0 && (focus == island_hwnd || IsChild(island_hwnd, focus)))
-      {
-        SetFocus(window->hwnd);
-      }
-    }
-    w32_comp_release(native);
-    w32_comp_release(island);
-  }
-}
-
-// After a size change's frame: commits it with the resize's synchronization object, tells the same window
-// its layout is done, then waits for DComp to process the batch before the next resize step.
-internal void
-w32_comp_commit_resize(W32_WM_Window *window)
-{
-  W32_Comp_State *s = &w32_comp_state;
-  HANDLE sync = 0;
   HRESULT error = S_OK;
-  if(s->get_resize_sync_object != 0 && window->comp_island != 0)
-  {
-    s->get_resize_sync_object(window->hwnd, &sync);
-  }
   if(sync != 0)
   {
     error = w32_comp_slot(s->device_partner, W32_COMP_SLOT_DEVICE_PARTNER6_SYNCHRONIZED_COMMIT, W32_Comp_PutFn)(s->device_partner, sync);
     CloseHandle(sync);
   }
-  if(sync != 0 && SUCCEEDED(error) && !s->layout_completed(window->hwnd))
+  if(SUCCEEDED(error) && s->get_resize_sync_object != 0 && window->comp_resize_child != 0 &&
+     !s->layout_completed(window->hwnd))
   {
     error = E_FAIL;
-  }
-  if(sync != 0 && SUCCEEDED(error))
-  {
-    // A successful synchronized commit only submits the batch. Do not let the next resize advance before
-    // the composition engine has processed it. This is not an acknowledgment that the frame was displayed.
-    error = w32_comp_slot(s->commit_device, W32_COMP_SLOT_DEVICE_WAIT_FOR_COMMIT_COMPLETION, W32_Comp_CallFn)(s->commit_device);
   }
   if(FAILED(error))
   {
@@ -443,26 +347,5 @@ w32_comp_commit_resize(W32_WM_Window *window)
     raddbg_snprintf(buffer, sizeof(buffer), "DirectComposition resize commit failure (%lx). The process is terminating.", error);
     sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
     abort_self(1);
-  }
-}
-
-// While frames follow each other, CompositionTarget.Rendering ticks once per compositor frame, as a message;
-// idle, it's unsubscribed so nothing wakes the thread.
-internal void
-w32_comp_pace(B32 frames_follow)
-{
-  W32_Comp_State *s = &w32_comp_state;
-  if(s->composition_target != 0 && s->ticking != frames_follow)
-  {
-    if(frames_follow)
-    {
-      s->ticking = SUCCEEDED(w32_comp_slot(s->composition_target, W32_COMP_SLOT_TARGET_STATICS_ADD_RENDERING, W32_Comp_PutGetFn)(s->composition_target, &w32_comp_rendering_handler, (void **)&s->rendering_token));
-      s->ticked = 0;
-    }
-    else
-    {
-      w32_comp_slot(s->composition_target, W32_COMP_SLOT_TARGET_STATICS_REMOVE_RENDERING, W32_Comp_RemoveTokenFn)(s->composition_target, s->rendering_token);
-      s->ticking = 0;
-    }
   }
 }

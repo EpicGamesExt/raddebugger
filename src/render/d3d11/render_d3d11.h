@@ -153,9 +153,6 @@ struct R_D3D11_State
   ID3D11DepthStencilState *plain_depth_stencil;
   ID3D11Buffer            *instance_scratch_buffer_64kb;
   
-  // GPU completion before a resize's synchronized commit; ordinary frames do not wait.
-  HANDLE frame_done_event;
-  
   // rjf: backups
   R_Handle backup_texture;
   

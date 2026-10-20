@@ -227,18 +227,10 @@ r_init(CmdLine *cmdln)
   //- rjf: get dxgi device/adapter/factory
   ProfBegin("get dxgi device/adapter/factory");
   error = r_d3d11_state->device->lpVtbl->QueryInterface(r_d3d11_state->device, &IID_IDXGIDevice2, (void **)(&r_d3d11_state->dxgi_device));
-  if(SUCCEEDED(error))
-  {
-    r_d3d11_state->frame_done_event = CreateEventW(0, 0, 0, 0);
-    if(r_d3d11_state->frame_done_event == 0)
-    {
-      error = HRESULT_FROM_WIN32(GetLastError());
-    }
-  }
   if(FAILED(error))
   {
     char buffer[256] = {0};
-    raddbg_snprintf(buffer, sizeof(buffer), "D3D11 completion event setup failure (%lx). The process is terminating.", error);
+    raddbg_snprintf(buffer, sizeof(buffer), "DXGI device setup failure (%lx). The process is terminating.", error);
     sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
     abort_self(1);
   }
@@ -845,15 +837,8 @@ r_begin_frame(void)
 r_hook void
 r_end_frame(void)
 {
-  //- EnqueueSetEvent flushes the resize frame's GPU work; wait below, outside the device lock.
-  B32 wait_for_gpu = w32_comp_state.resize_step;
-  HRESULT error = S_OK;
   MutexScopeW(r_d3d11_state->device_rw_mutex)
   {
-    if(wait_for_gpu)
-    {
-      error = r_d3d11_state->dxgi_device->lpVtbl->EnqueueSetEvent(r_d3d11_state->dxgi_device, r_d3d11_state->frame_done_event);
-    }
     for(R_D3D11_FlushBuffer *buffer = r_d3d11_state->first_buffer_to_flush; buffer != 0; buffer = buffer->next)
     {
       buffer->buffer->lpVtbl->Release(buffer->buffer);
@@ -893,31 +878,6 @@ r_end_frame(void)
     r_d3d11_state->first_buffer_to_flush = r_d3d11_state->last_buffer_to_flush = 0;
     r_d3d11_state->first_to_free_tex2d  = 0;
     r_d3d11_state->first_to_free_buffer = 0;
-  }
-  
-  //- DXGI signals on rendering completion or device removal. Neither is a presentation acknowledgment:
-  // the window manager still follows this frame with SynchronizedCommit.
-  if(wait_for_gpu)
-  {
-    if(SUCCEEDED(error))
-    {
-      DWORD wait = WaitForSingleObject(r_d3d11_state->frame_done_event, INFINITE);
-      if(wait == WAIT_OBJECT_0)
-      {
-        error = r_d3d11_state->device->lpVtbl->GetDeviceRemovedReason(r_d3d11_state->device);
-      }
-      else
-      {
-        error = HRESULT_FROM_WIN32(wait == WAIT_FAILED ? GetLastError() : ERROR_GEN_FAILURE);
-      }
-    }
-    if(FAILED(error))
-    {
-      char buffer[256] = {0};
-      raddbg_snprintf(buffer, sizeof(buffer), "D3D11 resize completion failure (%lx). The process is terminating.", error);
-      sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
-      abort_self(1);
-    }
   }
 }
 
@@ -1148,7 +1108,7 @@ r_window_end_frame(WM_Window window, R_Handle window_equip)
     
     ////////////////////////////
     //- composed: end the surface update after dropping all references to this draw's target.
-    // Frames are paced in wm_get_events; r_end_frame waits for the GPU on resize steps.
+    // Frames are paced in wm_get_events; the posted resize handler commits the resulting surface update.
     //
     else
     {

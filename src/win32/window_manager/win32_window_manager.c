@@ -375,14 +375,33 @@ w32_wm_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         DwmFlush();
       }break;
       
-      case W32_COMP_ATTACH_ISLAND_MSG:
+      case W32_COMP_RENDER_RESIZE_MSG:
       {
-        if(window != 0)
+        if(window != 0 && window->comp_resize_queued)
         {
-          w32_comp_window_attach_island(window);
+          HANDLE sync = window->comp_resize_sync;
+          window->comp_resize_sync = 0;
+          window->comp_resize_queued = 0;
+          if(w32_wm_between_frames && !IsIconic(hwnd))
+          {
+            w32_wm_between_frames = 0;
+            update();
+            w32_wm_between_frames = 1;
+            ValidateRect(hwnd, 0);
+          }
+          // update() can close a window. The detached token still belongs to this handler.
+          window = w32_wm_window_from_hwnd(hwnd);
+          if(window != 0 && window->comp_surface != 0)
+          {
+            w32_comp_commit_resize(window, sync);
+          }
+          else if(sync != 0)
+          {
+            CloseHandle(sync);
+          }
         }
       }break;
-      
+
       case WM_CLOSE:
       {
         w32_wm_push_event(WM_EventKind_WindowClose, window);
@@ -630,22 +649,30 @@ w32_wm_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       case WM_WINDOWPOSCHANGED:
       {
         // NOTE: returning without DefWindowProc means no WM_SIZE; a composed window's size changes are handled here.
-        // The frame for the new size is built now and committed with DWM's resize synchronization object, so the
-        // window frame and its content show at the new size together. Inside a frame (a programmatic resize
-        // from a command), no frame can be built: the object is committed at once and the next frame catches up.
+        // Capture the token now, but render and commit only after returning from this window-position callback.
         WINDOWPOS *pos = (WINDOWPOS *)lParam;
         if(window != 0 && window->comp_surface != 0 && !(pos->flags & SWP_NOSIZE))
         {
-          if(w32_wm_between_frames && !IsIconic(hwnd))
+          HANDLE sync = 0;
+          W32_Comp_State *s = &w32_comp_state;
+          if(s->get_resize_sync_object != 0 && window->comp_resize_child != 0 &&
+             !s->get_resize_sync_object(hwnd, &sync))
           {
-            w32_wm_between_frames = 0;
-            w32_comp_state.resize_step = 1;
-            update();
-            w32_comp_state.resize_step = 0;
-            w32_wm_between_frames = 1;
-            ValidateRect(hwnd, 0);
+            if(sync != 0){CloseHandle(sync);}
+            sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not acquire the resize synchronization object."));
+            abort_self(1);
           }
-          w32_comp_commit_resize(window);
+          if(window->comp_resize_sync != 0){CloseHandle(window->comp_resize_sync);}
+          window->comp_resize_sync = sync;
+          if(!window->comp_resize_queued)
+          {
+            window->comp_resize_queued = 1;
+            if(!PostMessageW(hwnd, W32_COMP_RENDER_RESIZE_MSG, 0, 0))
+            {
+              sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not post the resize frame."));
+              abort_self(1);
+            }
+          }
         }
         result = 0;
       }break;
@@ -1192,10 +1219,6 @@ wm_window_first_paint(WM_Window window_handle)
     {
       ShowWindow(window->hwnd, SW_MAXIMIZE);
     }
-    if(window->comp_target != 0)
-    {
-      PostMessageW(window->hwnd, W32_COMP_ATTACH_ISLAND_MSG, 0, 0);
-    }
   }
 }
 
@@ -1582,18 +1605,15 @@ wm_get_events(Arena *arena, B32 wait)
   w32_wm_event_arena = arena;
   MemoryZeroStruct(&w32_wm_event_list);
   
-  //- pacing for windows drawn through composition, where no swap chain's Present blocks for vsync: while frames
-  // follow each other, wait (dispatching messages) for XAML's tick at each compositor frame; until XAML runs, for
-  // the compositor's clock
-  w32_comp_pace(!wait);
-  if(!wait && !w32_comp_state.ticking && w32_comp_state.graphics_device != 0 && w32_comp_state.wait_for_compositor_clock != 0)
+  //- composition has no swap chain Present to pace frames; use the compositor clock only while frames follow
+  if(!wait && w32_comp_state.graphics_device != 0 && w32_comp_state.wait_for_compositor_clock != 0)
   {
     w32_comp_state.wait_for_compositor_clock(0, 0, 100);
   }
   
   w32_wm_between_frames = 1;
   MSG msg = {0};
-  B32 block = wait || (w32_comp_state.ticking && !w32_comp_state.ticked);
+  B32 block = wait;
   for(;;)
   {
     if(!PeekMessageW(&msg, 0, 0, 0, PM_REMOVE))
@@ -1610,9 +1630,8 @@ wm_get_events(Arena *arena, B32 wait)
     {
       w32_wm_push_event(WM_EventKind_WindowClose, 0);
     }
-    block = w32_comp_state.ticking && !w32_comp_state.ticked;
+    block = 0;
   }
-  w32_comp_state.ticked = 0;
   w32_wm_between_frames = 0;
   return w32_wm_event_list;
 }

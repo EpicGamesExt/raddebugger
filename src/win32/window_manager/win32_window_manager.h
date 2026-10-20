@@ -54,8 +54,10 @@ struct W32_WM_Window
   void *comp_target;  // ICompositionTarget
   void *comp_visual;  // IVisual
   void *comp_surface; // ICompositionDrawingSurfaceInterop
-  void *comp_island;  // DesktopWindowXamlSource
+  HWND comp_resize_child;
   Vec2S32 comp_size;
+  HANDLE comp_resize_sync;
+  B32 comp_resize_queued;
 };
 
 ////////////////////////////////
