@@ -341,7 +341,15 @@ wm_init(void)
   lnx_wm_state = push_array(arena, LNX_WM_State, 1);
   lnx_wm_state->arena = arena;
   lnx_wm_state->display = XOpenDisplay(0);
-  
+  if(lnx_wm_state->display == 0)
+  {
+    char *display_env = getenv("DISPLAY");
+    fprintf(stderr, "[X] Fatal Error\n");
+    fprintf(stderr, "Failed to open X display (DISPLAY=%s). Check that a display server is running and reachable.\n\n",
+            display_env ? display_env : "");
+    abort_self(1);
+  }
+
   //- rjf: create invisible global window for stuff like clipboard
   {
     lnx_wm_state->global_invisible_window = XCreateWindow(lnx_wm_state->display, XDefaultRootWindow(lnx_wm_state->display), -1, -1, 1, 1, 0, 0, 0, 0, 0, 0);
