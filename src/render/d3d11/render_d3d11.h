@@ -92,11 +92,6 @@ struct R_D3D11_Window
   R_D3D11_Window *next;
   U64 generation;
   
-  // rjf: swapchain/framebuffer
-  IDXGISwapChain1        *swapchain;
-  ID3D11Texture2D        *framebuffer;
-  ID3D11RenderTargetView *framebuffer_rtv;
-  
   // rjf: staging buffer
   ID3D11Texture2D *stage_color;
   ID3D11RenderTargetView *stage_color_rtv;
@@ -143,8 +138,6 @@ struct R_D3D11_State
   ID3D11Device1           *device;
   ID3D11DeviceContext1    *device_ctx;
   IDXGIDevice2            *dxgi_device;
-  IDXGIAdapter            *dxgi_adapter;
-  IDXGIFactory2           *dxgi_factory;
   ID3D11RasterizerState1  *main_rasterizer;
   ID3D11BlendState        *main_blend_state;
   ID3D11BlendState        *no_blend_state;

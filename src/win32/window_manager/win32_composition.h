@@ -7,8 +7,8 @@
 ////////////////////////////////
 //~ Composition: synchronized window resizes
 //
-// The renderer writes its final pass directly into a Windows.UI.Composition drawing surface instead of a swap
-// chain. BeginDraw supplies the render target and its offset; the renderer keeps neither past EndDraw.
+// The renderer writes its final pass directly into a Windows.UI.Composition drawing surface.
+// BeginDraw supplies the render target and its offset; the renderer keeps neither past EndDraw.
 // New surface pixels are part of a composition commit. DWM can hold a resized window frame until the commit
 // that carries the resize's synchronization object.
 //
@@ -18,7 +18,7 @@
 // IDCompositionDesktopDevicePartner6 slot 69 (SynchronizedCommit). A hidden, zero-size ordinary Win32 child per
 // window, with resize synchronization enabled on both parent and child, makes DWM issue the objects; no XAML is
 // needed. Frames that follow each other are paced on the compositor clock; idle windows wait for messages.
-// Each piece falls back: no composition -> the swap chain; no resize APIs -> unsynchronized commits.
+// Composition, resize synchronization and compositor-clock APIs are required; setup failures are fatal.
 //
 // WM_WINDOWPOSCHANGED captures the resize token and posts a render message, returning before building the frame.
 // That message draws the latest size, commits with the captured token, then calls LayoutCompleted on the same HWND.
@@ -57,7 +57,7 @@ global W32_Comp_State w32_comp_state = {0};
 
 #define W32_COMP_RENDER_RESIZE_MSG (WM_APP + 0x3F2)
 
-internal B32  w32_comp_window_equip(WM_Window window, void *d3d11_device);
+internal void w32_comp_window_equip(WM_Window window, void *d3d11_device);
 internal void w32_comp_window_unequip(WM_Window window);
 internal HRESULT w32_comp_window_begin_draw(WM_Window window, Vec2S32 size, REFIID iid, void **out, POINT *offset);
 internal HRESULT w32_comp_window_end_draw(WM_Window window);

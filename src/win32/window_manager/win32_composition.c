@@ -32,7 +32,6 @@ global const GUID w32_comp_iid_drawing_interop       = {0xfd04e6e3, 0xfe0c, 0x4c
 
 #define W32_COMP_PIXEL_FORMAT_B8G8R8A8_UNORM 87
 #define W32_COMP_ALPHA_MODE_PREMULTIPLIED    1
-#define W32_COMP_ALPHA_MODE_IGNORE           3
 
 typedef struct W32_Comp_Vec2 W32_Comp_Vec2;
 struct W32_Comp_Vec2
@@ -65,14 +64,23 @@ typedef HRESULT (WINAPI *W32_Comp_CreateDispatcherQueueControllerFn)(W32_Comp_Di
 ////////////////////////////////
 //~ Composition: helpers
 
+internal void
+w32_comp_check(HRESULT error, const char *operation)
+{
+  if(FAILED(error))
+  {
+    char buffer[256] = {0};
+    raddbg_snprintf(buffer, sizeof(buffer), "DirectComposition %s failure (%lx). The process is terminating.", operation, error);
+    sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+    abort_self(1);
+  }
+}
+
 internal void *
 w32_comp_query(void *object, REFIID iid)
 {
   void *result = 0;
-  if(object != 0)
-  {
-    ((IUnknown *)object)->lpVtbl->QueryInterface((IUnknown *)object, iid, &result);
-  }
+  w32_comp_check(((IUnknown *)object)->lpVtbl->QueryInterface((IUnknown *)object, iid, &result), "query interface");
   return result;
 }
 
@@ -85,36 +93,10 @@ w32_comp_release(void *object)
   }
 }
 
-internal HSTRING
-w32_comp_class_name(HSTRING_HEADER *header, const WCHAR *name)
-{
-  HSTRING result = 0;
-  WindowsCreateStringReference(name, (UINT32)lstrlenW(name), header, &result);
-  return result;
-}
-
-internal void *
-w32_comp_statics(const WCHAR *class_name, REFIID iid)
-{
-  HSTRING_HEADER header;
-  void *result = 0;
-  RoGetActivationFactory(w32_comp_class_name(&header, class_name), iid, &result);
-  return result;
-}
-
-internal void *
-w32_comp_activate(const WCHAR *class_name)
-{
-  HSTRING_HEADER header;
-  void *result = 0;
-  RoActivateInstance(w32_comp_class_name(&header, class_name), (IInspectable **)&result);
-  return result;
-}
-
 ////////////////////////////////
 //~ Composition: windows
 
-internal B32
+internal void
 w32_comp_window_equip(WM_Window handle, void *d3d11_device)
 {
   W32_Comp_State *s = &w32_comp_state;
@@ -125,35 +107,29 @@ w32_comp_window_equip(WM_Window handle, void *d3d11_device)
   {
     s->init_tried = 1;
     
-    // a DispatcherQueue on this thread (fails harmlessly if one exists)
+    // a DispatcherQueue on this thread
     W32_Comp_CreateDispatcherQueueControllerFn create_queue = (W32_Comp_CreateDispatcherQueueControllerFn)GetProcAddress(LoadLibraryW(L"CoreMessaging.dll"), "CreateDispatcherQueueController");
-    if(create_queue != 0)
+    if(create_queue == 0)
     {
-      W32_Comp_DispatcherQueueOptions options = {sizeof(options), 2, 2};
-      create_queue(options, &s->queue_controller);
+      w32_comp_check(HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND), "load dispatcher queue API");
     }
+    W32_Comp_DispatcherQueueOptions options = {sizeof(options), 2, 2};
+    w32_comp_check(create_queue(options, &s->queue_controller), "create dispatcher queue");
     
-    // dcomp's interop compositor (the one UWP XAML uses), which takes synchronized commits; else a plain one
-    void *factory = w32_comp_statics(L"Windows.UI.Composition.Compositor", &w32_comp_iid_factory_partner);
-    if(factory != 0)
-    {
-      w32_comp_slot(factory, W32_COMP_SLOT_FACTORY_PARTNER_CREATE_INTEROP_COMPOSITOR, W32_Comp_CreateInteropCompositorFn)(factory, 0, 0, &w32_comp_iid_compositor, &s->compositor);
-      w32_comp_release(factory);
-    }
-    if(s->compositor == 0)
-    {
-      void *compositor = w32_comp_activate(L"Windows.UI.Composition.Compositor");
-      s->compositor = w32_comp_query(compositor, &w32_comp_iid_compositor);
-      w32_comp_release(compositor);
-    }
+    // dcomp's interop compositor, which takes synchronized commits
+    static const WCHAR compositor_name[] = L"Windows.UI.Composition.Compositor";
+    HSTRING_HEADER header;
+    HSTRING name = 0;
+    w32_comp_check(WindowsCreateStringReference(compositor_name, ArrayCount(compositor_name) - 1, &header, &name), "name compositor class");
+    void *factory = 0;
+    w32_comp_check(RoGetActivationFactory(name, &w32_comp_iid_factory_partner, &factory), "get interop compositor factory");
+    w32_comp_check(w32_comp_slot(factory, W32_COMP_SLOT_FACTORY_PARTNER_CREATE_INTEROP_COMPOSITOR, W32_Comp_CreateInteropCompositorFn)(factory, 0, 0, &w32_comp_iid_compositor, &s->compositor), "create interop compositor");
+    w32_comp_release(factory);
     
     // the graphics device that hands out the renderer's D3D11 textures
     void *compositor_interop = w32_comp_query(s->compositor, &w32_comp_iid_compositor_interop);
-    if(compositor_interop != 0)
-    {
-      w32_comp_slot(compositor_interop, W32_COMP_SLOT_COMPOSITOR_INTEROP_CREATE_GRAPHICS_DEVICE, W32_Comp_PutGetFn)(compositor_interop, d3d11_device, &s->graphics_device);
-      w32_comp_release(compositor_interop);
-    }
+    w32_comp_check(w32_comp_slot(compositor_interop, W32_COMP_SLOT_COMPOSITOR_INTEROP_CREATE_GRAPHICS_DEVICE, W32_Comp_PutGetFn)(compositor_interop, d3d11_device, &s->graphics_device), "create graphics device");
+    w32_comp_release(compositor_interop);
     
     // resize synchronization
     HMODULE user32 = GetModuleHandleW(L"user32.dll");
@@ -161,101 +137,71 @@ w32_comp_window_equip(WM_Window handle, void *d3d11_device)
     s->get_resize_sync_object = (BOOL (WINAPI *)(HWND, HANDLE *))GetProcAddress(user32, MAKEINTRESOURCEA(2614));
     s->enable_resize_sync = (BOOL (WINAPI *)(HWND, BOOL))GetProcAddress(user32, MAKEINTRESOURCEA(2615));
     s->layout_completed = (BOOL (WINAPI *)(HWND))GetProcAddress(user32, MAKEINTRESOURCEA(2538));
-    if(s->device_partner != 0 && s->layout_completed == 0)
+    if(s->get_resize_sync_object == 0 || s->enable_resize_sync == 0 || s->layout_completed == 0)
     {
-      sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not get the native window layout completion API."));
-      abort_self(1);
+      w32_comp_check(HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND), "load resize synchronization APIs");
     }
-    if(s->device_partner == 0 || s->get_resize_sync_object == 0 || s->enable_resize_sync == 0 ||
-       GetEnvironmentVariableW(L"RADDBG_NO_RESIZE_SYNC", 0, 0) != 0) // the control for measuring what it does
+    WNDCLASSW child_class = {0};
+    child_class.lpfnWndProc = DefWindowProcW;
+    child_class.hInstance = w32_wm_state->hInstance;
+    child_class.lpszClassName = L"composition-resize-child";
+    s->resize_child_class = RegisterClassW(&child_class);
+    if(s->resize_child_class == 0)
     {
-      s->get_resize_sync_object = 0;
-    }
-    if(s->get_resize_sync_object != 0)
-    {
-      WNDCLASSW child_class = {0};
-      child_class.lpfnWndProc = DefWindowProcW;
-      child_class.hInstance = w32_wm_state->hInstance;
-      child_class.lpszClassName = L"composition-resize-child";
-      s->resize_child_class = RegisterClassW(&child_class);
-      if(s->resize_child_class == 0)
-      {
-        sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not register the resize synchronization child class."));
-        abort_self(1);
-      }
+      w32_comp_check(HRESULT_FROM_WIN32(GetLastError()), "register resize synchronization child");
     }
     
     // pacing without a swap chain or XAML
     s->wait_for_compositor_clock = (HRESULT (WINAPI *)(UINT, const HANDLE *, DWORD))GetProcAddress(LoadLibraryW(L"dcomp.dll"), "DCompositionWaitForCompositorClock");
+    if(s->wait_for_compositor_clock == 0)
+    {
+      w32_comp_check(HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND), "load compositor-clock API");
+    }
   }
   
   //- the window's tree: target -> sprite visual, whose brush is the drawing surface
-  B32 result = 0;
-  if(s->graphics_device != 0 && window != 0)
+  if(window == 0)
   {
-    void *desktop_interop = w32_comp_query(s->compositor, &w32_comp_iid_compositor_desktop);
-    void *desktop_target = 0;
-    void *target = 0;
-    void *sprite = 0;
-    void *visual = 0;
-    void *drawing_surface = 0;
-    void *surface = 0;
-    void *surface_brush = 0;
-    void *brush = 0;
-    void *drawing_interop = 0;
-    if(desktop_interop != 0)
-    {
-      w32_comp_slot(desktop_interop, W32_COMP_SLOT_COMPOSITOR_DESKTOP_CREATE_TARGET, W32_Comp_CreateTargetFn)(desktop_interop, window->hwnd, 1, &desktop_target);
-    }
-    target = w32_comp_query(desktop_target, &w32_comp_iid_composition_target);
-    w32_comp_slot(s->compositor, W32_COMP_SLOT_COMPOSITOR_CREATE_SPRITE_VISUAL, W32_Comp_GetFn)(s->compositor, &sprite);
-    visual = w32_comp_query(sprite, &w32_comp_iid_visual);
-    W32_Comp_Vec2 one = {1, 1};
-    if(FAILED(w32_comp_slot(s->graphics_device, W32_COMP_SLOT_GRAPHICS_DEVICE_CREATE_DRAWING_SURFACE, W32_Comp_CreateDrawingSurfaceFn)(s->graphics_device, one, W32_COMP_PIXEL_FORMAT_B8G8R8A8_UNORM, W32_COMP_ALPHA_MODE_IGNORE, &drawing_surface)))
-    {
-      w32_comp_slot(s->graphics_device, W32_COMP_SLOT_GRAPHICS_DEVICE_CREATE_DRAWING_SURFACE, W32_Comp_CreateDrawingSurfaceFn)(s->graphics_device, one, W32_COMP_PIXEL_FORMAT_B8G8R8A8_UNORM, W32_COMP_ALPHA_MODE_PREMULTIPLIED, &drawing_surface);
-    }
-    surface = w32_comp_query(drawing_surface, &w32_comp_iid_composition_surface);
-    drawing_interop = w32_comp_query(drawing_surface, &w32_comp_iid_drawing_interop);
-    if(surface != 0)
-    {
-      w32_comp_slot(s->compositor, W32_COMP_SLOT_COMPOSITOR_CREATE_SURFACE_BRUSH, W32_Comp_PutGetFn)(s->compositor, surface, &surface_brush);
-    }
-    brush = w32_comp_query(surface_brush, &w32_comp_iid_composition_brush);
-    if(target != 0 && visual != 0 && brush != 0 && drawing_interop != 0 &&
-       SUCCEEDED(w32_comp_slot(sprite, W32_COMP_SLOT_SPRITE_VISUAL_PUT_BRUSH, W32_Comp_PutFn)(sprite, brush)) &&
-       SUCCEEDED(w32_comp_slot(target, W32_COMP_SLOT_TARGET_PUT_ROOT, W32_Comp_PutFn)(target, visual)))
-    {
-      window->comp_target = target;
-      window->comp_visual = visual;
-      window->comp_surface = drawing_interop;
-      window->comp_size = v2s32(0, 0);
-      target = visual = drawing_interop = 0;
-      if(s->get_resize_sync_object != 0)
-      {
-        window->comp_resize_child = CreateWindowExW(0, MAKEINTRESOURCEW(s->resize_child_class), L"", WS_CHILD,
-                                                   0, 0, 0, 0, window->hwnd, 0, w32_wm_state->hInstance, 0);
-        if(window->comp_resize_child == 0 ||
-           !s->enable_resize_sync(window->hwnd, 1) || !s->enable_resize_sync(window->comp_resize_child, 1))
-        {
-          sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not create or enable the resize synchronization child."));
-          abort_self(1);
-        }
-      }
-      result = 1;
-    }
-    w32_comp_release(desktop_interop);
-    w32_comp_release(desktop_target);
-    w32_comp_release(target);
-    w32_comp_release(sprite);
-    w32_comp_release(visual);
-    w32_comp_release(drawing_surface);
-    w32_comp_release(surface);
-    w32_comp_release(surface_brush);
-    w32_comp_release(brush);
-    w32_comp_release(drawing_interop);
+    w32_comp_check(E_INVALIDARG, "equip window");
   }
-  return result;
+  void *desktop_interop = w32_comp_query(s->compositor, &w32_comp_iid_compositor_desktop);
+  void *desktop_target = 0;
+  w32_comp_check(w32_comp_slot(desktop_interop, W32_COMP_SLOT_COMPOSITOR_DESKTOP_CREATE_TARGET, W32_Comp_CreateTargetFn)(desktop_interop, window->hwnd, 1, &desktop_target), "create desktop target");
+  void *target = w32_comp_query(desktop_target, &w32_comp_iid_composition_target);
+  void *sprite = 0;
+  w32_comp_check(w32_comp_slot(s->compositor, W32_COMP_SLOT_COMPOSITOR_CREATE_SPRITE_VISUAL, W32_Comp_GetFn)(s->compositor, &sprite), "create sprite visual");
+  void *visual = w32_comp_query(sprite, &w32_comp_iid_visual);
+  W32_Comp_Vec2 one = {1, 1};
+  void *drawing_surface = 0;
+  w32_comp_check(w32_comp_slot(s->graphics_device, W32_COMP_SLOT_GRAPHICS_DEVICE_CREATE_DRAWING_SURFACE, W32_Comp_CreateDrawingSurfaceFn)(s->graphics_device, one, W32_COMP_PIXEL_FORMAT_B8G8R8A8_UNORM, W32_COMP_ALPHA_MODE_PREMULTIPLIED, &drawing_surface), "create drawing surface");
+  void *surface = w32_comp_query(drawing_surface, &w32_comp_iid_composition_surface);
+  void *drawing_interop = w32_comp_query(drawing_surface, &w32_comp_iid_drawing_interop);
+  void *surface_brush = 0;
+  w32_comp_check(w32_comp_slot(s->compositor, W32_COMP_SLOT_COMPOSITOR_CREATE_SURFACE_BRUSH, W32_Comp_PutGetFn)(s->compositor, surface, &surface_brush), "create surface brush");
+  void *brush = w32_comp_query(surface_brush, &w32_comp_iid_composition_brush);
+  w32_comp_check(w32_comp_slot(sprite, W32_COMP_SLOT_SPRITE_VISUAL_PUT_BRUSH, W32_Comp_PutFn)(sprite, brush), "set surface brush");
+  w32_comp_check(w32_comp_slot(target, W32_COMP_SLOT_TARGET_PUT_ROOT, W32_Comp_PutFn)(target, visual), "set root visual");
+  window->comp_target = target;
+  window->comp_visual = visual;
+  window->comp_surface = drawing_interop;
+  window->comp_size = v2s32(0, 0);
+  window->comp_resize_child = CreateWindowExW(0, MAKEINTRESOURCEW(s->resize_child_class), L"", WS_CHILD,
+                                             0, 0, 0, 0, window->hwnd, 0, w32_wm_state->hInstance, 0);
+  if(window->comp_resize_child == 0)
+  {
+    w32_comp_check(HRESULT_FROM_WIN32(GetLastError()), "create resize synchronization child");
+  }
+  if(!s->enable_resize_sync(window->hwnd, 1) || !s->enable_resize_sync(window->comp_resize_child, 1))
+  {
+    w32_comp_check(E_FAIL, "enable resize synchronization");
+  }
+  w32_comp_release(desktop_interop);
+  w32_comp_release(desktop_target);
+  w32_comp_release(sprite);
+  w32_comp_release(drawing_surface);
+  w32_comp_release(surface);
+  w32_comp_release(surface_brush);
+  w32_comp_release(brush);
 }
 
 internal void
@@ -336,8 +282,7 @@ w32_comp_commit_resize(W32_WM_Window *window, HANDLE sync)
     error = w32_comp_slot(s->device_partner, W32_COMP_SLOT_DEVICE_PARTNER6_SYNCHRONIZED_COMMIT, W32_Comp_PutFn)(s->device_partner, sync);
     CloseHandle(sync);
   }
-  if(SUCCEEDED(error) && s->get_resize_sync_object != 0 && window->comp_resize_child != 0 &&
-     !s->layout_completed(window->hwnd))
+  if(SUCCEEDED(error) && !s->layout_completed(window->hwnd))
   {
     error = E_FAIL;
   }

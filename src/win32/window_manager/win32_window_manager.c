@@ -655,8 +655,7 @@ w32_wm_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
         {
           HANDLE sync = 0;
           W32_Comp_State *s = &w32_comp_state;
-          if(s->get_resize_sync_object != 0 && window->comp_resize_child != 0 &&
-             !s->get_resize_sync_object(hwnd, &sync))
+          if(!s->get_resize_sync_object(hwnd, &sync))
           {
             if(sync != 0){CloseHandle(sync);}
             sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not acquire the resize synchronization object."));

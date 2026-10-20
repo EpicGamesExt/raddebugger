@@ -224,8 +224,8 @@ r_init(CmdLine *cmdln)
   error = r_d3d11_state->base_device_ctx->lpVtbl->QueryInterface(r_d3d11_state->base_device_ctx, &IID_ID3D11DeviceContext1, (void **)(&r_d3d11_state->device_ctx));
   ProfEnd();
   
-  //- rjf: get dxgi device/adapter/factory
-  ProfBegin("get dxgi device/adapter/factory");
+  //- rjf: get dxgi device
+  ProfBegin("get dxgi device");
   error = r_d3d11_state->device->lpVtbl->QueryInterface(r_d3d11_state->device, &IID_IDXGIDevice2, (void **)(&r_d3d11_state->dxgi_device));
   if(FAILED(error))
   {
@@ -234,8 +234,6 @@ r_init(CmdLine *cmdln)
     sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
     abort_self(1);
   }
-  error = r_d3d11_state->dxgi_device->lpVtbl->GetAdapter(r_d3d11_state->dxgi_device, &r_d3d11_state->dxgi_adapter);
-  error = r_d3d11_state->dxgi_adapter->lpVtbl->GetParent(r_d3d11_state->dxgi_adapter, &IID_IDXGIFactory2, (void **)(&r_d3d11_state->dxgi_factory));
   error = r_d3d11_state->dxgi_device->lpVtbl->SetMaximumFrameLatency(r_d3d11_state->dxgi_device, 1);
   ProfEnd();
   
@@ -513,50 +511,7 @@ r_window_equip(WM_Window handle)
       window->generation += 1;
     }
     
-    //- rjf: map os window handle -> hwnd
-    HWND hwnd = {0};
-    {
-      W32_WM_Window *w32_layer_window = w32_wm_window_from_handle(handle);
-      hwnd = w32_wm_hwnd_from_window(w32_layer_window);
-    }
-    
-    //- draw the final pass into a composition surface when possible; otherwise, a swap chain
-    if(!w32_comp_window_equip(handle, r_d3d11_state->device))
-    {
-      //- rjf: create swapchain
-      DXGI_SWAP_CHAIN_DESC1 swapchain_desc = {0};
-      {
-        swapchain_desc.Width              = 0; // NOTE(rjf): use window width
-        swapchain_desc.Height             = 0; // NOTE(rjf): use window height
-        swapchain_desc.Format             = DXGI_FORMAT_B8G8R8A8_UNORM;
-        swapchain_desc.Stereo             = FALSE;
-        swapchain_desc.SampleDesc.Count   = 1;
-        swapchain_desc.SampleDesc.Quality = 0;
-        swapchain_desc.BufferUsage        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-        swapchain_desc.BufferCount        = 2;
-        swapchain_desc.Scaling            = DXGI_SCALING_NONE;
-        swapchain_desc.SwapEffect         = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-        swapchain_desc.AlphaMode          = DXGI_ALPHA_MODE_UNSPECIFIED;
-        swapchain_desc.Flags              = 0;
-      }
-      HRESULT error = r_d3d11_state->dxgi_factory->lpVtbl->CreateSwapChainForHwnd(r_d3d11_state->dxgi_factory, (IUnknown *)r_d3d11_state->device, hwnd, &swapchain_desc, 0, 0, &window->swapchain);
-      if(FAILED(error))
-      {
-        char buffer[256] = {0};
-        raddbg_snprintf(buffer, sizeof(buffer), "DXGI swap chain creation failure (%lx). The process is terminating.", error);
-        sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
-        abort_self(1);
-      }
-      
-      r_d3d11_state->dxgi_factory->lpVtbl->MakeWindowAssociation(r_d3d11_state->dxgi_factory, hwnd, DXGI_MWA_NO_ALT_ENTER);
-      
-      //- rjf: create framebuffer & view
-      D3D11_RENDER_TARGET_VIEW_DESC framebuffer_rtv_desc = {0};
-      framebuffer_rtv_desc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-      framebuffer_rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-      window->swapchain->lpVtbl->GetBuffer(window->swapchain, 0, &IID_ID3D11Texture2D, (void **)(&window->framebuffer));
-      r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)window->framebuffer, &framebuffer_rtv_desc, &window->framebuffer_rtv);
-    }
+    w32_comp_window_equip(handle, r_d3d11_state->device);
     
     result = r_d3d11_handle_from_window(window);
     r_d3d11_state->window_count += 1;
@@ -581,16 +536,7 @@ r_window_unequip(WM_Window handle, R_Handle equip_handle)
       window->stage_scratch_color_srv->lpVtbl->Release(window->stage_scratch_color_srv);
       window->stage_scratch_color_rtv->lpVtbl->Release(window->stage_scratch_color_rtv);
       window->stage_scratch_color->lpVtbl->Release(window->stage_scratch_color);
-      if(window->framebuffer_rtv){window->framebuffer_rtv->lpVtbl->Release(window->framebuffer_rtv);}
-      if(window->framebuffer)    {window->framebuffer->lpVtbl->Release(window->framebuffer);}
-      if(window->swapchain)
-      {
-        window->swapchain->lpVtbl->Release(window->swapchain);
-      }
-      else
-      {
-        w32_comp_window_unequip(handle);
-      }
+      w32_comp_window_unequip(handle);
       window->generation += 1;
       SLLStackPush(r_d3d11_state->first_free_window, window);
       r_d3d11_state->window_count -= 1;
@@ -916,7 +862,7 @@ r_window_begin_frame(WM_Window window, R_Handle window_equip)
       if(wnd->geo3d_depth_dsv)        {wnd->geo3d_depth_dsv->lpVtbl->Release(wnd->geo3d_depth_dsv);}
       if(wnd->geo3d_depth)            {wnd->geo3d_depth->lpVtbl->Release(wnd->geo3d_depth);}
       
-      // rjf: resize swapchain & main framebuffer
+      // rjf: screen-sized render target dimensions
       D3D11_TEXTURE2D_DESC target_desc = {0};
       target_desc.Width            = (UINT)Max(1, resolution.x);
       target_desc.Height           = (UINT)Max(1, resolution.y);
@@ -924,18 +870,6 @@ r_window_begin_frame(WM_Window window, R_Handle window_equip)
       target_desc.ArraySize        = 1;
       target_desc.SampleDesc.Count = 1;
       target_desc.Usage            = D3D11_USAGE_DEFAULT;
-      if(wnd->swapchain)
-      {
-        if(wnd->framebuffer_rtv){wnd->framebuffer_rtv->lpVtbl->Release(wnd->framebuffer_rtv);}
-        if(wnd->framebuffer)    {wnd->framebuffer->lpVtbl->Release(wnd->framebuffer);}
-        wnd->swapchain->lpVtbl->ResizeBuffers(wnd->swapchain, 0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
-        wnd->swapchain->lpVtbl->GetBuffer(wnd->swapchain, 0, &IID_ID3D11Texture2D, (void **)(&wnd->framebuffer));
-        wnd->framebuffer->lpVtbl->GetDesc(wnd->framebuffer, &target_desc);
-        D3D11_RENDER_TARGET_VIEW_DESC framebuffer_rtv_desc = {0};
-        framebuffer_rtv_desc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-        framebuffer_rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-        r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->framebuffer, &framebuffer_rtv_desc, &wnd->framebuffer_rtv);
-      }
       
       // rjf: create stage color targets
       {
@@ -1009,12 +943,8 @@ r_window_begin_frame(WM_Window window, R_Handle window_equip)
       }
     }
     
-    //- rjf: clear framebuffers
+    //- rjf: clear stage color
     Vec4F32 clear_color = {0, 0, 0, 0};
-    if(wnd->framebuffer_rtv)
-    {
-      d_ctx->lpVtbl->ClearRenderTargetView(d_ctx, wnd->framebuffer_rtv, clear_color.v);
-    }
     d_ctx->lpVtbl->ClearRenderTargetView(d_ctx, wnd->stage_color_rtv, clear_color.v);
     if(resize_done)
     {
@@ -1035,10 +965,9 @@ r_window_end_frame(WM_Window window, R_Handle window_equip)
     HRESULT error = S_OK;
     ID3D11Texture2D *surface_texture = 0;
     ID3D11RenderTargetView *surface_rtv = 0;
-    ID3D11RenderTargetView *output_rtv = wnd->framebuffer_rtv;
     POINT offset = {0};
     B32 drawing_surface = 0;
-    if(wnd->swapchain == 0 && wnd->last_resolution.x > 0 && wnd->last_resolution.y > 0)
+    if(wnd->last_resolution.x > 0 && wnd->last_resolution.y > 0)
     {
       error = w32_comp_window_begin_draw(window, wnd->last_resolution, &IID_ID3D11Texture2D, (void **)&surface_texture, &offset);
       if(SUCCEEDED(error))
@@ -1048,21 +977,20 @@ r_window_end_frame(WM_Window window, R_Handle window_equip)
         desc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
         desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
         error = r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)surface_texture, &desc, &surface_rtv);
-        output_rtv = surface_rtv;
       }
     }
     
     ////////////////////////////
-    //- rjf: finalize, directly into the window's output
+    //- rjf: finalize, directly into the window's composition surface
     //
-    if(SUCCEEDED(error) && output_rtv != 0)
+    if(SUCCEEDED(error) && surface_rtv != 0)
     {
       ID3D11SamplerState *sampler   = r_d3d11_state->samplers[R_Tex2DSampleKind_Nearest];
       ID3D11VertexShader *vshad     = r_d3d11_state->vshads[R_D3D11_VShadKind_Finalize];
       ID3D11PixelShader *pshad      = r_d3d11_state->pshads[R_D3D11_PShadKind_Finalize];
       
       // rjf: setup output merger
-      d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &output_rtv, 0);
+      d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &surface_rtv, 0);
       d_ctx->lpVtbl->OMSetDepthStencilState(d_ctx, r_d3d11_state->noop_depth_stencil, 0);
       // Finalize writes opaque pixels; do not blend with undefined surface contents.
       d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->no_blend_state, 0, 0xffffffff);
@@ -1099,26 +1027,15 @@ r_window_end_frame(WM_Window window, R_Handle window_equip)
     d_ctx->lpVtbl->ClearState(d_ctx);
     
     ////////////////////////////
-    //- rjf: present
-    //
-    if(wnd->swapchain)
-    {
-      error = wnd->swapchain->lpVtbl->Present(wnd->swapchain, 1, 0);
-    }
-    
-    ////////////////////////////
     //- composed: end the surface update after dropping all references to this draw's target.
     // Frames are paced in wm_get_events; the posted resize handler commits the resulting surface update.
     //
-    else
+    if(surface_rtv){surface_rtv->lpVtbl->Release(surface_rtv);}
+    if(surface_texture){surface_texture->lpVtbl->Release(surface_texture);}
+    if(drawing_surface)
     {
-      if(surface_rtv){surface_rtv->lpVtbl->Release(surface_rtv);}
-      if(surface_texture){surface_texture->lpVtbl->Release(surface_texture);}
-      if(drawing_surface)
-      {
-        HRESULT end_error = w32_comp_window_end_draw(window);
-        if(SUCCEEDED(error)){error = end_error;}
-      }
+      HRESULT end_error = w32_comp_window_end_draw(window);
+      if(SUCCEEDED(error)){error = end_error;}
     }
     if(FAILED(error))
     {
