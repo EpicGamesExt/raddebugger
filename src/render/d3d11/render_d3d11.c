@@ -146,6 +146,129 @@ r_usage_access_flags_from_resource_kind(R_ResourceKind kind, D3D11_USAGE *out_d3
   }
 }
 
+internal void
+r_d3d11_check(HRESULT error, char *operation)
+{
+  if(FAILED(error))
+  {
+    char buffer[256] = {0};
+    raddbg_snprintf(buffer, sizeof(buffer), "D3D11 %s failure (%lx). The process is terminating.", operation, error);
+    sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+    abort_self(1);
+  }
+}
+
+// Window-space pixel rect of a clip; zero clip means the whole window. Empty results are all-zero.
+internal Rng2S32
+r_d3d11_window_rect_from_clip(Rng2F32 clip, Vec2S32 resolution)
+{
+  Rng2S32 result = r2s32p(0, 0, resolution.x, resolution.y);
+  if(clip.x0 == 0 && clip.y0 == 0 && clip.x1 == 0 && clip.y1 == 0)
+  {
+    // no clip
+  }
+  else if(clip.x0 > clip.x1 || clip.y0 > clip.y1)
+  {
+    result = r2s32p(0, 0, 0, 0);
+  }
+  else
+  {
+    result = r2s32p((S32)Clamp(0.f, clip.x0, (F32)resolution.x),
+                    (S32)Clamp(0.f, clip.y0, (F32)resolution.y),
+                    (S32)Clamp(0.f, clip.x1, (F32)resolution.x),
+                    (S32)Clamp(0.f, clip.y1, (F32)resolution.y));
+  }
+  if(result.x1 <= result.x0 || result.y1 <= result.y0)
+  {
+    result = r2s32p(0, 0, 0, 0);
+  }
+  return result;
+}
+
+// The surface texture can be shared with other surfaces, so every draw into it is scissored to this
+// window's region (rect must already be inside [0, resolution]).
+internal D3D11_RECT
+r_d3d11_surface_scissor_from_rect(R_D3D11_Window *wnd, Rng2S32 rect)
+{
+  D3D11_RECT result = {0};
+  if(rect.x1 > rect.x0 && rect.y1 > rect.y0)
+  {
+    result.left   = wnd->surface_offset.x + rect.x0;
+    result.top    = wnd->surface_offset.y + rect.y0;
+    result.right  = wnd->surface_offset.x + rect.x1;
+    result.bottom = wnd->surface_offset.y + rect.y1;
+  }
+  return result;
+}
+
+// Grow-only, rounded up so small size changes do not reallocate.
+internal Vec2S32
+r_d3d11_scratch_size_from_needed(Vec2S32 current, Vec2S32 needed)
+{
+  Vec2S32 result = current;
+  if(needed.x > current.x || needed.y > current.y)
+  {
+    result.x = Min(Max(current.x, AlignPow2(needed.x, 64)), D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION);
+    result.y = Min(Max(current.y, AlignPow2(needed.y, 64)), D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION);
+  }
+  return result;
+}
+
+internal ID3D11Texture2D *
+r_d3d11_target_alloc(Vec2S32 size, DXGI_FORMAT format, UINT bind_flags)
+{
+  D3D11_TEXTURE2D_DESC desc = {0};
+  desc.Width            = (UINT)size.x;
+  desc.Height           = (UINT)size.y;
+  desc.MipLevels        = 1;
+  desc.ArraySize        = 1;
+  desc.Format           = format;
+  desc.SampleDesc.Count = 1;
+  desc.Usage            = D3D11_USAGE_DEFAULT;
+  desc.BindFlags        = bind_flags;
+  ID3D11Texture2D *texture = 0;
+  r_d3d11_check(r_d3d11_state->device->lpVtbl->CreateTexture2D(r_d3d11_state->device, &desc, 0, &texture), "render target creation");
+  return texture;
+}
+
+#define r_d3d11_release_and_zero(p) do{ if((p) != 0){ (p)->lpVtbl->Release(p); (p) = 0; } }while(0)
+
+internal void
+r_d3d11_window_release_blur_targets(R_D3D11_Window *wnd)
+{
+  r_d3d11_release_and_zero(wnd->blur_src_srv);
+  r_d3d11_release_and_zero(wnd->blur_src);
+  r_d3d11_release_and_zero(wnd->blur_mid_srv);
+  r_d3d11_release_and_zero(wnd->blur_mid_rtv);
+  r_d3d11_release_and_zero(wnd->blur_mid);
+  wnd->blur_size = v2s32(0, 0);
+}
+
+internal void
+r_d3d11_window_release_geo3d_targets(R_D3D11_Window *wnd)
+{
+  r_d3d11_release_and_zero(wnd->geo3d_color_srv);
+  r_d3d11_release_and_zero(wnd->geo3d_color_rtv);
+  r_d3d11_release_and_zero(wnd->geo3d_color);
+  r_d3d11_release_and_zero(wnd->geo3d_depth_dsv);
+  r_d3d11_release_and_zero(wnd->geo3d_depth);
+  wnd->geo3d_size = v2s32(0, 0);
+}
+
+internal HRESULT
+r_d3d11_window_close_surface(WM_Window window, R_D3D11_Window *wnd)
+{
+  HRESULT error = S_OK;
+  r_d3d11_release_and_zero(wnd->surface_rtv);
+  r_d3d11_release_and_zero(wnd->surface_texture);
+  if(wnd->surface_drawing)
+  {
+    wnd->surface_drawing = 0;
+    error = w32_comp_window_end_draw(window);
+  }
+  return error;
+}
+
 ////////////////////////////////
 //~ rjf: Backend Hook Implementations
 
@@ -224,14 +347,6 @@ r_init(CmdLine *cmdln)
   error = r_d3d11_state->base_device_ctx->lpVtbl->QueryInterface(r_d3d11_state->base_device_ctx, &IID_ID3D11DeviceContext1, (void **)(&r_d3d11_state->device_ctx));
   ProfEnd();
   
-  //- rjf: get dxgi device/adapter/factory
-  ProfBegin("get dxgi device/adapter/factory");
-  error = r_d3d11_state->device->lpVtbl->QueryInterface(r_d3d11_state->device, &IID_IDXGIDevice1, (void **)(&r_d3d11_state->dxgi_device));
-  error = r_d3d11_state->dxgi_device->lpVtbl->GetAdapter(r_d3d11_state->dxgi_device, &r_d3d11_state->dxgi_adapter);
-  error = r_d3d11_state->dxgi_adapter->lpVtbl->GetParent(r_d3d11_state->dxgi_adapter, &IID_IDXGIFactory2, (void **)(&r_d3d11_state->dxgi_factory));
-  error = r_d3d11_state->dxgi_device->lpVtbl->SetMaximumFrameLatency(r_d3d11_state->dxgi_device, 1);
-  ProfEnd();
-  
   //- rjf: create main rasterizer
   ProfScope("create main rasterizer")
   {
@@ -259,6 +374,8 @@ r_init(CmdLine *cmdln)
       desc.RenderTarget[0].RenderTargetWriteMask  = D3D11_COLOR_WRITE_ENABLE_ALL;
     }
     error = r_d3d11_state->device->lpVtbl->CreateBlendState(r_d3d11_state->device, &desc, &r_d3d11_state->main_blend_state);
+    desc.RenderTarget[0].RenderTargetWriteMask  = D3D11_COLOR_WRITE_ENABLE_RED|D3D11_COLOR_WRITE_ENABLE_GREEN|D3D11_COLOR_WRITE_ENABLE_BLUE;
+    error = r_d3d11_state->device->lpVtbl->CreateBlendState(r_d3d11_state->device, &desc, &r_d3d11_state->surface_blend_state);
   }
   
   //- rjf: create empty blend state
@@ -506,50 +623,9 @@ r_window_equip(WM_Window handle)
       window->generation += 1;
     }
     
-    //- rjf: map os window handle -> hwnd
-    HWND hwnd = {0};
-    {
-      W32_WM_Window *w32_layer_window = w32_wm_window_from_handle(handle);
-      hwnd = w32_wm_hwnd_from_window(w32_layer_window);
-    }
-    
-    //- rjf: create swapchain
-    DXGI_SWAP_CHAIN_DESC1 swapchain_desc = {0};
-    {
-      swapchain_desc.Width              = 0; // NOTE(rjf): use window width
-      swapchain_desc.Height             = 0; // NOTE(rjf): use window height
-      swapchain_desc.Format             = DXGI_FORMAT_B8G8R8A8_UNORM;
-      swapchain_desc.Stereo             = FALSE;
-      swapchain_desc.SampleDesc.Count   = 1;
-      swapchain_desc.SampleDesc.Quality = 0;
-      swapchain_desc.BufferUsage        = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-      swapchain_desc.BufferCount        = 2;
-      swapchain_desc.Scaling            = DXGI_SCALING_NONE;
-      swapchain_desc.SwapEffect         = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-      swapchain_desc.AlphaMode          = DXGI_ALPHA_MODE_UNSPECIFIED;
-      swapchain_desc.Flags              = 0;
-    }
-    HRESULT error = r_d3d11_state->dxgi_factory->lpVtbl->CreateSwapChainForHwnd(r_d3d11_state->dxgi_factory, (IUnknown *)r_d3d11_state->device, hwnd, &swapchain_desc, 0, 0, &window->swapchain);
-    if(FAILED(error))
-    {
-      char buffer[256] = {0};
-      raddbg_snprintf(buffer, sizeof(buffer), "DXGI swap chain creation failure (%lx). The process is terminating.", error);
-      sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
-      abort_self(1);
-    }
-    
-    r_d3d11_state->dxgi_factory->lpVtbl->MakeWindowAssociation(r_d3d11_state->dxgi_factory, hwnd, DXGI_MWA_NO_ALT_ENTER);
-    
-    //- rjf: create framebuffer & view
-    D3D11_RENDER_TARGET_VIEW_DESC framebuffer_rtv_desc = {0};
-    framebuffer_rtv_desc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-    framebuffer_rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-    window->swapchain->lpVtbl->GetBuffer(window->swapchain, 0, &IID_ID3D11Texture2D, (void **)(&window->framebuffer));
-    r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)window->framebuffer, &framebuffer_rtv_desc, &window->framebuffer_rtv);
+    w32_comp_window_equip(handle, r_d3d11_state->device);
     
     result = r_d3d11_handle_from_window(window);
-    r_d3d11_state->window_count += 1;
-    r_d3d11_state->dxgi_device->lpVtbl->SetMaximumFrameLatency(r_d3d11_state->dxgi_device, Clamp(1, r_d3d11_state->window_count, 16));
   }
   ProfEnd();
   return result;
@@ -564,19 +640,11 @@ r_window_unequip(WM_Window handle, R_Handle equip_handle)
     R_D3D11_Window *window = r_d3d11_window_from_handle(equip_handle);
     if(window != 0)
     {
-      window->stage_color_srv->lpVtbl->Release(window->stage_color_srv);
-      window->stage_color_rtv->lpVtbl->Release(window->stage_color_rtv);
-      window->stage_color->lpVtbl->Release(window->stage_color);
-      window->stage_scratch_color_srv->lpVtbl->Release(window->stage_scratch_color_srv);
-      window->stage_scratch_color_rtv->lpVtbl->Release(window->stage_scratch_color_rtv);
-      window->stage_scratch_color->lpVtbl->Release(window->stage_scratch_color);
-      window->framebuffer_rtv->lpVtbl->Release(window->framebuffer_rtv);
-      window->framebuffer->lpVtbl->Release(window->framebuffer);
-      window->swapchain->lpVtbl->Release(window->swapchain);
+      r_d3d11_window_release_blur_targets(window);
+      r_d3d11_window_release_geo3d_targets(window);
+      w32_comp_window_unequip(handle);
       window->generation += 1;
       SLLStackPush(r_d3d11_state->first_free_window, window);
-      r_d3d11_state->window_count -= 1;
-      r_d3d11_state->dxgi_device->lpVtbl->SetMaximumFrameLatency(r_d3d11_state->dxgi_device, Clamp(1, r_d3d11_state->window_count, 16));
     }
   }
   ProfEnd();
@@ -861,6 +929,7 @@ r_end_frame(void)
     r_d3d11_state->first_to_free_tex2d  = 0;
     r_d3d11_state->first_to_free_buffer = 0;
   }
+  w32_comp_commit_frame();
 }
 
 r_hook void
@@ -871,6 +940,7 @@ r_window_begin_frame(WM_Window window, R_Handle window_equip)
   {
     R_D3D11_Window *wnd = r_d3d11_window_from_handle(window_equip);
     ID3D11DeviceContext1 *d_ctx = r_d3d11_state->device_ctx;
+    wnd->frame_index += 1;
     
     //- rjf: get resolution
     Rng2F32 client_rect = wm_client_rect_from_window(window);
@@ -883,110 +953,47 @@ r_window_begin_frame(WM_Window window, R_Handle window_equip)
     {
       resize_done = 1;
       wnd->last_resolution = resolution;
-      
-      // rjf: release screen-sized render target resources, if there
-      if(wnd->stage_scratch_color_srv){wnd->stage_scratch_color_srv->lpVtbl->Release(wnd->stage_scratch_color_srv);}
-      if(wnd->stage_scratch_color_rtv){wnd->stage_scratch_color_rtv->lpVtbl->Release(wnd->stage_scratch_color_rtv);}
-      if(wnd->stage_scratch_color)    {wnd->stage_scratch_color->lpVtbl->Release(wnd->stage_scratch_color);}
-      if(wnd->stage_color_srv)        {wnd->stage_color_srv->lpVtbl->Release(wnd->stage_color_srv);}
-      if(wnd->stage_color_rtv)        {wnd->stage_color_rtv->lpVtbl->Release(wnd->stage_color_rtv);}
-      if(wnd->stage_color)            {wnd->stage_color->lpVtbl->Release(wnd->stage_color);}
-      if(wnd->geo3d_color_srv)        {wnd->geo3d_color_srv->lpVtbl->Release(wnd->geo3d_color_srv);}
-      if(wnd->geo3d_color_rtv)        {wnd->geo3d_color_rtv->lpVtbl->Release(wnd->geo3d_color_rtv);}
-      if(wnd->geo3d_color)            {wnd->geo3d_color->lpVtbl->Release(wnd->geo3d_color);}
-      if(wnd->geo3d_depth_srv)        {wnd->geo3d_depth_srv->lpVtbl->Release(wnd->geo3d_depth_srv);}
-      if(wnd->geo3d_depth_dsv)        {wnd->geo3d_depth_dsv->lpVtbl->Release(wnd->geo3d_depth_dsv);}
-      if(wnd->geo3d_depth)            {wnd->geo3d_depth->lpVtbl->Release(wnd->geo3d_depth);}
-      
-      // rjf: resize swapchain & main framebuffer
-      wnd->framebuffer_rtv->lpVtbl->Release(wnd->framebuffer_rtv);
-      wnd->framebuffer->lpVtbl->Release(wnd->framebuffer);
-      wnd->swapchain->lpVtbl->ResizeBuffers(wnd->swapchain, 0, 0, 0, DXGI_FORMAT_UNKNOWN, 0);
-      wnd->swapchain->lpVtbl->GetBuffer(wnd->swapchain, 0, &IID_ID3D11Texture2D, (void **)(&wnd->framebuffer));
-      D3D11_RENDER_TARGET_VIEW_DESC framebuffer_rtv_desc = {0};
-      framebuffer_rtv_desc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
-      framebuffer_rtv_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
-      r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->framebuffer, &framebuffer_rtv_desc, &wnd->framebuffer_rtv);
-      
-      // rjf: create stage color targets
-      {
-        D3D11_TEXTURE2D_DESC color_desc = zero_struct;
-        {
-          wnd->framebuffer->lpVtbl->GetDesc(wnd->framebuffer, &color_desc);
-          color_desc.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
-          color_desc.BindFlags = D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
-        }
-        D3D11_RENDER_TARGET_VIEW_DESC rtv_desc = zero_struct;
-        {
-          rtv_desc.Format         = color_desc.Format;
-          rtv_desc.ViewDimension  = D3D11_RTV_DIMENSION_TEXTURE2D;
-        }
-        D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc = zero_struct;
-        {
-          srv_desc.Format                    = DXGI_FORMAT_R16G16B16A16_FLOAT;
-          srv_desc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE2D;
-          srv_desc.Texture2D.MipLevels       = -1;
-        }
-        r_d3d11_state->device->lpVtbl->CreateTexture2D(r_d3d11_state->device, &color_desc, 0, &wnd->stage_color);
-        r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->stage_color, &rtv_desc, &wnd->stage_color_rtv);
-        r_d3d11_state->device->lpVtbl->CreateShaderResourceView(r_d3d11_state->device, (ID3D11Resource *)wnd->stage_color, &srv_desc, &wnd->stage_color_srv);
-        r_d3d11_state->device->lpVtbl->CreateTexture2D(r_d3d11_state->device, &color_desc, 0, &wnd->stage_scratch_color);
-        r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->stage_scratch_color, &rtv_desc, &wnd->stage_scratch_color_rtv);
-        r_d3d11_state->device->lpVtbl->CreateShaderResourceView(r_d3d11_state->device, (ID3D11Resource *)wnd->stage_scratch_color, &srv_desc, &wnd->stage_scratch_color_srv);
-      }
-      
-      // rjf: create geo3d targets
-      {
-        D3D11_TEXTURE2D_DESC color_desc = zero_struct;
-        {
-          wnd->framebuffer->lpVtbl->GetDesc(wnd->framebuffer, &color_desc);
-          color_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-          color_desc.BindFlags = D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE;
-        }
-        D3D11_RENDER_TARGET_VIEW_DESC color_rtv_desc = zero_struct;
-        {
-          color_rtv_desc.Format         = color_desc.Format;
-          color_rtv_desc.ViewDimension  = D3D11_RTV_DIMENSION_TEXTURE2D;
-        }
-        D3D11_SHADER_RESOURCE_VIEW_DESC color_srv_desc = zero_struct;
-        {
-          color_srv_desc.Format                    = DXGI_FORMAT_R8G8B8A8_UNORM;
-          color_srv_desc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE2D;
-          color_srv_desc.Texture2D.MipLevels       = -1;
-        }
-        D3D11_TEXTURE2D_DESC depth_desc = zero_struct;
-        {
-          wnd->framebuffer->lpVtbl->GetDesc(wnd->framebuffer, &depth_desc);
-          depth_desc.Format = DXGI_FORMAT_R24G8_TYPELESS;
-          depth_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL|D3D11_BIND_SHADER_RESOURCE;
-        }
-        D3D11_DEPTH_STENCIL_VIEW_DESC depth_dsv_desc = zero_struct;
-        {
-          depth_dsv_desc.Flags = 0;
-          depth_dsv_desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-          depth_dsv_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-          depth_dsv_desc.Texture2D.MipSlice = 0;
-        }
-        D3D11_SHADER_RESOURCE_VIEW_DESC depth_srv_desc = zero_struct;
-        {
-          depth_srv_desc.Format                    = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
-          depth_srv_desc.ViewDimension             = D3D11_SRV_DIMENSION_TEXTURE2D;
-          depth_srv_desc.Texture2D.MostDetailedMip = 0;
-          depth_srv_desc.Texture2D.MipLevels       = -1;
-        }
-        r_d3d11_state->device->lpVtbl->CreateTexture2D(r_d3d11_state->device, &color_desc, 0, &wnd->geo3d_color);
-        r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->geo3d_color, &color_rtv_desc, &wnd->geo3d_color_rtv);
-        r_d3d11_state->device->lpVtbl->CreateShaderResourceView(r_d3d11_state->device, (ID3D11Resource *)wnd->geo3d_color, &color_srv_desc, &wnd->geo3d_color_srv);
-        r_d3d11_state->device->lpVtbl->CreateTexture2D(r_d3d11_state->device, &depth_desc, 0, &wnd->geo3d_depth);
-        r_d3d11_state->device->lpVtbl->CreateDepthStencilView(r_d3d11_state->device, (ID3D11Resource *)wnd->geo3d_depth, &depth_dsv_desc, &wnd->geo3d_depth_dsv);
-        r_d3d11_state->device->lpVtbl->CreateShaderResourceView(r_d3d11_state->device, (ID3D11Resource *)wnd->geo3d_depth, &depth_srv_desc, &wnd->geo3d_depth_srv);
-      }
     }
     
-    //- rjf: clear framebuffers
-    Vec4F32 clear_color = {0, 0, 0, 0};
-    d_ctx->lpVtbl->ClearRenderTargetView(d_ctx, wnd->framebuffer_rtv, clear_color.v);
-    d_ctx->lpVtbl->ClearRenderTargetView(d_ctx, wnd->stage_color_rtv, clear_color.v);
+    //- release scratch targets that have gone unused (they are not window-sized, so resizes keep them)
+    if(wnd->blur_mid != 0 && wnd->frame_index - wnd->blur_last_used_frame > R_D3D11_SCRATCH_IDLE_FRAMES)
+    {
+      r_d3d11_window_release_blur_targets(wnd);
+    }
+    if(wnd->geo3d_color != 0 && wnd->frame_index - wnd->geo3d_last_used_frame > R_D3D11_SCRATCH_IDLE_FRAMES)
+    {
+      r_d3d11_window_release_geo3d_targets(wnd);
+    }
+    
+    //- open the window's composition surface: every pass draws straight into it, until r_window_end_frame
+    HRESULT error = S_OK;
+    if(resolution.x > 0 && resolution.y > 0)
+    {
+      error = w32_comp_window_begin_draw(window, resolution, &IID_ID3D11Texture2D, (void **)&wnd->surface_texture, &wnd->surface_offset);
+      if(SUCCEEDED(error))
+      {
+        wnd->surface_drawing = 1;
+        D3D11_RENDER_TARGET_VIEW_DESC desc = {0};
+        desc.Format        = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+        desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+        error = r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->surface_texture, &desc, &wnd->surface_rtv);
+      }
+      if(SUCCEEDED(error))
+      {
+        // Opaque black. Only this window's region: the texture can be shared with other surfaces.
+        F32 clear_color[4] = {0, 0, 0, 1};
+        D3D11_RECT rect = r_d3d11_surface_scissor_from_rect(wnd, r2s32p(0, 0, resolution.x, resolution.y));
+        d_ctx->lpVtbl->ClearView(d_ctx, (ID3D11View *)wnd->surface_rtv, clear_color, &rect, 1);
+      }
+    }
+    if(FAILED(error))
+    {
+      r_d3d11_window_close_surface(window, wnd);
+      char buffer[256] = {0};
+      raddbg_snprintf(buffer, sizeof(buffer), "D3D11 window output failure (%lx). The process is terminating.", error);
+      sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
+      abort_self(1);
+    }
     if(resize_done)
     {
       d_ctx->lpVtbl->Flush(d_ctx);
@@ -1005,60 +1012,18 @@ r_window_end_frame(WM_Window window, R_Handle window_equip)
     ID3D11DeviceContext1 *d_ctx = r_d3d11_state->device_ctx;
     
     ////////////////////////////
-    //- rjf: finalize, by writing staging buffer out to window framebuffer
+    //- composed: end the surface update after dropping all references to this draw's target.
+    // Frames are paced in wm_get_events; r_end_frame or the posted resize handler commits the surface update.
     //
-    {
-      ID3D11SamplerState *sampler   = r_d3d11_state->samplers[R_Tex2DSampleKind_Nearest];
-      ID3D11VertexShader *vshad     = r_d3d11_state->vshads[R_D3D11_VShadKind_Finalize];
-      ID3D11PixelShader *pshad      = r_d3d11_state->pshads[R_D3D11_PShadKind_Finalize];
-      
-      // rjf: setup output merger
-      d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->framebuffer_rtv, 0);
-      d_ctx->lpVtbl->OMSetDepthStencilState(d_ctx, r_d3d11_state->noop_depth_stencil, 0);
-      d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->main_blend_state, 0, 0xffffffff);
-      
-      // rjf: set up rasterizer
-      Vec2S32 resolution = wnd->last_resolution;
-      D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (F32)resolution.x, (F32)resolution.y, 0.0f, 1.0f };
-      d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &viewport);
-      d_ctx->lpVtbl->RSSetState(d_ctx, (ID3D11RasterizerState *)r_d3d11_state->main_rasterizer);
-      
-      // rjf: setup input assembly
-      d_ctx->lpVtbl->IASetPrimitiveTopology(d_ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-      d_ctx->lpVtbl->IASetInputLayout(d_ctx, 0);
-      
-      // rjf: setup shaders
-      d_ctx->lpVtbl->VSSetShader(d_ctx, vshad, 0, 0);
-      d_ctx->lpVtbl->PSSetShader(d_ctx, pshad, 0, 0);
-      d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &wnd->stage_color_srv);
-      d_ctx->lpVtbl->PSSetSamplers(d_ctx, 0, 1, &sampler);
-      
-      // rjf: setup scissor rect
-      {
-        D3D11_RECT rect = {0};
-        rect.left = 0;
-        rect.right = (LONG)wnd->last_resolution.x;
-        rect.top = 0;
-        rect.bottom = (LONG)wnd->last_resolution.y;
-        d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &rect);
-      }
-      
-      // rjf: draw
-      d_ctx->lpVtbl->Draw(d_ctx, 4, 0);
-    }
-    
-    ////////////////////////////
-    //- rjf: present
-    //
-    HRESULT error = wnd->swapchain->lpVtbl->Present(wnd->swapchain, 1, 0);
+    d_ctx->lpVtbl->ClearState(d_ctx);
+    HRESULT error = r_d3d11_window_close_surface(window, wnd);
     if(FAILED(error))
     {
       char buffer[256] = {0};
-      raddbg_snprintf(buffer, sizeof(buffer), "D3D11 present failure (%lx). The process is terminating.", error);
+      raddbg_snprintf(buffer, sizeof(buffer), "D3D11 window output failure (%lx). The process is terminating.", error);
       sh_message(1, str8_lit("Fatal Error"), str8_cstring(buffer));
       abort_self(1);
     }
-    d_ctx->lpVtbl->ClearState(d_ctx);
   }
   ProfEnd();
 }
@@ -1076,11 +1041,14 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
     //
     R_D3D11_Window *wnd = r_d3d11_window_from_handle(window_equip);
     ID3D11DeviceContext1 *d_ctx = r_d3d11_state->device_ctx;
+    Vec2S32 resolution = wnd->last_resolution;
+    POINT surface_offset = wnd->surface_offset;
+    D3D11_VIEWPORT surface_viewport = { (F32)surface_offset.x, (F32)surface_offset.y, (F32)resolution.x, (F32)resolution.y, 0.0f, 1.0f };
     
     ////////////////////////////
     //- rjf: do passes
     //
-    for(R_PassNode *pass_n = passes->first; pass_n != 0; pass_n = pass_n->next)
+    for(R_PassNode *pass_n = wnd->surface_drawing ? passes->first : 0; pass_n != 0; pass_n = pass_n->next)
     {
       R_Pass *pass = &pass_n->v;
       switch(pass->kind)
@@ -1097,9 +1065,7 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
           R_BatchGroup2DList *rect_batch_groups = &params->rects;
           
           //- rjf: set up rasterizer
-          Vec2S32 resolution = wnd->last_resolution;
-          D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (F32)resolution.x, (F32)resolution.y, 0.0f, 1.0f };
-          d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &viewport);
+          d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &surface_viewport);
           d_ctx->lpVtbl->RSSetState(d_ctx, (ID3D11RasterizerState *)r_d3d11_state->main_rasterizer);
           
           //- rjf: draw each batch group
@@ -1164,9 +1130,9 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
             }
             
             // rjf: setup output merger
-            d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->stage_color_rtv, 0);
+            d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->surface_rtv, 0);
             d_ctx->lpVtbl->OMSetDepthStencilState(d_ctx, r_d3d11_state->noop_depth_stencil, 0);
-            d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->main_blend_state, 0, 0xffffffff);
+            d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->surface_blend_state, 0, 0xffffffff);
             
             // rjf: setup input assembly
             U32 stride = batches->bytes_per_inst;
@@ -1185,31 +1151,7 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
             
             // rjf: setup scissor rect
             {
-              Rng2F32 clip = group_params->clip;
-              D3D11_RECT rect = {0};
-              {
-                if(clip.x0 == 0 && clip.y0 == 0 && clip.x1 == 0 && clip.y1 == 0)
-                {
-                  rect.left = 0;
-                  rect.right = (LONG)wnd->last_resolution.x;
-                  rect.top = 0;
-                  rect.bottom = (LONG)wnd->last_resolution.y;
-                }
-                else if(clip.x0 > clip.x1 || clip.y0 > clip.y1)
-                {
-                  rect.left = 0;
-                  rect.right = 0;
-                  rect.top = 0;
-                  rect.bottom = 0;
-                }
-                else
-                {
-                  rect.left = (LONG)clip.x0;
-                  rect.right = (LONG)clip.x1;
-                  rect.top = (LONG)clip.y0;
-                  rect.bottom = (LONG)clip.y1;
-                }
-              }
+              D3D11_RECT rect = r_d3d11_surface_scissor_from_rect(wnd, r_d3d11_window_rect_from_clip(group_params->clip, resolution));
               d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &rect);
             }
             
@@ -1221,46 +1163,21 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
         ////////////////////////
         //- rjf: blur rendering pass
         //
+        // The blurred region, padded by the kernel radius, is copied out of the surface. The horizontal pass
+        // writes a float intermediate covering the vertical pass's taps; the vertical pass writes the surface.
+        //
         case R_PassKind_Blur:
         {
           R_PassParams_Blur *params = pass->params_blur;
           ID3D11SamplerState *sampler   = r_d3d11_state->samplers[R_Tex2DSampleKind_Linear];
           ID3D11VertexShader *vshad     = r_d3d11_state->vshads[R_D3D11_VShadKind_Blur];
           ID3D11PixelShader *pshad      = r_d3d11_state->pshads[R_D3D11_PShadKind_Blur];
-          ID3D11Buffer *uniforms_buffer = r_d3d11_state->uniform_type_kind_buffers[R_D3D11_VShadKind_Blur];
+          ID3D11Buffer *uniforms_buffer = r_d3d11_state->uniform_type_kind_buffers[R_D3D11_UniformTypeKind_Blur];
           
-          // rjf: setup output merger
-          d_ctx->lpVtbl->OMSetDepthStencilState(d_ctx, r_d3d11_state->noop_depth_stencil, 0);
-          d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->no_blend_state, 0, 0xffffffff);
-          
-          // rjf: set up viewport
-          Vec2S32 resolution = wnd->last_resolution;
-          D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (F32)resolution.x, (F32)resolution.y, 0.0f, 1.0f };
-          d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &viewport);
-          d_ctx->lpVtbl->RSSetState(d_ctx, (ID3D11RasterizerState *)r_d3d11_state->main_rasterizer);
-          
-          // rjf: setup input assembly
-          d_ctx->lpVtbl->IASetPrimitiveTopology(d_ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-          d_ctx->lpVtbl->IASetInputLayout(d_ctx, 0);
-          
-          // rjf: setup shaders
-          d_ctx->lpVtbl->VSSetShader(d_ctx, vshad, 0, 0);
-          d_ctx->lpVtbl->VSSetConstantBuffers(d_ctx, 0, 1, &uniforms_buffer);
-          d_ctx->lpVtbl->PSSetShader(d_ctx, pshad, 0, 0);
-          d_ctx->lpVtbl->PSSetSamplers(d_ctx, 0, 1, &sampler);
-          
-          // rjf: setup scissor rect
-          {
-            D3D11_RECT rect = { 0 };
-            rect.left = 0;
-            rect.right = (LONG)wnd->last_resolution.x;
-            rect.top = 0;
-            rect.bottom = (LONG)wnd->last_resolution.y;
-            d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &rect);
-          }
-          
-          // rjf: set up uniforms
+          // rjf: build kernel
           R_D3D11_Uniforms_Blur uniforms = { 0 };
+          U32 sample_count = 0;
+          F32 max_sample_offset = 0;
           {
             F32 weights[ArrayCount(uniforms.kernel)*2] = {0};
             
@@ -1306,21 +1223,91 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
               }
             }
             uniforms.kernel[0].x = weights[0];
+            sample_count = (U32)(1 + blur_count / 2); // 2x smaller because of bilinear sampling
+            for(U32 idx = 1; idx < sample_count; idx += 1)
+            {
+              max_sample_offset = Max(max_sample_offset, uniforms.kernel[idx].y);
+            }
+          }
+          
+          // regions, in window pixels: D = blurred output, H = horizontal-pass output, S = copied source
+          S32 pad = (S32)ceil_f32(max_sample_offset) + 2;
+          Rng2S32 rect_px = r2s32p((S32)floor_f32(Clamp(0.f, params->rect.x0, (F32)resolution.x)),
+                                   (S32)floor_f32(Clamp(0.f, params->rect.y0, (F32)resolution.y)),
+                                   (S32)ceil_f32 (Clamp(0.f, params->rect.x1, (F32)resolution.x)),
+                                   (S32)ceil_f32 (Clamp(0.f, params->rect.y1, (F32)resolution.y)));
+          Rng2S32 D = intersect_2s32(r_d3d11_window_rect_from_clip(params->clip, resolution), rect_px);
+          if(D.x1 <= D.x0 || D.y1 <= D.y0)
+          {
+            break;
+          }
+          Rng2S32 H = r2s32p(D.x0, Max(D.y0 - pad, 0), D.x1, Min(D.y1 + pad, resolution.y));
+          Rng2S32 S = r2s32p(Max(H.x0 - pad, 0), H.y0, Min(H.x1 + pad, resolution.x), H.y1);
+          Vec2S32 S_size = dim_2s32(S);
+          
+          // grow the scratch targets if needed
+          Vec2S32 scratch_size = r_d3d11_scratch_size_from_needed(wnd->blur_size, S_size);
+          if(scratch_size.x != wnd->blur_size.x || scratch_size.y != wnd->blur_size.y)
+          {
+            r_d3d11_window_release_blur_targets(wnd);
             
-            // technically we need just direction be different
-            // but there are 256 bytes of usable space anyway for each constant buffer chunk
+            // same typeless group as the surface, so the copy is legal; read through an sRGB view as linear
+            D3D11_SHADER_RESOURCE_VIEW_DESC src_srv_desc = {0};
+            src_srv_desc.Format              = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+            src_srv_desc.ViewDimension       = D3D11_SRV_DIMENSION_TEXTURE2D;
+            src_srv_desc.Texture2D.MipLevels = 1;
+            wnd->blur_src = r_d3d11_target_alloc(scratch_size, DXGI_FORMAT_B8G8R8A8_TYPELESS, D3D11_BIND_SHADER_RESOURCE);
+            r_d3d11_check(r_d3d11_state->device->lpVtbl->CreateShaderResourceView(r_d3d11_state->device, (ID3D11Resource *)wnd->blur_src, &src_srv_desc, &wnd->blur_src_srv), "blur source view creation");
             
-            uniforms.passes[Axis2_X].viewport_size = v2f32(resolution.x, resolution.y);
-            uniforms.passes[Axis2_X].rect          = params->rect;
-            uniforms.passes[Axis2_X].direction     = v2f32(1.f / resolution.x, 0);
-            uniforms.passes[Axis2_X].blur_count    = 1 + blur_count / 2; // 2x smaller because of bilinear sampling
-            MemoryCopyArray(uniforms.passes[Axis2_X].corner_radii.v, params->corner_radii);
+            wnd->blur_mid = r_d3d11_target_alloc(scratch_size, DXGI_FORMAT_R16G16B16A16_FLOAT, D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE);
+            r_d3d11_check(r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->blur_mid, 0, &wnd->blur_mid_rtv), "blur target view creation");
+            r_d3d11_check(r_d3d11_state->device->lpVtbl->CreateShaderResourceView(r_d3d11_state->device, (ID3D11Resource *)wnd->blur_mid, 0, &wnd->blur_mid_srv), "blur target view creation");
+            wnd->blur_size = scratch_size;
+          }
+          if(S_size.x > wnd->blur_size.x || S_size.y > wnd->blur_size.y)
+          {
+            break;
+          }
+          wnd->blur_last_used_frame = wnd->frame_index;
+          
+          // copy the padded source region out of the surface
+          {
+            D3D11_BOX box = {0};
+            box.left   = (UINT)(surface_offset.x + S.x0);
+            box.top    = (UINT)(surface_offset.y + S.y0);
+            box.front  = 0;
+            box.right  = (UINT)(surface_offset.x + S.x1);
+            box.bottom = (UINT)(surface_offset.y + S.y1);
+            box.back   = 1;
+            d_ctx->lpVtbl->CopySubresourceRegion(d_ctx, (ID3D11Resource *)wnd->blur_src, 0, 0, 0, 0, (ID3D11Resource *)wnd->surface_texture, 0, &box);
+          }
+          
+          // rjf: set up uniforms
+          {
+            Vec2F32 texel_size = v2f32(1.f / wnd->blur_size.x, 1.f / wnd->blur_size.y);
             
-            uniforms.passes[Axis2_Y].viewport_size = v2f32(resolution.x, resolution.y);
-            uniforms.passes[Axis2_Y].rect          = params->rect;
-            uniforms.passes[Axis2_Y].direction     = v2f32(0, 1.f / resolution.y);
-            uniforms.passes[Axis2_Y].blur_count    = 1 + blur_count / 2; // 2x smaller because of bilinear sampling
-            MemoryCopyArray(uniforms.passes[Axis2_Y].corner_radii.v, params->corner_radii);
+            // horizontal: blur_src -> blur_mid, both in S-relative pixels
+            R_D3D11_Uniforms_BlurPass *h_pass = &uniforms.passes[Axis2_X];
+            h_pass->rect           = r2f32p((F32)(H.x0 - S.x0), (F32)(H.y0 - S.y0), (F32)(H.x1 - S.x0), (F32)(H.y1 - S.y0));
+            h_pass->viewport_size  = v2f32((F32)wnd->blur_size.x, (F32)wnd->blur_size.y);
+            h_pass->src_offset     = v2f32(0, 0);
+            h_pass->src_texel_size = texel_size;
+            h_pass->direction      = v2f32(1, 0);
+            h_pass->src_clamp      = v4f32(0.5f, 0.5f, S_size.x - 0.5f, S_size.y - 0.5f);
+            h_pass->blur_count     = sample_count;
+            h_pass->mask_corners   = 0;
+            
+            // vertical: blur_mid -> surface; taps stay inside H's S-relative pixels
+            R_D3D11_Uniforms_BlurPass *v_pass = &uniforms.passes[Axis2_Y];
+            v_pass->rect           = params->rect;
+            v_pass->viewport_size  = v2f32((F32)resolution.x, (F32)resolution.y);
+            v_pass->src_offset     = v2f32(-(F32)(surface_offset.x + S.x0), -(F32)(surface_offset.y + S.y0));
+            v_pass->src_texel_size = texel_size;
+            v_pass->direction      = v2f32(0, 1);
+            v_pass->src_clamp      = v4f32(H.x0 - S.x0 + 0.5f, H.y0 - S.y0 + 0.5f, H.x1 - S.x0 - 0.5f, H.y1 - S.y0 - 0.5f);
+            v_pass->blur_count     = sample_count;
+            v_pass->mask_corners   = 1;
+            MemoryCopyArray(v_pass->corner_radii.v, params->corner_radii);
             
             D3D11_MAPPED_SUBRESOURCE sub_rsrc = {0};
             d_ctx->lpVtbl->Map(d_ctx, (ID3D11Resource *)uniforms_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &sub_rsrc);
@@ -1342,57 +1329,52 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
             { sizeof(R_D3D11_Uniforms_BlurPass) / 16, sizeof(uniforms.kernel) / 16 },
           };
           
-          // rjf: setup scissor rect
-          {
-            Rng2F32 clip = params->clip;
-            D3D11_RECT rect = {0};
-            {
-              if(clip.x0 == 0 && clip.y0 == 0 && clip.x1 == 0 && clip.y1 == 0)
-              {
-                rect.left = 0;
-                rect.right = (LONG)wnd->last_resolution.x;
-                rect.top = 0;
-                rect.bottom = (LONG)wnd->last_resolution.y;
-              }
-              else if(clip.x0 > clip.x1 || clip.y0 > clip.y1)
-              {
-                rect.left = 0;
-                rect.right = 0;
-                rect.top = 0;
-                rect.bottom = 0;
-              }
-              else
-              {
-                rect.left = (LONG)clip.x0;
-                rect.right = (LONG)clip.x1;
-                rect.top = (LONG)clip.y0;
-                rect.bottom = (LONG)clip.y1;
-              }
-            }
-            d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &rect);
-          }
+          // rjf: setup output merger, rasterizer, input assembly, shaders
+          d_ctx->lpVtbl->OMSetDepthStencilState(d_ctx, r_d3d11_state->noop_depth_stencil, 0);
+          d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->no_blend_state, 0, 0xffffffff);
+          d_ctx->lpVtbl->RSSetState(d_ctx, (ID3D11RasterizerState *)r_d3d11_state->main_rasterizer);
+          d_ctx->lpVtbl->IASetPrimitiveTopology(d_ctx, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+          d_ctx->lpVtbl->IASetInputLayout(d_ctx, 0);
+          d_ctx->lpVtbl->VSSetShader(d_ctx, vshad, 0, 0);
+          d_ctx->lpVtbl->PSSetShader(d_ctx, pshad, 0, 0);
+          d_ctx->lpVtbl->PSSetSamplers(d_ctx, 0, 1, &sampler);
           
           // rjf: for unsetting srv
           ID3D11ShaderResourceView* srv = 0;
           
           // horizontal pass
-          d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->stage_scratch_color_rtv, 0);
-          d_ctx->lpVtbl->PSSetConstantBuffers1(d_ctx, 0, ArrayCount(uniforms_buffers), uniforms_buffers, uniform_offset[Axis2_X], uniform_count[Axis2_X]);
-          d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &wnd->stage_color_srv);
-          d_ctx->lpVtbl->Draw(d_ctx, 4, 0);
-          d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &srv);
+          {
+            D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (F32)wnd->blur_size.x, (F32)wnd->blur_size.y, 0.0f, 1.0f };
+            D3D11_RECT scissor = { H.x0 - S.x0, H.y0 - S.y0, H.x1 - S.x0, H.y1 - S.y0 };
+            d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->blur_mid_rtv, 0);
+            d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &viewport);
+            d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &scissor);
+            d_ctx->lpVtbl->VSSetConstantBuffers1(d_ctx, 0, 1, uniforms_buffers, uniform_offset[Axis2_X], uniform_count[Axis2_X]);
+            d_ctx->lpVtbl->PSSetConstantBuffers1(d_ctx, 0, ArrayCount(uniforms_buffers), uniforms_buffers, uniform_offset[Axis2_X], uniform_count[Axis2_X]);
+            d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &wnd->blur_src_srv);
+            d_ctx->lpVtbl->Draw(d_ctx, 4, 0);
+            d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &srv);
+          }
           
           // vertical pass
-          d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->stage_color_rtv, 0);
-          d_ctx->lpVtbl->PSSetConstantBuffers1(d_ctx, 0, ArrayCount(uniforms_buffers), uniforms_buffers, uniform_offset[Axis2_Y], uniform_count[Axis2_Y]);
-          d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &wnd->stage_scratch_color_srv);
-          d_ctx->lpVtbl->Draw(d_ctx, 4, 0);
-          d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &srv);
+          {
+            D3D11_RECT scissor = r_d3d11_surface_scissor_from_rect(wnd, D);
+            d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->surface_rtv, 0);
+            d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &surface_viewport);
+            d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &scissor);
+            d_ctx->lpVtbl->VSSetConstantBuffers1(d_ctx, 0, 1, uniforms_buffers, uniform_offset[Axis2_Y], uniform_count[Axis2_Y]);
+            d_ctx->lpVtbl->PSSetConstantBuffers1(d_ctx, 0, ArrayCount(uniforms_buffers), uniforms_buffers, uniform_offset[Axis2_Y], uniform_count[Axis2_Y]);
+            d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &wnd->blur_mid_srv);
+            d_ctx->lpVtbl->Draw(d_ctx, 4, 0);
+            d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &srv);
+          }
         }break;
         
         
         ////////////////////////
         //- rjf: 3d geometry rendering pass
+        //
+        // Meshes are drawn into a target covering only the visible part of the viewport, then composited.
         //
         case R_PassKind_Geo3D:
         {
@@ -1400,9 +1382,43 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
           R_PassParams_Geo3D *params = pass->params_geo3d;
           R_BatchGroup3DMap *mesh_group_map = &params->mesh_batches;
           
-          //- rjf: set up rasterizer
+          //- visible region of the viewport, in window pixels
           Vec2F32 viewport_dim = dim_2f32(params->viewport);
-          D3D11_VIEWPORT viewport = { params->viewport.x0, params->viewport.y0, viewport_dim.x, viewport_dim.y, 0.f, 1.f };
+          if(!(viewport_dim.x > 0 && viewport_dim.y > 0))
+          {
+            break;
+          }
+          Rng2S32 viewport_px = r2s32p((S32)floor_f32(Clamp(0.f, params->viewport.x0, (F32)resolution.x)),
+                                       (S32)floor_f32(Clamp(0.f, params->viewport.y0, (F32)resolution.y)),
+                                       (S32)ceil_f32 (Clamp(0.f, params->viewport.x1, (F32)resolution.x)),
+                                       (S32)ceil_f32 (Clamp(0.f, params->viewport.y1, (F32)resolution.y)));
+          Rng2S32 visible = intersect_2s32(r_d3d11_window_rect_from_clip(params->clip, resolution), viewport_px);
+          if(visible.x1 <= visible.x0 || visible.y1 <= visible.y0)
+          {
+            break;
+          }
+          Vec2S32 visible_size = dim_2s32(visible);
+          
+          //- grow the targets if needed
+          Vec2S32 target_size = r_d3d11_scratch_size_from_needed(wnd->geo3d_size, visible_size);
+          if(target_size.x != wnd->geo3d_size.x || target_size.y != wnd->geo3d_size.y)
+          {
+            r_d3d11_window_release_geo3d_targets(wnd);
+            wnd->geo3d_color = r_d3d11_target_alloc(target_size, DXGI_FORMAT_R8G8B8A8_UNORM, D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE);
+            r_d3d11_check(r_d3d11_state->device->lpVtbl->CreateRenderTargetView(r_d3d11_state->device, (ID3D11Resource *)wnd->geo3d_color, 0, &wnd->geo3d_color_rtv), "geo3d target view creation");
+            r_d3d11_check(r_d3d11_state->device->lpVtbl->CreateShaderResourceView(r_d3d11_state->device, (ID3D11Resource *)wnd->geo3d_color, 0, &wnd->geo3d_color_srv), "geo3d target view creation");
+            wnd->geo3d_depth = r_d3d11_target_alloc(target_size, DXGI_FORMAT_D24_UNORM_S8_UINT, D3D11_BIND_DEPTH_STENCIL);
+            r_d3d11_check(r_d3d11_state->device->lpVtbl->CreateDepthStencilView(r_d3d11_state->device, (ID3D11Resource *)wnd->geo3d_depth, 0, &wnd->geo3d_depth_dsv), "geo3d depth view creation");
+            wnd->geo3d_size = target_size;
+          }
+          if(visible_size.x > wnd->geo3d_size.x || visible_size.y > wnd->geo3d_size.y)
+          {
+            break;
+          }
+          wnd->geo3d_last_used_frame = wnd->frame_index;
+          
+          //- rjf: set up rasterizer; the target's origin is the visible region's origin
+          D3D11_VIEWPORT viewport = { params->viewport.x0 - visible.x0, params->viewport.y0 - visible.y0, viewport_dim.x, viewport_dim.y, 0.f, 1.f };
           d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &viewport);
           d_ctx->lpVtbl->RSSetState(d_ctx, (ID3D11RasterizerState *)r_d3d11_state->main_rasterizer);
           
@@ -1419,12 +1435,18 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
             ID3D11VertexShader *vshad     = r_d3d11_state->vshads[R_D3D11_VShadKind_Mesh];
             ID3D11InputLayout *ilay       = r_d3d11_state->ilays[R_D3D11_VShadKind_Mesh];
             ID3D11PixelShader *pshad      = r_d3d11_state->pshads[R_D3D11_PShadKind_Mesh];
-            ID3D11Buffer *uniforms_buffer = r_d3d11_state->uniform_type_kind_buffers[R_D3D11_VShadKind_Mesh];
+            ID3D11Buffer *uniforms_buffer = r_d3d11_state->uniform_type_kind_buffers[R_D3D11_UniformTypeKind_Mesh];
             
             // rjf: setup output merger
             d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->geo3d_color_rtv, wnd->geo3d_depth_dsv);
             d_ctx->lpVtbl->OMSetDepthStencilState(d_ctx, r_d3d11_state->plain_depth_stencil, 0);
             d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->main_blend_state, 0, 0xffffffff);
+            
+            // rjf: setup scissor rect
+            {
+              D3D11_RECT rect = { 0, 0, visible_size.x, visible_size.y };
+              d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &rect);
+            }
             
             // rjf: draw all batches
             for(U64 slot_idx = 0; slot_idx < mesh_group_map->slots_count; slot_idx += 1)
@@ -1464,39 +1486,31 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
                 d_ctx->lpVtbl->PSSetShader(d_ctx, pshad, 0, 0);
                 d_ctx->lpVtbl->PSSetConstantBuffers(d_ctx, 0, 1, &uniforms_buffer);
                 
-                // rjf: setup scissor rect
-                {
-                  D3D11_RECT rect = {0};
-                  {
-                    rect.left = 0;
-                    rect.right = (LONG)wnd->last_resolution.x;
-                    rect.top = 0;
-                    rect.bottom = (LONG)wnd->last_resolution.y;
-                  }
-                  d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &rect);
-                }
-                
                 // rjf: draw
                 d_ctx->lpVtbl->DrawIndexed(d_ctx, mesh_indices->size/sizeof(U32), 0, 0);
               }
             }
           }
           
-          //- rjf: composite to main staging buffer
+          //- rjf: composite into the surface
           {
             ID3D11SamplerState *sampler   = r_d3d11_state->samplers[R_Tex2DSampleKind_Nearest];
             ID3D11VertexShader *vshad     = r_d3d11_state->vshads[R_D3D11_VShadKind_Geo3DComposite];
             ID3D11PixelShader *pshad      = r_d3d11_state->pshads[R_D3D11_PShadKind_Geo3DComposite];
             
             // rjf: setup output merger
-            d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->stage_color_rtv, 0);
+            d_ctx->lpVtbl->OMSetRenderTargets(d_ctx, 1, &wnd->surface_rtv, 0);
             d_ctx->lpVtbl->OMSetDepthStencilState(d_ctx, r_d3d11_state->noop_depth_stencil, 0);
-            d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->main_blend_state, 0, 0xffffffff);
+            d_ctx->lpVtbl->OMSetBlendState(d_ctx, r_d3d11_state->surface_blend_state, 0, 0xffffffff);
             
-            // rjf: set up rasterizer
-            Vec2S32 resolution = wnd->last_resolution;
-            D3D11_VIEWPORT viewport = { 0.0f, 0.0f, (F32)resolution.x, (F32)resolution.y, 0.0f, 1.0f };
-            d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &viewport);
+            // rjf: set up rasterizer: a viewport the size of the whole target maps its texels 1:1 onto pixels
+            D3D11_VIEWPORT composite_viewport =
+            {
+              (F32)(surface_offset.x + visible.x0), (F32)(surface_offset.y + visible.y0),
+              (F32)wnd->geo3d_size.x, (F32)wnd->geo3d_size.y,
+              0.0f, 1.0f
+            };
+            d_ctx->lpVtbl->RSSetViewports(d_ctx, 1, &composite_viewport);
             d_ctx->lpVtbl->RSSetState(d_ctx, (ID3D11RasterizerState *)r_d3d11_state->main_rasterizer);
             
             // rjf: setup input assembly
@@ -1511,34 +1525,14 @@ r_window_submit(WM_Window window, R_Handle window_equip, R_PassList *passes)
             
             // rjf: setup scissor rect
             {
-              D3D11_RECT rect = {0};
-              Rng2F32 clip = params->clip;
-              if(clip.x0 == 0 && clip.y0 == 0 && clip.x1 == 0 && clip.y1 == 0)
-              {
-                rect.left = 0;
-                rect.right = (LONG)wnd->last_resolution.x;
-                rect.top = 0;
-                rect.bottom = (LONG)wnd->last_resolution.y;
-              }
-              else if(clip.x0 > clip.x1 || clip.y0 > clip.y1)
-              {
-                rect.left = 0;
-                rect.right = 0;
-                rect.top = 0;
-                rect.bottom = 0;
-              }
-              else
-              {
-                rect.left = (LONG)clip.x0;
-                rect.right = (LONG)clip.x1;
-                rect.top = (LONG)clip.y0;
-                rect.bottom = (LONG)clip.y1;
-              }
+              D3D11_RECT rect = r_d3d11_surface_scissor_from_rect(wnd, visible);
               d_ctx->lpVtbl->RSSetScissorRects(d_ctx, 1, &rect);
             }
             
             // rjf: draw
             d_ctx->lpVtbl->Draw(d_ctx, 4, 0);
+            ID3D11ShaderResourceView *srv = 0;
+            d_ctx->lpVtbl->PSSetShaderResources(d_ctx, 0, 1, &srv);
           }
         }break;
       }

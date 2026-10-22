@@ -367,11 +367,43 @@ w32_wm_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       {
         PAINTSTRUCT ps = {0};
         BeginPaint(hwnd, &ps);
+        B32 between_frames = w32_wm_between_frames;
+        w32_wm_between_frames = 0;
         update();
+        w32_wm_between_frames = between_frames;
         EndPaint(hwnd, &ps);
         DwmFlush();
       }break;
       
+      case W32_COMP_RENDER_RESIZE_MSG:
+      {
+        if(window != 0 && window->comp_resize_queued)
+        {
+          HANDLE sync = window->comp_resize_sync;
+          window->comp_resize_sync = 0;
+          window->comp_resize_queued = 0;
+          if(w32_wm_between_frames && !IsIconic(hwnd))
+          {
+            w32_wm_between_frames = 0;
+            update();
+            w32_wm_between_frames = 1;
+            ValidateRect(hwnd, 0);
+          }
+          // update() can close a window. The detached token still belongs to this handler.
+          window = w32_wm_window_from_hwnd(hwnd);
+          if(window != 0 && window->comp_surface != 0)
+          {
+            w32_comp_commit_resize(window, sync);
+          }
+          else if(sync != 0)
+          {
+            CloseHandle(sync);
+          }
+          Assert(w32_comp_state.pending_resizes > 0);
+          --w32_comp_state.pending_resizes;
+        }
+      }break;
+
       case WM_CLOSE:
       {
         w32_wm_push_event(WM_EventKind_WindowClose, window);
@@ -618,6 +650,32 @@ w32_wm_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
       }break;
       case WM_WINDOWPOSCHANGED:
       {
+        // NOTE: returning without DefWindowProc means no WM_SIZE; a composed window's size changes are handled here.
+        // Capture the token now, but render and commit only after returning from this window-position callback.
+        WINDOWPOS *pos = (WINDOWPOS *)lParam;
+        if(window != 0 && window->comp_surface != 0 && !(pos->flags & SWP_NOSIZE))
+        {
+          HANDLE sync = 0;
+          W32_Comp_State *s = &w32_comp_state;
+          if(!s->get_resize_sync_object(hwnd, &sync))
+          {
+            if(sync != 0){CloseHandle(sync);}
+            sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not acquire the resize synchronization object."));
+            abort_self(1);
+          }
+          if(window->comp_resize_sync != 0){CloseHandle(window->comp_resize_sync);}
+          window->comp_resize_sync = sync;
+          if(!window->comp_resize_queued)
+          {
+            window->comp_resize_queued = 1;
+            ++s->pending_resizes;
+            if(!PostMessageW(hwnd, W32_COMP_RENDER_RESIZE_MSG, 0, 0))
+            {
+              sh_message(1, str8_lit("Fatal Error"), str8_lit("Could not post the resize frame."));
+              abort_self(1);
+            }
+          }
+        }
         result = 0;
       }break;
       case WM_NCUAHDRAWCAPTION:
@@ -1548,20 +1606,35 @@ wm_get_events(Arena *arena, B32 wait)
 {
   w32_wm_event_arena = arena;
   MemoryZeroStruct(&w32_wm_event_list);
-  MSG msg = {0};
-  if(!wait || GetMessageW(&msg, 0, 0, 0))
+  
+  //- composition has no swap chain Present to pace frames; use the compositor clock only while frames follow
+  if(!wait && w32_comp_state.graphics_device != 0 && w32_comp_state.wait_for_compositor_clock != 0)
   {
-    B32 first_wait = wait;
-    for(;first_wait || PeekMessageW(&msg, 0, 0, 0, PM_REMOVE); first_wait = 0)
-    {
-      TranslateMessage(&msg);
-      DispatchMessageW(&msg);
-      if(msg.message == WM_QUIT)
-      {
-        w32_wm_push_event(WM_EventKind_WindowClose, 0);
-      }
-    }
+    w32_comp_state.wait_for_compositor_clock(0, 0, 100);
   }
+  
+  w32_wm_between_frames = 1;
+  MSG msg = {0};
+  B32 block = wait;
+  for(;;)
+  {
+    if(!PeekMessageW(&msg, 0, 0, 0, PM_REMOVE))
+    {
+      if(!block || MsgWaitForMultipleObjectsEx(0, 0, wait ? INFINITE : 100, QS_ALLINPUT, MWMO_INPUTAVAILABLE) == WAIT_TIMEOUT)
+      {
+        break;
+      }
+      continue;
+    }
+    TranslateMessage(&msg);
+    DispatchMessageW(&msg);
+    if(msg.message == WM_QUIT)
+    {
+      w32_wm_push_event(WM_EventKind_WindowClose, 0);
+    }
+    block = 0;
+  }
+  w32_wm_between_frames = 0;
   return w32_wm_event_list;
 }
 
@@ -1654,3 +1727,8 @@ hcursor = curs; }break;
     w32_wm_state->hCursor = hcursor;
   }
 }
+
+////////////////////////////////
+//~ Composition
+
+#include "win32_composition.c"

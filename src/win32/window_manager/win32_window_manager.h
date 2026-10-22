@@ -49,6 +49,15 @@ struct W32_WM_Window
   Arena *paint_arena;
   W32_WM_TitleBarClientArea *first_title_bar_client_area;
   W32_WM_TitleBarClientArea *last_title_bar_client_area;
+  
+  // composition (win32_composition.c): set while the renderer draws this window through a composition surface
+  void *comp_target;  // ICompositionTarget
+  void *comp_visual;  // IVisual
+  void *comp_surface; // ICompositionDrawingSurfaceInterop
+  HWND comp_resize_child;
+  Vec2S32 comp_size;
+  HANDLE comp_resize_sync;
+  B32 comp_resize_queued;
 };
 
 ////////////////////////////////
@@ -95,6 +104,7 @@ global WM_EventList w32_wm_event_list = {0};
 global Arena *w32_wm_event_arena = 0;
 global B32 w32_wm_resizing = 0;
 global B32 w32_wm_new_window_custom_border = 0;
+global B32 w32_wm_between_frames = 0; // dispatching wm_get_events' messages, outside any update(): a window message may build a frame
 
 ////////////////////////////////
 //~ rjf: Basic Helpers
@@ -119,5 +129,7 @@ internal LRESULT         w32_wm_wnd_proc(HWND hwnd, UINT uMsg, WPARAM wParam, LP
 //~ rjf: Monitors
 
 internal BOOL w32_wm_monitor_gather_enum_proc(HMONITOR monitor, HDC hdc, LPRECT rect, LPARAM bundle_ptr);
+
+#include "win32_composition.h"
 
 #endif // WIN32_WINDOW_MANAGER_H
