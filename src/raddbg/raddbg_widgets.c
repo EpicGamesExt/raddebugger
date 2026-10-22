@@ -1346,7 +1346,7 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
   Temp scratch = scratch_begin(0, 0);
   D_Entity *selected_thread = d_entity_from_handle(rd_regs()->thread);
   D_Entity *selected_thread_process = d_entity_ancestor_from_kind(selected_thread, D_EntityKind_Process);
-  U64 selected_thread_rip_unwind_vaddr = d_query_cached_rip_from_thread_unwind(selected_thread, rd_regs()->unwind_count);
+  U64 selected_thread_rip_unwind_vaddr = d_cached_rip_from_thread_unwind(selected_thread, rd_regs()->unwind_count);
   D_Entity *selected_thread_module = d_module_from_process_vaddr(selected_thread_process, selected_thread_rip_unwind_vaddr);
   D_Event stop_event = d_ctrl_last_stop_event();
   D_Entity *stopper_thread = d_entity_from_handle(stop_event.entity);
@@ -1512,7 +1512,7 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
               continue;
             }
             U64 unwind_count = (thread == selected_thread) ? rd_regs()->unwind_count : 0;
-            U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
+            U64 thread_rip_vaddr = d_cached_rip_from_thread_unwind(thread, unwind_count);
             D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
             D_Entity *module = d_module_from_process_vaddr(process, thread_rip_vaddr);
             DI_Key dbgi_key = d_dbgi_key_from_module(module);
@@ -1689,7 +1689,7 @@ rd_code_slice(RD_CodeSliceParams *params, U64 *cursor, U64 *mark, S64 *preferred
               continue;
             }
             U64 unwind_count = (thread == selected_thread) ? rd_regs()->unwind_count : 0;
-            U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
+            U64 thread_rip_vaddr = d_cached_rip_from_thread_unwind(thread, unwind_count);
             D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
             D_Entity *module = d_module_from_process_vaddr(process, thread_rip_vaddr);
             DI_Key dbgi_key = d_dbgi_key_from_module(module);

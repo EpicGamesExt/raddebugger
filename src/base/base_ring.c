@@ -22,7 +22,10 @@ ring_try_write(Ring *ring, U64 size, void *ptr)
   if(bytes_available >= size)
   {
     result = 1;
-    ring->write_pos += wrapped_write(ring->base, ring->size, ring->write_pos, ptr, size);
+    if(ptr != 0)
+    {
+      ring->write_pos += wrapped_write(ring->base, ring->size, ring->write_pos, ptr, size);
+    }
   }
   return result;
 }
@@ -35,7 +38,10 @@ ring_try_read(Ring *ring, U64 size, void *ptr)
   if(bytes_unconsumed >= size)
   {
     result = 1;
-    ring->read_pos += wrapped_read(ring->base, ring->size, ring->read_pos, ptr, size);
+    if(ptr != 0)
+    {
+      ring->read_pos += wrapped_read(ring->base, ring->size, ring->read_pos, ptr, size);
+    }
   }
   return result;
 }
@@ -78,7 +84,7 @@ internal B32
 guarded_ring_try_write(RingGuard *guard, U64 size, void *ptr)
 {
   B32 result = ring_try_write(guard->r->ring, size, ptr);
-  if(result)
+  if(result && ptr != 0)
   {
     cond_var_broadcast(guard->r->cv);
   }
@@ -89,7 +95,7 @@ internal B32
 guarded_ring_try_read(RingGuard *guard, U64 size, void *ptr)
 {
   B32 result = ring_try_read(guard->r->ring, size, ptr);
-  if(result)
+  if(result && ptr != 0)
   {
     cond_var_broadcast(guard->r->cv);
   }

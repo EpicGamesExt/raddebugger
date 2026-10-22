@@ -12538,7 +12538,7 @@ rd_frame(void)
     Arch arch = thread->arch;
     E_Space primary_space = rd_eval_space_from_ctrl_entity(process, D_EvalSpaceKind_Entity);
     U64 unwind_count = rd_regs()->unwind_count;
-    U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
+    U64 rip_vaddr = d_cached_rip_from_thread_unwind(thread, unwind_count);
     D_Entity *module = d_module_from_process_vaddr(process, rip_vaddr);
     U64 rip_voff = d_voff_from_vaddr(module, rip_vaddr);
     U64 tls_root_vaddr = thread->tls_root_vaddr;
@@ -13499,8 +13499,8 @@ rd_frame(void)
     {
       E_IRCtx *ctx = ir_ctx;
       ctx->regs_map       = d_string2reg_from_arch(arch);
-      ctx->locals_map     = d_query_cached_locals_map_from_dbgi_key_voff(eval_base_ctx->primary_dbg_info->dbgi_key, rip_voff);
-      ctx->member_map     = d_query_cached_member_map_from_dbgi_key_voff(eval_base_ctx->primary_dbg_info->dbgi_key, rip_voff);
+      ctx->locals_map     = d_cached_locals_map_from_dbgi_key_voff(eval_base_ctx->primary_dbg_info->dbgi_key, rip_voff);
+      ctx->member_map     = d_cached_member_map_from_dbgi_key_voff(eval_base_ctx->primary_dbg_info->dbgi_key, rip_voff);
       ctx->macro_map      = macro_map;
       ctx->auto_hook_map  = auto_hook_map;
     }
@@ -13521,7 +13521,7 @@ rd_frame(void)
       ctx->frame_base                  = push_array(scratch.arena, U64, 1);
       ctx->tls_base                    = push_array(scratch.arena, U64, 1);
       ctx->tls_base[0]                 = d_cached_tls_vaddr_from_thread_module(thread->handle, module->handle, rd_state->frame_eval_memread_endt_us, 0);
-      ctx->cfa                         = d_query_cached_cfa_from_thread_unwind(thread, unwind_count);
+      ctx->cfa                         = d_cached_cfa_from_thread_unwind(thread, unwind_count);
     }
     e_select_interpret_ctx(interpret_ctx, eval_dbg_infos_primary->rdi, rip_voff);
     
@@ -14031,7 +14031,7 @@ rd_frame(void)
                 str8_list_pushf(scratch.arena, &state_parts, "  {\n");
                 str8_list_pushf(scratch.arena, &state_parts, "   name: \"%S\"\n", escaped_from_raw_str8(scratch.arena, thread->string));
                 str8_list_pushf(scratch.arena, &state_parts, "   id:   %I64u\n", thread->id);
-                str8_list_pushf(scratch.arena, &state_parts, "   ip:   0x%I64x\n", d_query_cached_rip_from_thread(thread));
+                str8_list_pushf(scratch.arena, &state_parts, "   ip:   0x%I64x\n", d_cached_rip_from_thread(thread));
                 str8_list_pushf(scratch.arena, &state_parts, "  }\n");
               }
               str8_list_pushf(scratch.arena, &state_parts, " }\n");
@@ -15533,7 +15533,7 @@ rd_frame(void)
             }
             if(vaddr == 0)
             {
-              vaddr = d_query_cached_rip_from_thread_unwind(thread, rd_regs()->unwind_count);
+              vaddr = d_cached_rip_from_thread_unwind(thread, rd_regs()->unwind_count);
             }
             rd_cmd(RD_CmdKind_FindCodeLocation, .process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process)->handle, .vaddr = vaddr, .prefer_disasm = 1);
           }break;
@@ -15699,7 +15699,7 @@ rd_frame(void)
             D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
             U64 unwind_index = rd_regs()->unwind_count;
             U64 inline_depth = rd_regs()->inline_depth;
-            U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_index);
+            U64 rip_vaddr = d_cached_rip_from_thread_unwind(thread, unwind_index);
             
             //- rjf: determine if any disassembly is open
             B32 any_disasm_is_open = 0;

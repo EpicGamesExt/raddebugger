@@ -425,11 +425,12 @@ struct D_ServerSlot
 ////////////////////////////////
 //~ rjf: Socket Receiving Rings
 
-typedef struct D_SockRing D_SockRing;
-struct D_SockRing
+typedef struct D_SockRingSlot D_SockRingSlot;
+struct D_SockRingSlot
 {
-  D_SockRing *next;
-  GuardedRing *ring;
+  D_SockRingSlot *next;
+  GuardedRing *recv_ring;
+  GuardedRing *completion_ring;
 };
 
 ////////////////////////////////
@@ -440,14 +441,15 @@ struct D_CtrlState
 {
   Arena *arena;
   D_WakeupFunctionType *wakeup_hook;
-  SOCK_Session sock_session;
+  SOCK2_Session sock_session;
   Thread sock_recv_thread;
+  RWMutex sock_send_mutex;
   
   // rjf: network response receiving ring buffers
   GuardedRing *sock_event_ring;
   U64 sock_rings_count;
-  D_SockRing *sock_rings;
-  D_SockRing *free_sock_ring;
+  D_SockRingSlot *sock_rings;
+  D_SockRingSlot *free_sock_ring;
   RWMutex sock_ring_alloc_rw_mutex;
   CondVar sock_ring_alloc_cv;
   
@@ -699,9 +701,18 @@ internal SOCK_Endpoint d_endpoint_from_server_id(D_ServerID server_id);
 ////////////////////////////////
 //~ rjf: Server Sends/Receives
 
-internal U16 d_sock_ring_open(void);
-internal void d_sock_ring_close(U16 id);
-internal DS_Response d_sock_ring_recv(Arena *arena, U16 ring_id);
+typedef struct D_ServerIOCtx D_ServerIOCtx;
+struct D_ServerIOCtx
+{
+  U16 ring_id;
+};
+
+internal D_ServerIOCtx d_server_io_begin(void);
+internal B32 d_server_io_send_msg(D_ServerIOCtx ctx, SOCK_Endpoint endpoint, DS_Msg *msg);
+internal DS_Response d_server_io_recv_response(Arena *arena, D_ServerIOCtx ctx);
+internal void d_server_io_end(D_ServerIOCtx ctx);
+
+internal DS_Response d_server_msg(Arena *arena, SOCK_Endpoint endpoint, DS_Msg *msg);
 
 ////////////////////////////////
 //~ rjf: Unwinding Functions
@@ -756,9 +767,6 @@ internal void d_ctrl_thread__close_dump_process(D_MsgID msg_id, D_Handle process
 internal D_RunCtrls *d_ctrl_thread__run_ctrls(Arena *arena);
 internal D_ServerRunCtrls *d_ctrl_thread__server_run_ctrls_from_id_or_push(Arena *arena, D_RunCtrls *ctrls, D_ServerID server_id);
 internal D_ServerRunCtrls *d_ctrl_thread__server_run_ctrls_from_id(D_RunCtrls *ctrls, D_ServerID server_id);
-
-//- rjf: server packet dequeueing
-internal DS_Response d_ctrl_thread__next_server_response(Arena *arena);
 
 //- rjf: attached process running/event gathering
 internal DMN_Event *d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D_RunCtrls *run_ctrls, D_Spoof *spoof, D_ServerID *server_id_out);
@@ -833,8 +841,9 @@ internal void d_call_stack_tree_artifact_destroy(AC_Artifact artifact);
 internal D_CallStackTree d_call_stack_tree(Access *access, U64 endt_us);
 
 ////////////////////////////////
-//~ rjf: Socket Receiving Thread
+//~ rjf: Socket Traffic Distribution Threads
 
 internal void d_sock_recv_thread_entry_point(void *p);
+internal void d_sock_send_completion_thread_entry_point(void *p);
 
 #endif // DBG_ENGINE_CTRL_H

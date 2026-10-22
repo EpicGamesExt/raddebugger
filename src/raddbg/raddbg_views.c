@@ -561,7 +561,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
         D_Entity *process = d_entity_ancestor_from_kind(thread, D_EntityKind_Process);
         U64 unwind_count = (thread == selected_thread) ? rd_regs()->unwind_count : 0;
         U64 inline_depth = (thread == selected_thread) ? rd_regs()->inline_depth : 0;
-        U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
+        U64 rip_vaddr = d_cached_rip_from_thread_unwind(thread, unwind_count);
         U64 last_inst_on_unwound_rip_vaddr = rip_vaddr - !!unwind_count;
         D_Entity *module = d_module_from_process_vaddr(process, last_inst_on_unwound_rip_vaddr);
         D_Entity *dbg_path = d_entity_child_from_kind(module, D_EntityKind_DebugInfoPath);
@@ -665,7 +665,7 @@ rd_code_view_build(Arena *arena, RD_CodeViewState *cv, RD_CodeViewBuildFlags fla
       {
         D_Entity *thread = threads.v[idx];
         U64 unwind_count = (thread == selected_thread) ? rd_regs()->unwind_count : 0;
-        U64 rip_vaddr = d_query_cached_rip_from_thread_unwind(thread, unwind_count);
+        U64 rip_vaddr = d_cached_rip_from_thread_unwind(thread, unwind_count);
         if(d_entity_ancestor_from_kind(thread, D_EntityKind_Process) == process && contains_1u64(dasm_vaddr_range, rip_vaddr))
         {
           U64 rip_off = rip_vaddr - dasm_vaddr_range.min;
@@ -1311,7 +1311,7 @@ rd_watch_row_info_from_row(Arena *arena, EV_Row *row)
         if(row->eval.irtree.mode == E_Mode_Value)
         {
           D_Entity *process = d_process_from_entity(row_ctrl_entity);
-          info.module = d_module_from_process_vaddr(process, d_query_cached_rip_from_thread(row_ctrl_entity));
+          info.module = d_module_from_process_vaddr(process, d_cached_rip_from_thread(row_ctrl_entity));
         }break;
       }
     }
@@ -3761,7 +3761,7 @@ RD_VIEW_UI_FUNCTION_DEF(memory)
         mix_4f32(local_color, v4f32(0, 0, 0, 1), 0.6f),
         mix_4f32(local_color, v4f32(0, 0, 0, 1), 0.8f),
       };
-      U64 thread_rip_vaddr = d_query_cached_rip_from_thread_unwind(selected_thread, rd_regs()->unwind_count);
+      U64 thread_rip_vaddr = d_cached_rip_from_thread_unwind(selected_thread, rd_regs()->unwind_count);
       for(E_String2NumMapNode *n = e_ir_ctx->locals_map->first; n != 0; n = n->order_next)
       {
         String8 local_name = n->string;

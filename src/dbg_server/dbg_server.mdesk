@@ -1,0 +1,70 @@
+// Copyright (c) Epic Games Tools
+// Licensed under the MIT license (https://opensource.org/license/mit/)
+
+@table(name)
+DS_PacketTable:
+{
+  {Null}
+  {Msg}
+  {Response}
+  {Event}
+}
+
+@enum DS_PacketKind:
+{
+  @expand(DS_PacketTable a) `$(a.name)`,
+}
+
+@data(String8) ds_name_from_packet_kind_table:
+{
+  @expand(DS_PacketTable a) `str8_lit_comp("$(a.name)")`,
+}
+
+@table(name)
+DS_MsgTable:
+{
+  {Null}
+  
+  //- rjf: connection handshake
+  {Handshake}
+  
+  //- rjf: debuggee attaching/detaching ops
+  {Launch}
+  {Attach}
+  {Kill}
+  {Detach}
+  
+  //- rjf: running ops
+  {Run}
+  {SingleStep}
+  
+  //- rjf: halting
+  {Halt}
+  
+  //- rjf: memory ops
+  {MemoryReserve}
+  {MemoryCommit}
+  {MemoryDecommit}
+  {MemoryRelease}
+  {MemoryProtect}
+  {MemoryRead}
+  {MemoryWrite}
+  
+  //- rjf: thread ops
+  {ThreadRegBlockRead}
+  {ThreadRegBlockWrite}
+  {ThreadGetModuleTLSVAddr}
+  
+  //- rjf: system ops
+  {ListSystemProcesses}
+}
+
+@enum DS_MsgKind:
+{
+  @expand(DS_MsgTable a) `$(a.name)`,
+}
+
+@data(String8) ds_name_from_msg_kind_table:
+{
+  @expand(DS_MsgTable a) `str8_lit_comp("$(a.name)")`,
+}

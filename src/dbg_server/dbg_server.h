@@ -5,70 +5,34 @@
 #define DBG_SERVER_H
 
 ////////////////////////////////
+//~ rjf: Generated Code
+
+#include "generated/dbg_server.meta.h"
+
+////////////////////////////////
 //~ rjf: Packet Headers
 
 #define DS_PACKET_MAGIC 0x7273
 #define DS_PACKET_VERSION 0x0
-#define DS_PACKET_CAP KB(1)
+#define DS_PACKET_SIZE KB(1)
 
-typedef U8 DS_PacketKind;
+typedef U8 DS_PacketFlags;
 enum
 {
-  DS_PacketKind_Msg,
-  DS_PacketKind_Response,
-  DS_PacketKind_Event,
+  DS_PacketFlag_KindMask = 0x7f,
+  DS_PacketFlag_Terminal = (1<<7),
 };
 
 typedef struct DS_PacketHeader DS_PacketHeader;
 struct DS_PacketHeader
 {
   U16 magic;
-  DS_PacketKind kind;
+  DS_PacketFlags flags;
   U8 version;
-  U32 payload_size;
 };
 
 ////////////////////////////////
 //~ rjf: Messages (Client -> Server)
-
-typedef enum DS_MsgKind
-{
-  DS_MsgKind_Null,
-  
-  //- rjf: connection handshake
-  DS_MsgKind_Handshake,
-  
-  //- rjf: debuggee attaching/detaching ops
-  DS_MsgKind_Launch,
-  DS_MsgKind_Attach,
-  DS_MsgKind_Kill,
-  DS_MsgKind_Detach,
-  
-  //- rjf: running ops
-  DS_MsgKind_Run,
-  DS_MsgKind_SingleStep,
-  
-  //- rjf: halting
-  DS_MsgKind_Halt,
-  
-  //- rjf: memory ops
-  DS_MsgKind_MemoryReserve,
-  DS_MsgKind_MemoryCommit,
-  DS_MsgKind_MemoryDecommit,
-  DS_MsgKind_MemoryRelease,
-  DS_MsgKind_MemoryProtect,
-  DS_MsgKind_MemoryRead,
-  DS_MsgKind_MemoryWrite,
-  
-  //- rjf: thread ops
-  DS_MsgKind_ThreadRegBlockRead,
-  DS_MsgKind_ThreadRegBlockWrite,
-  DS_MsgKind_ThreadGetModuleTLSVAddr,
-  
-  //- rjf: system ops
-  DS_MsgKind_ListSystemProcesses,
-}
-DS_MsgKind;
 
 typedef U32 DS_MsgFlags;
 enum
@@ -141,12 +105,27 @@ struct DS_ResponseNode
 ////////////////////////////////
 //~ rjf: Message/Response Parsing
 
+internal DS_Msg ds_msg_from_data(Arena *arena, String8 data);
+internal String8 ds_data_from_msg(Arena *arena, DS_Msg *msg);
+internal DS_Response ds_response_from_data(String8 data);
+internal String8 ds_data_from_response(Arena *arena, DS_Response *response);
+internal DMN_EventList ds_dmn_events_from_data(Arena *arena, String8 data);
+internal String8 ds_data_from_dmn_events(Arena *arena, DMN_EventList evts);
+
+internal String8List ds_packets_from_data(Arena *arena, DS_PacketKind kind, String8 data);
+internal String8 ds_data_from_packets(Arena *arena, String8List packets, DS_PacketKind *packet_kind_out);
+
+////////////////////////////////
+//~ rjf: Message/Response Parsing
+
+#if 0
 internal DS_Msg ds_msg_from_packet(Arena *arena, String8 data);
 internal String8 ds_packet_from_msg(Arena *arena, DS_Msg *msg);
 internal DS_Response ds_response_from_packet(String8 data);
 internal String8 ds_packet_from_response(Arena *arena, DS_Response *response);
 internal DMN_EventList ds_dmn_events_from_packet(Arena *arena, String8 data);
 internal String8 ds_packet_from_dmn_events(Arena *arena, DMN_EventList evts);
+#endif
 
 ////////////////////////////////
 //~ rjf: Local Server Functions

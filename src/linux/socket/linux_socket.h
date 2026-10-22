@@ -65,6 +65,6 @@ global LNX_SOCK_State *lnx_sock_state = 0;
 ////////////////////////////////
 //~ rjf: Listener Thread
 
-internal void lnx_sock_listener_thread_entry_point(void *p);
+internal void lnx_sock2_listener_thread_entry_point(void *p);
 
 #endif // LINUX_SOCKET_H

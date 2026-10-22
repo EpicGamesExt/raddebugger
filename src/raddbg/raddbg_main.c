@@ -7,6 +7,9 @@
 // [ ] ui -> ui?
 // [ ] ui (w/ debug info) -> ui (w/out debug info)?
 // [ ] ctrl -> slim server?
+//
+// [ ] get all slow paths off UI thread - UI should ONLY ever access cached register blocks,
+//     cache lookup should NOT fill with slow path, etc.
 
 ////////////////////////////////
 //~ rjf: linux TODO notes
@@ -426,6 +429,7 @@
 #include "window_manager/window_manager_inc.h"
 #include "shell/shell_inc.h"
 #include "socket/socket_inc.h"
+#include "socket2/socket2_inc.h"
 #include "http/http_inc.h"
 #include "symbol_server/symbol_server_inc.h"
 #include "config/config_inc.h"
@@ -490,6 +494,7 @@
 #include "window_manager/window_manager_inc.c"
 #include "shell/shell_inc.c"
 #include "socket/socket_inc.c"
+#include "socket2/socket2_inc.c"
 #include "http/http_inc.c"
 #include "symbol_server/symbol_server_inc.c"
 #include "config/config_inc.c"
@@ -550,6 +555,19 @@ typedef enum ExecMode
   ExecMode_Help,
 }
 ExecMode;
+
+////////////////////////////////
+//~ rjf: IPC Packets
+
+#define IPC_PACKET_MAGIC 0x72726300
+#define IPC_PACKET_SIZE KB(1)
+
+typedef struct IPCPacketHeader IPCPacketHeader;
+struct IPCPacketHeader
+{
+  U32 magic;
+  B32 is_last;
+};
 
 ////////////////////////////////
 //~ rjf: Ctrl -> Main Thread Wakeup Hook
@@ -637,7 +655,6 @@ entry_point(CmdLine *cmd_line)
   make_directory(g_logs_folder);
   
   //- rjf: dispatch to top-level codepath based on execution mode
-  U32 ipc_packet_magic_start = 0x72726300;
   switch(exec_mode)
   {
     //- rjf: normal execution
@@ -692,81 +709,90 @@ entry_point(CmdLine *cmd_line)
         d_set_wakeup_hook(wakeup_hook_ctrl);
       }
       
-      //- rjf: set up socket session for IPC
-      SOCK_Session ipc_sock_session = sock_session_open((U16)ipc_port, wakeup_hook_ctrl);
+      //- rjf: set up IPC resources
+      SOCK2_Session ipc_sock_session = sock2_session_open((U16)ipc_port, wakeup_hook_ctrl, IPC_PACKET_SIZE);
+      Arena *ipc_packet_arena = arena_alloc();
+      String8List ipc_msg_pieces = {0};
       
       //- rjf: main application loop
       {
         for(B32 quit = 0; !quit;)
         {
-          //- rjf: receive packets, run as IPC messages
+          //- rjf: receive next IPC packet
           B32 ipc_command_frame = 0;
-          SOCK_Protocol ipc_protocol = SOCK_Protocol_TCP;
           SOCK_Endpoint ipc_endpoint = {0};
           {
             Temp scratch = scratch_begin(0, 0);
-            String8 packet = {0};
-            if(sock_recv(scratch.arena, ipc_sock_session, &ipc_protocol, &ipc_endpoint, &packet, 0))
+            U8 *packet_buffer = push_array(scratch.arena, U8, IPC_PACKET_SIZE);
+            if(sock2_recv(ipc_sock_session, &ipc_endpoint, 0, packet_buffer, 0))
             {
-              // rjf: use header to determine message portion
-              String8 msg = {0};
+              String8 packet = str8(packet_buffer, IPC_PACKET_SIZE);
+              IPCPacketHeader header = {0};
+              str8_deserial_read_struct(packet, 0, &header);
+              String8 msg_piece = str8_skip(packet, sizeof(header));
+              msg_piece = str8_cstring_capped(msg_piece.str, msg_piece.str + msg_piece.size);
+              str8_list_push(ipc_packet_arena, &ipc_msg_pieces, str8_copy(ipc_packet_arena, msg_piece));
+              if(header.is_last)
               {
-                U64 msg_size = 0;
-                U64 header_size = sizeof(ipc_packet_magic_start) + sizeof(U64);
-                if(str8_match(packet, str8_struct(&ipc_packet_magic_start), StringMatchFlag_RightSideSloppy) &&
-                   packet.size >= header_size)
-                {
-                  U64 msg_size_cap = packet.size - header_size;
-                  msg_size = *(U64 *)(packet.str + sizeof(ipc_packet_magic_start));
-                  msg_size = Min(msg_size, msg_size_cap);
-                  msg = str8_substr(packet, r1u64(header_size, header_size+msg_size));
-                }
-              }
-              
-              // rjf: split command by ;s
-              String8List cmd_parts_of_msg = str8_split(scratch.arena, msg, (U8 *)";", 1, 0);
-              
-              // rjf: pick target window
-              RD_WindowState *dst_ws = rd_state->first_window_state;
-              for(RD_WindowState *ws = dst_ws; ws != &rd_nil_window_state; ws = ws->order_next)
-              {
-                if(wm_window_is_focused(ws->os))
-                {
-                  dst_ws = ws;
-                  break;
-                }
-              }
-              
-              // rjf: got a window -> send command
-              if(dst_ws != &rd_nil_window_state)
-              {
-                dst_ws->window_temporarily_focused_ipc = 1;
-                RD_RegsScope()
-                {
-                  if(dst_ws->cfg_id != rd_regs()->window)
-                  {
-                    Temp scratch = scratch_begin(0, 0);
-                    CFG_PanelTree panel_tree = cfg_panel_tree_from_cfg(scratch.arena, cfg_node_from_id(dst_ws->cfg_id));
-                    rd_regs()->window = dst_ws->cfg_id;
-                    rd_regs()->panel  = panel_tree.focused->cfg->id;
-                    rd_regs()->tab    = panel_tree.focused->selected_tab->id;
-                    rd_regs()->view   = panel_tree.focused->selected_tab->id;
-                    scratch_end(scratch);
-                  }
-                  for EachNode(n, String8Node, cmd_parts_of_msg.first)
-                  {
-                    String8 cmd_string = str8_skip_chop_whitespace(n->string);
-                    if(cmd_string.size != 0)
-                    {
-                      rd_cmd(RD_CmdKind_RunExternalDriverTextCommand, .string = cmd_string);
-                    }
-                  }
-                  rd_request_frame();
-                  ipc_command_frame = 1;
-                  rd_state->ipc_sock_endpoint = ipc_endpoint;
-                }
+                ipc_command_frame = 1;
               }
             }
+            scratch_end(scratch);
+          }
+          
+          //- rjf: if this is an ipc command frame, we're done receiving a chain of packets.
+          // join & send down as a command
+          if(ipc_command_frame)
+          {
+            Temp scratch = scratch_begin(0, 0);
+            String8 msg = str8_list_join(scratch.arena, &ipc_msg_pieces, 0);
+            MemoryZeroStruct(&ipc_msg_pieces);
+            arena_clear(ipc_packet_arena);
+            
+            // rjf: split command by ;s
+            String8List cmd_parts_of_msg = str8_split(scratch.arena, msg, (U8 *)";", 1, 0);
+            
+            // rjf: pick target window
+            RD_WindowState *dst_ws = rd_state->first_window_state;
+            for(RD_WindowState *ws = dst_ws; ws != &rd_nil_window_state; ws = ws->order_next)
+            {
+              if(wm_window_is_focused(ws->os))
+              {
+                dst_ws = ws;
+                break;
+              }
+            }
+            
+            // rjf: got a window -> send command
+            if(dst_ws != &rd_nil_window_state)
+            {
+              dst_ws->window_temporarily_focused_ipc = 1;
+              RD_RegsScope()
+              {
+                if(dst_ws->cfg_id != rd_regs()->window)
+                {
+                  Temp scratch = scratch_begin(0, 0);
+                  CFG_PanelTree panel_tree = cfg_panel_tree_from_cfg(scratch.arena, cfg_node_from_id(dst_ws->cfg_id));
+                  rd_regs()->window = dst_ws->cfg_id;
+                  rd_regs()->panel  = panel_tree.focused->cfg->id;
+                  rd_regs()->tab    = panel_tree.focused->selected_tab->id;
+                  rd_regs()->view   = panel_tree.focused->selected_tab->id;
+                  scratch_end(scratch);
+                }
+                for EachNode(n, String8Node, cmd_parts_of_msg.first)
+                {
+                  String8 cmd_string = str8_skip_chop_whitespace(n->string);
+                  if(cmd_string.size != 0)
+                  {
+                    rd_cmd(RD_CmdKind_RunExternalDriverTextCommand, .string = cmd_string);
+                  }
+                }
+                rd_request_frame();
+                ipc_command_frame = 1;
+                rd_state->ipc_sock_endpoint = ipc_endpoint;
+              }
+            }
+            
             scratch_end(scratch);
           }
           
@@ -797,11 +823,28 @@ entry_point(CmdLine *cmd_line)
           //- rjf: gather command outputs & send them back back to sender
           if(ipc_command_frame)
           {
-            U64 packet_size = rd_state->cmd_outputs.total_size;
-            str8_list_push_front(scratch.arena, &rd_state->cmd_outputs, str8_struct(&packet_size));
-            str8_list_push_front(scratch.arena, &rd_state->cmd_outputs, str8_struct(&ipc_packet_magic_start));
-            String8 msg = str8_list_join(scratch.arena, &rd_state->cmd_outputs, 0);
-            sock_send(ipc_sock_session, ipc_protocol, ipc_endpoint, msg, now_time_us()+5000000);
+            Temp scratch = scratch_begin(0, 0);
+            String8 cmd_outputs = str8_list_join(scratch.arena, &rd_state->cmd_outputs, 0);
+            U64 header_size = sizeof(IPCPacketHeader);
+            U64 payload_size_per_packet = (IPC_PACKET_SIZE - header_size);
+            U64 packet_count = (cmd_outputs.size + payload_size_per_packet-1) / payload_size_per_packet;
+            for EachIndex(packet_idx, packet_count)
+            {
+              Temp scratch2 = scratch_begin(&scratch.arena, 1);
+              IPCPacketHeader header = {IPC_PACKET_MAGIC, (packet_idx+1 == packet_count)};
+              String8 payload = str8_substr(cmd_outputs, r1u64(packet_idx*payload_size_per_packet, (packet_idx+1)*payload_size_per_packet));
+              U64 padding_byte_count = payload_size_per_packet - payload.size;
+              U8 *padding_bytes = push_array(scratch2.arena, U8, padding_byte_count);
+              String8 padding = str8(padding_bytes, padding_byte_count);
+              String8List packet_parts = {0};
+              str8_list_push(scratch2.arena, &packet_parts, str8_struct(&header));
+              str8_list_push(scratch2.arena, &packet_parts, payload);
+              str8_list_push(scratch2.arena, &packet_parts, padding);
+              String8 packet = str8_list_join(scratch2.arena, &packet_parts, 0);
+              sock2_send(ipc_sock_session, ipc_endpoint, SOCK_Protocol_TCP, packet, max_U64);
+              scratch_end(scratch2);
+            }
+            scratch_end(scratch);
           }
         }
       }
@@ -814,7 +857,8 @@ entry_point(CmdLine *cmd_line)
       Temp scratch = scratch_begin(0, 0);
       
       //- rjf: create socket session
-      SOCK_Session ipc_sock_session = sock_session_open(0, 0);
+      SOCK2_Session ipc_sock_session = sock2_session_open(0, 0, IPC_PACKET_SIZE);
+      GuardedRing *ipc_send_completion_ring = guarded_ring_alloc(scratch.arena, KB(4));
       
       //- rjf: form target raddbg endpoint address
       SOCK_Endpoint endpoint = {0};
@@ -829,8 +873,8 @@ entry_point(CmdLine *cmd_line)
         }
       }
       
-      //- rjf: form message from command line inputs
-      String8List parts = {0};
+      //- rjf: command line inputs -> text describing commands
+      String8 text = {0};
       {
         String8List text_parts = {0};
         for EachIndex(idx, cmd_line->argc-1)
@@ -842,30 +886,90 @@ entry_point(CmdLine *cmd_line)
           }
         }
         StringJoin join = {.sep = s(" ")};
-        String8 text = str8_list_join(scratch.arena, &text_parts, &join);
-        U64 msg_size = text.size;
-        str8_list_push(scratch.arena, &parts, str8_struct(&ipc_packet_magic_start));
-        str8_list_push(scratch.arena, &parts, str8_struct(&msg_size));
-        str8_list_push(scratch.arena, &parts, text);
+        text = str8_list_join(scratch.arena, &text_parts, &join);
       }
-      String8 msg = str8_list_join(scratch.arena, &parts, 0);
+      
+      //- rjf: text -> packets
+      String8List packets = {0};
+      {
+        U64 header_size = sizeof(IPCPacketHeader);
+        U64 payload_size_per_packet = IPC_PACKET_SIZE - header_size;
+        U64 packet_count = (text.size + payload_size_per_packet - 1) / payload_size_per_packet;
+        for EachIndex(packet_idx, packet_count)
+        {
+          Temp scratch2 = scratch_begin(&scratch.arena, 1);
+          String8List packet_parts = {0};
+          IPCPacketHeader header = {IPC_PACKET_MAGIC, (packet_idx+1 == packet_count)};
+          {
+            String8 payload = str8_substr(text, r1u64(packet_idx*payload_size_per_packet, (packet_idx+1)*payload_size_per_packet));
+            U64 padding_byte_count = payload_size_per_packet - payload.size;
+            U8 *padding_bytes = push_array(scratch2.arena, U8, padding_byte_count);
+            String8 padding = str8(padding_bytes, padding_byte_count);
+            str8_list_push(scratch2.arena, &packet_parts, str8_struct(&header));
+            str8_list_push(scratch2.arena, &packet_parts, payload);
+            str8_list_push(scratch2.arena, &packet_parts, padding);
+          }
+          String8 packet = str8_list_join(scratch.arena, &packet_parts, 0);
+          str8_list_push(scratch.arena, &packets, packet);
+          scratch_end(scratch2);
+        }
+      }
       
       //- rjf: send to server, get outputs
       String8List outputs = {0};
-      if(sock_send(ipc_sock_session, SOCK_Protocol_TCP, endpoint, msg, now_time_us()+10000000))
       {
-        SOCK_Protocol outputs_protocol = SOCK_Protocol_TCP;
-        SOCK_Endpoint outputs_endpoint = {0};
-        String8 packet = {0};
-        if(sock_recv(scratch.arena, ipc_sock_session, &outputs_protocol, &outputs_endpoint, &packet, now_time_us()+10000000) &&
-           str8_match(packet, str8_struct(&ipc_packet_magic_start), StringMatchFlag_RightSideSloppy) &&
-           packet.size >= sizeof(ipc_packet_magic_start) + sizeof(U64))
+        // rjf: send packets
         {
-          U64 msg_size = *(U64 *)(packet.str + sizeof(ipc_packet_magic_start));
-          String8 msg = str8_skip(packet, sizeof(ipc_packet_magic_start) + sizeof(U64));
-          msg.size = Min(msg.size, msg_size);
+          for EachNode(n, String8Node, packets.first)
+          {
+            sock2_send(ipc_sock_session, endpoint, SOCK_Protocol_TCP, n->string, max_U64, .id = 1, .out_ring = ipc_send_completion_ring);
+          }
+        }
+        
+        // rjf: get send completions
+        B32 good_send = 1;
+        for EachNode(n, String8Node, packets.first)
+        {
+          SOCK2_SendCompletion send_completion = {0};
+          sock2_wait_for_send_completion(ipc_send_completion_ring, &send_completion, max_U64);
+          good_send = (good_send && send_completion.good);
+        }
+        
+        // rjf: bad send -> report
+        if(!good_send)
+        {
+          String8 endpoint_string = sock_string_from_endpoint(scratch.arena, endpoint);
+          fprintf(stderr, "ERROR: couldn't successfully connect to %.*s\n", str8_varg(endpoint_string));
+        }
+        
+        // rjf: if we sent successfully -> receive outputs
+        if(good_send)
+        {
+          String8List responses = {0};
+          for(B32 done = 0; !done;)
+          {
+            U8 *packet_buffer = push_array(scratch.arena, U8, IPC_PACKET_SIZE);
+            if(!sock2_recv(ipc_sock_session, 0, 0, packet_buffer, now_time_us()+10000000))
+            {
+              fprintf(stderr, "ERROR: didn't receive outputs in time\n");
+              done = 1;
+            }
+            else
+            {
+              String8 packet = str8(packet_buffer, IPC_PACKET_SIZE);
+              IPCPacketHeader header = {0};
+              str8_deserial_read_struct(packet, 0, &header);
+              String8 payload = str8_skip(packet, sizeof(header));
+              str8_list_push(scratch.arena, &responses, payload);
+              if(header.is_last)
+              {
+                done = 1;
+              }
+            }
+          }
+          String8 response = str8_list_join(scratch.arena, &responses, 0);
           U8 split_char = 0;
-          outputs = str8_split(scratch.arena, msg, &split_char, 1, 0);
+          outputs = str8_split(scratch.arena, response, &split_char, 1, 0);
         }
       }
       
