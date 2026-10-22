@@ -33,6 +33,20 @@ D_ControllerKindEnum;
 
 #define D_ServerID_LocalHost (1)
 
+#if 0
+// TODO(rjf): instead of moving to controller/server IDs, move to single ID, something like this.
+// some decisions need to be made about how this shows up in the entity tree - e.g. local demon DLLs
+// can't be detected as being on another server.
+typedef U32 D_ControllerID;
+typedef enum D_ControllerIDEnum
+{
+  D_ControllerID_LocalDemon,
+  D_ControllerID_DumpFile,
+  D_ControllerID_FirstDynamic, // all servers and/or control DLLs start here
+}
+D_ControllerIDEnum;
+#endif
+
 #define d_packet_msg_id(ring_id, lower32) (((U64)(ring_id)<<32)|(lower32&0xffffffff))
 #define d_packet_ring_id_from_msg_id(msg_id) (((msg_id)&0xffffffff00000000ull)>>32)
 

@@ -61,6 +61,9 @@ main_thread_base_entry_point(int arguments_count, char **arguments)
 #if defined(SOCKET_H) && !defined(SOCKET_INIT_MANUAL)
   sock_init();
 #endif
+#if defined(SOCKET2_H) && !defined(SOCKET2_INIT_MANUAL)
+  sock2_init();
+#endif
 #if defined(HTTP_H) && !defined(HTTP_INIT_MANUAL)
   http_init();
 #endif

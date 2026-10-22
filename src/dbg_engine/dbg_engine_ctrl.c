@@ -1556,10 +1556,32 @@ d_thread_read_reg_block(D_Handle handle, void *reg_block)
   B32 result = 0;
   switch((D_ControllerKindEnum)handle.controller_kind)
   {
+    //- rjf: demon case
     case D_ControllerKind_Demon:
     {
-      result = dmn_thread_read_reg_block(d_dmn_from_handle(handle), reg_block);
+      //- rjf: local server case
+      if(handle.server_id == D_ServerID_LocalHost)
+      {
+        result = dmn_thread_read_reg_block(d_dmn_from_handle(handle), reg_block);
+      }
+      
+      //- rjf: remote server case
+      else
+      {
+        Temp scratch = scratch_begin(0, 0);
+        SOCK_Endpoint endpoint = d_endpoint_from_server_id(handle.server_id);
+        DS_Msg msg = {DS_MsgKind_ThreadRegBlockRead, .entity = d_dmn_from_handle(handle)};
+        DS_Response response = d_server_msg(scratch.arena, endpoint, &msg);
+        result = response.good;
+        if(result)
+        {
+          MemoryCopy(reg_block, response.data.str, response.data.size);
+        }
+        scratch_end(scratch);
+      }
     }break;
+    
+    //- rjf: dump case
     case D_ControllerKind_Dump:
     {
       D_Entity *thread = d_entity_from_handle(handle);
@@ -1613,16 +1635,58 @@ d_thread_write_reg_block(D_Handle thread, void *block)
   B32 result = 0;
   switch((D_ControllerKindEnum)thread.controller_kind)
   {
+    //- rjf: demon debugging
     case D_ControllerKind_Demon:
     {
       // TODO(rjf): @callstacks immediately reflect this in the call stack cache
       DMN_Handle handle_dmn = d_dmn_from_handle(thread);
-      B32 result = dmn_thread_write_reg_block(handle_dmn, block);
+      
+      //- rjf: local demon case
+      if(thread.server_id == D_ServerID_LocalHost)
+      {
+        result = dmn_thread_write_reg_block(handle_dmn, block);
+      }
+      
+      //- rjf: remote demon case
+      else
+      {
+#if 0 // TODO(rjf): need architecture
+        Temp scratch = scratch_begin(0, 0);
+        
+        // rjf: get server id's endpoint
+        SOCK_Endpoint endpoint = d_endpoint_from_server_id(process.server_id);
+        
+        // rjf: reserve a sock ring
+        U16 sock_ring_id = d_server_io_begin();
+        
+        // rjf: send message
+        DS_Msg msg = {DS_MsgKind_ThreadRegBlockWrite, .msg_id = d_packet_msg_id(sock_ring_id, 0), .entity = handle_dmn, .data = };
+        String8 packet = ds_packet_from_msg(scratch.arena, &msg);
+        sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, endpoint, packet, max_U64);
+        
+        // rjf: receive next response
+        DS_Response response = d_server_io_recv_response(scratch.arena, sock_ring_id);
+        result = response.good;
+        if(result)
+        {
+          MemoryCopy(reg_block, response.data.str, response.data.size);
+        }
+        
+        // rjf: release receive ring
+        d_server_io_end(sock_ring_id);
+        
+        scratch_end(scratch);
+#endif
+      }
+      
+      //- rjf: dirty register gen
       if(result)
       {
         ins_atomic_u64_inc_eval(&d_ctrl_state->reg_gen);
       }
     }break;
+    
+    //- rjf: dump debugging
     case D_ControllerKind_Dump:
     {
       // TODO(rjf)
@@ -1672,15 +1736,34 @@ d_thread_get_module_tls_vaddr(D_Handle thread, D_Handle module, U64 *vaddr_out)
 {
   B32 result = 0;
   
-  // rjf: resolve to demon
+  //- rjf: resolve to demon
   DMN_Handle thread_dmn = d_dmn_from_handle(thread);
   DMN_Handle module_dmn = d_dmn_from_handle(module);
   
-  // rjf: compute vaddr
+  //- rjf: read TLS vaddr
   if(!dmn_handle_match(thread_dmn, dmn_handle_zero()) &&
      !dmn_handle_match(module_dmn, dmn_handle_zero()))
   {
-    result = dmn_thread_get_module_tls_vaddr(thread_dmn, module_dmn, vaddr_out);
+    //- rjf: local demon version
+    if(thread.server_id == D_ServerID_LocalHost)
+    {
+      result = dmn_thread_get_module_tls_vaddr(thread_dmn, module_dmn, vaddr_out);
+    }
+    
+    //- rjf: remote demon version
+    else
+    {
+      Temp scratch = scratch_begin(0, 0);
+      SOCK_Endpoint endpoint = d_endpoint_from_server_id(thread.server_id);
+      DS_Msg msg = {DS_MsgKind_ThreadGetModuleTLSVAddr, .entity = thread_dmn, .module = module_dmn};
+      DS_Response response = d_server_msg(scratch.arena, endpoint, &msg);
+      result = response.good;
+      if(vaddr_out)
+      {
+        vaddr_out[0] = response.vaddr;
+      }
+      scratch_end(scratch);
+    }
   }
   
   return result;
@@ -1923,17 +2006,17 @@ d_endpoint_from_server_id(D_ServerID server_id)
 ////////////////////////////////
 //~ rjf: Server Sends/Receives
 
-internal U16
-d_sock_ring_open(void)
+internal D_ServerIOCtx
+d_server_io_begin(void)
 {
-  U16 result = 0;
+  D_ServerIOCtx result = {0};
   RWMutexScope(d_ctrl_state->sock_ring_alloc_rw_mutex, 1) for(;;)
   {
     if(d_ctrl_state->free_sock_ring)
     {
-      D_SockRing *sock_ring = d_ctrl_state->free_sock_ring;
+      D_SockRingSlot *sock_ring = d_ctrl_state->free_sock_ring;
       SLLStackPop(d_ctrl_state->free_sock_ring);
-      result = (U16)(sock_ring - d_ctrl_state->sock_rings);
+      result.ring_id = (U16)(sock_ring - d_ctrl_state->sock_rings);
       break;
     }
     cond_var_wait_rw_w(d_ctrl_state->sock_ring_alloc_cv, d_ctrl_state->sock_ring_alloc_rw_mutex, max_U64);
@@ -1941,37 +2024,112 @@ d_sock_ring_open(void)
   return result;
 }
 
+internal B32
+d_server_io_send_msg(D_ServerIOCtx ctx, SOCK_Endpoint endpoint, DS_Msg *msg)
+{
+  Temp scratch = scratch_begin(0, 0);
+  
+  // rjf: unpack ctx
+  GuardedRing *completion_ring = d_ctrl_state->sock_rings[ctx.ring_id].completion_ring;
+  
+  // rjf: msg -> packets
+  DS_Msg msg_copy = {0};
+  MemoryCopyStruct(&msg_copy, msg);
+  msg_copy.msg_id = d_packet_msg_id(ctx.ring_id, 0);
+  String8 data = ds_data_from_msg(scratch.arena, &msg_copy);
+  String8List packets = ds_packets_from_data(scratch.arena, DS_PacketKind_Msg, data);
+  
+  // rjf: send all packets
+  RWMutexScope(d_ctrl_state->sock_send_mutex, 1)
+  {
+    for EachNode(n, String8Node, packets.first)
+    {
+      sock2_send(d_ctrl_state->sock_session, endpoint, SOCK_Protocol_TCP, n->string, max_U64, .out_ring = completion_ring);
+    }
+  }
+  
+  // rjf: wait for send completion
+  SOCK2_SendCompletion completion = {0};
+  sock2_wait_for_send_completion(completion_ring, &completion, max_U64);
+  
+  // rjf: result -> completion is good
+  B32 result = completion.good;
+  
+  scratch_end(scratch);
+  return result;
+}
+
+internal DS_Response
+d_server_io_recv_response(Arena *arena, D_ServerIOCtx ctx)
+{
+  Temp scratch = scratch_begin(&arena, 1);
+  
+  // rjf: unpack ctx
+  D_SockRingSlot *sock_ring = d_ctrl_state->sock_rings + ctx.ring_id;
+  GuardedRing *guarded_ring = sock_ring->recv_ring;
+  
+  // rjf: read packet group
+  String8List packets = {0};
+  {
+    RingGuard g = guarded_ring_open(guarded_ring);
+    for(B32 done = 0; !done;)
+    {
+      U64 packet_size = 0;
+      if(guarded_ring_read_struct_or_wait(&g, &packet_size, max_U64))
+      {
+        U8 *packet_data = push_array(scratch.arena, U8, packet_size);
+        guarded_ring_read_or_wait(&g, packet_size, packet_data, max_U64);
+        String8 packet = str8(packet_data, packet_size);
+        if(packet.size >= sizeof(DS_PacketHeader))
+        {
+          DS_PacketHeader *header = (DS_PacketHeader *)packet.str;
+          str8_list_push(scratch.arena, &packets, packet);
+          if(header->flags & DS_PacketFlag_Terminal)
+          {
+            done = 1;
+          }
+        }
+      }
+    }
+    guarded_ring_close(&g);
+  }
+  
+  // rjf: packet group -> data
+  DS_PacketKind packet_kind = DS_PacketKind_Null;
+  String8 data = ds_data_from_packets(scratch.arena, packets, &packet_kind);
+  
+  // rjf: data -> response
+  DS_Response response = {0};
+  if(packet_kind == DS_PacketKind_Response)
+  {
+    response = ds_response_from_data(data);
+  }
+  
+  scratch_end(scratch);
+  return response;
+}
+
 internal void
-d_sock_ring_close(U16 id)
+d_server_io_end(D_ServerIOCtx ctx)
 {
   RWMutexScope(d_ctrl_state->sock_ring_alloc_rw_mutex, 1)
   {
-    D_SockRing *sock_ring = d_ctrl_state->sock_rings + id;
+    D_SockRingSlot *sock_ring = d_ctrl_state->sock_rings + ctx.ring_id;
     SLLStackPush(d_ctrl_state->free_sock_ring, sock_ring);
   }
   cond_var_broadcast(d_ctrl_state->sock_ring_alloc_cv);
 }
 
 internal DS_Response
-d_sock_ring_recv(Arena *arena, U16 ring_id)
+d_server_msg(Arena *arena, SOCK_Endpoint endpoint, DS_Msg *msg)
 {
   DS_Response response = {0};
-  D_SockRing *sock_ring = d_ctrl_state->sock_rings + ring_id;
-  GuardedRing *guarded_ring = sock_ring->ring;
-  RingGuard g = guarded_ring_open(guarded_ring);
+  D_ServerIOCtx ctx = d_server_io_begin();
+  if(d_server_io_send_msg(ctx, endpoint, msg))
   {
-    SOCK_Endpoint endpoint = {0};
-    U64 packet_size = 0;
-    if(guarded_ring_read_struct_or_wait(&g, &endpoint, max_U64) &&
-       guarded_ring_read_struct_or_wait(&g, &packet_size, max_U64))
-    {
-      U8 *packet_data = push_array(arena, U8, packet_size);
-      guarded_ring_read_or_wait(&g, packet_size, packet_data, max_U64);
-      String8 packet = str8(packet_data, packet_size);
-      response = ds_response_from_packet(packet);
-    }
+    response = d_server_io_recv_response(arena, ctx);
   }
-  guarded_ring_close(&g);
+  d_server_io_end(ctx);
   return response;
 }
 
@@ -3009,70 +3167,6 @@ d_ctrl_thread__server_run_ctrls_from_id(D_RunCtrls *ctrls, D_ServerID server_id)
   return result;
 }
 
-//- rjf: server packet dequeueing
-
-internal DS_Response
-d_ctrl_thread__next_server_response(Arena *arena)
-{
-  DS_Response response = {0};
-  Temp scratch = scratch_begin(&arena, 1);
-  SOCK_Endpoint endpoint = {0};
-  String8 packet = {0};
-  if(sock_recv(arena, d_ctrl_state->sock_session, 0, &endpoint, &packet, max_U64) &&
-     packet.size >= sizeof(DS_PacketHeader))
-  {
-    String8 address = sock_string_from_endpoint(scratch.arena, endpoint);
-    DS_PacketHeader header = {0};
-    MemoryCopy(&header, packet.str, sizeof(header));
-    if(header.magic == DS_PACKET_MAGIC && header.version == DS_PACKET_VERSION)
-    {
-      switch(header.kind)
-      {
-        default:{}break;
-        case DS_PacketKind_Response:
-        {
-          response = ds_response_from_packet(packet);
-        }break;
-        case DS_PacketKind_Event:
-        {
-          D_Handle server_handle = d_ctrl_thread__handle_from_addr_or_connect(address);
-          U64 slot_idx = server_handle.server_id%d_ctrl_state->server_slots_count;
-          D_ServerState *ss = 0;
-          for(D_ServerState *s = d_ctrl_state->server_slots[slot_idx].first; s != 0; s = s->hash_next)
-          {
-            if(s->server_id == server_handle.server_id)
-            {
-              ss = s;
-              break;
-            }
-          }
-          if(ss != 0)
-          {
-            DMN_EventList events = ds_dmn_events_from_packet(scratch.arena, packet);
-            for EachNode(n, DMN_EventNode, events.first)
-            {
-              DMN_EventNode *dst_n = ss->free_dmn_event_node;
-              if(dst_n != 0)
-              {
-                SLLStackPop(ss->free_dmn_event_node);
-              }
-              else
-              {
-                dst_n = push_array(ss->dmn_event_arena, DMN_EventNode, 1);
-              }
-              SLLQueuePush(ss->first_dmn_event_node, ss->last_dmn_event_node, dst_n);
-              dmn_event_deep_copy(ss->dmn_event_arena, &dst_n->v, &n->v);
-            }
-            ss->run_state = 0;
-          }
-        }break;
-      }
-    }
-  }
-  scratch_end(scratch);
-  return response;
-}
-
 //- rjf: attached process running/event gathering
 
 internal DMN_Event *
@@ -3304,8 +3398,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
         }
 #endif
         
-        //- rjf: reserve a socket receiving ring for this run - where we want all responses to be directed.
-        U16 sock_ring_id = d_sock_ring_open();
+        //- rjf: open server I/O for this run
+        D_ServerIOCtx server_io_ctx = d_server_io_begin();
         
         //- rjf: send run message to all *remote* servers - shouldn't matter much, but send starting at the
         // current server position, so that we also fairly order the runs (assuming equal network latency)
@@ -3339,7 +3433,6 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
               DS_Msg msg = {0};
               {
                 msg.kind   = DS_MsgKind_Run;
-                msg.msg_id = d_packet_msg_id(sock_ring_id, 0);
                 msg.flags |= (DS_MsgFlag_IgnorePreviousException*!!server_run_ctrls->ignore_previous_exception);
                 msg.entity = (run_ctrls->single_step_thread.server_id == ss->server_id ? d_dmn_from_handle(run_ctrls->single_step_thread) : 
                               run_ctrls->priority_thread.server_id == ss->server_id ? d_dmn_from_handle(run_ctrls->priority_thread) : 
@@ -3354,11 +3447,8 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
                 }
               }
               
-              // rjf: message -> packet
-              String8 packet = ds_packet_from_msg(scratch.arena, &msg);
-              
-              // rjf: send packet
-              sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, server_endpoint, packet, max_U64);
+              // rjf: send message
+              d_server_io_send_msg(server_io_ctx, server_endpoint, &msg);
               
               // rjf: set run state
               num_servers_running += 1;
@@ -3441,12 +3531,9 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
                 String8 server_addr = server->string;
                 SOCK_Endpoint server_endpoint = sock_endpoint_from_string(server_addr);
                 
-                // rjf: form halt message / packet
-                DS_Msg msg = {DS_MsgKind_Halt, .msg_id = d_packet_msg_id(sock_ring_id, 0)};
-                String8 packet = ds_packet_from_msg(scratch.arena, &msg);
-                
                 // rjf: send
-                sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, server_endpoint, packet, max_U64);
+                DS_Msg msg = {DS_MsgKind_Halt};
+                d_server_io_send_msg(server_io_ctx, server_endpoint, &msg);
                 
                 // rjf: set group halt state (to skip halt event)
                 ss->group_halt = 1;
@@ -3462,62 +3549,100 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
           for(;num_servers_running > 0;)
           {
             // rjf: drain next running response
-            DS_Response response = d_sock_ring_recv(scratch.arena, sock_ring_id);
+            DS_Response response = d_server_io_recv_response(scratch.arena, server_io_ctx);
             num_servers_running -= 1;
             
-            // rjf: drain events
+            // rjf: drain event packets
+            String8List packets = {0};
+            SOCK_Endpoint endpoint = {0};
             {
               GuardedRing *ring = d_ctrl_state->sock_event_ring;
               RingGuard g = guarded_ring_open(ring);
+              for(B32 done = 0; !done;)
               {
-                SOCK_Endpoint endpoint = {0};
-                U64 packet_size = 0;
-                if(guarded_ring_try_read_struct(&g, &endpoint))
+                // rjf: read next events packet
+                String8 packet = {0};
                 {
-                  guarded_ring_read_struct_or_wait(&g, &packet_size, max_U64);
-                  U8 *packet_data = push_array(scratch.arena, U8, packet_size);
-                  guarded_ring_read_or_wait(&g, packet_size, packet_data, max_U64);
-                  String8 packet = str8(packet_data, packet_size);
-                  DMN_EventList events = ds_dmn_events_from_packet(scratch.arena, packet);
-                  String8 address = sock_string_from_endpoint(scratch.arena, endpoint);
-                  D_Handle server_handle = d_ctrl_thread__handle_from_addr_or_connect(address);
-                  U64 slot_idx = server_handle.server_id%d_ctrl_state->server_slots_count;
-                  D_ServerState *ss = 0;
-                  for(D_ServerState *s = d_ctrl_state->server_slots[slot_idx].first; s != 0; s = s->hash_next)
+                  U64 packet_size = 0;
+                  if(guarded_ring_try_read_struct(&g, &endpoint))
                   {
-                    if(s->server_id == server_handle.server_id)
-                    {
-                      ss = s;
-                      break;
-                    }
+                    guarded_ring_try_read_struct(&g, &packet_size);
+                    U8 *packet_data = push_array(scratch.arena, U8, packet_size);
+                    guarded_ring_read_or_wait(&g, packet_size, packet_data, max_U64);
+                    packet = str8(packet_data, packet_size);
                   }
-                  if(ss != 0)
-                  {
-                    for EachNode(n, DMN_EventNode, events.first)
-                    {
-                      DMN_EventNode *dst_n = ss->free_dmn_event_node;
-                      if(dst_n != 0)
-                      {
-                        SLLStackPop(ss->free_dmn_event_node);
-                      }
-                      else
-                      {
-                        dst_n = push_array(ss->dmn_event_arena, DMN_EventNode, 1);
-                      }
-                      SLLQueuePush(ss->first_dmn_event_node, ss->last_dmn_event_node, dst_n);
-                      dmn_event_deep_copy(ss->dmn_event_arena, &dst_n->v, &n->v);
-                    }
-                    ss->run_state = 0;
-                  }
+                }
+                
+                // rjf: extract packet header
+                DS_PacketHeader header = {0};
+                if(packet.size >= sizeof(header))
+                {
+                  MemoryCopy(&header, packet.str, sizeof(header));
+                }
+                
+                // rjf: valid event packet -> store
+                if((DS_PacketKind)(header.flags & DS_PacketFlag_KindMask) == DS_PacketKind_Event &&
+                   header.magic == DS_PACKET_MAGIC &&
+                   header.version == DS_PACKET_VERSION)
+                {
+                  str8_list_push(scratch.arena, &packets, packet);
+                }
+                
+                // rjf: terminal? -> done
+                if(header.flags & DS_PacketFlag_Terminal)
+                {
+                  break;
                 }
               }
               guarded_ring_close(&g);
+            }
+            
+            // rjf: packets -> data
+            String8 data = ds_data_from_packets(scratch.arena, packets, 0);
+            
+            // rjf: data -> events
+            DMN_EventList events = ds_dmn_events_from_data(scratch.arena, data);
+            
+            // rjf: endpoint -> server state
+            D_ServerState *ss = 0;
+            {
+              String8 address = sock_string_from_endpoint(scratch.arena, endpoint);
+              D_Handle server_handle = d_ctrl_thread__handle_from_addr_or_connect(address);
+              U64 slot_idx = server_handle.server_id%d_ctrl_state->server_slots_count;
+              for(D_ServerState *s = d_ctrl_state->server_slots[slot_idx].first; s != 0; s = s->hash_next)
+              {
+                if(s->server_id == server_handle.server_id)
+                {
+                  ss = s;
+                  break;
+                }
+              }
+            }
+            
+            // rjf: store events in server state - move to stopped state
+            if(ss != 0)
+            {
+              for EachNode(n, DMN_EventNode, events.first)
+              {
+                DMN_EventNode *dst_n = ss->free_dmn_event_node;
+                if(dst_n != 0)
+                {
+                  SLLStackPop(ss->free_dmn_event_node);
+                }
+                else
+                {
+                  dst_n = push_array(ss->dmn_event_arena, DMN_EventNode, 1);
+                }
+                SLLQueuePush(ss->first_dmn_event_node, ss->last_dmn_event_node, dst_n);
+                dmn_event_deep_copy(ss->dmn_event_arena, &dst_n->v, &n->v);
+              }
+              ss->run_state = 0;
             }
           }
         }
         
         //- rjf: we received all we needed to, so close the sock ring.
-        d_sock_ring_close(sock_ring_id);
+        d_server_io_end(server_io_ctx);
         
         //- rjf: bump all debuggee state generations
         ins_atomic_u64_inc_eval(&d_ctrl_state->mem_gen);
@@ -4254,27 +4379,10 @@ d_ctrl_thread__handle_from_addr_or_connect(String8 addr)
     {
       Temp scratch = scratch_begin(0, 0);
       
-      // rjf: open sock ring
-      U16 sock_ring_id = d_sock_ring_open();
-      
-      // rjf: send handshake packet
-      {
-        DS_Msg server_msg = {DS_MsgKind_Handshake, .msg_id = d_packet_msg_id(sock_ring_id, 0)};
-        String8 send_packet = ds_packet_from_msg(scratch.arena, &server_msg);
-        sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, endpoint, send_packet, max_U64);
-      }
-      
-      // rjf: receive state packet(s)
-      {
-        DS_Response response = d_sock_ring_recv(scratch.arena, sock_ring_id);
-        if(!response.good)
-        {
-          good_handshake = 0;
-        }
-      }
-      
-      // rjf: close sock ring
-      d_sock_ring_close(sock_ring_id);
+      // rjf: handshake & get state
+      DS_Msg server_msg = {DS_MsgKind_Handshake};
+      DS_Response response = d_server_msg(scratch.arena, endpoint, &server_msg);
+      good_handshake = response.good;
       
       // rjf: report failure
       if(!good_handshake)
@@ -4450,21 +4558,12 @@ d_ctrl_thread__launch(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   U64 pid = 0;
   if(msg->address.size != 0)
   {
-    // rjf: open sock ring
-    U16 sock_ring_id = d_sock_ring_open();
-    
-    // rjf: send/recv
+    Temp scratch = scratch_begin(0, 0);
     SOCK_Endpoint server_endpoint = sock_endpoint_from_string(msg->address);
-    DS_Msg server_msg = {DS_MsgKind_Launch, .launch_params = &launch_params, .msg_id = d_packet_msg_id(sock_ring_id, 0)};
-    String8 server_packet = ds_packet_from_msg(scratch.arena, &server_msg);
-    String8 server_response_packet = {0};
-    SOCK_Endpoint server_response_endpoint = {0};
-    sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, server_endpoint, server_packet, max_U64);
-    DS_Response response = d_sock_ring_recv(scratch.arena, sock_ring_id);
+    DS_Msg server_msg = {DS_MsgKind_Launch, .launch_params = &launch_params};
+    DS_Response response = d_server_msg(scratch.arena, server_endpoint, &server_msg);
     pid = response.pid;
-    
-    // rjf: close sock ring
-    d_sock_ring_close(sock_ring_id);
+    scratch_end(scratch);
   }
   
   //////////////////////////////
@@ -4516,20 +4615,11 @@ d_ctrl_thread__attach(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
   //- rjf: remote? -> attach remotely, wait for response
   else
   {
-    // rjf: open sock ring
-    U16 sock_ring_id = d_sock_ring_open();
-    
-    // rjf: send/recv
     String8 address = msg->address;
     SOCK_Endpoint endpoint = sock_endpoint_from_string(address);
-    DS_Msg attach_msg = {DS_MsgKind_Attach, .pid = msg->entity_id, .msg_id = d_packet_msg_id(sock_ring_id, 0)};
-    String8 packet = ds_packet_from_msg(scratch.arena, &attach_msg);
-    sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, endpoint, packet, max_U64);
-    DS_Response response = d_sock_ring_recv(scratch.arena, sock_ring_id);
+    DS_Msg attach_msg = {DS_MsgKind_Attach, .pid = msg->entity_id};
+    DS_Response response = d_server_msg(scratch.arena, endpoint, &attach_msg);
     attach_good = response.good;
-    
-    // rjf: close sock ring
-    d_sock_ring_close(sock_ring_id);
   }
   
   //- rjf: run to handshake
@@ -5139,20 +5229,11 @@ d_ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
       //- rjf: send kill - remote demon debugging case
       else if(msg->entity.server_id != D_ServerID_LocalHost)
       {
-        // rjf: open sock ring
-        U16 sock_ring_id = d_sock_ring_open();
-        
-        // rjf: send/recv
-        String8 server_addr = server->string;
-        SOCK_Endpoint server_endpoint = sock_endpoint_from_string(server_addr);
-        DS_Msg msg = {DS_MsgKind_Kill, .entity = d_dmn_from_handle(process->handle), .msg_id = d_packet_msg_id(sock_ring_id, 0)};
-        String8 packet = ds_packet_from_msg(scratch.arena, &msg);
-        sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, server_endpoint, packet, max_U64);
-        DS_Response response = d_sock_ring_recv(scratch.arena, sock_ring_id);
+        String8 address = msg->address;
+        SOCK_Endpoint endpoint = sock_endpoint_from_string(address);
+        DS_Msg kill_msg = {DS_MsgKind_Kill, .entity = d_dmn_from_handle(process->handle)};
+        DS_Response response = d_server_msg(scratch.arena, endpoint, &kill_msg);
         kill_worked = response.good;
-        
-        // rjf: close sock ring
-        d_sock_ring_close(sock_ring_id);
       }
       
       //- rjf: wait for process to be dead
@@ -5271,19 +5352,11 @@ d_ctrl_thread__kill_all(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
             //- rjf: send kill - remote demon debugging case
             else if(t->process->handle.server_id != D_ServerID_LocalHost)
             {
-              // rjf: open sock ring
-              U16 sock_ring_id = d_sock_ring_open();
-              
-              String8 server_addr = server->string;
-              SOCK_Endpoint server_endpoint = sock_endpoint_from_string(server_addr);
-              DS_Msg msg = {DS_MsgKind_Kill, .entity = d_dmn_from_handle(process->handle), .msg_id = d_packet_msg_id(sock_ring_id, 0)};
-              String8 packet = ds_packet_from_msg(scratch.arena, &msg);
-              sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, server_endpoint, packet, max_U64);
-              DS_Response response = d_sock_ring_recv(scratch.arena, sock_ring_id);
+              String8 address = msg->address;
+              SOCK_Endpoint endpoint = sock_endpoint_from_string(address);
+              DS_Msg kill_msg = {DS_MsgKind_Kill, .entity = d_dmn_from_handle(t->process->handle)};
+              DS_Response response = d_server_msg(scratch.arena, endpoint, &kill_msg);
               kill_worked = response.good;
-              
-              // rjf: close sock ring
-              d_sock_ring_close(sock_ring_id);
             }
           }break;
           case D_ControllerKind_Dump: {kill_worked = 1; d_ctrl_thread__close_dump_process(msg->msg_id, t->process->handle);}break;
@@ -5361,23 +5434,11 @@ d_ctrl_thread__detach(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
       //- rjf: send detach - remote demon debugging case
       else
       {
-        // rjf: open sock ring
-        U16 sock_ring_id = d_sock_ring_open();
-        
-        // rjf: send/recv
-        DMN_Handle process_dmn = d_dmn_from_handle(msg->entity);
-        D_Entity *process = d_entity_from_handle(msg->entity);
-        D_Entity *server = d_entity_ancestor_from_kind(process, D_EntityKind_Server);
-        String8 addr = server->string;
-        SOCK_Endpoint endpoint = sock_endpoint_from_string(addr);
-        DS_Msg msg = {DS_MsgKind_Detach, .entity = process_dmn, .msg_id = d_packet_msg_id(sock_ring_id, 0)};
-        String8 packet = ds_packet_from_msg(scratch.arena, &msg);
-        sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, endpoint, packet, max_U64);
-        DS_Response response = d_sock_ring_recv(scratch.arena, sock_ring_id);
+        String8 address = msg->address;
+        SOCK_Endpoint endpoint = sock_endpoint_from_string(address);
+        DS_Msg detach_msg = {DS_MsgKind_Detach, .entity = d_dmn_from_handle(msg->entity)};
+        DS_Response response = d_server_msg(scratch.arena, endpoint, &detach_msg);
         detach_worked = response.good;
-        
-        // rjf: close sock ring
-        d_sock_ring_close(sock_ring_id);
       }
       
       //- rjf: wait for process to be dead
@@ -5393,6 +5454,7 @@ d_ctrl_thread__detach(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
         DMN_Event *event = d_ctrl_thread__next_dmn_event(scratch.arena, ctrl_ctx, msg, run_ctrls, 0, 0);
         switch(event->kind)
         {
+          default:{}break;
           case DMN_EventKind_ExitProcess:
           if(dmn_handle_match(event->process, process_dmn))
           {
@@ -6784,24 +6846,13 @@ d_process_read(D_Handle process, Rng1U64 range, void *dst)
       else
       {
         Temp scratch = scratch_begin(0, 0);
-        
-        // rjf: get server id's endpoint
         SOCK_Endpoint endpoint = d_endpoint_from_server_id(process.server_id);
-        
-        // rjf: reserve a sock ring
-        U16 sock_ring_id = d_sock_ring_open();
-        
-        // rjf: send message
-        DS_Msg msg = {DS_MsgKind_MemoryRead, .msg_id = d_packet_msg_id(sock_ring_id, 0), .vaddr_range = range};
-        String8 packet = ds_packet_from_msg(scratch.arena, &msg);
-        sock_send(d_ctrl_state->sock_session, SOCK_Protocol_TCP, endpoint, packet, max_U64);
-        
-        // rjf: receive next response
-        DS_Response response = d_sock_ring_recv(scratch.arena, sock_ring_id);
-        
-        // rjf: release receive ring
-        d_sock_ring_close(sock_ring_id);
-        
+        DS_Msg msg = {DS_MsgKind_MemoryRead, .entity = d_dmn_from_handle(process), .vaddr_range = range};
+        DS_Response response = d_server_msg(scratch.arena, endpoint, &msg);
+        U64 bytes_read_desired = dim_1u64(range);
+        U64 bytes_read = Min(response.data.size, bytes_read_desired);
+        MemoryCopy(dst, response.data.str, bytes_read);
+        result = bytes_read;
         scratch_end(scratch);
       }
     }break;
@@ -6861,15 +6912,34 @@ d_process_write(D_Handle process, Rng1U64 range, void *src)
   B32 result = 0;
   switch((D_ControllerKindEnum)process.controller_kind)
   {
+    //- rjf: demon process writes
     case D_ControllerKind_Demon:
     {
-      result = dmn_process_write(d_dmn_from_handle(process), range, src);
+      //- rjf: local server writes
+      if(process.server_id == D_ServerID_LocalHost)
+      {
+        result = dmn_process_write(d_dmn_from_handle(process), range, src);
+      }
+      
+      //- rjf: remote server writes
+      else
+      {
+        Temp scratch = scratch_begin(0, 0);
+        SOCK_Endpoint endpoint = d_endpoint_from_server_id(process.server_id);
+        DS_Msg msg = {DS_MsgKind_MemoryWrite, .entity = d_dmn_from_handle(process), .vaddr_range = range, .data = str8((U8 *)src, dim_1u64(range))};
+        DS_Response response = d_server_msg(scratch.arena, endpoint, &msg);
+        result = response.good;
+        scratch_end(scratch);
+      }
+      
+      //- rjf: success -> increment memory gen counter
       if(result)
       {
         ins_atomic_u64_inc_eval(&d_ctrl_state->mem_gen);
       }
     }break;
     
+    //- rjf: dump process writes
     case D_ControllerKind_Dump:
     {
       // TODO(rjf)
@@ -7268,19 +7338,10 @@ d_tls_vaddr_artifact_create(String8 key, B32 *cancel_signal, AC_Status *status_o
     off += str8_deserial_read_struct(key, off, &module);
   }
   
-  // rjf: resolve to demon
-  DMN_Handle thread_dmn = d_dmn_from_handle(thread);
-  DMN_Handle module_dmn = d_dmn_from_handle(module);
-  
   // rjf: compute vaddr
   U64 pre_run_gen = d_run_gen();
   U64 tls_vaddr = 0;
-  B32 success = 1;
-  if(!dmn_handle_match(thread_dmn, dmn_handle_zero()) &&
-     !dmn_handle_match(module_dmn, dmn_handle_zero()))
-  {
-    success = dmn_thread_get_module_tls_vaddr(thread_dmn, module_dmn, &tls_vaddr);
-  }
+  B32 success = d_thread_get_module_tls_vaddr(thread, module, &tls_vaddr);
   U64 post_run_gen = d_run_gen();
   
   // rjf: if not successful due to run -> retry
@@ -7680,39 +7741,49 @@ d_call_stack_tree(Access *access, U64 endt_us)
 }
 
 ////////////////////////////////
-//~ rjf: Socket Receiving Thread
+//~ rjf: Socket Traffic Distribution Threads
 
 internal void
 d_sock_recv_thread_entry_point(void *p)
 {
   ThreadNameF("d_sock_recv_thread");
+  U64 msg_id = 0;
+  B32 need_new_msg_id = 1;
   for(;;)
   {
     Temp scratch = scratch_begin(0, 0);
     SOCK_Protocol protocol = SOCK_Protocol_TCP;
     SOCK_Endpoint endpoint = {0};
-    String8 data = {0};
-    if(sock_recv(scratch.arena, d_ctrl_state->sock_session, &protocol, &endpoint, &data, max_U64) && data.size >= sizeof(DS_PacketHeader))
+    U8 *packet_buffer = push_array(scratch.arena, U8, DS_PACKET_SIZE);
+    if(sock2_recv(d_ctrl_state->sock_session, &endpoint, &protocol, packet_buffer, max_U64))
     {
+      String8 data = str8(packet_buffer, DS_PACKET_SIZE);
+      
       // rjf: unpack header
       DS_PacketHeader header = {0};
       MemoryCopy(&header, data.str, sizeof(header));
       
       // rjf: determine if packet is valid, and where to send it
       B32 valid_packet = 0;
+      B32 need_endpoint = 0;
       GuardedRing *dst_ring = 0;
       if(header.magic == DS_PACKET_MAGIC && header.version == DS_PACKET_VERSION)
       {
         valid_packet = 1;
-        if(header.kind == DS_PacketKind_Event)
+        if((DS_PacketKind)(header.flags & DS_PacketFlag_KindMask) == DS_PacketKind_Event)
         {
+          need_endpoint = 1;
           dst_ring = d_ctrl_state->sock_event_ring;
         }
-        else if(header.kind == DS_PacketKind_Response)
+        else if((DS_PacketKind)(header.flags & DS_PacketFlag_KindMask) == DS_PacketKind_Response)
         {
-          DS_Response response = ds_response_from_packet(data);
-          U16 ring_id = d_packet_ring_id_from_msg_id(response.msg_id);
-          dst_ring = d_ctrl_state->sock_rings[ring_id].ring;
+          if(need_new_msg_id)
+          {
+            need_new_msg_id = 0;
+            str8_deserial_read_struct(data, sizeof(header), &msg_id);
+          }
+          U16 ring_id = d_packet_ring_id_from_msg_id(msg_id);
+          dst_ring = d_ctrl_state->sock_rings[ring_id].recv_ring;
         }
         else
         {
@@ -7725,11 +7796,21 @@ d_sock_recv_thread_entry_point(void *p)
       {
         RingGuard g = guarded_ring_open(dst_ring);
         {
-          guarded_ring_write_struct_or_wait(&g, &endpoint, max_U64);
+          if(need_endpoint)
+          {
+            guarded_ring_write_struct_or_wait(&g, &endpoint, max_U64);
+          }
           guarded_ring_write_struct_or_wait(&g, &data.size, max_U64);
           guarded_ring_write_string_or_wait(&g, data, max_U64);
         }
         guarded_ring_close(&g);
+      }
+      
+      // rjf: last packet in a sequence? -> look for new msg ids
+      if(header.flags & DS_PacketFlag_Terminal)
+      {
+        need_new_msg_id = 1;
+        msg_id = 0;
       }
     }
   }

@@ -1388,14 +1388,14 @@ d_push_active_dbgi_key_list(Arena *arena)
 //- rjf: per-run caches
 
 internal U64
-d_query_cached_rip_from_thread(D_Entity *thread)
+d_cached_rip_from_thread(D_Entity *thread)
 {
-  U64 result = d_query_cached_rip_from_thread_unwind(thread, 0);
+  U64 result = d_cached_rip_from_thread_unwind(thread, 0);
   return result;
 }
 
 internal U64
-d_query_cached_rip_from_thread_unwind(D_Entity *thread, U64 unwind_count)
+d_cached_rip_from_thread_unwind(D_Entity *thread, U64 unwind_count)
 {
   U64 result = 0;
   if(unwind_count == 0)
@@ -1417,7 +1417,7 @@ d_query_cached_rip_from_thread_unwind(D_Entity *thread, U64 unwind_count)
 }
 
 internal U64
-d_query_cached_cfa_from_thread_unwind(D_Entity *thread, U64 unwind_count)
+d_cached_cfa_from_thread_unwind(D_Entity *thread, U64 unwind_count)
 {
   U64 cfa = 0;
   Access *access = access_open();
@@ -1431,7 +1431,7 @@ d_query_cached_cfa_from_thread_unwind(D_Entity *thread, U64 unwind_count)
 }
 
 internal E_String2NumMap *
-d_query_cached_locals_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff)
+d_cached_locals_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff)
 {
   ProfBeginFunction();
   E_String2NumMap *map = &e_string2num_map_nil;
@@ -1485,7 +1485,7 @@ d_query_cached_locals_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff)
 }
 
 internal E_String2NumMap *
-d_query_cached_member_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff)
+d_cached_member_map_from_dbgi_key_voff(DI_Key dbgi_key, U64 voff)
 {
   ProfBeginFunction();
   E_String2NumMap *map = &e_string2num_map_nil;
