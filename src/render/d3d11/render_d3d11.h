@@ -41,10 +41,14 @@ struct R_D3D11_Uniforms_BlurPass
 {
   Rng2F32 rect;
   Vec4F32 corner_radii;
-  Vec2F32 direction;
   Vec2F32 viewport_size;
+  Vec2F32 src_offset;      // source pixel = SV_Position.xy + src_offset
+  Vec2F32 src_texel_size;  // 1 / allocated source texture size
+  Vec2F32 direction;       // in source pixels
+  Vec4F32 src_clamp;       // valid source pixel-center range: min.xy, max.xy
   U32 blur_count;
-  U8 _padding0_[204];
+  U32 mask_corners;
+  U8 _padding0_[168];
 };
 StaticAssert(sizeof(R_D3D11_Uniforms_BlurPass) % 256 == 0, NotAligned); // constant count/offset must be aligned to 256 bytes
 
@@ -63,6 +67,9 @@ struct R_D3D11_Uniforms_Mesh
 
 ////////////////////////////////
 //~ rjf: Main State Types
+
+// Per-window blur and geo3d scratch targets are released after this many frames without use.
+#define R_D3D11_SCRATCH_IDLE_FRAMES 600
 
 typedef struct R_D3D11_Tex2D R_D3D11_Tex2D;
 struct R_D3D11_Tex2D
@@ -92,23 +99,32 @@ struct R_D3D11_Window
   R_D3D11_Window *next;
   U64 generation;
   
-  // rjf: staging buffer
-  ID3D11Texture2D *stage_color;
-  ID3D11RenderTargetView *stage_color_rtv;
-  ID3D11ShaderResourceView *stage_color_srv;
-  ID3D11Texture2D *stage_scratch_color;
-  ID3D11RenderTargetView *stage_scratch_color_rtv;
-  ID3D11ShaderResourceView *stage_scratch_color_srv;
+  // composition surface: open from r_window_begin_frame to r_window_end_frame; all passes draw into it
+  ID3D11Texture2D *surface_texture;
+  ID3D11RenderTargetView *surface_rtv;
+  POINT surface_offset;
+  B32 surface_drawing;
   
-  // rjf: geo3d buffer
+  // blur scratch: grow-only, sized to blurred regions, released when unused for a while
+  ID3D11Texture2D *blur_src;
+  ID3D11ShaderResourceView *blur_src_srv;
+  ID3D11Texture2D *blur_mid;
+  ID3D11RenderTargetView *blur_mid_rtv;
+  ID3D11ShaderResourceView *blur_mid_srv;
+  Vec2S32 blur_size;
+  U64 blur_last_used_frame;
+  
+  // rjf: geo3d buffer: grow-only, sized to 3D viewports, released when unused for a while
   ID3D11Texture2D *geo3d_color;
   ID3D11RenderTargetView *geo3d_color_rtv;
   ID3D11ShaderResourceView *geo3d_color_srv;
   ID3D11Texture2D *geo3d_depth;
   ID3D11DepthStencilView *geo3d_depth_dsv;
-  ID3D11ShaderResourceView *geo3d_depth_srv;
+  Vec2S32 geo3d_size;
+  U64 geo3d_last_used_frame;
   
   // rjf: last state
+  U64 frame_index;
   Vec2S32 last_resolution;
 };
 
@@ -124,7 +140,6 @@ struct R_D3D11_State
 {
   // rjf: state
   Arena *arena;
-  U64 window_count;
   R_D3D11_Window *first_free_window;
   R_D3D11_Tex2D *first_free_tex2d;
   R_D3D11_Buffer *first_free_buffer;
@@ -137,9 +152,9 @@ struct R_D3D11_State
   ID3D11DeviceContext     *base_device_ctx;
   ID3D11Device1           *device;
   ID3D11DeviceContext1    *device_ctx;
-  IDXGIDevice2            *dxgi_device;
   ID3D11RasterizerState1  *main_rasterizer;
   ID3D11BlendState        *main_blend_state;
+  ID3D11BlendState        *surface_blend_state; // main blend, RGB writes only: the surface's alpha stays 1
   ID3D11BlendState        *no_blend_state;
   ID3D11SamplerState      *samplers[R_Tex2DSampleKind_COUNT];
   ID3D11DepthStencilState *noop_depth_stencil;
@@ -180,5 +195,13 @@ internal R_D3D11_Buffer *r_d3d11_buffer_from_handle(R_Handle handle);
 internal R_Handle r_d3d11_handle_from_buffer(R_D3D11_Buffer *buffer);
 internal ID3D11Buffer *r_d3d11_instance_buffer_from_size(U64 size);
 internal void r_usage_access_flags_from_resource_kind(R_ResourceKind kind, D3D11_USAGE *out_d3d11_usage, UINT *out_cpu_access_flags);
+internal void r_d3d11_check(HRESULT error, char *operation);
+internal Vec2S32 r_d3d11_scratch_size_from_needed(Vec2S32 current, Vec2S32 needed);
+internal ID3D11Texture2D *r_d3d11_target_alloc(Vec2S32 size, DXGI_FORMAT format, UINT bind_flags);
+internal Rng2S32 r_d3d11_window_rect_from_clip(Rng2F32 clip, Vec2S32 resolution);
+internal D3D11_RECT r_d3d11_surface_scissor_from_rect(R_D3D11_Window *wnd, Rng2S32 rect);
+internal void r_d3d11_window_release_blur_targets(R_D3D11_Window *wnd);
+internal void r_d3d11_window_release_geo3d_targets(R_D3D11_Window *wnd);
+internal HRESULT r_d3d11_window_close_surface(WM_Window window, R_D3D11_Window *wnd);
 
 #endif // RENDER_D3D11_H
