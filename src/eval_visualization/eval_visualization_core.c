@@ -1951,6 +1951,16 @@ ev_string_iter_next(Arena *arena, EV_StringIter *it, String8 *out_string)
                     E_TypeKey type = e_type_key_ext(e_type_kind_from_rdi(type_node->kind), inline_site->type_idx, dbg_info_num);
                     String8 name = {0};
                     name.str = rdi_string_from_idx(rdi, inline_site->name_string_idx, &name.size);
+                    if(inline_site->owner_type_idx != 0 && name.size != 0)
+                    {
+                      RDI_TypeNode *owner = rdi_element_from_name_idx(rdi, TypeNodes, inline_site->owner_type_idx);
+                      String8 owner_name = {0};
+                      owner_name.str = rdi_string_from_idx(rdi, owner->user_defined.name_string_idx, &owner_name.size);
+                      if(owner->kind >= RDI_TypeKind_FirstUserDefined && owner->kind <= RDI_TypeKind_LastUserDefined && owner_name.size != 0)
+                      {
+                        name = push_str8f(arena, "%S::%S", owner_name, name);
+                      }
+                    }
                     if(inline_site->type_idx != 0)
                     {
                       Temp scratch = scratch_begin(&arena, 1);

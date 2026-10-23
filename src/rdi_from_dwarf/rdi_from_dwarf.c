@@ -18,8 +18,255 @@ d2r_unique_tag_node_is_less_than(D2R_UniqueTagNode **l, D2R_UniqueTagNode **r)
   return is_less_than;
 }
 
+typedef struct D2R_InlineRec D2R_InlineRec;
+struct D2R_InlineRec
+{
+  D2R_InlineRec *next;
+  D2R_InlineRec *parent;
+  D2R_InlineRec *first_child;
+  D2R_InlineRec *next_sibling;
+  RDIM_Scope *scope;
+  RDIM_SrcFile *call_file;
+  U32 call_line;
+};
+
+typedef struct D2R_OriginMemo D2R_OriginMemo;
+struct D2R_OriginMemo
+{
+  D2R_OriginMemo *next;
+  U64 origin_info_off;
+  String8 name;
+  U64 spec_decl_info_off;
+};
+
+typedef struct D2R_LineRow D2R_LineRow;
+struct D2R_LineRow
+{
+  U64 lo;
+  U64 hi;
+  RDIM_SrcFile *file;
+  U32 line;
+};
+
+internal int
+d2r_line_row_is_before(D2R_LineRow *l, D2R_LineRow *r)
+{
+  return (l->lo < r->lo);
+}
+
+internal void
+d2r_line_rows_push(Arena *arena, D2R_LineRow **rows, U64 *count, U64 *cap, U64 lo, U64 hi, RDIM_SrcFile *file, U32 line)
+{
+  if(*count != 0)
+  {
+    D2R_LineRow *last = &(*rows)[*count-1];
+    if(last->hi == lo && last->file == file && last->line == line)
+    {
+      last->hi = hi;
+      return;
+    }
+  }
+  if(*count == *cap)
+  {
+    U64 new_cap = Max(64, 2*(*cap));
+    D2R_LineRow *new_rows = push_array_no_zero(arena, D2R_LineRow, new_cap);
+    if(*count != 0)
+    {
+      MemoryCopy(new_rows, *rows, sizeof(D2R_LineRow)*(*count));
+    }
+    *rows = new_rows;
+    *cap = new_cap;
+  }
+  D2R_LineRow *row = &(*rows)[*count];
+  row->lo = lo;
+  row->hi = hi;
+  row->file = file;
+  row->line = line;
+  *count += 1;
+}
+
+// Fills dst with the lines seen at one inline depth: rows inside the domain, except that each
+// child inline site's ranges show the child's call-site line.
+internal void
+d2r_line_table_push_inline_depth(Arena *arena, Arena *scratch_arena, RDIM_LineTableChunkList *line_tables, RDIM_LineTable *dst,
+                                 D2R_LineRow *rows, U64 row_count, RDIM_Rng1U64List *domain_list, RDIM_Rng1U64 whole_domain,
+                                 D2R_InlineRec *first_child)
+{
+  Temp temp = temp_begin(scratch_arena);
+  
+  U64 domain_count = domain_list ? domain_list->count : 1;
+  D2R_LineRow *domain = push_array(temp.arena, D2R_LineRow, domain_count);
+  if(domain_list)
+  {
+    U64 idx = 0;
+    for EachNode(n, RDIM_Rng1U64Node, domain_list->first)
+    {
+      domain[idx].lo = n->v.min;
+      domain[idx].hi = n->v.max;
+      idx += 1;
+    }
+    radsort(domain, domain_count, (int (*)(void *, void *))d2r_line_row_is_before);
+    U64 merged_count = 0;
+    for EachIndex(read_idx, domain_count)
+    {
+      if(merged_count != 0 && domain[read_idx].lo <= domain[merged_count-1].hi)
+      {
+        domain[merged_count-1].hi = Max(domain[merged_count-1].hi, domain[read_idx].hi);
+      }
+      else
+      {
+        domain[merged_count] = domain[read_idx];
+        merged_count += 1;
+      }
+    }
+    domain_count = merged_count;
+  }
+  else
+  {
+    domain[0].lo = whole_domain.min;
+    domain[0].hi = whole_domain.max;
+  }
+  
+  U64 ov_count = 0;
+  for(D2R_InlineRec *c = first_child; c != 0; c = c->next_sibling)
+  {
+    if(c->call_file != 0 && c->call_line != 0)
+    {
+      ov_count += c->scope->voff_ranges.count;
+    }
+  }
+  D2R_LineRow *ov = push_array(temp.arena, D2R_LineRow, ov_count+1);
+  {
+    U64 idx = 0;
+    for(D2R_InlineRec *c = first_child; c != 0; c = c->next_sibling)
+    {
+      if(c->call_file != 0 && c->call_line != 0)
+      {
+        for EachNode(n, RDIM_Rng1U64Node, c->scope->voff_ranges.first)
+        {
+          ov[idx].lo = n->v.min;
+          ov[idx].hi = n->v.max;
+          ov[idx].file = c->call_file;
+          ov[idx].line = c->call_line;
+          idx += 1;
+        }
+      }
+    }
+    radsort(ov, ov_count, (int (*)(void *, void *))d2r_line_row_is_before);
+    U64 write_idx = 0;
+    U64 prev_hi = 0;
+    for EachIndex(read_idx, ov_count)
+    {
+      U64 lo = Max(ov[read_idx].lo, prev_hi);
+      if(lo < ov[read_idx].hi)
+      {
+        ov[write_idx] = ov[read_idx];
+        ov[write_idx].lo = lo;
+        prev_hi = ov[read_idx].hi;
+        write_idx += 1;
+      }
+    }
+    ov_count = write_idx;
+  }
+  
+  D2R_LineRow *pieces = 0;
+  U64 piece_count = 0;
+  U64 piece_cap = 0;
+  U64 ov_idx = 0;
+  for EachIndex(domain_idx, domain_count)
+  {
+    U64 cursor = domain[domain_idx].lo;
+    U64 end = domain[domain_idx].hi;
+    while(cursor < end)
+    {
+      while(ov_idx < ov_count && ov[ov_idx].hi <= cursor)
+      {
+        ov_idx += 1;
+      }
+      if(ov_idx < ov_count && ov[ov_idx].lo <= cursor)
+      {
+        U64 piece_end = Min(ov[ov_idx].hi, end);
+        d2r_line_rows_push(temp.arena, &pieces, &piece_count, &piece_cap, cursor, piece_end, ov[ov_idx].file, ov[ov_idx].line);
+        cursor = piece_end;
+        continue;
+      }
+      U64 next_ov_lo = (ov_idx < ov_count) ? ov[ov_idx].lo : max_U64;
+      U64 first_after = 0;
+      {
+        U64 l = 0, r = row_count;
+        while(l < r)
+        {
+          U64 mid = l + (r-l)/2;
+          if(rows[mid].lo <= cursor) { l = mid+1; } else { r = mid; }
+        }
+        first_after = l;
+      }
+      U64 next_row_lo = (first_after < row_count) ? rows[first_after].lo : max_U64;
+      if(first_after > 0 && rows[first_after-1].hi > cursor)
+      {
+        D2R_LineRow *row = &rows[first_after-1];
+        U64 piece_end = Min(Min(row->hi, next_ov_lo), Min(next_row_lo, end));
+        if(row->line != 0)
+        {
+          d2r_line_rows_push(temp.arena, &pieces, &piece_count, &piece_cap, cursor, piece_end, row->file, row->line);
+        }
+        else if(piece_count != 0 && pieces[piece_count-1].hi == cursor)
+        {
+          pieces[piece_count-1].hi = piece_end;
+        }
+        cursor = piece_end;
+      }
+      else
+      {
+        cursor = Min(Min(next_row_lo, next_ov_lo), end);
+      }
+    }
+  }
+  
+  for(U64 first = 0; first < piece_count;)
+  {
+    U64 opl = first+1;
+    while(opl < piece_count && pieces[opl].file == pieces[first].file && pieces[opl].lo == pieces[opl-1].hi)
+    {
+      opl += 1;
+    }
+    U64 count = opl - first;
+    U64 *voffs = push_array_no_zero(arena, U64, count+1);
+    U32 *line_nums = push_array_no_zero(arena, U32, count);
+    for EachIndex(idx, count)
+    {
+      voffs[idx] = pieces[first+idx].lo;
+      line_nums[idx] = pieces[first+idx].line;
+    }
+    voffs[count] = pieces[opl-1].hi;
+    rdim_line_table_push_sequence(arena, line_tables, dst, pieces[first].file, voffs, line_nums, 0, count);
+    first = opl;
+  }
+  
+  temp_end(temp);
+}
+
 ////////////////////////////////
 //~ rjf: Main Conversion Entry Point (New)
+
+// The unique-tag table keeps the lowest .debug_info offset of each deduplicated tag, but its stored
+// container ancestor comes from whichever lane inserted first; read the ancestor of the final offset.
+internal U64
+d2r_container_ancestor_info_off_from_tag_off(D2R_TagHashNode **slots, U64 slots_count, U64 info_off)
+{
+  U64 result = 0;
+  U64 slot_idx = u64_hash_from_str8(str8_struct(&info_off))%slots_count;
+  for(D2R_TagHashNode *n = slots[slot_idx]; n != 0; n = n->next)
+  {
+    if(n->info_off == info_off)
+    {
+      result = n->container_ancestor_info_off;
+      break;
+    }
+  }
+  return result;
+}
+
 
 internal RDIM_BakeParams
 d2r_convert(Arena *arena, D2R_ConvertParams *params)
@@ -49,6 +296,19 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       acceptable_vaddr_range.min = Min(base_vaddr + n->v.voff_first, acceptable_vaddr_range.min);
       acceptable_vaddr_range.max = Max(base_vaddr + n->v.voff_opl, acceptable_vaddr_range.max);
     }
+  }
+  Rng1U64 code_voff_range = {max_U64, 0};
+  for EachNode(n, RDIM_BinarySectionNode, binary_sections.first)
+  {
+    if(n->v.flags & RDI_BinarySectionFlag_Execute && n->v.voff_first < n->v.voff_opl)
+    {
+      code_voff_range.min = Min(n->v.voff_first, code_voff_range.min);
+      code_voff_range.max = Max(n->v.voff_opl, code_voff_range.max);
+    }
+  }
+  if(code_voff_range.min >= code_voff_range.max)
+  {
+    code_voff_range = r1u64(0, max_U64);
   }
   
   ////////////////////////////
@@ -440,14 +700,19 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         if(f->file_name.size != 0)
         {
           DW2_LineTableFile *dir = &hdr->dirs.v[f->dir_idx];
+          String8 dir_name = dir->file_name;
           String8 root_dir = {0};
-          if(path_style_from_str8(dir->file_name) == PathStyle_Relative)
+          if(path_style_from_str8(f->file_name) != PathStyle_Relative)
+          {
+            dir_name = str8_zero();
+          }
+          else if(path_style_from_str8(dir_name) == PathStyle_Relative)
           {
             root_dir = ctx->unit_dir;
           }
           String8 full_file_path = str8f(scratch2.arena, "%S%s%S%s%S",
                                          root_dir, root_dir.size != 0 ? "/" : "",
-                                         dir->file_name, dir->file_name.size != 0 ? "/" : "",
+                                         dir_name, dir_name.size != 0 ? "/" : "",
                                          f->file_name);
           full_file_path = path_normalized_from_string(scratch2.arena, full_file_path);
           U64 hash = u64_hash_from_str8(full_file_path);
@@ -572,6 +837,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       
       //- rjf: run the line opcode program
       B32 emit_line = 0;
+      B32 seq_dead = 0;
       RDIM_SrcFile *line_seq_src_file = 0;
       LineSeqChunk *first_line_seq_chunk = 0;
       LineSeqChunk *last_line_seq_chunk = 0;
@@ -726,6 +992,10 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                   op_read_off += str8_deserial_read(ext_op_data, op_read_off, &addr, line_table_header->addr_size, line_table_header->addr_size);
                   vm_regs.address = addr;
                   vm_regs.vliw_op_index = 0;
+                  // The linker points sequences of discarded functions at 0 or a -1/-2 tombstone.
+                  // Rows advanced from 0 would otherwise land on live code near the image start.
+                  U64 addr_max = (line_table_header->addr_size >= 8) ? max_U64 : ((1ull << (8*line_table_header->addr_size)) - 1);
+                  seq_dead = (addr == 0 || addr >= addr_max - 1);
                 }break;
                 case DW_ExtOpcode_DefineFile:
                 {
@@ -767,7 +1037,12 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         }
         
         //- rjf: sequence ended explicitly, or file change, or end of stream? -> push to line table
-        if(line_seq_src_file != 0 && (vm_regs.end_sequence || (src_file != line_seq_src_file && first_line_seq_chunk != 0) || off >= unit_line_table_data.size))
+        //
+        // A file change closes the sequence only when the next row is emitted: DW_LNS_set_file
+        // normally precedes the address advance, so closing at set_file would end the last line
+        // at its own start address and leave it an empty range.
+        B32 file_change_row = (emit_line && !seq_dead && vm_regs.address != 0 && src_file != line_seq_src_file && first_line_seq_chunk != 0);
+        if(line_seq_src_file != 0 && (vm_regs.end_sequence || file_change_row || off >= unit_line_table_data.size))
         {
           // rjf: combine voffs/lines/cols
           U64 seq_line_count = total_line_seq_count;
@@ -790,52 +1065,79 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             seq_voffs[seq_line_count] = vm_regs.address - base_vaddr;
           }
           
-          // rjf: push sequence to line table
-          RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, dst_line_tables, dst_line_table, line_seq_src_file, seq_voffs, seq_lines, seq_cols, seq_line_count);
-          
-          // rjf: map src file -> file seq node
-          FileSeqNode *file_seq_n = 0;
+          // Rows sharing an address with the next row cover no code. Kept, they are empty ranges
+          // that a lookup can land on, which makes step-over end without running.
           {
-            U64 hash = u64_hash_from_str8(str8_struct(&line_seq_src_file));
-            U64 slot_idx = hash%unit_file_seq_maps[unit_idx].slots_count;
-            for(FileSeqNode *n = unit_file_seq_maps[unit_idx].slots[slot_idx]; n != 0; n = n->next)
+            U64 write_idx = 0;
+            for(U64 read_idx = 0; read_idx < seq_line_count; read_idx += 1)
             {
-              if(n->src_file == line_seq_src_file)
+              if(seq_voffs[read_idx] == seq_voffs[read_idx+1])
               {
-                file_seq_n = n;
-                break;
+                continue;
               }
+              seq_voffs[write_idx] = seq_voffs[read_idx];
+              seq_lines[write_idx] = seq_lines[read_idx];
+              seq_cols[2*write_idx+0] = seq_cols[2*read_idx+0];
+              seq_cols[2*write_idx+1] = seq_cols[2*read_idx+1];
+              write_idx += 1;
             }
-            if(file_seq_n == 0)
-            {
-              file_seq_n = push_array(scratch.arena, FileSeqNode, 1);
-              SLLStackPush(unit_file_seq_maps[unit_idx].slots[slot_idx], file_seq_n);
-              file_seq_n->src_file = line_seq_src_file;
-            }
+            seq_voffs[write_idx] = seq_voffs[seq_line_count];
+            seq_line_count = write_idx;
           }
           
-          // rjf: record sequence in file seq node
+          // rjf: push sequence to line table
+          if(seq_line_count != 0)
           {
-            RDIM_SrcFileLineMapFragment *f = push_array(scratch.arena, RDIM_SrcFileLineMapFragment, 1);
-            SLLQueuePush(file_seq_n->first_line_map_fragment, file_seq_n->last_line_map_fragment, f);
-            f->seq = seq;
+            RDIM_LineSequence *seq = rdim_line_table_push_sequence(arena, dst_line_tables, dst_line_table, line_seq_src_file, seq_voffs, seq_lines, seq_cols, seq_line_count);
+          
+            // rjf: map src file -> file seq node
+            FileSeqNode *file_seq_n = 0;
+            {
+              U64 hash = u64_hash_from_str8(str8_struct(&line_seq_src_file));
+              U64 slot_idx = hash%unit_file_seq_maps[unit_idx].slots_count;
+              for(FileSeqNode *n = unit_file_seq_maps[unit_idx].slots[slot_idx]; n != 0; n = n->next)
+              {
+                if(n->src_file == line_seq_src_file)
+                {
+                  file_seq_n = n;
+                  break;
+                }
+              }
+              if(file_seq_n == 0)
+              {
+                file_seq_n = push_array(scratch.arena, FileSeqNode, 1);
+                SLLStackPush(unit_file_seq_maps[unit_idx].slots[slot_idx], file_seq_n);
+                file_seq_n->src_file = line_seq_src_file;
+              }
+            }
+          
+            // rjf: record sequence in file seq node
+            {
+              RDIM_SrcFileLineMapFragment *f = push_array(scratch.arena, RDIM_SrcFileLineMapFragment, 1);
+              SLLQueuePush(file_seq_n->first_line_map_fragment, file_seq_n->last_line_map_fragment, f);
+              f->seq = seq;
+            }
           }
           
           // rjf: reset
           first_line_seq_chunk = last_line_seq_chunk = 0;
           total_line_seq_count = 0;
           line_seq_src_file = 0;
-          if(vm_regs.end_sequence)
-          {
-            MemoryZeroStruct(&vm_regs);
-            vm_regs.file_index = 1;
-            vm_regs.line = 1;
-            vm_regs.is_stmt = line_table_header->default_is_stmt;
-          }
+        }
+        
+        // Reset even when the sequence emitted nothing (a discarded function): otherwise the next
+        // sequence inherits end_sequence and a stale line register, and every row it emits is wrong.
+        if(vm_regs.end_sequence)
+        {
+          MemoryZeroStruct(&vm_regs);
+          vm_regs.file_index = 1;
+          vm_regs.line = 1;
+          vm_regs.is_stmt = line_table_header->default_is_stmt;
+          seq_dead = 0;
         }
         
         //- rjf: emit lines
-        if(emit_line && vm_regs.address != 0 && vm_regs.line != 0)
+        if(emit_line && !seq_dead && vm_regs.address != 0)
         {
           emit_line = 0;
           
@@ -899,6 +1201,9 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           vm_regs.prologue_end = 0;
           vm_regs.epilogue_begin = 0;
         }
+        // A row that was not kept must not carry over: the next opcode would emit it at a later
+        // address, or with a later line number.
+        emit_line = 0;
       }
       
       scratch_end(scratch2);
@@ -1189,6 +1494,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         {
           D2R_ParentTagNode *next;
           U64 hash_seed;
+          U64 container_info_off;
         };
         D2R_ParentTagNode *top_parent = 0;
         D2R_ParentTagNode *free_parent = 0;
@@ -1214,6 +1520,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                                tag.kind == DW_TagKind_SubroutineType ||
                                tag.kind == DW_TagKind_SubProgram ||
                                tag.kind == DW_TagKind_Typedef ||
+                               tag.kind == DW_TagKind_TemplateAlias ||
                                tag.kind == DW_TagKind_UnionType ||
                                tag.kind == DW_TagKind_PtrToMemberType ||
                                tag.kind == DW_TagKind_SetType ||
@@ -1232,7 +1539,9 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                                tag.kind == DW_TagKind_AtomicType ||
                                tag.kind == DW_TagKind_ImmutableType ||
                                tag.kind == DW_TagKind_Member ||
+                               tag.kind == DW_TagKind_Inheritance ||
                                tag.kind == DW_TagKind_FormalParameter ||
+                               tag.kind == DW_TagKind_SubrangeType ||
                                tag.kind == DW_TagKind_Namespace);
           
           // rjf: get top hash seed
@@ -1294,6 +1603,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             D2R_TagHashNode *n = push_array(scratch.arena, D2R_TagHashNode, 1);
             n->info_off = start_off;
             n->hash = hash;
+            n->container_ancestor_info_off = top_parent ? top_parent->container_info_off : 0;
             for(B32 inserted = 0; !inserted;)
             {
               U64 slot_head_val = (U64)ins_atomic_u64_eval(&tag_hash_slots[slot_idx]);
@@ -1334,6 +1644,13 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             MemoryZeroStruct(n);
             SLLStackPush(top_parent, n);
             n->hash_seed = n_hash_seed;
+            B32 is_container = (tag.kind == DW_TagKind_Namespace ||
+                                tag.kind == DW_TagKind_StructureType ||
+                                tag.kind == DW_TagKind_ClassType ||
+                                tag.kind == DW_TagKind_UnionType ||
+                                tag.kind == DW_TagKind_SubProgram ||
+                                tag.kind == DW_TagKind_LexicalBlock);
+            n->container_info_off = is_container ? start_off : 0;
           }
           
           // rjf: pop parents
@@ -1501,6 +1818,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                 tag.kind == DW_TagKind_SubroutineType ||
                 tag.kind == DW_TagKind_SubProgram ||
                 tag.kind == DW_TagKind_Typedef ||
+                tag.kind == DW_TagKind_TemplateAlias ||
                 tag.kind == DW_TagKind_UnionType ||
                 tag.kind == DW_TagKind_PtrToMemberType ||
                 tag.kind == DW_TagKind_SetType ||
@@ -1667,7 +1985,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                           top_task->root_tag_kind == DW_TagKind_ClassType ||
                           top_task->root_tag_kind == DW_TagKind_UnionType)
                   {
-                    include_tag_in_hash = (tag.kind == DW_TagKind_Member);
+                    include_tag_in_hash = (tag.kind == DW_TagKind_Member || tag.kind == DW_TagKind_Inheritance);
                   }
                 }
                 
@@ -1749,7 +2067,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                 // rjf: if this tag has a non-recursive type reference -> push a new task to hash the type.
                 if(!type_ref_is_recursive && type_info_off != 0)
                 {
-                  if(tag.kind != DW_TagKind_Member)
+                  if(tag.kind != DW_TagKind_Member && tag.kind != DW_TagKind_Inheritance)
                   {
                     top_task->dependency_count += 1;
                   }
@@ -1774,7 +2092,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                   MemoryZeroStruct(task);
                   task->unit_idx = unit_idx;
                   task->start_off = task->off = type_info_off;
-                  task->is_member = (tag.kind == DW_TagKind_Member);
+                  task->is_member = (tag.kind == DW_TagKind_Member || tag.kind == DW_TagKind_Inheritance);
                   SLLStackPush(top_task, task);
                 }
                 
@@ -2066,16 +2384,20 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
   //
   RDIM_TypeChunkList *all_types = 0;
   RDIM_Type **type_from_idx_map = 0;
+  // An array without subranges maps to its element's type; only the element's own index may write to that type.
+  B8 *type_idx_borrows_type = 0;
   ProfScope("build all types")
   {
     if(lane_idx() == 0)
     {
       all_types = push_array(scratch.arena, RDIM_TypeChunkList, 1);
       type_from_idx_map = push_array(scratch.arena, RDIM_Type *, type_count);
+      type_idx_borrows_type = push_array(scratch.arena, B8, type_count);
       rdim_type_chunk_list_concat_in_place(all_types, builtin_types);
     }
     lane_sync_u64(&all_types, 0);
     lane_sync_u64(&type_from_idx_map, 0);
+    lane_sync_u64(&type_idx_borrows_type, 0);
     Rng1U64 range = lane_range(type_count);
     U64 max_chain_count = 0;
     for(;max_chain_count < max_U64;)
@@ -2343,6 +2665,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             }
           }break;
           case DW_TagKind_Typedef:
+          case DW_TagKind_TemplateAlias:
           {
             dst_type = rdim_type_chunk_list_push(arena, &lane_types, lane_types_chunk_count);
             dst_type->kind        = RDI_TypeKind_Alias;
@@ -2388,6 +2711,8 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
               CaseB(RDI_TypeKind_S128,        DW_ATE_Signed,       128)
               CaseB(RDI_TypeKind_S256,        DW_ATE_Signed,       256)
               CaseB(RDI_TypeKind_S512,        DW_ATE_Signed,       512)
+              CaseD(RDI_TypeKind_UChar16,     DW_ATE_Unsigned,     "wchar_t", 16)
+              CaseD(RDI_TypeKind_UChar32,     DW_ATE_Unsigned,     "wchar_t", 32)
               CaseB(RDI_TypeKind_U8,          DW_ATE_Unsigned,     8)
               CaseB(RDI_TypeKind_U16,         DW_ATE_Unsigned,     16)
               CaseB(RDI_TypeKind_U32,         DW_ATE_Unsigned,     32)
@@ -2562,6 +2887,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             
             // rjf: final destination type -> the final array dimension type
             dst_type = array_direct_type;
+            type_idx_borrows_type[type_idx] = (top_dimension == 0 && dst_type != 0);
           }break;
         }
         
@@ -2655,7 +2981,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       
       // rjf: build namespace
       RDIM_Namespace *ns = rdim_namespace_chunk_list_push(arena, &lane_namespaces, 64);
-      ns->name = name;
+      ns->name = name.size != 0 ? name : str8_lit("(anonymous namespace)");
       
       // rjf: store in (deduped tag idx -> namespace) table
       namespace_from_idx_map[tag_node->order_idx] = ns;
@@ -2692,14 +3018,21 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
   //- rjf: convert all UDTs
   //
   RDIM_UDTChunkList *all_udts = 0;
+  RDIM_SymbolChunkList *all_udt_constants = 0;
   ProfScope("convert all UDTs")
   {
     //- rjf: produce UDTs across all lanes
     U64 chunk_count = 512;
     RDIM_UDTChunkList lane_udts = {0};
+    RDIM_SymbolChunkList lane_udt_constants = {0};
+    RDIM_TypeChunkList lane_bitfield_types = {0};
     Rng1U64 range = lane_range(type_count);
     for EachInRange(type_idx, range)
     {
+      if(type_idx_borrows_type[type_idx])
+      {
+        continue;
+      }
       RDIM_Type *type = type_from_idx_map[type_idx];
       if(type != 0 &&
          (type->kind == RDI_TypeKind_Struct ||
@@ -2725,6 +3058,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
         
         // rjf: parse all tags
         S64 depth = 0;
+        RDIM_Type *nested_enum_type = 0;
         for(U64 off = info_off; contains_1u64(unit_info_tag_range, off) && (depth > 0 || off == info_off);)
         {
           Temp scratch2 = scratch_begin(&scratch.arena, 1);
@@ -2740,19 +3074,25 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           DW2_Attrib *type_attrib = &dw2_attrib_nil;
           DW2_Attrib *off_attrib = &dw2_attrib_nil;
           DW2_Attrib *val_attrib = &dw2_attrib_nil;
+          DW2_Attrib *decl_attrib = &dw2_attrib_nil;
           DW2_Attrib *declfile_attrib = &dw2_attrib_nil;
           DW2_Attrib *declline_attrib = &dw2_attrib_nil;
           DW2_Attrib *declcol_attrib = &dw2_attrib_nil;
+          DW2_Attrib *bitsize_attrib = &dw2_attrib_nil;
+          DW2_Attrib *databitoff_attrib = &dw2_attrib_nil;
           for EachNode(n, DW2_AttribNode, tag.attribs.first)
           {
             switch(n->v.attrib_kind)
             {
               default:{}break;
 #define Case(dst, src) case DW_AttribKind_##src:{dst##_attrib = &n->v;}break
+              Case(bitsize,    BitSize);
+              Case(databitoff, DataBitOffset);
               Case(name,     Name);
               Case(type,     Type);
               Case(off,      DataMemberLocation);
               Case(val,      ConstValue);
+              Case(decl,     Declaration);
               Case(declfile, DeclFile);
               Case(declline, DeclLine);
               Case(declcol,  DeclColumn);
@@ -2767,15 +3107,19 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           
           // rjf: unpack type
           RDIM_Type *type = 0;
-          if(type_attrib != &dw2_attrib_nil)
+          B32 type_is_tag_itself = (tag.kind == DW_TagKind_SubProgram || (depth == 1 && tag.kind == DW_TagKind_EnumerationType));
+          if(type_attrib != &dw2_attrib_nil || type_is_tag_itself)
           {
-            // rjf: attrib -> info off / unit idx
-            U64 type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &type_attrib->val);
+            U64 type_info_off = start_off;
             U64 type_unit_idx = unit_idx;
-            if(!contains_1u64(unit_info_tag_range, type_info_off))
+            if(!type_is_tag_itself)
             {
-              U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, type_info_off);
-              type_unit_idx = (new_unit_num > 0 ? new_unit_num-1 : unit_idx);
+              type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &type_attrib->val);
+              if(!contains_1u64(unit_info_tag_range, type_info_off))
+              {
+                U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, type_info_off);
+                type_unit_idx = (new_unit_num > 0 ? new_unit_num-1 : unit_idx);
+              }
             }
             
             // rjf: (info_off, unit_idx) -> hash
@@ -2808,6 +3152,14 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             }
           }
           
+          // An unscoped enum nested in a class puts its enumerators in the class scope (`Class::Value`).
+          if(depth == 1)
+          {
+            B32 is_unscoped_enum = (tag.kind == DW_TagKind_EnumerationType && decl_attrib == &dw2_attrib_nil &&
+                                    dw2_attrib_from_kind(&tag, DW_AttribKind_EnumClass) == &dw2_attrib_nil);
+            nested_enum_type = is_unscoped_enum ? type : 0;
+          }
+          
           // rjf: root-level tag -> collect decl file/line info
           if(tag_parse_off == start_off)
           {
@@ -2820,16 +3172,164 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           switch(tag.kind)
           {
             default:{}break;
-            case DW_TagKind_Member:
+            case DW_TagKind_SubProgram:
             {
+              DW2_Attrib *virtuality_attrib = dw2_attrib_from_kind(&tag, DW_AttribKind_Virtuality);
+              if(depth == 1 && type != 0 && type->kind == RDI_TypeKind_Function && name.size != 0 &&
+                 virtuality_attrib != &dw2_attrib_nil && virtuality_attrib->val.u128.u64[0] != 0)
+              {
+                RDIM_UDTMember *member = rdim_udt_push_member(arena, &lane_udts, udt);
+                member->kind = RDI_MemberKind_VirtualMethod;
+                member->name = name;
+                member->type = type;
+                member->off = max_U32;
+                DW2_Attrib *vtable_elem_location_attrib = dw2_attrib_from_kind(&tag, DW_AttribKind_VTableElemLocation);
+                if(vtable_elem_location_attrib != &dw2_attrib_nil &&
+                   vtable_elem_location_attrib->val.kind == DW_FormKind_ExprLoc && unit_parse_ctx->addr_size == 8)
+                {
+                  U64 expr_off = vtable_elem_location_attrib->val.u128.u64[0];
+                  U64 expr_size = vtable_elem_location_attrib->val.u128.u64[1];
+                  String8 expr = str8_substr(raw->sec[DW_SectionKind_Info].data, r1u64(expr_off, expr_off+expr_size));
+                  if(expr.size >= 2 && expr.str[0] == 0x10)
+                  {
+                    U64 slot_idx = 0;
+                    U64 read_idx = 1;
+                    for(U64 shift = 0; read_idx < expr.size && shift < 64; shift += 7)
+                    {
+                      U8 byte = expr.str[read_idx];
+                      read_idx += 1;
+                      slot_idx |= (U64)(byte & 0x7f) << shift;
+                      if((byte & 0x80) == 0)
+                      {
+                        if(read_idx == expr.size && slot_idx <= max_U32/8)
+                        {
+                          member->off = (RDI_U32)(slot_idx*8);
+                        }
+                        break;
+                      }
+                    }
+                  }
+                }
+              }
+            }break;
+            case DW_TagKind_Inheritance:
+            {
+              if(depth != 1 || type == 0 || type == udt->self_type || off_attrib == &dw2_attrib_nil) { break; }
+              DW2_Attrib *virtuality_attrib = dw2_attrib_from_kind(&tag, DW_AttribKind_Virtuality);
+              if(virtuality_attrib != &dw2_attrib_nil && virtuality_attrib->val.u128.u64[0] != 0)
+              {
+                // Itanium virtual base: DW_OP_dup, DW_OP_deref, DW_OP_constu N, DW_OP_minus, DW_OP_deref, DW_OP_plus.
+                // N is the distance below the vptr of the slot holding the base's offset. off = 0 means unknown.
+                if(off_attrib->val.kind != DW_FormKind_ExprLoc || unit_parse_ctx->addr_size != 8) { break; }
+                U64 expr_off  = off_attrib->val.u128.u64[0];
+                U64 expr_size = off_attrib->val.u128.u64[1];
+                String8 expr = str8_substr(raw->sec[DW_SectionKind_Info].data, r1u64(expr_off, expr_off+expr_size));
+                if(expr.size < 7 || expr.str[0] != 0x12 || expr.str[1] != 0x06 || expr.str[2] != 0x10) { break; }
+                U64 vbase_slot_off = 0;
+                U64 read_idx = 3;
+                for(U64 shift = 0; read_idx < expr.size && shift < 64; shift += 7)
+                {
+                  U8 byte = expr.str[read_idx];
+                  read_idx += 1;
+                  vbase_slot_off |= (U64)(byte & 0x7f) << shift;
+                  if((byte & 0x80) == 0) { break; }
+                }
+                if(read_idx+3 != expr.size || expr.str[read_idx] != 0x1c || expr.str[read_idx+1] != 0x06 || expr.str[read_idx+2] != 0x22) { break; }
+                if(vbase_slot_off == 0 || vbase_slot_off > max_U32) { break; }
+                RDIM_UDTMember *member = rdim_udt_push_member(arena, &lane_udts, udt);
+                member->kind = RDI_MemberKind_VirtualBase;
+                member->type = type;
+                member->off = (RDI_U32)vbase_slot_off;
+                break;
+              }
+              switch(off_attrib->val.kind)
+              {
+                default:{}break;
+                case DW_FormKind_Data1: case DW_FormKind_Data2: case DW_FormKind_Data4: case DW_FormKind_Data8:
+                case DW_FormKind_UData: case DW_FormKind_SData: case DW_FormKind_ImplicitConst:
+                {
+                  U64 base_off = off_attrib->val.u128.u64[0];
+                  if(base_off <= max_U32)
+                  {
+                    RDIM_UDTMember *member = rdim_udt_push_member(arena, &lane_udts, udt);
+                    member->kind = RDI_MemberKind_Base;
+                    member->type = type;
+                    member->off = (RDI_U32)base_off;
+                  }
+                }break;
+              }
+            }break;
+            case DW_TagKind_Member:
+            case DW_TagKind_Variable:
+            {
+              // A constexpr static member has no storage; without a constant symbol `Type::Name` cannot resolve.
+              // Deeper tags belong to nested type definitions, which get their own UDTs.
+              if(depth != 1) { break; }
+              B32 is_static = (tag.kind == DW_TagKind_Variable || decl_attrib->val.u128.u64[0] != 0);
               RDIM_UDTMember *member = rdim_udt_push_member(arena, &lane_udts, udt);
-              member->kind = RDI_MemberKind_DataField;
+              member->kind = is_static ? RDI_MemberKind_StaticData : RDI_MemberKind_DataField;
               member->name = name;
               member->type = type;
-              member->off = (RDI_U32)off; // TODO(rjf): @u64_to_u32
+              member->off = is_static ? 0 : (RDI_U32)off; // TODO(rjf): @u64_to_u32
+              RDIM_Type *storage_type = type;
+              for(;storage_type != 0 && storage_type->byte_size == 0 && storage_type->direct_type != 0; storage_type = storage_type->direct_type);
+              if(!is_static && storage_type != 0 && storage_type->byte_size != 0 && storage_type->byte_size <= 8 &&
+                 bitsize_attrib != &dw2_attrib_nil && databitoff_attrib != &dw2_attrib_nil)
+              {
+                U64 bit_size = bitsize_attrib->val.u128.u64[0];
+                U64 bit_off = databitoff_attrib->val.u128.u64[0];
+                U64 storage_bits = (U64)storage_type->byte_size*8;
+                U64 storage_byte_off = (bit_off/storage_bits)*storage_type->byte_size;
+                U64 bit_pos = bit_off - storage_byte_off*8;
+                if(bit_size != 0 && bit_pos + bit_size <= storage_bits && storage_byte_off <= max_U32)
+                {
+                  RDIM_Type *bitfield_type = rdim_type_chunk_list_push(arena, &lane_bitfield_types, 256);
+                  bitfield_type->kind        = RDI_TypeKind_Bitfield;
+                  bitfield_type->off         = (RDI_U32)bit_pos;
+                  bitfield_type->count       = (RDI_U32)bit_size;
+                  bitfield_type->byte_size   = storage_type->byte_size;
+                  bitfield_type->direct_type = type;
+                  member->type = bitfield_type;
+                  member->off = (RDI_U32)storage_byte_off;
+                }
+              }
+              B32 val_is_scalar = 0;
+              switch(val_attrib->val.kind)
+              {
+                default:{}break;
+                case DW_FormKind_Data1: case DW_FormKind_Data2: case DW_FormKind_Data4: case DW_FormKind_Data8:
+                case DW_FormKind_SData: case DW_FormKind_UData: case DW_FormKind_ImplicitConst:
+                {
+                  val_is_scalar = 1;
+                }break;
+              }
+              if(is_static && val_is_scalar && depth == 1 && name.size != 0)
+              {
+                U64 val64 = val_attrib->val.u128.u64[0];
+                RDIM_Symbol *cnst = rdim_symbol_chunk_list_push(arena, &lane_udt_constants, 256);
+                cnst->name = name;
+                cnst->container_type = udt->self_type;
+                cnst->type = type;
+                RDIM_Location loc = {.kind = RDI_LocationKind_ConstantDataOff, .value_data = push_str8_copy(arena, str8_struct(&val64))};
+                RDIM_Rng1U64 loc_range = {0, max_U64};
+                rdim_location_case_list_push(arena, &cnst->location_cases, loc, loc_range);
+              }
             }break;
             case DW_TagKind_Enumerator:
             {
+              if(depth == 2 && nested_enum_type != 0 && name.size != 0 &&
+                 (udt->self_type->kind == RDI_TypeKind_Struct || udt->self_type->kind == RDI_TypeKind_Class || udt->self_type->kind == RDI_TypeKind_Union))
+              {
+                U64 val64 = val_attrib->val.u128.u64[0];
+                RDIM_Symbol *cnst = rdim_symbol_chunk_list_push(arena, &lane_udt_constants, 256);
+                cnst->name = name;
+                cnst->container_type = udt->self_type;
+                cnst->type = (nested_enum_type->name.size == 0 && nested_enum_type->direct_type != 0) ? nested_enum_type->direct_type : nested_enum_type;
+                RDIM_Location loc = {.kind = RDI_LocationKind_ConstantDataOff, .value_data = push_str8_copy(arena, str8_struct(&val64))};
+                RDIM_Rng1U64 loc_range = {0, max_U64};
+                rdim_location_case_list_push(arena, &cnst->location_cases, loc, loc_range);
+              }
+              if(depth != 1) { break; }
               RDIM_UDTEnumVal *enum_val = rdim_udt_push_enum_val(arena, &lane_udts, udt);
               enum_val->name = name;
               enum_val->val = val;
@@ -2874,6 +3374,41 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       }
     }
     lane_sync_u64(&all_udts, 0);
+
+    RDIM_TypeChunkList *lanes_bitfield_types = 0;
+    if(lane_idx() == 0)
+    {
+      lanes_bitfield_types = push_array(scratch.arena, RDIM_TypeChunkList, lane_count());
+    }
+    lane_sync_u64(&lanes_bitfield_types, 0);
+    lanes_bitfield_types[lane_idx()] = lane_bitfield_types;
+    lane_sync();
+    if(lane_idx() == 0)
+    {
+      for EachIndex(l_idx, lane_count())
+      {
+        rdim_type_chunk_list_concat_in_place(all_types, &lanes_bitfield_types[l_idx]);
+      }
+    }
+    lane_sync();
+    
+    RDIM_SymbolChunkList *lanes_udt_constants = 0;
+    if(lane_idx() == 0)
+    {
+      lanes_udt_constants = push_array(scratch.arena, RDIM_SymbolChunkList, lane_count());
+    }
+    lane_sync_u64(&lanes_udt_constants, 0);
+    lanes_udt_constants[lane_idx()] = lane_udt_constants;
+    lane_sync();
+    if(lane_idx() == 0)
+    {
+      all_udt_constants = push_array(scratch.arena, RDIM_SymbolChunkList, 1);
+      for EachIndex(l_idx, lane_count())
+      {
+        rdim_symbol_chunk_list_concat_in_place(all_udt_constants, &lanes_udt_constants[l_idx]);
+      }
+    }
+    lane_sync_u64(&all_udt_constants, 0);
   }
   
   ////////////////////////////
@@ -3043,6 +3578,30 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     D2R_ScopeContainerNode **slots;
     U64 slots_count;
   };
+  // Out-of-line member definitions sit at namespace level and reach their class only through
+  // DW_AT_specification. Declarations record their class here; definitions are fixed up after
+  // all lanes finish, since the declaration may be converted by another lane.
+  typedef struct D2R_MemberDeclNode D2R_MemberDeclNode;
+  struct D2R_MemberDeclNode
+  {
+    D2R_MemberDeclNode *next;
+    U64 info_off;
+    RDIM_Type *container_type;
+  };
+  typedef struct D2R_MemberDeclMap D2R_MemberDeclMap;
+  struct D2R_MemberDeclMap
+  {
+    D2R_MemberDeclNode **slots;
+    U64 slots_count;
+  };
+  typedef struct D2R_ContainerFixup D2R_ContainerFixup;
+  struct D2R_ContainerFixup
+  {
+    D2R_ContainerFixup *next;
+    RDIM_Symbol *symbol;
+    RDIM_InlineSite *inline_site;
+    U64 decl_info_off;
+  };
   typedef struct D2R_SubUnitWorkArtifacts D2R_SubUnitWorkArtifacts;
   struct D2R_SubUnitWorkArtifacts
   {
@@ -3052,8 +3611,12 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     RDIM_SymbolChunkList procedures;
     RDIM_ScopeChunkList scopes;
     RDIM_InlineSiteChunkList inline_sites;
+    D2R_ContainerFixup *first_container_fixup;
+    D2R_InlineRec *first_inline_rec;
+    D2R_InlineRec *last_inline_rec;
   };
   D2R_ScopeContainerMap *scope_container_map = 0;
+  D2R_MemberDeclMap *member_decl_map = 0;
   D2R_SubUnitWorkArtifacts *sub_unit_work_artifacts = 0;
   ProfScope("convert all symbols")
   {
@@ -3063,9 +3626,16 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       scope_container_map->slots_count = total_tag_count_estimate/8 + 1;
       scope_container_map->slots = push_array(scratch.arena, D2R_ScopeContainerNode *, scope_container_map->slots_count);
       sub_unit_work_artifacts = push_array(scratch.arena, D2R_SubUnitWorkArtifacts, sub_unit_works_count);
+      member_decl_map = push_array(scratch.arena, D2R_MemberDeclMap, 1);
+      member_decl_map->slots_count = total_tag_count_estimate/8 + 1;
+      member_decl_map->slots = push_array(scratch.arena, D2R_MemberDeclNode *, member_decl_map->slots_count);
     }
     lane_sync_u64(&scope_container_map, 0);
+    lane_sync_u64(&member_decl_map, 0);
     lane_sync_u64(&sub_unit_work_artifacts, 0);
+    // Inline sites of one function share its abstract origin; resolve its name once per lane.
+    U64 origin_memo_slots_count = 1ull << 18;
+    D2R_OriginMemo **origin_memo_slots = push_array(scratch.arena, D2R_OriginMemo *, origin_memo_slots_count);
     U64 work_take_idx_ = 0;
     U64 *work_take_idx_ptr = &work_take_idx_;
     lane_sync_u64(&work_take_idx_ptr, 0);
@@ -3100,6 +3670,8 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           RDIM_Type *container_type;
           RDIM_Namespace *container_namespace;
           RDIM_LocationCaseList framebase_location_cases;
+          D2R_InlineRec *inline_rec;
+          B32 is_dead;
         };
         D2R_ParentNode *top_parent = 0;
         D2R_ParentNode *free_parent = 0;
@@ -3131,6 +3703,8 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           DW2_Attrib *framebase_attrib = &dw2_attrib_nil;
           DW2_Attrib *external_attrib = &dw2_attrib_nil;
           DW2_Attrib *decl_attrib = &dw2_attrib_nil;
+          DW2_Attrib *callfile_attrib = &dw2_attrib_nil;
+          DW2_Attrib *callline_attrib = &dw2_attrib_nil;
           for EachNode(n, DW2_AttribNode, tag.attribs.first)
           {
             switch(n->v.attrib_kind)
@@ -3149,6 +3723,8 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
               Case(framebase, FrameBase);
               Case(external,  External);
               Case(decl,      Declaration);
+              Case(callfile,  CallFile);
+              Case(callline,  CallLine);
 #undef Case
             }
           }
@@ -3163,34 +3739,141 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           B32 is_decl = (decl_attrib != &dw2_attrib_nil);
           
           ////////////////////////
+          //- follow DW_AT_specification / DW_AT_abstract_origin for missing names
+          //
+          // Out-of-line member definitions and concrete instances of inlined functions carry no
+          // DW_AT_name; it lives on the declaration or abstract instance they reference.
+          // Variables of an inline site are skipped: naming them would list every inlined
+          // callee's parameters as locals of the caller.
+          B32 follow_name_refs = (tag.kind == DW_TagKind_SubProgram || tag.kind == DW_TagKind_InlinedSubroutine);
+          if(tag.kind == DW_TagKind_Variable || tag.kind == DW_TagKind_FormalParameter)
+          {
+            follow_name_refs = 1;
+            for(D2R_ParentNode *p = top_parent; p != 0; p = p->next)
+            {
+              if(p->tag_kind == DW_TagKind_SubProgram) { break; }
+              if(p->tag_kind == DW_TagKind_InlinedSubroutine) { follow_name_refs = 0; break; }
+            }
+          }
+          U64 spec_decl_info_off = 0;
+          U64 type_attrib_unit_idx = unit_idx;
+          B32 want_spec = (!is_decl && (tag.kind == DW_TagKind_SubProgram || tag.kind == DW_TagKind_InlinedSubroutine || (tag.kind == DW_TagKind_Variable && (top_parent == 0 || top_parent->scope == 0))));
+          D2R_OriginMemo *origin_memo = 0;
+          U64 origin_memo_slot_idx = 0;
+          U64 origin_info_off = 0;
+          if(tag.kind == DW_TagKind_InlinedSubroutine && name.size == 0)
+          {
+            DW2_Attrib *origin_attrib = dw2_attrib_from_kind(&tag, DW_AttribKind_AbstractOrigin);
+            if(origin_attrib != &dw2_attrib_nil)
+            {
+              origin_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &origin_attrib->val);
+              origin_memo_slot_idx = u64_hash_from_str8(str8_struct(&origin_info_off))%origin_memo_slots_count;
+              for(D2R_OriginMemo *m = origin_memo_slots[origin_memo_slot_idx]; m != 0; m = m->next)
+              {
+                if(m->origin_info_off == origin_info_off)
+                {
+                  origin_memo = m;
+                  break;
+                }
+              }
+              if(origin_memo != 0)
+              {
+                name = origin_memo->name;
+                spec_decl_info_off = origin_memo->spec_decl_info_off;
+                follow_name_refs = 0;
+              }
+            }
+          }
+          if(follow_name_refs && (name.size == 0 || link_name.size == 0 || want_spec))
+          {
+            DW2_Tag ref_src_tag = tag;
+            U64 ref_unit_idx = unit_idx;
+            for(U64 hop = 0; hop < 4 && (name.size == 0 || link_name.size == 0 || want_spec); hop += 1)
+            {
+              DW2_Attrib *ref_attrib = dw2_attrib_from_kind(&ref_src_tag, DW_AttribKind_Specification);
+              B32 ref_is_spec = (ref_attrib != &dw2_attrib_nil);
+              if(ref_attrib == &dw2_attrib_nil) { ref_attrib = dw2_attrib_from_kind(&ref_src_tag, DW_AttribKind_AbstractOrigin); }
+              if(ref_attrib == &dw2_attrib_nil) { break; }
+              U64 ref_info_off = dw2_reference_info_off_from_form_val(&unit_parse_ctxs[ref_unit_idx], &ref_attrib->val);
+              if(ref_is_spec) { spec_decl_info_off = ref_info_off; }
+              if(!contains_1u64(unit_info_tag_ranges[ref_unit_idx], ref_info_off))
+              {
+                U64 ref_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, ref_info_off);
+                if(ref_unit_num == 0) { break; }
+                ref_unit_idx = ref_unit_num-1;
+              }
+              DW2_Tag ref_tag = {0};
+              dw2_read_tag(scratch2.arena, raw, &unit_parse_ctxs[ref_unit_idx], raw->sec[DW_SectionKind_Info].data, ref_info_off, &ref_tag);
+              if(name.size == 0)      { name = dw2_attrib_from_kind(&ref_tag, DW_AttribKind_Name)->val.string; }
+              if(link_name.size == 0) { link_name = dw2_attrib_from_kind(&ref_tag, DW_AttribKind_LinkageName)->val.string; }
+              // An out-of-line static data member definition has its type only on the declaration.
+              if(type_attrib == &dw2_attrib_nil && tag.kind == DW_TagKind_Variable && ref_is_spec)
+              {
+                DW2_Attrib *ref_type_attrib = dw2_attrib_from_kind(&ref_tag, DW_AttribKind_Type);
+                if(ref_type_attrib != &dw2_attrib_nil)
+                {
+                  type_attrib = ref_type_attrib;
+                  type_attrib_unit_idx = ref_unit_idx;
+                }
+              }
+              ref_src_tag = ref_tag;
+            }
+            if(origin_info_off != 0)
+            {
+              D2R_OriginMemo *m = push_array(scratch.arena, D2R_OriginMemo, 1);
+              m->origin_info_off = origin_info_off;
+              m->name = name;
+              m->spec_decl_info_off = spec_decl_info_off;
+              SLLStackPush(origin_memo_slots[origin_memo_slot_idx], m);
+            }
+          }
+          
+          ////////////////////////
           //- rjf: unpack ranges
           //
+          // The linker points discarded functions at 0 or a -1/-2 tombstone; a size added to a
+          // tombstone wraps to a range such as [-2, 0x2a), which unsorts the scope vmap.
+          // Code nested in a discarded function keeps small offsets from the tombstone, which no
+          // filter here can tell from live code at the image start; it dies with its function.
           RDIM_Rng1U64List ranges = {0};
+          B32 is_dead = (top_parent != 0 && top_parent->is_dead);
+          if(!is_dead)
           {
+            U64 addr_max = (unit_parse_ctx->addr_size >= 8) ? max_U64 : ((1ull << (8*unit_parse_ctx->addr_size)) - 1);
             if(ranges_attrib != &dw2_attrib_nil)
             {
               Temp temp = temp_begin(scratch2.arena);
               Rng1U64List tag_ranges = dw2_rnglist_from_form_val(temp.arena, unit_parse_ctx, raw, ranges_attrib->val);
               for EachNode(n, Rng1U64Node, tag_ranges.first)
               {
-                rdim_rng1u64_list_push(arena, &ranges, (RDIM_Rng1U64){.min = n->v.min, .max = n->v.max});
+                if(n->v.min != 0 && n->v.min < addr_max - 1 && n->v.min < n->v.max &&
+                   n->v.min >= base_vaddr && code_voff_range.min <= n->v.min - base_vaddr && n->v.max - base_vaddr <= code_voff_range.max)
+                {
+                  rdim_rng1u64_list_push(arena, &ranges, (RDIM_Rng1U64){.min = n->v.min - base_vaddr, .max = n->v.max - base_vaddr});
+                }
               }
               temp_end(temp);
             }
-            if(lopc_attrib != &dw2_attrib_nil && hipc_attrib != &dw2_attrib_nil)
+            if(lopc_attrib != &dw2_attrib_nil && hipc_attrib != &dw2_attrib_nil &&
+               lopc_attrib->val.addr != 0 && lopc_attrib->val.addr < addr_max - 1)
             {
               U64 voff_base = lopc_attrib->val.addr - base_vaddr;
               U64 voff_opl = 0;
               if(dw_attrib_class_from_form_kind(unit_parse_ctx->version, unit_parse_ctx->exts, hipc_attrib->val.kind) & DW_AttribClass_Address)
               {
-                voff_opl = hipc_attrib->val.addr;
+                voff_opl = hipc_attrib->val.addr - base_vaddr;
               }
               else
               {
                 voff_opl = voff_base + hipc_attrib->val.u128.u64[0];
               }
-              rdim_rng1u64_list_push(arena, &ranges, (RDIM_Rng1U64){voff_base, voff_opl});
+              if(voff_base < voff_opl && code_voff_range.min <= voff_base && voff_opl <= code_voff_range.max)
+              {
+                rdim_rng1u64_list_push(arena, &ranges, (RDIM_Rng1U64){voff_base, voff_opl});
+              }
             }
+            B32 has_code = (ranges_attrib != &dw2_attrib_nil || (lopc_attrib != &dw2_attrib_nil && hipc_attrib != &dw2_attrib_nil));
+            is_dead = (has_code && ranges.count == 0);
           }
           
           ////////////////////////
@@ -3208,9 +3891,9 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             // rjf: attrib -> (info_off, unit_idx)
             if(tag.kind != DW_TagKind_SubProgram)
             {
-              type_info_off = dw2_reference_info_off_from_form_val(unit_parse_ctx, &type_attrib->val);
-              type_unit_idx = unit_idx;
-              if(!contains_1u64(unit_info_tag_range, type_info_off))
+              type_info_off = dw2_reference_info_off_from_form_val(&unit_parse_ctxs[type_attrib_unit_idx], &type_attrib->val);
+              type_unit_idx = type_attrib_unit_idx;
+              if(!contains_1u64(unit_info_tag_ranges[type_attrib_unit_idx], type_info_off))
               {
                 U64 new_unit_num = rng1u64_array_num_from_value__binary_search(&unit_info_tag_ranges_array, type_info_off);
                 type_unit_idx = (new_unit_num > 0 ? new_unit_num-1 : unit_idx);
@@ -3650,7 +4333,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
                         D2R_ExprVal picked_val = {0};
                         {
                           U64 idx = 0;
-                          for(D2R_ExprValNode *n = val_stack_top; n != 0; n = n->next)
+                          for(D2R_ExprValNode *n = val_stack_top; n != 0; n = n->next, idx += 1)
                           {
                             if(idx == target_pick_val_idx)
                             {
@@ -4020,6 +4703,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
           //
           RDIM_Symbol *new_symbol = 0;
           RDIM_Scope *new_scope_open = 0;
+          D2R_InlineRec *new_inline_rec = 0;
           B32 parent_tag_is_container_to_deduped_tags = 0;
           switch(tag.kind)
           {
@@ -4032,6 +4716,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             case DW_TagKind_ClassType:
             case DW_TagKind_EnumerationType:
             case DW_TagKind_Typedef:
+            case DW_TagKind_TemplateAlias:
             {
               parent_tag_is_container_to_deduped_tags = 1;
             }break;
@@ -4056,8 +4741,37 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             
             //- rjf: inline site
             case DW_TagKind_InlinedSubroutine:
+            if(top_parent != 0 && top_parent->scope != 0 && ranges.count != 0)
             {
-              // TODO(rjf)
+              RDIM_Scope *scope = rdim_scope_chunk_list_push(arena, &dst_artifacts->scopes, chunk_count);
+              RDIM_InlineSite *inline_site = rdim_inline_site_chunk_list_push(arena, &dst_artifacts->inline_sites, chunk_count);
+              inline_site->name = name;
+              scope->voff_ranges = ranges;
+              scope->inline_site = inline_site;
+              dst_artifacts->scopes.scope_voff_count += 2*ranges.count;
+              new_scope_open = scope;
+              D2R_InlineRec *rec = push_array(scratch.arena, D2R_InlineRec, 1);
+              rec->scope = scope;
+              rec->parent = top_parent->inline_rec;
+              U64 call_file_idx = callfile_attrib->val.u128.u64[0];
+              if(callfile_attrib != &dw2_attrib_nil && call_file_idx < unit_line_table_headers[unit_idx].files.count)
+              {
+                rec->call_file = unit_src_file_maps[unit_idx].v[call_file_idx];
+              }
+              rec->call_line = (U32)callline_attrib->val.u128.u64[0];
+              if(rec->parent != 0)
+              {
+                SLLStackPush_N(rec->parent->first_child, rec, next_sibling);
+              }
+              SLLQueuePush(dst_artifacts->first_inline_rec, dst_artifacts->last_inline_rec, rec);
+              new_inline_rec = rec;
+              if(spec_decl_info_off != 0)
+              {
+                D2R_ContainerFixup *f = push_array(scratch.arena, D2R_ContainerFixup, 1);
+                f->inline_site = inline_site;
+                f->decl_info_off = spec_decl_info_off;
+                SLLStackPush(dst_artifacts->first_container_fixup, f);
+              }
             }break;
             
             //- rjf: variables
@@ -4152,6 +4866,27 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
               new_symbol->container_namespace = top_parent->container_namespace;
             }
           }
+          if(is_decl && top_parent != 0 && top_parent->container_type != 0 &&
+             (tag.kind == DW_TagKind_SubProgram || tag.kind == DW_TagKind_Variable || tag.kind == DW_TagKind_Member))
+          {
+            D2R_MemberDeclNode *n = push_array(scratch.arena, D2R_MemberDeclNode, 1);
+            n->info_off = start_off;
+            n->container_type = top_parent->container_type;
+            U64 slot_idx = u64_hash_from_str8(str8_struct(&start_off))%member_decl_map->slots_count;
+            for(;;)
+            {
+              U64 head = ins_atomic_u64_eval(&member_decl_map->slots[slot_idx]);
+              n->next = (D2R_MemberDeclNode *)head;
+              if(head == ins_atomic_u64_eval_cond_assign(&member_decl_map->slots[slot_idx], (U64)n, head)) { break; }
+            }
+          }
+          if(new_symbol != 0 && spec_decl_info_off != 0 && new_symbol->container_type == 0 && new_symbol->container_scope == 0)
+          {
+            D2R_ContainerFixup *f = push_array(scratch.arena, D2R_ContainerFixup, 1);
+            f->symbol = new_symbol;
+            f->decl_info_off = spec_decl_info_off;
+            SLLStackPush(dst_artifacts->first_container_fixup, f);
+          }
           
           ////////////////////////
           //- rjf: insert new scopes to their parent
@@ -4233,6 +4968,8 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
             n->scope = new_scope_open ? new_scope_open : top_parent ? top_parent->scope : 0;
             n->container_type = new_scope_open ? 0 : container_type;
             n->container_namespace = new_scope_open ? 0 : container_namespace;
+            n->inline_rec = new_inline_rec ? new_inline_rec : (tag.kind != DW_TagKind_SubProgram && top_parent) ? top_parent->inline_rec : 0;
+            n->is_dead = is_dead;
             if(framebase_attrib != &dw2_attrib_nil)
             {
               n->framebase_location_cases = framebase_location_cases;
@@ -4309,23 +5046,195 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     lane_sync();
   }
   
+  if(lane_idx() == 0 && unit_count != 0)
+  {
+    rdim_symbol_chunk_list_concat_in_place(&unit_from_idx_map[0]->constants, all_udt_constants);
+  }
+  lane_sync();
+  
+  ////////////////////////////
+  //- give inline sites line tables, and give their callers the call-site line
+  //
+  // DWARF line rows name only the innermost inlined callee. The debugger reads the unit line
+  // table as the outermost frame's lines, so an inlined range there must carry the call-site
+  // line; otherwise step-over stops inside every inlined callee. Source line maps keep the
+  // original rows, so breakpoints on inlined lines still bind.
+  RDIM_LineTableChunkList *unit_inline_line_tables = 0;
+  D2R_InlineRec **unit_first_inline_recs = 0;
+  U64 line_table_totals_delta_[3] = {0};
+  U64 *line_table_totals_delta = line_table_totals_delta_;
+  if(lane_idx() == 0)
+  {
+    unit_inline_line_tables = push_array(scratch.arena, RDIM_LineTableChunkList, unit_count);
+    unit_first_inline_recs = push_array(scratch.arena, D2R_InlineRec *, unit_count);
+    for EachIndex(work_idx, sub_unit_works_count)
+    {
+      D2R_SubUnitWorkArtifacts *art = &sub_unit_work_artifacts[work_idx];
+      if(art->first_inline_rec != 0)
+      {
+        U64 unit_idx = sub_unit_works[work_idx].unit_idx;
+        art->last_inline_rec->next = unit_first_inline_recs[unit_idx];
+        unit_first_inline_recs[unit_idx] = art->first_inline_rec;
+      }
+    }
+  }
+  lane_sync_u64(&unit_inline_line_tables, 0);
+  lane_sync_u64(&unit_first_inline_recs, 0);
+  lane_sync_u64(&line_table_totals_delta, 0);
+  ProfScope("build inline site line tables")
+  {
+    U64 unit_take_idx_ = 0;
+    U64 *unit_take_idx_ptr = &unit_take_idx_;
+    lane_sync_u64(&unit_take_idx_ptr, 0);
+    RDIM_LineTableChunkList lane_unit_totals = {0};
+    U64 lane_removed_seq_count = 0;
+    U64 lane_removed_line_count = 0;
+    U64 lane_removed_col_count = 0;
+    for(;;)
+    {
+      U64 unit_idx = ins_atomic_u64_inc_eval(unit_take_idx_ptr)-1;
+      if(unit_idx >= unit_count)
+      {
+        break;
+      }
+      RDIM_LineTable *unit_line_table = unit_line_tables[unit_idx];
+      D2R_InlineRec *first_rec = unit_first_inline_recs[unit_idx];
+      if(unit_line_table == 0 || unit_line_table->line_count == 0)
+      {
+        continue;
+      }
+      B32 has_line_zero = 0;
+      for(RDIM_LineSequenceNode *seq_n = unit_line_table->first_seq; seq_n != 0 && !has_line_zero; seq_n = seq_n->next)
+      {
+        for EachIndex(idx, seq_n->v.line_count)
+        {
+          if(seq_n->v.line_nums[idx] == 0)
+          {
+            has_line_zero = 1;
+            break;
+          }
+        }
+      }
+      if(first_rec == 0 && !has_line_zero)
+      {
+        continue;
+      }
+      Temp scratch2 = scratch_begin(&scratch.arena, 1);
+      
+      D2R_LineRow *rows = push_array_no_zero(scratch2.arena, D2R_LineRow, unit_line_table->line_count);
+      U64 row_count = 0;
+      U64 rows_max = 0;
+      for(RDIM_LineSequenceNode *seq_n = unit_line_table->first_seq; seq_n != 0; seq_n = seq_n->next)
+      {
+        RDIM_LineSequence *seq = &seq_n->v;
+        for EachIndex(idx, seq->line_count)
+        {
+          if(seq->voffs[idx] < seq->voffs[idx+1])
+          {
+            D2R_LineRow *row = &rows[row_count];
+            row->lo = seq->voffs[idx];
+            row->hi = seq->voffs[idx+1];
+            row->file = seq->src_file;
+            row->line = seq->line_nums[idx];
+            rows_max = Max(rows_max, row->hi);
+            row_count += 1;
+          }
+        }
+      }
+      radsort(rows, row_count, (int (*)(void *, void *))d2r_line_row_is_before);
+      
+      D2R_InlineRec *top_recs = 0;
+      B32 has_call_site_line = 0;
+      for(D2R_InlineRec *r = first_rec; r != 0; r = r->next)
+      {
+        if(r->parent == 0)
+        {
+          SLLStackPush_N(top_recs, r, next_sibling);
+          has_call_site_line |= (r->call_file != 0 && r->call_line != 0);
+        }
+      }
+      
+      if(row_count != 0 && (has_call_site_line || has_line_zero))
+      {
+        lane_removed_seq_count  += unit_line_table->seq_count;
+        lane_removed_line_count += unit_line_table->line_count;
+        lane_removed_col_count  += unit_line_table->col_count;
+        unit_line_table->first_seq = unit_line_table->last_seq = 0;
+        unit_line_table->seq_count = unit_line_table->line_count = unit_line_table->col_count = 0;
+        RDIM_Rng1U64 whole = {rows[0].lo, rows_max};
+        d2r_line_table_push_inline_depth(arena, scratch2.arena, &lane_unit_totals, unit_line_table, rows, row_count, 0, whole, top_recs);
+      }
+      
+      RDIM_LineTableChunkList *site_tables = &unit_inline_line_tables[unit_idx];
+      for(D2R_InlineRec *r = first_rec; r != 0; r = r->next)
+      {
+        RDIM_LineTable site_table = {0};
+        RDIM_Rng1U64 unused = {0};
+        d2r_line_table_push_inline_depth(arena, scratch2.arena, site_tables, &site_table, rows, row_count, &r->scope->voff_ranges, unused, r->first_child);
+        if(site_table.seq_count != 0)
+        {
+          RDIM_LineTable *dst = rdim_line_table_chunk_list_push(arena, site_tables, 256);
+          RDIM_LineTableChunkNode *chunk = dst->chunk;
+          *dst = site_table;
+          dst->chunk = chunk;
+          r->scope->inline_site->line_table = dst;
+        }
+      }
+      
+      scratch_end(scratch2);
+    }
+    ins_atomic_u64_add_eval(&line_table_totals_delta[0], lane_unit_totals.total_seq_count - lane_removed_seq_count);
+    ins_atomic_u64_add_eval(&line_table_totals_delta[1], lane_unit_totals.total_line_count - lane_removed_line_count);
+    ins_atomic_u64_add_eval(&line_table_totals_delta[2], lane_unit_totals.total_col_count - lane_removed_col_count);
+  }
+  lane_sync();
+  if(lane_idx() == 0)
+  {
+    all_line_tables->total_seq_count  += line_table_totals_delta[0];
+    all_line_tables->total_line_count += line_table_totals_delta[1];
+    all_line_tables->total_col_count  += line_table_totals_delta[2];
+    for EachIndex(unit_idx, unit_count)
+    {
+      rdim_line_table_chunk_list_concat_in_place(all_line_tables, &unit_inline_line_tables[unit_idx]);
+    }
+  }
+  lane_sync();
+  
   ////////////////////////////
   //- rjf: upgrade all types with namespacing info
   //
+  U64 *fwd_container_keys = 0;
+  RDIM_Type **name_container_types = 0;
+  RDIM_Namespace **name_container_namespaces = 0;
+  if(lane_idx() == 0)
+  {
+    fwd_container_keys = push_array(scratch.arena, U64, type_count);
+    name_container_types = push_array(scratch.arena, RDIM_Type *, all_types->total_count+1);
+    name_container_namespaces = push_array(scratch.arena, RDIM_Namespace *, all_types->total_count+1);
+  }
+  lane_sync_u64(&fwd_container_keys, 0);
+  lane_sync_u64(&name_container_types, 0);
+  lane_sync_u64(&name_container_namespaces, 0);
   ProfScope("upgrade all types with namespacing info")
   {
     Rng1U64 range = lane_range(type_count);
     for EachInRange(type_idx, range)
     {
+      if(type_idx_borrows_type[type_idx])
+      {
+        continue;
+      }
       D2R_UniqueTagNode *type_tag_node = type_tag_nodes[type_idx];
-      U64 container_ancestor_info_off = type_tag_node->container_ancestor_info_off;
+      U64 container_ancestor_info_off = d2r_container_ancestor_info_off_from_tag_off(tag_hash_slots, tag_hash_slots_count, type_tag_node->info_off);
       RDIM_Type *dst_type = type_from_idx_map[type_idx];
       if(dst_type == 0)
       {
         continue;
       }
       RDIM_UDT *dst_udt = dst_type->udt;
-      if(dst_udt == 0)
+      B32 is_fwd = (RDI_TypeKind_FirstIncomplete <= dst_type->kind && dst_type->kind <= RDI_TypeKind_LastIncomplete);
+      B32 is_alias = (dst_type->kind == RDI_TypeKind_Alias);
+      if(dst_udt == 0 && !is_fwd && !is_alias)
       {
         continue;
       }
@@ -4393,6 +5302,13 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
       }
       
       // rjf: fill
+      name_container_types[rdim_idx_from_type(dst_type)] = container_type;
+      name_container_namespaces[rdim_idx_from_type(dst_type)] = container_namespace;
+      if(dst_udt == 0)
+      {
+        fwd_container_keys[type_idx] = (U64)container_scope;
+        continue;
+      }
       dst_udt->container_scope = container_scope;
       dst_udt->container_type = container_type;
       dst_udt->container_namespace = container_namespace;
@@ -4409,7 +5325,7 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     for EachInRange(namespace_idx, range)
     {
       D2R_UniqueTagNode *unique_tag_node = namespace_tag_nodes[namespace_idx];
-      U64 container_ancestor_info_off = unique_tag_node->container_ancestor_info_off;
+      U64 container_ancestor_info_off = d2r_container_ancestor_info_off_from_tag_off(tag_hash_slots, tag_hash_slots_count, unique_tag_node->info_off);
       RDIM_Namespace *dst_namespace = namespace_from_idx_map[namespace_idx];
       if(dst_namespace == 0)
       {
@@ -4484,7 +5400,286 @@ d2r_convert(Arena *arena, D2R_ConvertParams *params)
     }
   }
   lane_sync();
+
+  ////////////////////////////
+  //- qualify type names with their containing types and namespaces
+  //
+  // Clang names a nested or namespaced type by its leaf name only, while PDB names, views, casts
+  // and natvis patterns use the qualified name. Like PDB, a qualified UDT keeps no type/namespace
+  // container, so readers that join container names do not repeat the prefix. Containers are read
+  // per RDIM type (declaration stubs included), since a nested type may sit under a stub.
+  String8 *qualified_type_names = 0;
+  if(lane_idx() == 0)
+  {
+    qualified_type_names = push_array(scratch.arena, String8, type_count);
+  }
+  lane_sync_u64(&qualified_type_names, 0);
+  ProfScope("qualify type names")
+  {
+    Rng1U64 range = lane_range(type_count);
+    for EachInRange(type_idx, range)
+    {
+      if(type_idx_borrows_type[type_idx])
+      {
+        continue;
+      }
+      RDIM_Type *type = type_from_idx_map[type_idx];
+      RDIM_Type *container_type = type ? name_container_types[rdim_idx_from_type(type)] : 0;
+      RDIM_Namespace *container_namespace = type ? name_container_namespaces[rdim_idx_from_type(type)] : 0;
+      if(type == 0 || type->name.size == 0 || (container_type == 0 && container_namespace == 0))
+      {
+        continue;
+      }
+      Temp temp = temp_begin(scratch.arena);
+      String8List parts = {0};
+      str8_list_push_front(temp.arena, &parts, type->name);
+      for(U64 depth = 0; depth < 64 && (container_type != 0 || container_namespace != 0); depth += 1)
+      {
+        if(container_type != 0)
+        {
+          if(container_type->name.size == 0)
+          {
+            break;
+          }
+          str8_list_push_front(temp.arena, &parts, container_type->name);
+          U64 container_rdim_idx = rdim_idx_from_type(container_type);
+          container_namespace = name_container_namespaces[container_rdim_idx];
+          container_type = name_container_types[container_rdim_idx];
+        }
+        else
+        {
+          String8 namespace_name = container_namespace->name.size ? container_namespace->name : str8_lit("(anonymous namespace)");
+          str8_list_push_front(temp.arena, &parts, namespace_name);
+          container_type = container_namespace->parent_type;
+          container_namespace = container_namespace->parent_namespace;
+        }
+      }
+      if(parts.node_count > 1)
+      {
+        StringJoin join = {.sep = str8_lit("::")};
+        qualified_type_names[type_idx] = str8_list_join(arena, &parts, &join);
+      }
+      temp_end(temp);
+    }
+  }
+  lane_sync();
+  ProfScope("apply qualified type names")
+  {
+    Rng1U64 range = lane_range(type_count);
+    for EachInRange(type_idx, range)
+    {
+      if(qualified_type_names[type_idx].size != 0)
+      {
+        RDIM_Type *type = type_from_idx_map[type_idx];
+        type->name = qualified_type_names[type_idx];
+        if(type->udt != 0 && type->udt->self_type == type)
+        {
+          type->udt->container_type = 0;
+          type->udt->container_namespace = 0;
+        }
+      }
+    }
+  }
+  lane_sync();
   
+  ////////////////////////////
+  //- resolve forward-declared types to their definitions
+  //
+  // Clang emits a class definition only in the unit holding its vtable; every other unit has a
+  // DW_AT_declaration stub. Each stub with a definition of the same qualified name (and local scope) takes on the
+  // definition's kind, size and UDT, so pointers to the stub (`this` among them) reach members.
+  // An alias would not do: the evaluator ignores an alias whose target has a higher type index.
+  typedef struct D2R_CompleteTypeNode D2R_CompleteTypeNode;
+  struct D2R_CompleteTypeNode
+  {
+    D2R_CompleteTypeNode *next;
+    RDIM_Type *type;
+    U64 container_key;
+    U64 type_idx;
+  };
+  D2R_CompleteTypeNode **complete_type_slots = 0;
+  U64 complete_type_slots_count = type_count/2 + 1;
+  if(lane_idx() == 0)
+  {
+    complete_type_slots = push_array(scratch.arena, D2R_CompleteTypeNode *, complete_type_slots_count);
+  }
+  lane_sync_u64(&complete_type_slots, 0);
+  ProfScope("index complete types by qualified name")
+  {
+    Rng1U64 range = lane_range(type_count);
+    for EachInRange(type_idx, range)
+    {
+      if(type_idx_borrows_type[type_idx])
+      {
+        continue;
+      }
+      RDIM_Type *type = type_from_idx_map[type_idx];
+      if(type == 0 || type->udt == 0 || type->name.size == 0)
+      {
+        continue;
+      }
+      if(type->kind != RDI_TypeKind_Struct && type->kind != RDI_TypeKind_Class &&
+         type->kind != RDI_TypeKind_Union && type->kind != RDI_TypeKind_Enum)
+      {
+        continue;
+      }
+      RDIM_UDT *udt = type->udt;
+      U64 container_key = (U64)udt->container_scope;
+      D2R_CompleteTypeNode *n = push_array(scratch.arena, D2R_CompleteTypeNode, 1);
+      n->type = type;
+      n->container_key = container_key;
+      n->type_idx = type_idx;
+      U64 slot_idx = u64_hash_from_seed_str8(container_key, type->name)%complete_type_slots_count;
+      for(;;)
+      {
+        U64 head = ins_atomic_u64_eval(&complete_type_slots[slot_idx]);
+        n->next = (D2R_CompleteTypeNode *)head;
+        if(head == ins_atomic_u64_eval_cond_assign(&complete_type_slots[slot_idx], (U64)n, head)) { break; }
+      }
+    }
+  }
+  lane_sync();
+  ProfScope("complete forward-declared types from their definitions")
+  {
+    Rng1U64 range = lane_range(type_count);
+    for EachInRange(type_idx, range)
+    {
+      if(type_idx_borrows_type[type_idx])
+      {
+        continue;
+      }
+      RDIM_Type *type = type_from_idx_map[type_idx];
+      if(type == 0 || type->name.size == 0 ||
+         !(RDI_TypeKind_FirstIncomplete <= type->kind && type->kind <= RDI_TypeKind_LastIncomplete))
+      {
+        continue;
+      }
+      // The lowest matching index wins so the output does not depend on lane scheduling.
+      U64 container_key = fwd_container_keys[type_idx];
+      U64 slot_idx = u64_hash_from_seed_str8(container_key, type->name)%complete_type_slots_count;
+      D2R_CompleteTypeNode *best = 0;
+      for(D2R_CompleteTypeNode *n = complete_type_slots[slot_idx]; n != 0; n = n->next)
+      {
+        RDI_TypeKind k = n->type->kind;
+        B32 kind_match = ((type->kind == RDI_TypeKind_IncompleteStruct || type->kind == RDI_TypeKind_IncompleteClass) ? (k == RDI_TypeKind_Struct || k == RDI_TypeKind_Class) :
+                          type->kind == RDI_TypeKind_IncompleteUnion ? (k == RDI_TypeKind_Union) :
+                          type->kind == RDI_TypeKind_IncompleteEnum  ? (k == RDI_TypeKind_Enum) : 0);
+        if(kind_match && n->container_key == container_key && str8_match(n->type->name, type->name, 0) &&
+           (best == 0 || n->type_idx < best->type_idx))
+        {
+          best = n;
+        }
+      }
+      if(best != 0)
+      {
+        type->kind        = best->type->kind;
+        type->byte_size   = best->type->byte_size;
+        type->direct_type = best->type->direct_type;
+        type->udt         = best->type->udt;
+      }
+    }
+  }
+  lane_sync();
+  
+  ////////////////////////////
+  //- equip out-of-line member definitions with their declaration's class
+  //
+  // Runs after stub completion: a declaration's class may be a stub. A container still without a
+  // UDT would bake as index 0 and drop the namespace, so those symbols keep their namespace.
+  ProfScope("equip out-of-line member definitions with their declaration's class")
+  {
+    Rng1U64 range = lane_range(sub_unit_works_count);
+    for EachInRange(work_idx, range)
+    {
+      for(D2R_ContainerFixup *f = sub_unit_work_artifacts[work_idx].first_container_fixup; f != 0; f = f->next)
+      {
+        U64 slot_idx = u64_hash_from_str8(str8_struct(&f->decl_info_off))%member_decl_map->slots_count;
+        for(D2R_MemberDeclNode *n = member_decl_map->slots[slot_idx]; n != 0; n = n->next)
+        {
+          if(n->info_off == f->decl_info_off)
+          {
+            if(f->inline_site != 0)
+            {
+              f->inline_site->owner = n->container_type;
+            }
+            else if(n->container_type->udt != 0)
+            {
+              f->symbol->container_type = n->container_type;
+              f->symbol->container_namespace = 0;
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
+  lane_sync();
+
+  ////////////////////////////
+  //- name lambda closure types
+  //
+  // A closure type has no DW_AT_name, so its call operator read as "Outer::Fn::::operator()". Only unnamed
+  // types owning a call operator are named: other unnamed structs stay anonymous, whose members are
+  // accessed as members of the enclosing type.
+  ProfScope("name lambda closure types")
+  {
+    RDIM_Type ***closures = 0;
+    U64 *closure_counts = 0;
+    if(lane_idx() == 0)
+    {
+      closures = push_array(scratch.arena, RDIM_Type **, lane_count());
+      closure_counts = push_array(scratch.arena, U64, lane_count());
+    }
+    lane_sync_u64(&closures, 0);
+    lane_sync_u64(&closure_counts, 0);
+    {
+      Rng1U64 range = lane_range(unit_count);
+      RDIM_Type **lane_closures = 0;
+      U64 lane_closures_cap = 0;
+      U64 lane_closures_count = 0;
+      for EachInRange(unit_idx, range)
+      {
+        for(RDIM_SymbolChunkNode *chunk = unit_from_idx_map[unit_idx]->procedures.first; chunk != 0; chunk = chunk->next)
+        {
+          for EachIndex(idx, chunk->count)
+          {
+            RDIM_Symbol *procedure = &chunk->v[idx];
+            RDIM_Type *container = procedure->container_type;
+            if(container == 0 || container->name.size != 0 ||
+               !(str8_match(procedure->name, str8_lit("operator()"), 0) || str8_match(procedure->name, str8_lit("__invoke"), 0)))
+            {
+              continue;
+            }
+            if(lane_closures_count == lane_closures_cap)
+            {
+              U64 new_cap = Max(64, lane_closures_cap*2);
+              RDIM_Type **new_closures = push_array_no_zero(scratch.arena, RDIM_Type *, new_cap);
+              MemoryCopyTyped(new_closures, lane_closures, lane_closures_count);
+              lane_closures = new_closures;
+              lane_closures_cap = new_cap;
+            }
+            lane_closures[lane_closures_count] = container;
+            lane_closures_count += 1;
+          }
+        }
+      }
+      closures[lane_idx()] = lane_closures;
+      closure_counts[lane_idx()] = lane_closures_count;
+    }
+    lane_sync();
+    if(lane_idx() == 0)
+    {
+      for EachIndex(lane, lane_count())
+      {
+        for EachIndex(idx, closure_counts[lane])
+        {
+          closures[lane][idx]->name = str8_lit("<lambda>");
+        }
+      }
+    }
+    lane_sync();
+  }
+
   ////////////////////////////
   //- rjf: fill result
   //
