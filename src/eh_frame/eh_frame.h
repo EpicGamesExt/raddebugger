@@ -57,6 +57,7 @@ enum
   EH_AugFlag_HasHandler  = (1 << 1),
   EH_AugFlag_HasAddrEnc  = (1 << 2),
   EH_AugFlag_SignalFrame = (1 << 3),
+  EH_AugFlag_HasAugData  = (1 << 4),
 };
 
 typedef struct EH_Augmentation
@@ -78,6 +79,7 @@ enum
   EH_CIE_Ext_LSDAEnc,
   EH_CIE_Ext_HandlerEnc,
   EH_CIE_Ext_HandlerIp,
+  EH_CIE_Ext_HasAugData,
 } EH_CIE_Ext;
 
 typedef struct EH_FrameHdrEntry

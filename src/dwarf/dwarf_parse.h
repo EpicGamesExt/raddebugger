@@ -350,11 +350,10 @@ typedef struct DW_CIE DW_CIE;
 struct DW_CIE
 {
   Rng1U64 aug_string_range;
-  Rng1U64 aug_data_range;
   U64 code_align_factor;
   S64 data_align_factor;
   U64 ret_addr_reg;
-  U64 ext[4];
+  U64 ext[5];
   DW_Format format;
   U8 version;
   U8 address_size;

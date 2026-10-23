@@ -152,6 +152,7 @@ eh_read_aug_data(String8 data, U64 off, String8 string, U64 pc, EH_PtrCtx *ptr_c
   U64 handler_ip = 0;
   if(str8_match(str8_prefix(string, 1), str8_lit("z"), 0))
   {
+    aug_flags |= EH_AugFlag_HasAugData;
     off += str8_deserial_read_uleb128(data, off, &aug_data_size);
     for(U8 *ptr = string.str+1; ptr < (string.str+string.size); ptr += 1)
     {
@@ -241,8 +242,6 @@ eh_read_cie(String8 data, U64 off, DW_Format fmt, Arch arch, U64 pc, EH_PtrCtx *
   // rjf: read entry info
   U64 aug_string_off_first = 0;
   U64 aug_string_off_opl = 0;
-  U64 aug_data_off_first = 0;
-  U64 aug_data_off_opl = 0;
   U64 code_align_factor = 0;
   S64 data_align_factor = 0;
   U64 ret_addr_reg = 0;
@@ -271,15 +270,12 @@ eh_read_cie(String8 data, U64 off, DW_Format fmt, Arch arch, U64 pc, EH_PtrCtx *
     off += str8_deserial_read(data, off, &ret_addr_reg, sizeof(U8), sizeof(U8));
     
     // rjf: parse augmentation
-    aug_data_off_first = off;
     U64 aug_data_size = eh_read_aug_data(data, off, aug_string, pc + (off - start_off), ptr_ctx, &aug);
-    aug_data_off_opl = off + aug.size;
     off += aug_data_size;
   }
   
   // rjf: fill output
   cie_out->aug_string_range      = r1u64(aug_string_off_first, aug_string_off_opl);
-  cie_out->aug_data_range        = r1u64(aug_data_off_first, aug_data_off_opl);
   cie_out->code_align_factor     = code_align_factor;
   cie_out->data_align_factor     = data_align_factor;
   cie_out->ret_addr_reg          = ret_addr_reg;
@@ -290,6 +286,7 @@ eh_read_cie(String8 data, U64 off, DW_Format fmt, Arch arch, U64 pc, EH_PtrCtx *
   cie_out->ext[EH_CIE_Ext_LSDAEnc]    = EH_PtrEnc_Omit;
   cie_out->ext[EH_CIE_Ext_AddrEnc]    = EH_PtrEnc_Omit;
   cie_out->ext[EH_CIE_Ext_HandlerEnc] = EH_PtrEnc_Omit;
+  cie_out->ext[EH_CIE_Ext_HasAugData] = !!(aug.flags & EH_AugFlag_HasAugData);
   if(aug.flags & EH_AugFlag_HasLSDA)
   {
     cie_out->ext[EH_CIE_Ext_LSDAEnc] = aug.lsda_encoding;
@@ -327,8 +324,13 @@ eh_read_fde(String8 data, U64 off, DW_Format fmt, Arch arch, U64 pc, EH_PtrCtx *
   }
   
   // rjf: skip aug data
-  off += dim_1u64(cie->aug_data_range);
-  
+  if(cie->ext[EH_CIE_Ext_HasAugData])
+  {
+    U64 aug_data_size = 0;
+    off += str8_deserial_read_uleb128(data, off, &aug_data_size);
+    off += aug_data_size;
+  }
+
   // rjf: fill output
   fde_out->pc_range = r1u64(pc_begin, pc_begin + pc_delta);
   
