@@ -2044,13 +2044,13 @@ d_server_io_send_msg(D_ServerIOCtx ctx, SOCK_Endpoint endpoint, DS_Msg *msg)
   {
     for EachNode(n, String8Node, packets.first)
     {
-      sock2_send(d_ctrl_state->sock_session, endpoint, SOCK_Protocol_TCP, n->string, max_U64, .out_ring = completion_ring);
+      sock_send(d_ctrl_state->sock_session, endpoint, SOCK_Protocol_TCP, n->string, max_U64, .out_ring = completion_ring);
     }
   }
   
   // rjf: wait for send completion
-  SOCK2_SendCompletion completion = {0};
-  sock2_wait_for_send_completion(completion_ring, &completion, max_U64);
+  SOCK_SendCompletion completion = {0};
+  sock_wait_for_send_completion(completion_ring, &completion, max_U64);
   
   // rjf: result -> completion is good
   B32 result = completion.good;
@@ -7755,7 +7755,7 @@ d_sock_recv_thread_entry_point(void *p)
     SOCK_Protocol protocol = SOCK_Protocol_TCP;
     SOCK_Endpoint endpoint = {0};
     U8 *packet_buffer = push_array(scratch.arena, U8, DS_PACKET_SIZE);
-    if(sock2_recv(d_ctrl_state->sock_session, &endpoint, &protocol, packet_buffer, max_U64))
+    if(sock_recv(d_ctrl_state->sock_session, &endpoint, &protocol, packet_buffer, max_U64))
     {
       String8 data = str8(packet_buffer, DS_PACKET_SIZE);
       

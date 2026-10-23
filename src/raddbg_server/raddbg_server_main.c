@@ -15,7 +15,6 @@
 #include "x64/x64_inc.h"
 #include "arch/arch_inc.h"
 #include "socket/socket_inc.h"
-#include "socket2/socket2_inc.h"
 #include "coff/coff.h"
 #include "coff/coff_parse.h"
 #include "pe/pe.h"
@@ -31,7 +30,6 @@
 #include "x64/x64_inc.c"
 #include "arch/arch_inc.c"
 #include "socket/socket_inc.c"
-#include "socket2/socket2_inc.c"
 #include "coff/coff.c"
 #include "coff/coff_parse.c"
 #include "pe/pe.c"
@@ -74,7 +72,7 @@ typedef struct RDS_State RDS_State;
 struct RDS_State
 {
   Arena *arena;
-  SOCK2_Session sock_session;
+  SOCK_Session sock_session;
   RWMutex sock_send_mutex;
   
   //- rjf: connected clients
@@ -221,7 +219,7 @@ dmn_thread__entry_point(void *p)
         {
           RWMutexScope(rds_state->sock_send_mutex, 1) for EachNode(n, String8Node, packets.first)
           {
-            sock2_send(rds_state->sock_session, c->endpoint, SOCK_Protocol_TCP, n->string, max_U64);
+            sock_send(rds_state->sock_session, c->endpoint, SOCK_Protocol_TCP, n->string, max_U64);
           }
         }
       }
@@ -236,7 +234,7 @@ dmn_thread__entry_point(void *p)
           rds_log_response(response);
           for EachNode(n, String8Node, packets.first)
           {
-            sock2_send(rds_state->sock_session, msg_n->endpoint, SOCK_Protocol_TCP, n->string, max_U64);
+            sock_send(rds_state->sock_session, msg_n->endpoint, SOCK_Protocol_TCP, n->string, max_U64);
           }
         }
       }
@@ -305,7 +303,7 @@ entry_point(CmdLine *cmd_line)
   Arena *arena = arena_alloc();
   rds_state = push_array(arena, RDS_State, 1);
   rds_state->arena = arena;
-  rds_state->sock_session = sock2_session_open((U16)port, 0, DS_PACKET_SIZE);
+  rds_state->sock_session = sock_session_open((U16)port, 0, DS_PACKET_SIZE);
   rds_state->sock_send_mutex = rw_mutex_alloc();
   rds_state->c2d_rw_mutex = rw_mutex_alloc();
   rds_state->c2d_cv = cond_var_alloc();
@@ -366,7 +364,7 @@ entry_point(CmdLine *cmd_line)
       String8 packet = {0};
       packet.size = DS_PACKET_SIZE;
       packet.str = push_array(scratch.arena, U8, packet.size);
-      sock2_recv(rds_state->sock_session, &endpoint, &protocol, packet.str, max_U64);
+      sock_recv(rds_state->sock_session, &endpoint, &protocol, packet.str, max_U64);
       
       // rjf: extract header
       DS_PacketHeader header = {0};
@@ -552,7 +550,7 @@ entry_point(CmdLine *cmd_line)
           rds_log_response(response);
           for EachNode(n, String8Node, packets.first)
           {
-            sock2_send(rds_state->sock_session, endpoint, SOCK_Protocol_TCP, n->string, max_U64);
+            sock_send(rds_state->sock_session, endpoint, SOCK_Protocol_TCP, n->string, max_U64);
           }
         }
       }

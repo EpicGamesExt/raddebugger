@@ -104,7 +104,7 @@ d_init(void)
     Arena *arena = arena_alloc();
     d_ctrl_state = push_array(arena, D_CtrlState, 1);
     d_ctrl_state->arena = arena;
-    d_ctrl_state->sock_session = sock2_session_open(0, d_ctrl_sock_wakeup, DS_PACKET_SIZE);
+    d_ctrl_state->sock_session = sock_session_open(0, d_ctrl_sock_wakeup, DS_PACKET_SIZE);
     d_ctrl_state->sock_send_mutex = rw_mutex_alloc();
     d_ctrl_state->sock_event_ring = guarded_ring_alloc(arena, KB(256));
     d_ctrl_state->sock_rings_count = get_system_info()->logical_processor_count;

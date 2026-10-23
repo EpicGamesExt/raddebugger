@@ -429,7 +429,6 @@
 #include "window_manager/window_manager_inc.h"
 #include "shell/shell_inc.h"
 #include "socket/socket_inc.h"
-#include "socket2/socket2_inc.h"
 #include "http/http_inc.h"
 #include "symbol_server/symbol_server_inc.h"
 #include "config/config_inc.h"
@@ -494,7 +493,6 @@
 #include "window_manager/window_manager_inc.c"
 #include "shell/shell_inc.c"
 #include "socket/socket_inc.c"
-#include "socket2/socket2_inc.c"
 #include "http/http_inc.c"
 #include "symbol_server/symbol_server_inc.c"
 #include "config/config_inc.c"
@@ -710,7 +708,7 @@ entry_point(CmdLine *cmd_line)
       }
       
       //- rjf: set up IPC resources
-      SOCK2_Session ipc_sock_session = sock2_session_open((U16)ipc_port, wakeup_hook_ctrl, IPC_PACKET_SIZE);
+      SOCK_Session ipc_sock_session = sock_session_open((U16)ipc_port, wakeup_hook_ctrl, IPC_PACKET_SIZE);
       Arena *ipc_packet_arena = arena_alloc();
       String8List ipc_msg_pieces = {0};
       
@@ -724,7 +722,7 @@ entry_point(CmdLine *cmd_line)
           {
             Temp scratch = scratch_begin(0, 0);
             U8 *packet_buffer = push_array(scratch.arena, U8, IPC_PACKET_SIZE);
-            if(sock2_recv(ipc_sock_session, &ipc_endpoint, 0, packet_buffer, 0))
+            if(sock_recv(ipc_sock_session, &ipc_endpoint, 0, packet_buffer, 0))
             {
               String8 packet = str8(packet_buffer, IPC_PACKET_SIZE);
               IPCPacketHeader header = {0};
@@ -841,7 +839,7 @@ entry_point(CmdLine *cmd_line)
               str8_list_push(scratch2.arena, &packet_parts, payload);
               str8_list_push(scratch2.arena, &packet_parts, padding);
               String8 packet = str8_list_join(scratch2.arena, &packet_parts, 0);
-              sock2_send(ipc_sock_session, ipc_endpoint, SOCK_Protocol_TCP, packet, max_U64);
+              sock_send(ipc_sock_session, ipc_endpoint, SOCK_Protocol_TCP, packet, max_U64);
               scratch_end(scratch2);
             }
             scratch_end(scratch);
@@ -857,7 +855,7 @@ entry_point(CmdLine *cmd_line)
       Temp scratch = scratch_begin(0, 0);
       
       //- rjf: create socket session
-      SOCK2_Session ipc_sock_session = sock2_session_open(0, 0, IPC_PACKET_SIZE);
+      SOCK_Session ipc_sock_session = sock_session_open(0, 0, IPC_PACKET_SIZE);
       GuardedRing *ipc_send_completion_ring = guarded_ring_alloc(scratch.arena, KB(4));
       
       //- rjf: form target raddbg endpoint address
@@ -922,7 +920,7 @@ entry_point(CmdLine *cmd_line)
         {
           for EachNode(n, String8Node, packets.first)
           {
-            sock2_send(ipc_sock_session, endpoint, SOCK_Protocol_TCP, n->string, max_U64, .id = 1, .out_ring = ipc_send_completion_ring);
+            sock_send(ipc_sock_session, endpoint, SOCK_Protocol_TCP, n->string, max_U64, .id = 1, .out_ring = ipc_send_completion_ring);
           }
         }
         
@@ -930,8 +928,8 @@ entry_point(CmdLine *cmd_line)
         B32 good_send = 1;
         for EachNode(n, String8Node, packets.first)
         {
-          SOCK2_SendCompletion send_completion = {0};
-          sock2_wait_for_send_completion(ipc_send_completion_ring, &send_completion, max_U64);
+          SOCK_SendCompletion send_completion = {0};
+          sock_wait_for_send_completion(ipc_send_completion_ring, &send_completion, max_U64);
           good_send = (good_send && send_completion.good);
         }
         
@@ -949,7 +947,7 @@ entry_point(CmdLine *cmd_line)
           for(B32 done = 0; !done;)
           {
             U8 *packet_buffer = push_array(scratch.arena, U8, IPC_PACKET_SIZE);
-            if(!sock2_recv(ipc_sock_session, 0, 0, packet_buffer, now_time_us()+10000000))
+            if(!sock_recv(ipc_sock_session, 0, 0, packet_buffer, now_time_us()+10000000))
             {
               fprintf(stderr, "ERROR: didn't receive outputs in time\n");
               done = 1;

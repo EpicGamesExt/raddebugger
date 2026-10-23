@@ -131,3 +131,12 @@ sock_endpoint_match(SOCK_Endpoint a, SOCK_Endpoint b)
   B32 result = (a.port == b.port && a.kind == b.kind && MemoryMatchArray(a.address_u8, b.address_u8));
   return result;
 }
+
+internal B32
+sock_wait_for_send_completion(GuardedRing *out_ring, SOCK_SendCompletion *out_completion, U64 endt_us)
+{
+  RingGuard g = guarded_ring_open(out_ring);
+  B32 result = guarded_ring_read_struct_or_wait(&g, out_completion, endt_us);
+  guarded_ring_close(&g);
+  return result;
+}

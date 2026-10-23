@@ -441,7 +441,7 @@ struct D_CtrlState
 {
   Arena *arena;
   D_WakeupFunctionType *wakeup_hook;
-  SOCK2_Session sock_session;
+  SOCK_Session sock_session;
   Thread sock_recv_thread;
   RWMutex sock_send_mutex;
   

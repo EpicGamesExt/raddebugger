@@ -39,8 +39,19 @@ struct SOCK_Endpoint
   };
 };
 
-////////////////////////////////
-//~ rjf: Session Handle
+typedef struct SOCK_SendCompletionParams SOCK_SendCompletionParams;
+struct SOCK_SendCompletionParams
+{
+  U64 id;
+  GuardedRing *out_ring;
+};
+
+typedef struct SOCK_SendCompletion SOCK_SendCompletion;
+struct SOCK_SendCompletion
+{
+  U64 id;
+  B32 good;
+};
 
 typedef struct SOCK_Session SOCK_Session;
 struct SOCK_Session
@@ -61,30 +72,24 @@ internal SOCK_Endpoint sock_endpoint_from_string_port(String8 address, U16 port)
 internal SOCK_Endpoint sock_endpoint_from_string(String8 address_and_port);
 internal String8 sock_string_from_endpoint(Arena *arena, SOCK_Endpoint endpoint);
 internal B32 sock_endpoint_match(SOCK_Endpoint a, SOCK_Endpoint b);
+internal B32 sock_wait_for_send_completion(GuardedRing *out_ring, SOCK_SendCompletion *out_completion, U64 endt_us);
 
 ////////////////////////////////
-//~ rjf: @per_os_impl Top-Level Layer Calls
+//~ rjf: @per_os_impl Main Layer Initialization
 
-#if !defined(NEED_ASYNC)
-# define NEED_ASYNC 1
-#endif
 internal void sock_init(void);
-internal void sock_async_tick(void);
 
 ////////////////////////////////
-//~ rjf: @per_os_impl Session Creation/Closing
+//~ rjf: @per_os_impl Sessions
 
-internal SOCK_Session sock_session_open(U16 listener_port, SOCK_WakeupFunctionType *wakeup_hook);
+internal SOCK_Session sock_session_open(U16 port, SOCK_WakeupFunctionType *wakeup_hook, U64 recv_packet_size);
 internal void sock_session_close(SOCK_Session session);
 
 ////////////////////////////////
-//~ rjf: @per_os_impl Sends
+//~ rjf: @per_os_impl Sends / Receives
 
-internal B32 sock_send(SOCK_Session session, SOCK_Protocol protocol, SOCK_Endpoint endpoint, String8 data, U64 endt_us);
-
-////////////////////////////////
-//~ rjf: @per_os_impl Receives
-
-internal B32 sock_recv(Arena *arena, SOCK_Session session, SOCK_Protocol *protocol_out, SOCK_Endpoint *endpoint_out, String8 *data_out, U64 endt_us);
+internal B32 sock_send_(SOCK_Session session, SOCK_Endpoint endpoint, SOCK_Protocol protocol, String8 data, U64 endt_us, SOCK_SendCompletionParams *completion_params);
+#define sock_send(session, endpoint, protocol, data, endt_us, ...) sock_send_((session), (endpoint), (protocol), (data), (endt_us), &(SOCK_SendCompletionParams){.id = 0, __VA_ARGS__})
+internal B32 sock_recv(SOCK_Session session, SOCK_Endpoint *endpoint_out, SOCK_Protocol *protocol_out, U8 *data_out, U64 endt_us);
 
 #endif // SOCKET_H
