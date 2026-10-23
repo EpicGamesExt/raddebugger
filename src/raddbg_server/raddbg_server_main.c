@@ -72,6 +72,7 @@ typedef struct RDS_State RDS_State;
 struct RDS_State
 {
   Arena *arena;
+  B32 quiet;
   SOCK_Session sock_session;
   RWMutex sock_send_mutex;
   
@@ -96,22 +97,43 @@ global RDS_State *rds_state = 0;
 //~ rjf: Response Logger
 
 internal void
+rds_log(String8 string)
+{
+  if(!rds_state->quiet)
+  {
+    fprintf(stderr, "%.*s", str8_varg(string));
+  }
+}
+
+internal void
+rds_logf(char *fmt, ...)
+{
+  Temp scratch = scratch_begin(0, 0);
+  va_list args;
+  va_start(args, fmt);
+  String8 string = str8fv(scratch.arena, fmt, args);
+  rds_log(string);
+  va_end(args);
+  scratch_end(scratch);
+}
+
+internal void
 rds_log_response(DS_Response response)
 {
-  fprintf(stderr, "[response]\n");
-  fprintf(stderr, "  msg_id: 0x%llx\n", response.msg_id);
-  fprintf(stderr, "  good:   %i\n", response.good);
+  rds_logf("[response]\n");
+  rds_logf("  msg_id: 0x%llx\n", response.msg_id);
+  rds_logf("  good: %i\n", response.good);
   if(response.vaddr != 0)
   {
-    fprintf(stderr, "  vaddr:  0x%llx\n", response.vaddr);
+    rds_logf("  vaddr: 0x%llx\n", response.vaddr);
   }
   if(response.pid != 0)
   {
-    fprintf(stderr, "  pid:    %llu\n", response.pid);
+    rds_logf("  pid: %llu\n", response.pid);
   }
   if(response.data.size != 0)
   {
-    fprintf(stderr, "  data:   {%llu bytes}\n", response.data.size);
+    rds_logf("  data: {%llu bytes}\n", response.data.size);
   }
 }
 
@@ -303,6 +325,7 @@ entry_point(CmdLine *cmd_line)
   Arena *arena = arena_alloc();
   rds_state = push_array(arena, RDS_State, 1);
   rds_state->arena = arena;
+  rds_state->quiet = (cmd_line_has_flag(cmd_line, s("quiet")) || cmd_line_has_flag(cmd_line, s("q")));
   rds_state->sock_session = sock_session_open((U16)port, 0, DS_PACKET_SIZE);
   rds_state->sock_send_mutex = rw_mutex_alloc();
   rds_state->c2d_rw_mutex = rw_mutex_alloc();
@@ -319,13 +342,13 @@ entry_point(CmdLine *cmd_line)
     String8 current_path = get_current_path(scratch.arena);
     for EachNode(t, Target, first_target)
     {
-      fprintf(stderr, "[launching command line target]\n");
-      fprintf(stderr, " ");
+      rds_logf("[launching command line target]\n");
+      rds_logf(" ");
       for EachNode(n, String8Node, t->cmd_line.first)
       {
-        fprintf(stderr, " %.*s", str8_varg(n->string));
+        rds_logf(" %S", n->string);
       }
-      fprintf(stderr, "\n");
+      rds_logf("\n");
       DS_LaunchParams launch_params =
       {
         .command_line = t->cmd_line,
@@ -354,7 +377,7 @@ entry_point(CmdLine *cmd_line)
     Temp scratch = scratch_begin(0, 0);
     
     //- rjf: get next set of packets from client
-    fprintf(stderr, "[waiting for message]\n");
+    rds_logf("[waiting for message]\n");
     SOCK_Protocol protocol = SOCK_Protocol_TCP;
     SOCK_Endpoint endpoint = {0};
     String8List packets = {0};
@@ -432,15 +455,15 @@ entry_point(CmdLine *cmd_line)
     {
       String8 endpoint_string = sock_string_from_endpoint(scratch.arena, endpoint);
       String8 packet_kind_name = lower_from_str8(scratch.arena, ds_name_from_packet_kind_table[kind]);
-      fprintf(stderr, "[%.*s]\n", str8_varg(packet_kind_name));
-      fprintf(stderr, "  sender: %.*s\n", str8_varg(endpoint_string));
+      rds_logf("[%S]\n", packet_kind_name);
+      rds_logf("  sender: %S\n", endpoint_string);
       if(msg_kind != DS_MsgKind_Null)
       {
         U64 msg_id = 0;
         str8_deserial_read_struct(data, sizeof(DS_MsgKind) + sizeof(DS_MsgFlags), &msg_id);
         String8 msg_kind_name = lower_from_str8(scratch.arena, ds_name_from_msg_kind_table[msg_kind]);
-        fprintf(stderr, "  msg_kind: %.*s\n", str8_varg(msg_kind_name));
-        fprintf(stderr, "  msg_id:   0x%llx\n", msg_id);
+        rds_logf("  msg_kind: %S\n", msg_kind_name);
+        rds_logf("  msg_id: 0x%llx\n", msg_id);
       }
     }
     

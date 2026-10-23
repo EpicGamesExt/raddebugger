@@ -640,13 +640,13 @@ d_serialized_string_from_event(Arena *arena, D_Event *event, U64 max)
     str8_serial_push_struct(scratch.arena, &srl, &event->rip_vaddr);
     str8_serial_push_struct(scratch.arena, &srl, &event->stack_base);
     str8_serial_push_struct(scratch.arena, &srl, &event->tls_root);
+    str8_serial_push_struct(scratch.arena, &srl, &event->tls_index);
+    str8_serial_push_struct(scratch.arena, &srl, &event->tls_offset);
     str8_serial_push_struct(scratch.arena, &srl, &event->timestamp);
     str8_serial_push_struct(scratch.arena, &srl, &event->exception_code);
     str8_serial_push_struct(scratch.arena, &srl, &event->rgba);
     str8_serial_push_struct(scratch.arena, &srl, &event->bp_flags);
     str8_serial_push_struct(scratch.arena, &srl, &event->os);
-    str8_serial_push_struct(scratch.arena, &srl, &event->tls_index);
-    str8_serial_push_struct(scratch.arena, &srl, &event->tls_offset);
     String8 string = event->string;
     string.size = Min(string.size, max-srl.total_size);
     str8_serial_push_struct(scratch.arena, &srl, &string.size);
@@ -676,13 +676,13 @@ d_event_from_serialized_string(Arena *arena, String8 string)
     read_off += str8_deserial_read_struct(string, read_off, &event.rip_vaddr);
     read_off += str8_deserial_read_struct(string, read_off, &event.stack_base);
     read_off += str8_deserial_read_struct(string, read_off, &event.tls_root);
+    read_off += str8_deserial_read_struct(string, read_off, &event.tls_index);
+    read_off += str8_deserial_read_struct(string, read_off, &event.tls_offset);
     read_off += str8_deserial_read_struct(string, read_off, &event.timestamp);
     read_off += str8_deserial_read_struct(string, read_off, &event.exception_code);
     read_off += str8_deserial_read_struct(string, read_off, &event.rgba);
     read_off += str8_deserial_read_struct(string, read_off, &event.bp_flags);
     read_off += str8_deserial_read_struct(string, read_off, &event.os);
-    read_off += str8_deserial_read_struct(string, read_off, &event.tls_index);
-    read_off += str8_deserial_read_struct(string, read_off, &event.tls_offset);
     read_off += str8_deserial_read_struct(string, read_off, &event.string.size);
     event.string.str = push_array_no_zero(arena, U8, event.string.size);
     read_off += str8_deserial_read(string, read_off, event.string.str, event.string.size, 1);
@@ -2260,19 +2260,49 @@ d_unwind_from_thread(Arena *arena, D_Handle thread, U64 endt_us)
           MemoryCopy(regs_block, regs_block_restore, arch_reg_block_size);
         }
         
-        // rjf: if we failed to read memory, try to read that memory, equip to memory map.
-        // if it is stale and we run out of time, we will need to mark the whole unwind as
-        // stale. if it can't be read, the unwind fails.
+        // rjf: if we failed to read memory, read that memory, and add to memory map.
+        //
+        // first, we try to read that memory, but rounded up/down to 4k boundaries. if that fails,
+        // we just fall back to doing a tiny read.
+        //
+        // this is a bit aggressive, e.g. we read a whole 4k chunk even if we just touch a small
+        // # of bytes in that chunk, but this is likely more optimal on average, and it avoids
+        // tons of roundtrips, which matters especially when doing remote debugging.
+        //
+        // if it can't be read at all, the unwind fails.
+        //
         if(step.status == UWND_StepStatus_FailedMemoryRead)
         {
-          U64 size_desired = dim_1u64(step.missed_read_vaddr_range);
-          U8 *data = push_array(scratch.arena, U8, size_desired);
-          U64 size = d_process_read(process_entity->handle, step.missed_read_vaddr_range, data);
-          if(size == size_desired)
+          // rjf: try reading the 4K-granularity chunks containing this read.
+          B32 read_good = 0;
           {
-            memory_map_push(scratch.arena, &memory_map, step.missed_read_vaddr_range, data);
+            Rng1U64 missed_read_vaddr_range_rounded = r1u64(AlignDownPow2(step.missed_read_vaddr_range.min, KB(4)),
+                                                            AlignPow2(step.missed_read_vaddr_range.max, KB(4)));
+            U64 size_desired = dim_1u64(missed_read_vaddr_range_rounded);
+            U8 *data = push_array(scratch.arena, U8, size_desired);
+            U64 size = d_process_read(process_entity->handle, missed_read_vaddr_range_rounded, data);
+            if(size == size_desired)
+            {
+              memory_map_push(scratch.arena, &memory_map, missed_read_vaddr_range_rounded, data);
+              read_good = 1;
+            }
           }
-          else
+          
+          // rjf: if read still isn't good, try just reading the part we need.
+          if(!read_good)
+          {
+            U64 size_desired = dim_1u64(step.missed_read_vaddr_range);
+            U8 *data = push_array(scratch.arena, U8, size_desired);
+            U64 size = d_process_read(process_entity->handle, step.missed_read_vaddr_range, data);
+            if(size == size_desired)
+            {
+              memory_map_push(scratch.arena, &memory_map, step.missed_read_vaddr_range, data);
+              read_good = 1;
+            }
+          }
+          
+          // rjf: if read still isn't good, we failed.
+          if(!read_good)
           {
             unwind.flags |= D_UnwindFlag_Error;
           }
@@ -3329,7 +3359,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
           SLLQueuePop(ss->first_dmn_event_node, ss->last_dmn_event_node);
           dmn_event_deep_copy(arena, event, &next_event_node->v);
           server_id = ss->server_id;
-          D_ServerRunCtrls *server_ctrls = d_ctrl_thread__server_run_ctrls_from_id_or_push(scratch.arena, run_ctrls, server_id);
+          D_ServerRunCtrls *server_ctrls = d_ctrl_thread__server_run_ctrls_from_id_or_push(arena, run_ctrls, server_id);
           server_ctrls->ignore_previous_exception = 1;
         }
         
@@ -3337,7 +3367,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
         if(next_event_node != 0 && should_filter_event)
         {
           SLLQueuePop(ss->first_dmn_event_node, ss->last_dmn_event_node);
-          D_ServerRunCtrls *server_ctrls = d_ctrl_thread__server_run_ctrls_from_id_or_push(scratch.arena, run_ctrls, server_id);
+          D_ServerRunCtrls *server_ctrls = d_ctrl_thread__server_run_ctrls_from_id_or_push(arena, run_ctrls, server_id);
           server_ctrls->ignore_previous_exception = 0;
         }
         
@@ -3433,7 +3463,7 @@ d_ctrl_thread__next_dmn_event(Arena *arena, DMN_CtrlCtx *ctrl_ctx, D_Msg *msg, D
               DS_Msg msg = {0};
               {
                 msg.kind   = DS_MsgKind_Run;
-                msg.flags |= (DS_MsgFlag_IgnorePreviousException*!!server_run_ctrls->ignore_previous_exception);
+                msg.flags |= (DS_MsgFlag_IgnorePreviousException*(server_run_ctrls ? (!!server_run_ctrls->ignore_previous_exception) : 0));
                 msg.entity = (run_ctrls->single_step_thread.server_id == ss->server_id ? d_dmn_from_handle(run_ctrls->single_step_thread) : 
                               run_ctrls->priority_thread.server_id == ss->server_id ? d_dmn_from_handle(run_ctrls->priority_thread) : 
                               dmn_handle_zero());
@@ -5229,8 +5259,7 @@ d_ctrl_thread__kill(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
       //- rjf: send kill - remote demon debugging case
       else if(msg->entity.server_id != D_ServerID_LocalHost)
       {
-        String8 address = msg->address;
-        SOCK_Endpoint endpoint = sock_endpoint_from_string(address);
+        SOCK_Endpoint endpoint = d_endpoint_from_server_id(process->handle.server_id);
         DS_Msg kill_msg = {DS_MsgKind_Kill, .entity = d_dmn_from_handle(process->handle)};
         DS_Response response = d_server_msg(scratch.arena, endpoint, &kill_msg);
         kill_worked = response.good;
@@ -5352,8 +5381,7 @@ d_ctrl_thread__kill_all(DMN_CtrlCtx *ctrl_ctx, D_Msg *msg)
             //- rjf: send kill - remote demon debugging case
             else if(t->process->handle.server_id != D_ServerID_LocalHost)
             {
-              String8 address = msg->address;
-              SOCK_Endpoint endpoint = sock_endpoint_from_string(address);
+              SOCK_Endpoint endpoint = d_endpoint_from_server_id(process->handle.server_id);;
               DS_Msg kill_msg = {DS_MsgKind_Kill, .entity = d_dmn_from_handle(t->process->handle)};
               DS_Response response = d_server_msg(scratch.arena, endpoint, &kill_msg);
               kill_worked = response.good;

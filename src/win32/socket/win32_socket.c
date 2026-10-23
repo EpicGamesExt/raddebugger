@@ -298,7 +298,7 @@ w32_sock_sender_thread_entry_point(void *p)
     {
       send_failed = 1;
       int error = WSAGetLastError();
-      if(error == WSAECONNRESET)
+      if(error == WSAECONNRESET || error == 10057)
       {
         bad_connection = 1;
       }

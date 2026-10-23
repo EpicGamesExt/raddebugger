@@ -844,6 +844,5 @@ internal D_CallStackTree d_call_stack_tree(Access *access, U64 endt_us);
 //~ rjf: Socket Traffic Distribution Threads
 
 internal void d_sock_recv_thread_entry_point(void *p);
-internal void d_sock_send_completion_thread_entry_point(void *p);
 
 #endif // DBG_ENGINE_CTRL_H

@@ -2164,6 +2164,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
                   e->process   = w32_dmn_handle_from_entity(process);
                   e->arch      = module_info->arch;
                   e->code      = evt.dwProcessId;
+                  e->size      = get_system_info()->page_size;
                 }
                 
                 // rjf: create thread

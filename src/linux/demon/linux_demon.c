@@ -3138,6 +3138,7 @@ dmn_ctrl_run(Arena *arena, DMN_CtrlCtx *ctx, DMN_RunCtrls *ctrls)
           e->process   = lnx_dmn_handle_from_process(new_process);
           e->arch      = new_process->ctx->arch;
           e->code      = new_process->pid;
+          e->size      = get_system_info()->page_size;
         }
         
         ////////////////////////
