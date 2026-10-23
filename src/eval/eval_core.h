@@ -842,6 +842,23 @@ struct E_TypeCacheSlot
   E_TypeCacheNode *last;
 };
 
+typedef struct E_ScopedConstantNode E_ScopedConstantNode;
+struct E_ScopedConstantNode
+{
+  E_ScopedConstantNode *next;
+  E_TypeKey key;
+  String8 name;
+  B32 found;
+  E_TypeKey type_key;
+  U64 value;
+};
+
+typedef struct E_ScopedConstantSlot E_ScopedConstantSlot;
+struct E_ScopedConstantSlot
+{
+  E_ScopedConstantNode *first;
+};
+
 //- rjf: member lookup cache types
 
 typedef struct E_MemberHashNode E_MemberHashNode;
@@ -1131,6 +1148,10 @@ struct E_Cache
   //- rjf: [types] unpacked type cache
   U64 type_cache_slots_count;
   E_TypeCacheSlot *type_cache_slots;
+  
+  //- [types] class-scope constants reached as member names, misses included
+  U64 scoped_constant_slots_count;
+  E_ScopedConstantSlot *scoped_constant_slots;
   
   //- rjf: [locals / members] locals/members map maps
   E_LocalMapCacheSlot *locals_map_map_slots;

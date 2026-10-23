@@ -373,6 +373,56 @@ e_expr_unpoison(E_Expr *expr)
 
 //- rjf: top-level irtree/type extraction
 
+// A class-scope constant (static constexpr member, enumerator of a nested unscoped enum) is reachable as a
+// member name; without this a natvis item falls back to any global of that name.
+internal E_ScopedConstantNode *
+e_scoped_constant_from_type_key_name(E_TypeKey key, String8 type_name, String8 name)
+{
+  E_ScopedConstantNode *node = 0;
+  if(e_cache == 0 || e_cache->scoped_constant_slots_count == 0 || type_name.size == 0)
+  {
+    return 0;
+  }
+  U64 hash = u64_hash_from_seed_str8(u64_hash_from_str8(str8_struct(&key)), name);
+  E_ScopedConstantSlot *slot = &e_cache->scoped_constant_slots[hash%e_cache->scoped_constant_slots_count];
+  for(E_ScopedConstantNode *n = slot->first; n != 0; n = n->next)
+  {
+    if(e_type_key_match(n->key, key) && str8_match(n->name, name, 0))
+    {
+      return n;
+    }
+  }
+  node = push_array(e_cache->arena, E_ScopedConstantNode, 1);
+  node->key = key;
+  node->name = push_str8_copy(e_cache->arena, name);
+  SLLStackPush(slot->first, node);
+  Temp scratch = scratch_begin(0, 0);
+  String8 qualified = push_str8f(scratch.arena, "%S::%S", type_name, name);
+  E_Parse parse = e_push_parse_from_string(scratch.arena, qualified);
+  if(parse.msgs.count == 0 && parse.expr->kind == E_ExprKind_LeafIdentifier)
+  {
+    E_IRTreeAndType irtree = e_push_irtree_and_type_from_expr(scratch.arena, 0, &e_default_identifier_resolution_rule, 1, 1, parse.expr);
+    E_TypeKey type = e_type_key_unwrap(irtree.type_key, E_TypeUnwrapFlag_Modifiers);
+    E_TypeKind kind = e_type_kind_from_key(e_type_key_unwrap(type, E_TypeUnwrapFlag_AllDecorative));
+    if(irtree.root != &e_irnode_nil && irtree.msgs.count == 0 &&
+       ((E_TypeKind_FirstBasic <= kind && kind <= E_TypeKind_LastBasic) || kind == E_TypeKind_Enum))
+    {
+      E_IRNode *value_tree = e_irtree_resolve_to_value(scratch.arena, irtree.mode, irtree.root, type);
+      E_OpList oplist = e_oplist_from_irtree(scratch.arena, value_tree);
+      String8 bytecode = e_bytecode_from_oplist(scratch.arena, &oplist);
+      E_Interpretation interp = e_interpret(bytecode);
+      if(interp.code == E_InterpretationCode_Good)
+      {
+        node->found = 1;
+        node->type_key = type;
+        node->value = interp.value.u64;
+      }
+    }
+  }
+  scratch_end(scratch);
+  return node;
+}
+
 E_TYPE_ACCESS_FUNCTION_DEF(default)
 {
   Temp scratch = scratch_begin(&arena, 1);
@@ -435,6 +485,17 @@ E_TYPE_ACCESS_FUNCTION_DEF(default)
             r_type = check_type_key;
             r_value = enum_val.val;
             r_is_constant_value = 1;
+          }
+          if(!r_found && exprr->kind == E_ExprKind_LeafIdentifier)
+          {
+            E_ScopedConstantNode *scoped = e_scoped_constant_from_type_key_name(check_type_key, type->name, lookup_string);
+            if(scoped != 0 && scoped->found)
+            {
+              r_found = 1;
+              r_type = scoped->type_key;
+              r_value = scoped->value;
+              r_is_constant_value = 1;
+            }
           }
         }
         scratch_end(scratch);
